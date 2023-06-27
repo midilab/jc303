@@ -21,11 +21,18 @@ To generate a **Visual Studio 2022 (17)** project, run:
 cmake -B Build -G "Visual Studio 17"
 ```
 
+---
+
+To generate a **Linux CMake** project, run:
+```sh
+cmake -B build
+```
+
 ## Building
 
 To build the generated IDE project from the command line, run:
 ```sh
-cmake --build Build --config Debug
+cmake --build Build --config Release
 ```
 
 ## Roadmap
