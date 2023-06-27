@@ -40,3 +40,4 @@ cmake --build Build --config Release
 1. Binary release for MacOS, Windows and Linux  
 2. Graphical User Interface  
 3. Filter type select  
+4. Step Sequencer  
