@@ -325,6 +325,8 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
             for(int i=0; i <= 127; i++) {
                 open303Core.noteOn(i, 0, 0);
             }
+        } else {
+            continue;
         }
 
         render(buffer, currentSample, messagePosition);
