@@ -1,0 +1,20 @@
+# build artifacts
+build*/
+lib*/
+bin/
+*_Packaged
+*.exe
+*.dmg
+
+# ide settings
+.vscode/
+.idea/
+
+# Mac extras
+.DS_Store
+
+# tex artifacts
+*.log
+*.aux
+*.out
+*.synctex*
