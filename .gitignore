@@ -5,6 +5,7 @@ bin/
 *_Packaged
 *.exe
 *.dmg
+vstsdk2.4/
 
 # ide settings
 .vscode/
