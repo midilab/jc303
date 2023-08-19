@@ -19,7 +19,7 @@ namespace rosic
   Argument x must satify (INT_MIN/2)ñ1.0 < x < (INT_MAX/2)+1.0.  */
   INLINE int roundToInt(double x)
   {
-#  if defined _MSC_VER
+#  if defined _MSC_VER && _MSC_VER <= 1700 // inline _asm deprecated from vs2012 and removed on vs2013
     const float round_to_nearest = 0.5f;
     int i;
      __asm
@@ -55,7 +55,7 @@ namespace rosic
 
   INLINE int floorInt(double x)
   {
-#  if defined _MSC_VER
+#  if defined _MSC_VER && _MSC_VER <= 1700 // inline _asm deprecated from vs2012 and removed on vs2013
     const float round_towards_m_i = -0.5f;
     int i;
     __asm
