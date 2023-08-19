@@ -78,7 +78,9 @@ INLINE bool isOdd(int x);
 INLINE bool isPowerOfTwo(unsigned int x);
 
 /** Calculates the logarithm to base 2. */
+#if defined _MSC_VER && _MSC_VER < 1930 // after vs2022 we can get it via native intrinsics support
 INLINE double log2(double x);
+#endif
 
 /** Calculates logarithm to an arbitrary base b. */
 INLINE double logB(double x, double b);
@@ -300,10 +302,12 @@ INLINE bool isPowerOfTwo(unsigned int x)
   return false;
 }
 
+#if defined _MSC_VER && _MSC_VER < 1930 // after vs2022 we can get it via native intrinsics support
 INLINE double log2(double x)
 {
   return ONE_OVER_LN2*log(x);
 }
+#endif
 
 INLINE double logB(double x, double b)
 {
