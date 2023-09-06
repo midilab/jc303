@@ -50,7 +50,7 @@ cmake --build build --config Release
 
 ## Roadmap
 
-1. Binary release for MacOS, Windows and Linux  
+1. ~~Binary release for MacOS, Windows and Linux~~  
 2. Graphical User Interface  
 3. Filter type select  
 4. Step Sequencer  
