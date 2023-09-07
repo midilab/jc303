@@ -4,10 +4,13 @@ A Cmake JUCE port of [Robin Schmidt`s Open303](https://github.com/RobinSchmidt/O
 
 ![Image of Roland TB-303](https://raw.githubusercontent.com/midilab/jc303/main/img/Roland_TB-303_Panel.jpg)  
 
+This software is licensed under the GNU General Public License version 3 (GPLv3).  
+  
+The Open303 engine part of this software are also licensed under the MIT License.    
 
 ## Download
 
-This very first version features a headless plugin (user interface planned for upcoming releases), with direct control mapping on your DAW. All platforms, Windows, Linux and MacOS will have VST2, VST3 and LV2 plugins format avaliable to install.
+This very first version features a headless plugin (user interface planned for upcoming releases), with direct control mapping on your DAW. Supports Windows, Linux and MacOS. You may found VST3, LV2 and AU formats avaliable to download.
 
 MacOS Intel x64 and M1: [jc303-macos-universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9/jc303-macos-universal-plugins.zip)  
 Windows Intel x64: [jc303-win64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9/jc303-win64-plugins.zip)  
