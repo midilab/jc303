@@ -10,82 +10,67 @@ JC303::JC303()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
-{
-    // default program values:
-    #ifdef SHOW_INTERNAL_PARAMETERS
-    parameters[AMP_SUSTAIN]        = (float) linToLin( -60.0,  -60.0,     0.0, 0.0,  1.0);
-    parameters[TANH_SHAPER_DRIVE]  = (float) linToLin(  36.9,    0.0,    60.0, 0.0,  1.0);
-    parameters[TANH_SHAPER_OFFSET] = (float) linToLin(   4.37, -10.0,    10.0, 0.0,  1.0);
-    parameters[PRE_FILTER_HPF]     = (float) expToLin(  44.5,   10.0,   500.0, 0.0,  1.0);
-    parameters[FEEDBACK_HPF]       = (float) expToLin( 150.0,   10.0,   500.0, 0.0,  1.0);
-    parameters[POST_FILTER_HPF]    = (float) expToLin(  24.0,   10.0,   500.0, 0.0,  1.0);
-    parameters[SQUARE_PHASE_SHIFT] = (float) linToLin( 189.0,    0.0,   360.0, 0.0,  1.0);
-    #endif
-    // parameters[WAVEFORM]    = (float) linToLin(   0.85,   0.0,     1.0, 0.0,  1.0);
-    addParameter (waveForm = new juce::AudioParameterFloat ("waveform", // parameterID
-                                                        "Waveform", // parameter name
-                                                        0.0f,   // minimum value
-                                                        1.0f,   // maximum value
+                       ),
+       parameters (*this, nullptr, juce::Identifier("APVTS"), {
+            std::make_unique<juce::AudioParameterFloat> ("waveform", // parameterID
+                                                        "Waveform",  // parameter name
+                                                        0.0f,        // minimum value
+                                                        1.0f,        // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        1.0f)); // default value
-    // parameters[TUNING]      = (float) linToLin( 440.0,  400.0,   480.0, 0.0,  1.0);
-    addParameter (tuning = new juce::AudioParameterFloat ("tuning", // parameterID
-                                                        "Tuning", // parameter name
-                                                        0.0f,   // minimum value
-                                                        1.0f,   // maximum value
-                                                        //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.5f)); // default value
-    // parameters[CUTOFF]      = (float) expToLin( 500.0,  314.0,  2394.0, 0.0,  1.0);
-    addParameter (cutoffFreq = new juce::AudioParameterFloat ("cutoff", // parameterID
+                                                        1.0f),       // default value
+            std::make_unique<juce::AudioParameterFloat> ("tuning",
+                                                        "Tuning",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f),
+            std::make_unique<juce::AudioParameterFloat> ("cutoff", // parameterID
                                                         "Cutoff", // parameter name
                                                         0.0f,   // minimum value
                                                         1.0f,   // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.0f)); // default value
-    // parameters[RESONANCE]   = (float) linToLin(  50.0,    0.0,   100.0, 0.0,  1.0);
-    addParameter (resonance = new juce::AudioParameterFloat ("resonance", // parameterID
+                                                        0.0f),       // default value
+            std::make_unique<juce::AudioParameterFloat> ("resonance", // parameterID
                                                         "Resonance", // parameter name
                                                         0.0f,   // minimum value
                                                         1.0f,   // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.0f)); // default value
-    //  parameters[ENVMOD]      = 0.25f;
-    addParameter (envelopMod = new juce::AudioParameterFloat ("envmod", // parameterID
+                                                        0.0f),       // default value
+            std::make_unique<juce::AudioParameterFloat> ("envmod", // parameterID
                                                         "EnvMod", // parameter name
                                                         0.0f,   // minimum value
                                                         1.0f,   // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.0f)); // default value
-    // parameters[DECAY]       = (float) expToLin( 400.0,  200.0,  2000.0, 0.0,  1.0);
-    addParameter (decay = new juce::AudioParameterFloat ("decay", // parameterID
+                                                        0.0f),       // default value
+            std::make_unique<juce::AudioParameterFloat> ("decay", // parameterID
                                                         "Decay", // parameter name
                                                         0.0f,   // minimum value
                                                         1.0f,   // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.85f)); // default value
-    // parameters[ACCENT]      = 0.5f;
-    addParameter (accent = new juce::AudioParameterFloat ("accent", // parameterID
+                                                        0.85f),       // default value
+            std::make_unique<juce::AudioParameterFloat> ("accent", // parameterID
                                                         "Accent", // parameter name
                                                         0.0f,   // minimum value
                                                         1.0f,   // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.5f)); // default value
-    // parameters[VOLUME]      = (float) linToLin(  -6.0,  -60.0,     0.0, 0.0,  1.0);
-    addParameter (volume = new juce::AudioParameterFloat ("volume", // parameterID
+                                                        0.5f),       // default value
+            std::make_unique<juce::AudioParameterFloat> ("volume", // parameterID
                                                         "Volume", // parameter name
                                                         0.0f,   // minimum value
                                                         1.0f,   // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.85f)); // default value
-    // parameters[FILTER_TYPE] = (float) indexToNormalizedValue(TeeBeeFilter::LP_18, TeeBeeFilter::NUM_MODES);
-    //addParameter (filter = new juce::AudioParameterFloat ("filter", // parameterID
-    //                                                    "Filter", // parameter name
-    //                                                    0.0f,   // minimum value
-    //                                                    1.0f,   // maximum value
-    //                                                    //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-    //                                                    0.5f)); // default value
+                                                        0.85f)        // default value
 
+       })
+{
+    // assign a pointer to use it around for each parameter
+    waveForm = parameters.getRawParameterValue("waveform");
+    tuning = parameters.getRawParameterValue("tuning");
+    cutoffFreq = parameters.getRawParameterValue("cutoff");
+    resonance = parameters.getRawParameterValue("resonance");
+    envelopMod = parameters.getRawParameterValue("envmod");
+    decay = parameters.getRawParameterValue("decay");
+    accent = parameters.getRawParameterValue("accent");
+    volume = parameters.getRawParameterValue("volume");
 }
 
 JC303::~JC303()
@@ -345,34 +330,25 @@ bool JC303::hasEditor() const
 
 juce::AudioProcessorEditor* JC303::createEditor()
 {
-    return new JC303Editor (*this);
+    return new JC303Editor (*this, parameters);
 }
 
 //==============================================================================
 void JC303::getStateInformation (juce::MemoryBlock& destData)
 {
     // for host save functionality
-    juce::MemoryOutputStream (destData, true).writeFloat (*waveForm);
-    juce::MemoryOutputStream (destData, true).writeFloat (*tuning);
-    juce::MemoryOutputStream (destData, true).writeFloat (*cutoffFreq);
-    juce::MemoryOutputStream (destData, true).writeFloat (*resonance);
-    juce::MemoryOutputStream (destData, true).writeFloat (*envelopMod);
-    juce::MemoryOutputStream (destData, true).writeFloat (*decay);
-    juce::MemoryOutputStream (destData, true).writeFloat (*accent);
-    juce::MemoryOutputStream (destData, true).writeFloat (*volume);
+    auto state = parameters.copyState();
+    std::unique_ptr<juce::XmlElement> xml (state.createXml());
+    copyXmlToBinary (*xml, destData);
 }
 
 void JC303::setStateInformation (const void* data, int sizeInBytes)
 {
     // for host load functionality
-    *waveForm = juce::MemoryInputStream (data, static_cast<size_t> (sizeInBytes), false).readFloat();
-    *tuning = juce::MemoryInputStream (data, static_cast<size_t> (sizeInBytes), false).readFloat();
-    *cutoffFreq = juce::MemoryInputStream (data, static_cast<size_t> (sizeInBytes), false).readFloat();
-    *resonance = juce::MemoryInputStream (data, static_cast<size_t> (sizeInBytes), false).readFloat();
-    *envelopMod = juce::MemoryInputStream (data, static_cast<size_t> (sizeInBytes), false).readFloat();
-    *decay = juce::MemoryInputStream (data, static_cast<size_t> (sizeInBytes), false).readFloat();
-    *accent = juce::MemoryInputStream (data, static_cast<size_t> (sizeInBytes), false).readFloat();
-    *volume = juce::MemoryInputStream (data, static_cast<size_t> (sizeInBytes), false).readFloat();
+    std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
+    if (xmlState.get() != nullptr)
+        if (xmlState->hasTagName (parameters.state.getType()))
+            parameters.replaceState (juce::ValueTree::fromXml (*xmlState));
 }
 
 //==============================================================================

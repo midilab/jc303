@@ -5,12 +5,13 @@
 #include "ui/BinaryData.h"
 #include "ui/KnobLookAndFeel.h"
 
+typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
+
 //==============================================================================
-class JC303Editor  : public juce::AudioProcessorEditor,
-                     public juce::Slider::Listener
+class JC303Editor  : public juce::AudioProcessorEditor
 {
 public:
-    explicit JC303Editor (JC303&);
+    explicit JC303Editor (JC303&, juce::AudioProcessorValueTreeState&);
     ~JC303Editor() override;
 
     //==============================================================================
@@ -18,8 +19,7 @@ public:
     void resized() override;
 
 private:
-    juce::Slider* createSlider(juce::AudioParameterFloat* parameter);
-    void sliderValueChanged(juce::Slider* slider) override;
+    juce::Slider* createSlider();
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -27,7 +27,7 @@ private:
     JC303& processorRef;
 
     // Declare your Slider members
-    juce::Slider* waveFormSlider;
+    juce::Slider* waveformSlider;
     juce::Slider* tuningSlider;
     juce::Slider* cutoffFreqSlider;
     juce::Slider* resonanceSlider;
@@ -35,6 +35,19 @@ private:
     juce::Slider* decaySlider;
     juce::Slider* accentSlider;
     juce::Slider* volumeSlider;
+
+    // declare the attchaments
+    std::unique_ptr<SliderAttachment> waveformAttachment;
+    std::unique_ptr<SliderAttachment> tuningAttachment;
+    std::unique_ptr<SliderAttachment> cutoffFreqAttachment;
+    std::unique_ptr<SliderAttachment> resonanceAttachment;
+    std::unique_ptr<SliderAttachment> envelopModAttachment;
+    std::unique_ptr<SliderAttachment> decayAttachment;
+    std::unique_ptr<SliderAttachment> accentAttachment;
+    std::unique_ptr<SliderAttachment> volumeAttachment;
+
+    // our value tree state
+    juce::AudioProcessorValueTreeState& valueTreeState;
 
     KnobLookAndFeel lookAndFeel;
 

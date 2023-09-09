@@ -71,22 +71,23 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    //==============================================================================
-    juce::AudioParameterFloat* waveForm;
-    juce::AudioParameterFloat* tuning;
-    juce::AudioParameterFloat* cutoffFreq;
-    juce::AudioParameterFloat* resonance;
-    juce::AudioParameterFloat* envelopMod;
-    juce::AudioParameterFloat* decay;
-    juce::AudioParameterFloat* accent;
-    juce::AudioParameterFloat* volume;
-
 private:
     void render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
 
     // the embedded core dsp object:
     Open303 open303Core;
+
+    //==============================================================================
+    juce::AudioProcessorValueTreeState parameters;
+    std::atomic<float>* waveForm = nullptr;
+    std::atomic<float>* tuning = nullptr;
+    std::atomic<float>* cutoffFreq = nullptr;
+    std::atomic<float>* resonance = nullptr;
+    std::atomic<float>* envelopMod = nullptr;
+    std::atomic<float>* decay = nullptr;
+    std::atomic<float>* accent = nullptr;
+    std::atomic<float>* volume = nullptr;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)
