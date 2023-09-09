@@ -2,7 +2,7 @@
 
 A Cmake JUCE port of [Robin Schmidt`s Open303](https://github.com/RobinSchmidt/Open303), a Roland TB-303 clone plugin. 
 
-![Image of Roland TB-303](https://raw.githubusercontent.com/midilab/jc303/main/img/Roland_TB-303_Panel.jpg)  
+![JC-303 Screenshot](https://raw.githubusercontent.com/midilab/jc303/main/img/jc303.png)  
 
 This software is licensed under the GNU General Public License version 3 (GPLv3).  
   
@@ -10,7 +10,7 @@ The Open303 engine part of this software are also licensed under the MIT License
 
 ## Download
 
-This very first version features a headless plugin (user interface planned for upcoming releases), with direct control mapping on your DAW. Supports Windows, Linux and MacOS. You may found VST3, LV2 and AU formats avaliable to download.
+Supports Windows, Linux and MacOS. You may found VST3, LV2 and AU formats avaliable to download.
 
 MacOS Intel x64 and M1: [jc303-macos-universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9/jc303-macos-universal-plugins.zip)  
 Windows Intel x64: [jc303-win64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9/jc303-win64-plugins.zip)  
@@ -20,7 +20,11 @@ Linux Intel x64: [jc303-linux64-plugins.zip](https://github.com/midilab/jc303/re
 
 **Know issues**: MacOS AU not loading in M1 tested with ableton11, all other MacOS plugins format tested and working fine on M1!  
 
-## Generating IDE project
+## Build
+
+Generate the project first before you compile.
+
+#### Apple Xcode
 
 To generate an **Xcode** project, run:
 ```sh
@@ -30,23 +34,23 @@ The `-D CMAKE_OSX_ARCHITECTURES=arm64\;x86_64` flag is required to build univers
 
 The `-D CMAKE_OSX_DEPLOYMENT_TARGET=10.13` flag sets the minimum MacOS version to be supported.
 
----
+#### Windows Visual Studio
 
 To generate a **Visual Studio 2022 (17)** project, run:
 ```sh
 cmake -B build -G "Visual Studio 17"
 ```
 
----
+#### GNU Linux
 
 To generate a **Linux CMake** project, run:
 ```sh
 cmake -B build
 ```
 
-## Building
+## Compile
 
-To build the generated IDE project from the command line, run:
+To compiled the generated IDE project from the command line, run:
 ```sh
 cmake --build build --config Release
 ```
@@ -54,6 +58,7 @@ cmake --build build --config Release
 ## Roadmap
 
 1. ~~Binary release for MacOS, Windows and Linux~~  
-2. Graphical User Interface  
-3. Filter type select  
-4. Step Sequencer  
+2. ~~Graphical User Interface~~  
+3. Filter type and internal parameters for engine tunning exposed to GUI  
+4. Preset Support  
+5. Step Sequencer  
