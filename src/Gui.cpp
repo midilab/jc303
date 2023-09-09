@@ -89,38 +89,25 @@ void JC303Editor::setControlsLayout()
     // Adjust the parameters accordingly to fit your needs
     const int sliderWidth = 120;
     const int sliderHeight = 120;
-    const int horizontalSpacing = 10;
-    const int verticalSpacing =15;
-    int x = 23;
-    int y = 38;
 
-    // buttons location
+    // knob positioning location
+    // first row
     pair<int, int> waveFormLocation = {9, 20}; 
     pair<int, int> volumeLocation = {130, 20}; 
-    
+    // second row
     pair<int, int> tuningLocation = {9, 160}; 
+    pair<int, int> cutoffFreqLocation = {130, 160}; 
+    pair<int, int> resonanceLocation = {252, 160}; 
+    pair<int, int> envelopeLocation = {374, 160}; 
+    pair<int, int> decayLocation = {496, 160}; 
+    pair<int, int> accentLocation = {618, 160}; 
 
     waveFormSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
-    x += sliderWidth + horizontalSpacing;
-
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);
-    x = 23;
-    y += sliderHeight + verticalSpacing;
-
     tuningSlider->setBounds(tuningLocation.first, tuningLocation.second, sliderWidth, sliderHeight);
-    x += sliderWidth + horizontalSpacing;
-
-    cutoffFreqSlider->setBounds(x, y, sliderWidth, sliderHeight);
-    x += sliderWidth + horizontalSpacing;
-
-    resonanceSlider->setBounds(x, y, sliderWidth, sliderHeight);
-    x += sliderWidth + horizontalSpacing;
-
-    envelopModSlider->setBounds(x, y, sliderWidth, sliderHeight);
-    x += sliderWidth + horizontalSpacing;
-
-    decaySlider->setBounds(x, y, sliderWidth, sliderHeight);
-    x += sliderWidth + horizontalSpacing;
-
-    accentSlider->setBounds(x, y, sliderWidth, sliderHeight);
+    cutoffFreqSlider->setBounds(cutoffFreqLocation.first, cutoffFreqLocation.second, sliderWidth, sliderHeight);
+    resonanceSlider->setBounds(resonanceLocation.first, resonanceLocation.second, sliderWidth, sliderHeight);
+    envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderWidth, sliderHeight);
+    decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderWidth, sliderHeight);
+    accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderWidth, sliderHeight);
 }
