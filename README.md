@@ -43,7 +43,12 @@ cmake -B build -G "Visual Studio 17"
 
 #### GNU Linux
 
-To generate a **Linux CMake** project, run:
+Install the dependecies:  
+```sh
+sudo apt install build-essential gcc cmake libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libasound2-dev
+```
+
+To generate a **Linux CMake** project, run:  
 ```sh
 cmake -B build
 ```
