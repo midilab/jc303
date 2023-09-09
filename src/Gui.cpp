@@ -4,8 +4,6 @@
 JC303Editor::JC303Editor (JC303& p)
     : AudioProcessorEditor (&p), processorRef (p)
 {
-    juce::ignoreUnused (processorRef);
-
     // Create and configure rotary sliders for each parameter
     addAndMakeVisible(waveFormSlider = createSlider(processorRef.waveForm));
     addAndMakeVisible(tuningSlider = createSlider(processorRef.tuning));
@@ -36,18 +34,14 @@ void JC303Editor::paint (juce::Graphics& g)
     g.setColour (juce::Colours::white);
     g.setFont (15.0f);
 
-    // main background with labels
+    // main gui is a simple background with labels
     juce::Image background = ImageCache::getFromMemory (BinaryData::jc303gui_png, BinaryData::jc303gui_pngSize);
     g.drawImageAt (background, 0, 0);
-    //g.drawFittedText ("JC303", getLocalBounds(), juce::Justification::centred, 1);
 }
 
 void JC303Editor::resized()
 {
-    //knobComponent.setBounds(50, 50, 100, 100);
     setControlsLayout();
-    // This is generally where you'll want to lay out the positions of any
-    // subcomponents in your editor..
 }
 
 juce::Slider* JC303Editor::createSlider(juce::AudioParameterFloat* parameter)
@@ -55,7 +49,6 @@ juce::Slider* JC303Editor::createSlider(juce::AudioParameterFloat* parameter)
     auto* slider = new juce::Slider();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider->setLookAndFeel(&lookAndFeel);
-    //slider->setTextBoxStyle(juce::Slider::TextBoxBelow, false, 80, 20);
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
     slider->setRange(parameter->range.start, parameter->range.end);
     slider->setValue(*parameter);
