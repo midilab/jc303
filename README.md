@@ -12,9 +12,9 @@ The Open303 engine part of this software are also licensed under the MIT License
 
 Supports Windows, Linux and MacOS. You may found VST3, LV2 and AU formats avaliable to download.
 
-MacOS Intel x64 and M1: [jc303-macos-universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9/jc303-macos-universal-plugins.zip)  
-Windows Intel x64: [jc303-win64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9/jc303-win64-plugins.zip)  
-Linux Intel x64: [jc303-linux64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9/jc303-linux64-plugins.zip)  
+MacOS Intel x64 and M1: [jc303-macos-universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9.1/jc303-0.9.1-macos-universal-plugins.zip)  
+Windows Intel x64: [jc303-win64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9.1/jc303-0.9.1-win64-plugins.zip)  
+Linux Intel x64: [jc303-linux64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.9.1/jc303-0.9.1-linux64-plugins.zip)  
   
 **Installation**: The platform zip pack will contain a folder per plugin format, just pick the format you want to install and copy the content of the folder to your OS plugin format folder.  
 
