@@ -112,7 +112,7 @@ include_directories(src)
 # into your build tree. The include path for this header will be automatically added to the target.
 # NOTE: JuceHeader.h is generated when the target is built.
 
-# juce_generate_juce_header("${PROJECT_NAME}")
+juce_generate_juce_header("${PROJECT_NAME}")
 
 # `target_compile_definitions` adds some preprocessor definitions to our target.
 # JUCE modules also make use of compile definitions to switch certain features on/off,

@@ -71,10 +71,6 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-private:
-    void render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
-    void setParameter (Open303Parameters index, float value);
-
     //==============================================================================
     juce::AudioParameterFloat* waveForm;
     juce::AudioParameterFloat* tuning;
@@ -84,6 +80,10 @@ private:
     juce::AudioParameterFloat* decay;
     juce::AudioParameterFloat* accent;
     juce::AudioParameterFloat* volume;
+
+private:
+    void render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
+    void setParameter (Open303Parameters index, float value);
 
     // the embedded core dsp object:
     Open303 open303Core;

@@ -24,10 +24,10 @@ target_sources("${PROJECT_NAME}"
         dsp/rosic_Open303.cpp
         dsp/rosic_RealFunctions.cpp
         dsp/rosic_TeeBeeFilter.cpp
-        
-        Gui.h
+       
+	ui/BinaryData.cpp
+ 
         Gui.cpp
-        JC303.h
         JC303.cpp)
 
 # Add subdirectories with source files, if present
