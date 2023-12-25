@@ -35,6 +35,7 @@ private:
     juce::Slider* decaySlider;
     juce::Slider* accentSlider;
     juce::Slider* volumeSlider;
+    juce::Slider* slideTimeSlider;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -45,6 +46,7 @@ private:
     std::unique_ptr<SliderAttachment> decayAttachment;
     std::unique_ptr<SliderAttachment> accentAttachment;
     std::unique_ptr<SliderAttachment> volumeAttachment;
+    std::unique_ptr<SliderAttachment> slideTimeAttachment;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;
