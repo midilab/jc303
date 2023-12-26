@@ -39,7 +39,15 @@ FetchContent_Declare(juce
     SUBBUILD_DIR   "${FETCHCONTENT_BASE_DIR}/JUCE-Subbuild"
     BINARY_DIR     "${FETCHCONTENT_BASE_DIR}/JUCE-Build")
 
+FetchContent_Declare(juce-clap-extensions
+    GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
+    GIT_TAG        54d83e121545490fdbb2d3dec3ba0c1da6005dde
+    GIT_SHALLOW    TRUE
+    GIT_CONFIG     advice.detachedHead=false)    # Disable detached HEAD warning for fetching a specific tag
+
+
 FetchContent_MakeAvailable(juce)
+FetchContent_MakeAvailable(juce-clap-extensions)
 
 
 ### Plugin Project Setup ###
@@ -94,6 +102,11 @@ juce_add_plugin("${PROJECT_NAME}"
 
     COPY_PLUGIN_AFTER_BUILD FALSE)              # Should the plugin be installed to a default location after building?
                                                 # NOTE: Writing to the default install locations might require administrator privileges on Windows.
+
+clap_juce_extensions_plugin(
+    TARGET "${PROJECT_NAME}"
+    CLAP_ID "co.midilab.${PROJECT_NAME}"
+    CLAP_FEATURES "instrument" "synthesizer")
 
 # Set the C++ language standard requirenment for the "shared code" library target.
 # Setting this to PUBLIC ensures that all dependent targets will inherit the specified C++ standard.
