@@ -58,7 +58,12 @@ JC303::JC303()
                                                         0.0f,   // minimum value
                                                         1.0f,   // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.85f)        // default value
+                                                        0.85f),        // default value
+            std::make_unique<juce::AudioParameterFloat> ("slideTime",
+                                                        "Slide time",
+                                                        0.0f,
+                                                        10.0f,
+                                                        6.0f)
 
        })
 {
@@ -71,6 +76,7 @@ JC303::JC303()
     decay = parameters.getRawParameterValue("decay");
     accent = parameters.getRawParameterValue("accent");
     volume = parameters.getRawParameterValue("volume");
+    slideTime = parameters.getRawParameterValue("slideTime");
 }
 
 JC303::~JC303()
@@ -136,6 +142,12 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setSquarePhaseShift(  linToLin(value, 0.0, 1.0,   0.0,    360.0)  );
         break;
     #endif
+
+    case SLIDE_TIME:
+        // setSlideTime scales the time constant internally by 0.2, 
+        // going from 0-10 to 0-50 here to compensate
+        open303Core.setSlideTime(linToLin(value, 0.0, 1.0, 0.0, 50.0));
+        break;
 
 	}
 }
@@ -290,6 +302,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     setParameter(DECAY, *decay);
     setParameter(ACCENT, *accent);
     setParameter(VOLUME, *volume);
+    setParameter(SLIDE_TIME, *slideTime);
 
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)

@@ -13,6 +13,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(decaySlider = createSlider());
     addAndMakeVisible(accentSlider = createSlider());
     addAndMakeVisible(volumeSlider = createSlider());
+    addAndMakeVisible(slideTimeSlider = createSlider());
 
     // attch controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -23,6 +24,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     decayAttachment.reset (new SliderAttachment (valueTreeState, "decay", *decaySlider));
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
+    slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
 
     setControlsLayout();
 
@@ -84,6 +86,8 @@ void JC303Editor::setControlsLayout()
     pair<int, int> envelopeLocation = {374, 160}; 
     pair<int, int> decayLocation = {496, 160}; 
     pair<int, int> accentLocation = {618, 160}; 
+    // small knobs
+    pair<int, int> slideTimeLocation = {692, 25};
 
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);
@@ -93,4 +97,5 @@ void JC303Editor::setControlsLayout()
     envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderWidth, sliderHeight);
     decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderWidth, sliderHeight);
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderWidth, sliderHeight);
+    slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderWidth / 4, sliderHeight / 4);
 }

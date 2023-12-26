@@ -28,6 +28,8 @@ enum Open303Parameters
   SQUARE_PHASE_SHIFT,
 #endif
 
+  SLIDE_TIME,
+
   OPEN303_NUM_PARAMETERS
 };
 
@@ -88,6 +90,7 @@ private:
     std::atomic<float>* decay = nullptr;
     std::atomic<float>* accent = nullptr;
     std::atomic<float>* volume = nullptr;
+    std::atomic<float>* slideTime = nullptr;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)
