@@ -55,8 +55,13 @@ FetchContent_MakeAvailable(juce-clap-extensions)
 # If you are building a VST2 or AAX plugin, CMake needs to be told where to find these SDKs.
 # This setup should be done before calling `juce_add_plugin`.
 
-juce_set_vst2_sdk_path("${PROJECT_SOURCE_DIR}/vstsdk2.4")
-# juce_set_aax_sdk_path(...)
+# do we have vst2 sdk to build it?
+if(EXISTS "${PROJECT_SOURCE_DIR}/vstsdk2.4")
+    juce_set_vst2_sdk_path("${PROJECT_SOURCE_DIR}/vstsdk2.4")
+    set(PLUGIN_FORMATS AU VST VST3 LV2)
+else()
+    set(PLUGIN_FORMATS AU VST3 LV2)
+endif()
 
 # `juce_add_plugin` adds a static library target with the name passed as the first argument.
 # This target is a normal CMake target, but has a lot of extra properties set
@@ -65,7 +70,7 @@ juce_set_vst2_sdk_path("${PROJECT_SOURCE_DIR}/vstsdk2.4")
 # Check the readme at `docs/CMake API.md` in the JUCE repo for the full list.
 
 juce_add_plugin("${PROJECT_NAME}"
-	FORMATS AU VST VST3 LV2                 # The formats to build. Valid formats: Standalone Unity VST3 AU AUv3 AAX VST LV2.
+    FORMATS ${PLUGIN_FORMATS}                   # The formats to build. Valid formats: Standalone Unity VST3 AU AUv3 AAX VST LV2.
                                                 # AU and AUv3 plugins will only be enabled when building on macOS.
     PRODUCT_NAME "JC303"                        # The name of the final executable, which can differ from the target name.
     PLUGIN_NAME "JC303"                         # Name of the plugin that will be displayed in the DAW. Can differ from PRODUCT_NAME.
