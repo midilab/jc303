@@ -13,7 +13,15 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(decaySlider = createSlider());
     addAndMakeVisible(accentSlider = createSlider());
     addAndMakeVisible(volumeSlider = createSlider());
+    // MODs
+    addAndMakeVisible(driverSlider = createSlider());
+    addAndMakeVisible(driverOffsetSlider = createSlider());
+    addAndMakeVisible(phaseShiftSlider = createSlider());
     addAndMakeVisible(slideTimeSlider = createSlider());
+    addAndMakeVisible(preFilterSlider = createSlider());
+    addAndMakeVisible(postFilterSlider = createSlider());
+    addAndMakeVisible(feedbackFilterSlider = createSlider());
+    addAndMakeVisible(ampSustainSlider = createSlider());
 
     // attch controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -24,7 +32,15 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     decayAttachment.reset (new SliderAttachment (valueTreeState, "decay", *decaySlider));
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
+    // MODs
+    driverAttachment.reset(new SliderAttachment(valueTreeState, "driver", *driverSlider));
+    driverOffsetAttachment.reset(new SliderAttachment(valueTreeState, "driverOffset", *driverOffsetSlider));
+    phaseShiftAttachment.reset(new SliderAttachment(valueTreeState, "phaseShift", *phaseShiftSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
+    preFilterAttachment.reset(new SliderAttachment(valueTreeState, "preFilter", *preFilterSlider));
+    postFilterAttachment.reset(new SliderAttachment(valueTreeState, "postFilter", *postFilterSlider));
+    feedbackFilterAttachment.reset(new SliderAttachment(valueTreeState, "feedbackFilter", *feedbackFilterSlider));
+    ampSustainAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
 
     setControlsLayout();
 
@@ -86,8 +102,17 @@ void JC303Editor::setControlsLayout()
     pair<int, int> envelopeLocation = {374, 160}; 
     pair<int, int> decayLocation = {496, 160}; 
     pair<int, int> accentLocation = {618, 160}; 
-    // small knobs
+    // MODs knobs
+    // first row
+    pair<int, int> driverLocation = {473, 25};
+    pair<int, int> driverOffsetLocation = {546, 25};
+    pair<int, int> phaseShiftLocation = {619, 25};
     pair<int, int> slideTimeLocation = {692, 25};
+    // second row
+    pair<int, int> preFilterLocation = {473, 45};
+    pair<int, int> postFilterLocation = {546, 45};
+    pair<int, int> feedbackFilterLocation = {619, 45};
+    pair<int, int> ampSustainLocation = {692, 45};
 
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);
@@ -97,5 +122,13 @@ void JC303Editor::setControlsLayout()
     envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderWidth, sliderHeight);
     decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderWidth, sliderHeight);
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderWidth, sliderHeight);
+    // MODs
+    driverSlider->setBounds(driverLocation.first, driverLocation.second, sliderWidth / 4, sliderHeight / 4);
+    driverOffsetSlider->setBounds(driverOffsetLocation.first, driverOffsetLocation.second, sliderWidth / 4, sliderHeight / 4);
+    phaseShiftSlider->setBounds(phaseShiftLocation.first, phaseShiftLocation.second, sliderWidth / 4, sliderHeight / 4);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderWidth / 4, sliderHeight / 4);
+    preFilterSlider->setBounds(preFilterLocation.first, preFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
+    postFilterSlider->setBounds(postFilterLocation.first, postFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
+    feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
+    ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderWidth / 4, sliderHeight / 4);
 }

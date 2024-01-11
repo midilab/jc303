@@ -59,11 +59,48 @@ JC303::JC303()
                                                         1.0f,   // maximum value
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
                                                         0.85f),        // default value
-            std::make_unique<juce::AudioParameterFloat> ("slideTime",
+            // MODs parameters
+            std::make_unique<juce::AudioParameterFloat> ("driver",
+                                                        "Driver",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.61f), // 36.9; linToLin(value, 0.0, 1.0,   0.0,     60.0)
+            std::make_unique<juce::AudioParameterFloat> ("driverOffset",
+                                                        "Driver Offset",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.71f), // 4.37; linToLin(value, 0.0, 1.0, -10.0,     10.0)
+            std::make_unique<juce::AudioParameterFloat> ("phaseShift",
+                                                        "Square Phase",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f), // 180.0; linToLin(value, 0.0, 1.0,   0.0,    360.0)
+            std::make_unique<juce::AudioParameterFloat> ("slideTime", //ok
                                                         "Slide time",
                                                         0.0f,
-                                                        10.0f,
-                                                        6.0f)
+                                                        1.0f,
+                                                        1.0f),
+                                                        //0.6f)
+            std::make_unique<juce::AudioParameterFloat> ("preFilter",
+                                                        "Filt. Pre",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.09f), // 44.486; linToExp(value, 0.0, 1.0,  10.0,    500.0)
+            std::make_unique<juce::AudioParameterFloat> ("postFilter",
+                                                        "Filt. Post",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.05f), // 24.167; linToExp(value, 0.0, 1.0,  10.0,    500.0)
+            std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
+                                                        "Filt. FeedB.",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.3f), // 150.0; linToExp(value, 0.0, 1.0,  10.0,    500.0) 
+            std::make_unique<juce::AudioParameterFloat> ("ampSustain",
+                                                        "Amp. Sust.",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f)  // 0.5; linToLin(value, 0.0, 1.0, 0.0,      1.0)
 
        })
 {
@@ -76,7 +113,16 @@ JC303::JC303()
     decay = parameters.getRawParameterValue("decay");
     accent = parameters.getRawParameterValue("accent");
     volume = parameters.getRawParameterValue("volume");
+    // MODs parameters
+    // TODO: a button to reset MOD changes to original 303 mode
+    driver = parameters.getRawParameterValue("driver");
+    driverOffset = parameters.getRawParameterValue("driverOffset");
+    phaseShift = parameters.getRawParameterValue("phaseShift");
     slideTime = parameters.getRawParameterValue("slideTime");
+    preFilter = parameters.getRawParameterValue("preFilter");
+    postFilter = parameters.getRawParameterValue("postFilter");
+    feedbackFilter = parameters.getRawParameterValue("feedbackFilter");
+    ampSustain = parameters.getRawParameterValue("ampSustain");
 }
 
 JC303::~JC303()
@@ -115,39 +161,40 @@ void JC303::setParameter (Open303Parameters index, float value)
     case VOLUME:
         open303Core.setVolume(   linToLin(value, 0.0, 1.0, -60.0,      0.0)  );
         break;
-    //case FILTER_TYPE:
-    //    open303Core.filter.setMode(  normalizedValueToIndex(value, TeeBeeFilter::NUM_MODES) );
-    //    break;
 
-    #ifdef SHOW_INTERNAL_PARAMETERS
-    case AMP_SUSTAIN:
-        open303Core.setAmpSustain(        linToLin(value, 0.0, 1.0, -60.0,      0.0)  );
-        break;
-    case TANH_SHAPER_DRIVE:
-        open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
+    //
+    // MODS
+    //
+    case TANH_SHAPER_DRIVE: // its valid for square but not super expresive
+        //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
+        open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   23.0,     100.0)  );
         break;
     case TANH_SHAPER_OFFSET:
         open303Core.setTanhShaperOffset(  linToLin(value, 0.0, 1.0, -10.0,     10.0)  );
         break;
+    case SQUARE_PHASE_SHIFT:
+        open303Core.setSquarePhaseShift(  linToLin(value, 0.0, 1.0,   0.0,    360.0)  );
+        break;
+    case SLIDE_TIME:
+        open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
+        //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 100.0)        );
+        break;
     case PRE_FILTER_HPF:
         open303Core.setPreFilterHighpass( linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
-        break;
-    case FEEDBACK_HPF:
-        open303Core.setFeedbackHighpass(  linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
         break;
     case POST_FILTER_HPF:
         open303Core.setPostFilterHighpass(linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
         break;
-    case SQUARE_PHASE_SHIFT:
-        open303Core.setSquarePhaseShift(  linToLin(value, 0.0, 1.0,   0.0,    360.0)  );
+    case FEEDBACK_HPF:
+        open303Core.setFeedbackHighpass(  linToExp(value, 0.0, 1.0,  500.0,    10.0)  ); // this one is expresive only on higher reesonances, invert it and set nice 
         break;
-    #endif
-
-    case SLIDE_TIME:
-        // setSlideTime scales the time constant internally by 0.2, 
-        // going from 0-10 to 0-50 here to compensate
-        open303Core.setSlideTime(linToLin(value, 0.0, 1.0, 0.0, 50.0));
+    case AMP_SUSTAIN:
+        open303Core.setAmpSustain(        linToLin(value, 0.0, 1.0, 0.0,      1.0)  );
         break;
+        
+    //case FILTER_TYPE:
+    //    open303Core.filter.setMode(  normalizedValueToIndex(value, TeeBeeFilter::NUM_MODES) );
+    //    break;
 
 	}
 }
@@ -302,7 +349,15 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     setParameter(DECAY, *decay);
     setParameter(ACCENT, *accent);
     setParameter(VOLUME, *volume);
+    // MODs
+    setParameter(TANH_SHAPER_DRIVE, *driver);
+    setParameter(TANH_SHAPER_OFFSET, *driverOffset);
+    setParameter(SQUARE_PHASE_SHIFT, *phaseShift);
     setParameter(SLIDE_TIME, *slideTime);
+    setParameter(PRE_FILTER_HPF, *preFilter);
+    setParameter(POST_FILTER_HPF, *postFilter);
+    setParameter(FEEDBACK_HPF, *feedbackFilter);
+    setParameter(AMP_SUSTAIN, *ampSustain);
 
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)
