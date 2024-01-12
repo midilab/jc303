@@ -104,14 +104,14 @@ void JC303Editor::setControlsLayout()
     pair<int, int> accentLocation = {618, 160}; 
     // MODs knobs
     // first row
-    pair<int, int> driverLocation = {473, 25};
-    pair<int, int> driverOffsetLocation = {546, 25};
-    pair<int, int> phaseShiftLocation = {619, 25};
+    pair<int, int> driverLocation = {546, 25};
+    pair<int, int> feedbackFilterLocation = {619, 25};
+    //pair<int, int> driverOffsetLocation = {546, 25};
+    //pair<int, int> phaseShiftLocation = {619, 25};
     pair<int, int> slideTimeLocation = {692, 25};
     // second row
-    pair<int, int> preFilterLocation = {473, 45};
-    pair<int, int> postFilterLocation = {546, 45};
-    pair<int, int> feedbackFilterLocation = {619, 45};
+    //pair<int, int> preFilterLocation = {473, 45};
+    //pair<int, int> postFilterLocation = {546, 45};
     pair<int, int> ampSustainLocation = {692, 45};
 
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
@@ -124,11 +124,11 @@ void JC303Editor::setControlsLayout()
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderWidth, sliderHeight);
     // MODs
     driverSlider->setBounds(driverLocation.first, driverLocation.second, sliderWidth / 4, sliderHeight / 4);
-    driverOffsetSlider->setBounds(driverOffsetLocation.first, driverOffsetLocation.second, sliderWidth / 4, sliderHeight / 4);
-    phaseShiftSlider->setBounds(phaseShiftLocation.first, phaseShiftLocation.second, sliderWidth / 4, sliderHeight / 4);
+    //driverOffsetSlider->setBounds(driverOffsetLocation.first, driverOffsetLocation.second, sliderWidth / 4, sliderHeight / 4);
+    //phaseShiftSlider->setBounds(phaseShiftLocation.first, phaseShiftLocation.second, sliderWidth / 4, sliderHeight / 4);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderWidth / 4, sliderHeight / 4);
-    preFilterSlider->setBounds(preFilterLocation.first, preFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
-    postFilterSlider->setBounds(postFilterLocation.first, postFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
+    //preFilterSlider->setBounds(preFilterLocation.first, preFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
+    //postFilterSlider->setBounds(postFilterLocation.first, postFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
     feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
     ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderWidth / 4, sliderHeight / 4);
 }

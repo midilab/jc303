@@ -79,7 +79,7 @@ JC303::JC303()
                                                         "Slide time",
                                                         0.0f,
                                                         1.0f,
-                                                        1.0f),
+                                                        0.6f),
                                                         //0.6f)
             std::make_unique<juce::AudioParameterFloat> ("preFilter",
                                                         "Filt. Pre",
@@ -100,7 +100,7 @@ JC303::JC303()
                                                         "Amp. Sust.",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f)  // 0.5; linToLin(value, 0.0, 1.0, 0.0,      1.0)
+                                                        0.3f)  // 0.5; linToLin(value, 0.0, 1.0, 0.0,      1.0)
 
        })
 {
@@ -167,29 +167,34 @@ void JC303::setParameter (Open303Parameters index, float value)
     //
     case TANH_SHAPER_DRIVE: // its valid for square but not super expresive
         //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
-        open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   23.0,     100.0)  );
+        open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   35.0,     80.0)  );
         break;
+    case FEEDBACK_HPF:
+        open303Core.setFeedbackHighpass(  linToExp(value, 0.0, 1.0,  350.0,    10.0)  ); // this one is expresive only on higher reesonances
+        break;
+    case SLIDE_TIME:
+        //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
+        open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 100.0)        );
+        break;
+    case AMP_SUSTAIN:
+        //open303Core.setAmpSustain(        linToLin(value, 0.0, 1.0, 0.0,      5.0)  );
+        //open303Core.setNormalAttack(        linToLin(value, 0.0, 1.0, 0.3,      30.0)  );
+        open303Core.setAccentDecay(        linToLin(value, 0.0, 1.0, 30.0,      3000.0)  );
+        // setAmpDecay 16 > 3000
+        break;
+
+
     case TANH_SHAPER_OFFSET:
         open303Core.setTanhShaperOffset(  linToLin(value, 0.0, 1.0, -10.0,     10.0)  );
         break;
     case SQUARE_PHASE_SHIFT:
         open303Core.setSquarePhaseShift(  linToLin(value, 0.0, 1.0,   0.0,    360.0)  );
         break;
-    case SLIDE_TIME:
-        open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
-        //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 100.0)        );
-        break;
     case PRE_FILTER_HPF:
         open303Core.setPreFilterHighpass( linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
         break;
     case POST_FILTER_HPF:
         open303Core.setPostFilterHighpass(linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
-        break;
-    case FEEDBACK_HPF:
-        open303Core.setFeedbackHighpass(  linToExp(value, 0.0, 1.0,  500.0,    10.0)  ); // this one is expresive only on higher reesonances, invert it and set nice 
-        break;
-    case AMP_SUSTAIN:
-        open303Core.setAmpSustain(        linToLin(value, 0.0, 1.0, 0.0,      1.0)  );
         break;
         
     //case FILTER_TYPE:
@@ -351,11 +356,11 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     setParameter(VOLUME, *volume);
     // MODs
     setParameter(TANH_SHAPER_DRIVE, *driver);
-    setParameter(TANH_SHAPER_OFFSET, *driverOffset);
-    setParameter(SQUARE_PHASE_SHIFT, *phaseShift);
+    //setParameter(TANH_SHAPER_OFFSET, *driverOffset);
+    //setParameter(SQUARE_PHASE_SHIFT, *phaseShift);
     setParameter(SLIDE_TIME, *slideTime);
-    setParameter(PRE_FILTER_HPF, *preFilter);
-    setParameter(POST_FILTER_HPF, *postFilter);
+    //setParameter(PRE_FILTER_HPF, *preFilter);
+    //setParameter(POST_FILTER_HPF, *postFilter);
     setParameter(FEEDBACK_HPF, *feedbackFilter);
     setParameter(AMP_SUSTAIN, *ampSustain);
 
