@@ -12,10 +12,13 @@
             file="gui/resources/jc303-mod-switch.png"/>
     </GROUP>
     <GROUP id="{448A74E3-0B21-A88C-6AF0-B8576C880BC5}" name="GUI">
+      <FILE id="fUN8Wx" name="BinaryData.h" compile="0" resource="0" file="JuceLibraryCode/BinaryData.h"/>
       <FILE id="RK1Gng" name="Gui.cpp" compile="1" resource="0" file="Gui.cpp"/>
       <FILE id="dd3FGf" name="Gui.h" compile="0" resource="0" file="Gui.h"/>
       <FILE id="gWFNci" name="KnobLookAndFeel.h" compile="0" resource="0"
             file="gui/KnobLookAndFeel.h"/>
+      <FILE id="JcAVkb" name="ModKnobLookAndFeel.h" compile="0" resource="0"
+            file="gui/ModKnobLookAndFeel.h"/>
     </GROUP>
     <GROUP id="{A0D2D718-25B9-6767-C7D9-D915FFC2C688}" name="Source">
       <FILE id="qz8Js5" name="JC303.cpp" compile="1" resource="0" file="JC303.cpp"/>

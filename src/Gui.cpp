@@ -5,23 +5,23 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     : AudioProcessorEditor (&p), processorRef (p), valueTreeState (vts)
 {
     // Create and configure rotary sliders for each parameter
-    addAndMakeVisible(waveformSlider = createSlider());
-    addAndMakeVisible(tuningSlider = createSlider());
-    addAndMakeVisible(cutoffFreqSlider = createSlider());
-    addAndMakeVisible(resonanceSlider = createSlider());
-    addAndMakeVisible(envelopModSlider = createSlider());
-    addAndMakeVisible(decaySlider = createSlider());
-    addAndMakeVisible(accentSlider = createSlider());
-    addAndMakeVisible(volumeSlider = createSlider());
+    addAndMakeVisible(waveformSlider = create303Knob());
+    addAndMakeVisible(tuningSlider = create303Knob());
+    addAndMakeVisible(cutoffFreqSlider = create303Knob());
+    addAndMakeVisible(resonanceSlider = create303Knob());
+    addAndMakeVisible(envelopModSlider = create303Knob());
+    addAndMakeVisible(decaySlider = create303Knob());
+    addAndMakeVisible(accentSlider = create303Knob());
+    addAndMakeVisible(volumeSlider = create303Knob());
     // MODs
-    addAndMakeVisible(driverSlider = createSlider());
-    addAndMakeVisible(driverOffsetSlider = createSlider());
-    addAndMakeVisible(phaseShiftSlider = createSlider());
-    addAndMakeVisible(slideTimeSlider = createSlider());
-    addAndMakeVisible(preFilterSlider = createSlider());
-    addAndMakeVisible(postFilterSlider = createSlider());
-    addAndMakeVisible(feedbackFilterSlider = createSlider());
-    addAndMakeVisible(ampSustainSlider = createSlider());
+    addAndMakeVisible(driverSlider = createModKnob());
+    addAndMakeVisible(driverOffsetSlider = createModKnob());
+    addAndMakeVisible(phaseShiftSlider = createModKnob());
+    addAndMakeVisible(slideTimeSlider = createModKnob());
+    addAndMakeVisible(preFilterSlider = createModKnob());
+    addAndMakeVisible(postFilterSlider = createModKnob());
+    addAndMakeVisible(feedbackFilterSlider = createModKnob());
+    addAndMakeVisible(ampSustainSlider = createModKnob());
 
     // attch controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -72,11 +72,11 @@ void JC303Editor::resized()
     setControlsLayout();
 }
 
-juce::Slider* JC303Editor::createSlider()
+juce::Slider* JC303Editor::create303Knob()
 {
     auto* slider = new juce::Slider();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider->setLookAndFeel(&lookAndFeel);
+    slider->setLookAndFeel(&knobLookAndFeel);
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
     //slider->setRange(parameter->range.start, parameter->range.end);
     //slider->setValue(*parameter);
@@ -84,6 +84,17 @@ juce::Slider* JC303Editor::createSlider()
     return slider;
 }
 
+juce::Slider* JC303Editor::createModKnob()
+{
+    auto* slider = new juce::Slider();
+    slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    slider->setLookAndFeel(&modKnobLookAndFeel);
+    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+    //slider->setRange(parameter->range.start, parameter->range.end);
+    //slider->setValue(*parameter);
+    //slider->addListener(this);
+    return slider;
+}
 void JC303Editor::setControlsLayout()
 {
     // Set the bounds and other properties for each slider
@@ -104,15 +115,15 @@ void JC303Editor::setControlsLayout()
     pair<int, int> accentLocation = {618, 160}; 
     // MODs knobs
     // first row
-    pair<int, int> driverLocation = {546, 25};
-    pair<int, int> feedbackFilterLocation = {619, 25};
+    pair<int, int> driverLocation = {473, 25};
+    pair<int, int> feedbackFilterLocation = {546, 25};
     //pair<int, int> driverOffsetLocation = {546, 25};
     //pair<int, int> phaseShiftLocation = {619, 25};
+    pair<int, int> ampSustainLocation = {619, 25};
     pair<int, int> slideTimeLocation = {692, 25};
     // second row
     //pair<int, int> preFilterLocation = {473, 45};
     //pair<int, int> postFilterLocation = {546, 45};
-    pair<int, int> ampSustainLocation = {692, 45};
 
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);

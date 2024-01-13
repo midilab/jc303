@@ -3,12 +3,12 @@
 #include "../JuceLibraryCode/BinaryData.h"
 
 //==============================================================================
-class KnobLookAndFeel : public LookAndFeel_V4
+class ModKnobLookAndFeel : public LookAndFeel_V4
 {
 public:
-    KnobLookAndFeel()
+    ModKnobLookAndFeel()
     {
-        imageKnob = ImageCache::getFromMemory(BinaryData::jc303knob_png, BinaryData::jc303knob_pngSize);
+        imageKnob = ImageCache::getFromMemory(BinaryData::jc303modknob_png, BinaryData::jc303modknob_pngSize);
     }
 
 //==============================================================================
