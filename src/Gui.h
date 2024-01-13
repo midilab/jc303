@@ -2,8 +2,8 @@
 
 #include <JuceHeader.h>
 #include "JC303.h"
-#include "ui/BinaryData.h"
-#include "ui/KnobLookAndFeel.h"
+#include "JuceLibraryCode/BinaryData.h"
+#include "gui/KnobLookAndFeel.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 

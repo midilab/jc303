@@ -25,7 +25,7 @@ target_sources("${PROJECT_NAME}"
         dsp/rosic_RealFunctions.cpp
         dsp/rosic_TeeBeeFilter.cpp
        
-	ui/BinaryData.cpp
+	JuceLibraryCode/BinaryData.cpp
  
         Gui.cpp
         JC303.cpp)

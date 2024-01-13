@@ -165,6 +165,7 @@ void JC303::setParameter (Open303Parameters index, float value)
     //
     // MODS
     //
+    // get devilfish as parameter for now: http://www.synthdiy.com/show/?id=415
     case TANH_SHAPER_DRIVE: // its valid for square but not super expresive
         //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
         open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   35.0,     80.0)  );

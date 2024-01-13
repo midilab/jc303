@@ -1,11 +1,15 @@
 # build artifacts
 build*/
+Build*/
+Builds*/
 lib*/
 bin/
 *_Packaged
 *.exe
 *.dmg
 vstsdk2.4/
+src/JuceLibraryCode/JuceHeader.h
+src/JuceLibraryCode/ReadMe.txt
 
 # ide settings
 .vscode/
