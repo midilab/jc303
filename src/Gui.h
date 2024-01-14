@@ -21,7 +21,7 @@ public:
 
 private:
     juce::Slider* create303Knob();
-    juce::Slider* createModKnob();
+    juce::Slider* createModKnob(const juce::String& label);
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to

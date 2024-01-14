@@ -14,14 +14,14 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(accentSlider = create303Knob());
     addAndMakeVisible(volumeSlider = create303Knob());
     // MODs
-    addAndMakeVisible(driverSlider = createModKnob());
-    addAndMakeVisible(driverOffsetSlider = createModKnob());
-    addAndMakeVisible(phaseShiftSlider = createModKnob());
-    addAndMakeVisible(slideTimeSlider = createModKnob());
-    addAndMakeVisible(preFilterSlider = createModKnob());
-    addAndMakeVisible(postFilterSlider = createModKnob());
-    addAndMakeVisible(feedbackFilterSlider = createModKnob());
-    addAndMakeVisible(ampSustainSlider = createModKnob());
+    addAndMakeVisible(driverSlider = createModKnob("driver"));
+    addAndMakeVisible(driverOffsetSlider = createModKnob("driver off."));
+    addAndMakeVisible(phaseShiftSlider = createModKnob("phase shf."));
+    addAndMakeVisible(slideTimeSlider = createModKnob("slide time"));
+    addAndMakeVisible(preFilterSlider = createModKnob("pre hpf"));
+    addAndMakeVisible(postFilterSlider = createModKnob("post hpf"));
+    addAndMakeVisible(feedbackFilterSlider = createModKnob("hpf feedbck"));
+    addAndMakeVisible(ampSustainSlider = createModKnob("amp sus."));
 
     // attch controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -84,17 +84,23 @@ juce::Slider* JC303Editor::create303Knob()
     return slider;
 }
 
-juce::Slider* JC303Editor::createModKnob()
+juce::Slider* JC303Editor::createModKnob(const juce::String& label)
 {
     auto* slider = new juce::Slider();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider->setLookAndFeel(&modKnobLookAndFeel);
-    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-    //slider->setRange(parameter->range.start, parameter->range.end);
-    //slider->setValue(*parameter);
-    //slider->addListener(this);
+    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::TextBoxAbove, true, 0, 0);
+
+    // Create a label for the text
+    auto* labelComponent = new juce::Label();
+    labelComponent->setText(label, juce::dontSendNotification);
+    //labelComponent->setJustificationType(juce::Justification::centred);
+    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
+    labelComponent->attachToComponent (slider, true);
+
     return slider;
 }
+
 void JC303Editor::setControlsLayout()
 {
     // Set the bounds and other properties for each slider
