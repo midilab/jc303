@@ -9,7 +9,7 @@
 namespace BinaryData
 {
     extern const char*   jc303gui_png;
-    const int            jc303gui_pngSize = 212843;
+    const int            jc303gui_pngSize = 212567;
 
     extern const char*   jc303knob_png;
     const int            jc303knob_pngSize = 1380653;

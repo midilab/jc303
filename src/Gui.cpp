@@ -117,13 +117,13 @@ void JC303Editor::setControlsLayout()
     // first row
     pair<int, int> driverLocation = {473, 25};
     pair<int, int> feedbackFilterLocation = {546, 25};
-    //pair<int, int> driverOffsetLocation = {546, 25};
-    //pair<int, int> phaseShiftLocation = {619, 25};
     pair<int, int> ampSustainLocation = {619, 25};
     pair<int, int> slideTimeLocation = {692, 25};
     // second row
-    //pair<int, int> preFilterLocation = {473, 45};
-    //pair<int, int> postFilterLocation = {546, 45};
+    //pair<int, int> driverOffsetLocation = {473, 45};
+    //pair<int, int> phaseShiftLocation = {546, 45};
+    //pair<int, int> preFilterLocation = {619, 45};
+    //pair<int, int> postFilterLocation = {692, 45};
 
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);
