@@ -89,14 +89,14 @@ juce::Slider* JC303Editor::createModKnob(const juce::String& label)
     auto* slider = new juce::Slider();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider->setLookAndFeel(&modKnobLookAndFeel);
-    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::TextBoxAbove, true, 0, 0);
+    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 
     // Create a label for the text
-    auto* labelComponent = new juce::Label();
+    auto* labelComponent = new MoveableLabel();
     labelComponent->setText(label, juce::dontSendNotification);
-    //labelComponent->setJustificationType(juce::Justification::centred);
+    labelComponent->setJustificationType(juce::Justification::centredTop);
     labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
-    labelComponent->attachToComponent (slider, true);
+    labelComponent->attachToComponent(slider, true);
 
     return slider;
 }

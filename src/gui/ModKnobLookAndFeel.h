@@ -41,3 +41,22 @@ void drawRotarySlider(Graphics& g,
     //==============================================================================
     
 };
+
+class MoveableLabel : public Label {
+public:
+    MoveableLabel(Justification justification = Justification::centredTop) :m_justification(justification) {}
+    void setJustification(Justification justification) { m_justification = justification; }
+    void componentMovedOrResized (Component& component, bool wasMoved, bool wasResized)
+    {
+        const Font f (getLookAndFeel().getLabelFont (*this));
+
+        // Set size based on text width, not component width
+        setSize (f.getStringWidth(getText()), roundToInt (f.getHeight()));
+
+        // Position label centered above the component
+        setTopLeftPosition (component.getX() + (component.getWidth() - getWidth()) / 2,
+                        component.getY() - getHeight());
+    }
+private:
+    Justification m_justification;
+};
