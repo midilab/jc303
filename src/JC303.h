@@ -81,6 +81,8 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    //void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+
 private:
     void render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
@@ -108,6 +110,9 @@ private:
     std::atomic<float>* feedbackFilter = nullptr;
     std::atomic<float>* ampSustain = nullptr;
     //std::atomic<float>* filterType = nullptr;
+    // mod switcc
+    // Atomic variable to safely communicate between GUI and audio threads
+    juce::Atomic<bool> switchModState{ false };
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

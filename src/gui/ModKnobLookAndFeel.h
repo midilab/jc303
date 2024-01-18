@@ -42,9 +42,9 @@ void drawRotarySlider(Graphics& g,
     
 };
 
-class MoveableLabel : public Label {
+class AttachedLabel : public Label {
 public:
-    MoveableLabel(Justification justification = Justification::centredTop) :m_justification(justification) {}
+    AttachedLabel(Justification justification = Justification::centredTop) :m_justification(justification) {}
     void setJustification(Justification justification) { m_justification = justification; }
     void componentMovedOrResized (Component& component, bool wasMoved, bool wasResized)
     {

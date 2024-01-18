@@ -204,7 +204,20 @@ void JC303::setParameter (Open303Parameters index, float value)
 
 	}
 }
-
+/* 
+void JC303::changeListenerCallback(juce::ChangeBroadcaster* source)
+{
+    // Handle state changes from Switch
+    if (source == switchComponent->get())
+    {
+        bool buttonState = switchComponent->getButtonState();
+        if (buttonState)
+            juce::Logger::writeToLog("Button state is ON in MainApplication");
+        else
+            juce::Logger::writeToLog("Button state is OFF in MainApplication");
+    }
+}
+ */
 //==============================================================================
 const juce::String JC303::getName() const
 {

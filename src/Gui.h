@@ -5,6 +5,7 @@
 #include "JuceLibraryCode/BinaryData.h"
 #include "gui/KnobLookAndFeel.h"
 #include "gui/ModKnobLookAndFeel.h"
+#include "gui/SwitchButton.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 
@@ -19,9 +20,16 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    // query switch state
+    bool getSwitchState() const
+    {
+        return switchModButton->getToggleState();
+    }
+
 private:
     juce::Slider* create303Knob();
     juce::Slider* createModKnob(const juce::String& label);
+    SwitchButton* createSwitch(const juce::String& label);
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -46,6 +54,7 @@ private:
     juce::Slider* postFilterSlider;
     juce::Slider* feedbackFilterSlider;
     juce::Slider* ampSustainSlider;
+    SwitchButton* switchModButton;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;

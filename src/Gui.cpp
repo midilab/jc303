@@ -14,14 +14,16 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(accentSlider = create303Knob());
     addAndMakeVisible(volumeSlider = create303Knob());
     // MODs
-    addAndMakeVisible(driverSlider = createModKnob("driver"));
-    addAndMakeVisible(driverOffsetSlider = createModKnob("driver off."));
-    addAndMakeVisible(phaseShiftSlider = createModKnob("phase shf."));
+    addAndMakeVisible(driverSlider = createModKnob("sqr. driver"));
+    //addAndMakeVisible(driverOffsetSlider = createModKnob("driver off."));
+    //addAndMakeVisible(phaseShiftSlider = createModKnob("phase shf."));
     addAndMakeVisible(slideTimeSlider = createModKnob("slide time"));
-    addAndMakeVisible(preFilterSlider = createModKnob("pre hpf"));
-    addAndMakeVisible(postFilterSlider = createModKnob("post hpf"));
+    //addAndMakeVisible(preFilterSlider = createModKnob("pre hpf"));
+    //addAndMakeVisible(postFilterSlider = createModKnob("post hpf"));
     addAndMakeVisible(feedbackFilterSlider = createModKnob("hpf feedbck"));
     addAndMakeVisible(ampSustainSlider = createModKnob("amp sus."));
+    // on/off mod switch
+    addAndMakeVisible(switchModButton = createSwitch("mod on"));
 
     // attch controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -34,11 +36,11 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
     // MODs
     driverAttachment.reset(new SliderAttachment(valueTreeState, "driver", *driverSlider));
-    driverOffsetAttachment.reset(new SliderAttachment(valueTreeState, "driverOffset", *driverOffsetSlider));
-    phaseShiftAttachment.reset(new SliderAttachment(valueTreeState, "phaseShift", *phaseShiftSlider));
+    //driverOffsetAttachment.reset(new SliderAttachment(valueTreeState, "driverOffset", *driverOffsetSlider));
+    //phaseShiftAttachment.reset(new SliderAttachment(valueTreeState, "phaseShift", *phaseShiftSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
-    preFilterAttachment.reset(new SliderAttachment(valueTreeState, "preFilter", *preFilterSlider));
-    postFilterAttachment.reset(new SliderAttachment(valueTreeState, "postFilter", *postFilterSlider));
+    //preFilterAttachment.reset(new SliderAttachment(valueTreeState, "preFilter", *preFilterSlider));
+    //postFilterAttachment.reset(new SliderAttachment(valueTreeState, "postFilter", *postFilterSlider));
     feedbackFilterAttachment.reset(new SliderAttachment(valueTreeState, "feedbackFilter", *feedbackFilterSlider));
     ampSustainAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
 
@@ -78,9 +80,6 @@ juce::Slider* JC303Editor::create303Knob()
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider->setLookAndFeel(&knobLookAndFeel);
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-    //slider->setRange(parameter->range.start, parameter->range.end);
-    //slider->setValue(*parameter);
-    //slider->addListener(this);
     return slider;
 }
 
@@ -92,13 +91,30 @@ juce::Slider* JC303Editor::createModKnob(const juce::String& label)
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 
     // Create a label for the text
-    auto* labelComponent = new MoveableLabel();
+    auto* labelComponent = new AttachedLabel();
     labelComponent->setText(label, juce::dontSendNotification);
     labelComponent->setJustificationType(juce::Justification::centredTop);
     labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
     labelComponent->attachToComponent(slider, true);
 
     return slider;
+}
+
+SwitchButton* JC303Editor::createSwitch(const juce::String& label)
+{
+    //auto* button = new juce::ImageButton();
+    //button->setLookAndFeel(&buttonLookAndFeel);
+    auto* button = new SwitchButton(label);
+    button->setClickingTogglesState(false);
+
+    // Create a label for the text
+    auto* labelComponent = new AttachedLabel();
+    labelComponent->setText(label, juce::dontSendNotification);
+    labelComponent->setJustificationType(juce::Justification::centredTop);
+    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
+    labelComponent->attachToComponent(button, true);
+
+    return button;
 }
 
 void JC303Editor::setControlsLayout()
@@ -119,11 +135,13 @@ void JC303Editor::setControlsLayout()
     pair<int, int> envelopeLocation = {374, 160}; 
     pair<int, int> decayLocation = {496, 160}; 
     pair<int, int> accentLocation = {618, 160}; 
+    // MOD Switch
+    pair<int, int> switchLocation = {410, 25};
     // MODs knobs
     // first row
-    pair<int, int> driverLocation = {473, 25};
-    pair<int, int> feedbackFilterLocation = {546, 25};
-    pair<int, int> ampSustainLocation = {619, 25};
+    pair<int, int> driverLocation = {482, 25};
+    pair<int, int> feedbackFilterLocation = {552, 25};
+    pair<int, int> ampSustainLocation = {622, 25};
     pair<int, int> slideTimeLocation = {692, 25};
     // second row
     //pair<int, int> driverOffsetLocation = {473, 45};
@@ -148,4 +166,6 @@ void JC303Editor::setControlsLayout()
     //postFilterSlider->setBounds(postFilterLocation.first, postFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
     feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
     ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderWidth / 4, sliderHeight / 4);
+
+    switchModButton->setBounds(switchLocation.first, switchLocation.second, sliderWidth / 2, sliderHeight / 2);
 }
