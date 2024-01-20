@@ -55,7 +55,7 @@ public:
 
         // Position label centered above the component
         setTopLeftPosition (component.getX() + (component.getWidth() - getWidth()) / 2,
-                        component.getY() - getHeight());
+                        component.getY() - getHeight() + 4);
     }
 private:
     Justification m_justification;
