@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(JC303 VERSION 0.0.1)
+project(JC303 VERSION 0.10.1)
 
 
 ### Dependency versions ###
@@ -99,7 +99,7 @@ juce_add_plugin("${PROJECT_NAME}"
                                                 # Filter, Generator, Mastering, Modulation, Mono, Network, NoOfflineProcess,
                                                 # OnlyOfflineProcess, OnlyRT, Pitch Shift, Restoration, Reverb, Sampler, Spatial,
                                                 # Stereo, Surround, Synth, Tools, Up-Downmix
-    AU_MAIN_TYPE "kAudioUnitType_Generator kAudioUnitType_MusicDevice" # Should be one or more, separated by spaces, of the following:
+    AU_MAIN_TYPE "kAudioUnitType_MusicDevice"   # Should be one or more, separated by spaces, of the following:
                                                 # kAudioUnitType_Effect, kAudioUnitType_FormatConverter, kAudioUnitType_Generator,
                                                 # kAudioUnitType_MIDIProcessor, kAudioUnitType_Mixer, kAudioUnitType_MusicDevice,
                                                 # kAudioUnitType_MusicEffect, kAudioUnitType_OfflineEffect, kAudioUnitType_Output,
