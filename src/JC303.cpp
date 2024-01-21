@@ -153,7 +153,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setEnvMod(   linToLin(value, 0.0, 1.0,    0.0,   100.0)  );
         break;
     case DECAY:
-        open303Core.setDecay(    linToExp(value, 0.0, 1.0,  200.0,  2000.0) );
+        open303Core.setDecay(    linToExp(value, 0.0, 1.0,  decayMin,  decayMax) );
         break;
     case ACCENT:
         open303Core.setAccent(   linToLin(value, 0.0, 1.0,   0.0,    100.0) );
@@ -199,28 +199,49 @@ void JC303::setParameter (Open303Parameters index, float value)
 	}
 }
 
-void JC303::setDevilFishMod(bool mode)
+void JC303::setDevilMod(bool mode)
 {
     if (mode == true) {
-        // set devilfish fixed parameters
+        
+        // fixed internal tunes, mostly based on devil fish
+        // setAccentAttack(3) 3ms devil vs ?? original
+        open303Core.setAccentAttack(3.0);
+        // devilfish extended decay range
+        decayMin = 30.0;
+        decayMax = 3000.0;
     } else if (mode == false) {
         // restore original 303 values and block devilfish mod knobs to operate
+        open303Core.setTanhShaperDrive(36.9); // dB2amp(36.9); 
+        open303Core.setAmpSustain(-6.0); // dB2amp(newSustain) = 0.5 ~ -6.0205
+        open303Core.setAmpRelease(1.0); // 1.0
+        open303Core.setSlideTime(60.0); // 60.0;
+        open303Core.setFeedbackHighpass(150.0); // filter.setFeedbackHighpassCutoff(150.0);
+        open303Core.setNormalAttack(3.0); // 3.0;
+        open303Core.setAmpDecay(1230.0); // ampEnv.setDecay(1230.0);
+        open303Core.setAccentDecay(200.0); // 200.0
+        // fixed parameters restore
+        open303Core.setAccentAttack(3.0); // 3.0?
+        // original tb303 decay range
+        decayMin = 200.0;
+        decayMax = 2000.0;
     }
 }
 
 void JC303::setSwitchModState(bool newState)
 {
     switchModState = newState;
-    setDevilFishMod(newState);
+    setDevilMod(newState);
 }
 
-/* void JC303::parameterValueChanged(int parameterIndex, float newValue)
+/* 
+// keep track of host changes for switchMod
+void JC303::parameterValueChanged(int parameterIndex, float newValue)
 {
     if (parameterIndex == 8) // switchModButton
     {
         // Update switchModState when the parameter changes
         switchModState = (newValue != 0.0f);
-        setDevilFishMod(switchModState);
+        setDevilMod(switchModState);
         // change interface parameter too!
     }
 } */

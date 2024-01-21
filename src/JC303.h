@@ -62,7 +62,7 @@ public:
     //void parameterValueChanged(int parameterIndex, float newValue) override;
 
     void setSwitchModState(bool newState);
-    void setDevilFishMod(bool mode);
+    void setDevilMod(bool mode);
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -118,6 +118,9 @@ private:
     //std::atomic<float>* filterType = nullptr;
     // mod switcc
     // Atomic variable to safely communicate between GUI and audio threads
+    // mod fixed ranges support
+    double decayMin;
+    double decayMax;
     juce::Atomic<bool> switchModState{ false };
 
     //==============================================================================

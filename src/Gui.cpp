@@ -61,11 +61,17 @@ JC303Editor::~JC303Editor()
 
 void JC303Editor::handleSwitchModButton()
 {
+    // get our selfs a lock for swtich mod changes
+    juce::MessageManagerLock lock;
+
     // Get the state of the mod button
     bool modButtonState = switchModButton->getToggleState();
 
-    // Update the mod state in the processor
-    processorRef.setSwitchModState(modButtonState);
+    if (lock.lockWasGained())
+    {
+        // Update the mod state in the processor
+        processorRef.setSwitchModState(modButtonState);
+    }
 }
 
 //==============================================================================
