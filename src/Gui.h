@@ -30,6 +30,7 @@ private:
     juce::Slider* create303Knob();
     juce::Slider* createModKnob(const juce::String& label);
     SwitchButton* createSwitch(const juce::String& label);
+    void handleSwitchModButton();
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -46,14 +47,14 @@ private:
     juce::Slider* accentSlider;
     juce::Slider* volumeSlider;
     // MODs
-    juce::Slider* driverSlider;
-    juce::Slider* driverOffsetSlider;
-    juce::Slider* phaseShiftSlider;
-    juce::Slider* slideTimeSlider;
-    juce::Slider* preFilterSlider;
-    juce::Slider* postFilterSlider;
-    juce::Slider* feedbackFilterSlider;
+    juce::Slider* sqrDriverSlider;
+    juce::Slider* ampReleaseSlider;
     juce::Slider* ampSustainSlider;
+    juce::Slider* slideTimeSlider;
+    juce::Slider* feedbackFilterSlider;
+    juce::Slider* softAttackSlider;
+    juce::Slider* normalDecaySlider;
+    juce::Slider* accentDecaySlider;
     SwitchButton* switchModButton;
 
     // declare the attchaments
@@ -66,14 +67,14 @@ private:
     std::unique_ptr<SliderAttachment> accentAttachment;
     std::unique_ptr<SliderAttachment> volumeAttachment;
     // MODs
-    std::unique_ptr<SliderAttachment> driverAttachment;
-    std::unique_ptr<SliderAttachment> driverOffsetAttachment;
-    std::unique_ptr<SliderAttachment> phaseShiftAttachment;
-    std::unique_ptr<SliderAttachment> slideTimeAttachment;
-    std::unique_ptr<SliderAttachment> preFilterAttachment;
-    std::unique_ptr<SliderAttachment> postFilterAttachment;
-    std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
+    std::unique_ptr<SliderAttachment> sqrDriverAttachment;
+    std::unique_ptr<SliderAttachment> ampReleaseAttachment;
     std::unique_ptr<SliderAttachment> ampSustainAttachment;
+    std::unique_ptr<SliderAttachment> slideTimeAttachment;
+    std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
+    std::unique_ptr<SliderAttachment> softAttackAttachment;
+    std::unique_ptr<SliderAttachment> normalDecayAttachment;
+    std::unique_ptr<SliderAttachment> accentDecayAttachment;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;

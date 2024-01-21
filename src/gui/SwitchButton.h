@@ -22,18 +22,6 @@ public:
         g.drawImage(imageSwitch, 0, 0, getWidth(), getHeight(),
                     sourceRect.getX(), sourceRect.getY(), sourceRect.getWidth(), sourceRect.getHeight(),
                     false);
-
-        // Draw overlay color when the button is pressed
-        /* if (isButtonDown)
-        {
-            g.setColour(findColour(juce::TextButton::buttonColourId).brighter());
-            g.fillRect(0, 0, getWidth(), getHeight());
-        }
-        else if (isMouseOverButton)
-        {
-            g.setColour(findColour(juce::TextButton::buttonColourId).darker());
-            g.fillRect(0, 0, getWidth(), getHeight());
-        } */
     }
 
     void mouseUp(const juce::MouseEvent& event) override

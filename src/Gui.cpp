@@ -14,14 +14,16 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(accentSlider = create303Knob());
     addAndMakeVisible(volumeSlider = create303Knob());
     // MODs
-    addAndMakeVisible(driverSlider = createModKnob("sqr. driver"));
+    // row 1
+    addAndMakeVisible(sqrDriverSlider = createModKnob("sqr. driver"));
+    addAndMakeVisible(ampSustainSlider = createModKnob("amp. sus."));
+    addAndMakeVisible(ampReleaseSlider = createModKnob("amp. rel."));
     addAndMakeVisible(slideTimeSlider = createModKnob("slide time"));
+    // row 2
     addAndMakeVisible(feedbackFilterSlider = createModKnob("hpf feedbck"));
-    addAndMakeVisible(ampSustainSlider = createModKnob("amp sus."));
-    addAndMakeVisible(preFilterSlider = createModKnob("pre hpf"));
-    addAndMakeVisible(postFilterSlider = createModKnob("post hpf"));
-    addAndMakeVisible(driverOffsetSlider = createModKnob("driver off."));
-    addAndMakeVisible(phaseShiftSlider = createModKnob("phase shf."));
+    addAndMakeVisible(softAttackSlider = createModKnob("soft attk."));
+    addAndMakeVisible(normalDecaySlider = createModKnob("norm. decay"));
+    addAndMakeVisible(accentDecaySlider = createModKnob("acc. decay"));
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch("mod on"));
 
@@ -35,14 +37,16 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
     // MODs
-    driverAttachment.reset(new SliderAttachment(valueTreeState, "driver", *driverSlider));
+    sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
+    ampReleaseAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
+    ampSustainAttachment.reset(new SliderAttachment(valueTreeState, "ampRelease", *ampReleaseSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
     feedbackFilterAttachment.reset(new SliderAttachment(valueTreeState, "feedbackFilter", *feedbackFilterSlider));
-    ampSustainAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
-    preFilterAttachment.reset(new SliderAttachment(valueTreeState, "preFilter", *preFilterSlider));
-    postFilterAttachment.reset(new SliderAttachment(valueTreeState, "postFilter", *postFilterSlider));
-    driverOffsetAttachment.reset(new SliderAttachment(valueTreeState, "driverOffset", *driverOffsetSlider));
-    phaseShiftAttachment.reset(new SliderAttachment(valueTreeState, "phaseShift", *phaseShiftSlider));
+    softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
+    normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
+    accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
+    // Set up a callback for mod button click
+    switchModButton->onClick = [this]() { handleSwitchModButton(); };
 
     setControlsLayout();
 
@@ -53,6 +57,15 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
 JC303Editor::~JC303Editor()
 {
+}
+
+void JC303Editor::handleSwitchModButton()
+{
+    // Get the state of the mod button
+    bool modButtonState = switchModButton->getToggleState();
+
+    // Update the mod state in the processor
+    processorRef.setSwitchModState(modButtonState);
 }
 
 //==============================================================================
@@ -139,15 +152,15 @@ void JC303Editor::setControlsLayout()
     pair<int, int> switchLocation = {412, 21};
     // MODs knobs
     // first row
-    pair<int, int> driverLocation = {482, 15};
-    pair<int, int> feedbackFilterLocation = {552, 15};
+    pair<int, int> sqrDriverLocation = {482, 15};
+    pair<int, int> ampReleaseLocation = {552, 15};
     pair<int, int> ampSustainLocation = {622, 15};
     pair<int, int> slideTimeLocation = {692, 15};
     // second row
-    pair<int, int> driverOffsetLocation = {482, 53};
-    pair<int, int> phaseShiftLocation = {552, 53};
-    pair<int, int> preFilterLocation = {622, 53};
-    pair<int, int> postFilterLocation = {692, 53};
+    pair<int, int> feedbackFilterLocation = {482, 53};
+    pair<int, int> softAttackLocation = {552, 53};
+    pair<int, int> normalAttackLocation = {622, 53};
+    pair<int, int> accentDecayLocation = {692, 53};
 
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);
@@ -158,14 +171,14 @@ void JC303Editor::setControlsLayout()
     decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderWidth, sliderHeight);
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderWidth, sliderHeight);
     // MODs
-    driverSlider->setBounds(driverLocation.first, driverLocation.second, sliderWidth / 4, sliderHeight / 4);
+    sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderWidth / 4, sliderHeight / 4);
+    ampReleaseSlider->setBounds(ampReleaseLocation.first, ampReleaseLocation.second, sliderWidth / 4, sliderHeight / 4);
+    ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderWidth / 4, sliderHeight / 4);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderWidth / 4, sliderHeight / 4);
     feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
-    ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderWidth / 4, sliderHeight / 4);
-    preFilterSlider->setBounds(preFilterLocation.first, preFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
-    postFilterSlider->setBounds(postFilterLocation.first, postFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
-    driverOffsetSlider->setBounds(driverOffsetLocation.first, driverOffsetLocation.second, sliderWidth / 4, sliderHeight / 4);
-    phaseShiftSlider->setBounds(phaseShiftLocation.first, phaseShiftLocation.second, sliderWidth / 4, sliderHeight / 4);
+    softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderWidth / 4, sliderHeight / 4);
+    normalDecaySlider->setBounds(normalAttackLocation.first, normalAttackLocation.second, sliderWidth / 4, sliderHeight / 4);
+    accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderWidth / 4, sliderHeight / 4);
 
     switchModButton->setBounds(switchLocation.first, switchLocation.second, sliderWidth / 2, sliderHeight / 2);
 }

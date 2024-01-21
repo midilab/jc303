@@ -60,47 +60,49 @@ JC303::JC303()
                                                         //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
                                                         0.85f),        // default value
             // MODs parameters
-            std::make_unique<juce::AudioParameterFloat> ("driver",
-                                                        "Driver",
+            std::make_unique<juce::AudioParameterBool> ("switchMod",
+                                                        "Switch Mod",
+                                                        false), 
+            std::make_unique<juce::AudioParameterFloat> ("sqrDriver",
+                                                        "Square Driver",
                                                         0.0f,
                                                         1.0f,
                                                         0.61f), // 36.9; linToLin(value, 0.0, 1.0,   0.0,     60.0)
-            std::make_unique<juce::AudioParameterFloat> ("driverOffset",
-                                                        "Driver Offset",
+            std::make_unique<juce::AudioParameterFloat> ("ampSustain",
+                                                        "Amp. Sustain",
                                                         0.0f,
                                                         1.0f,
-                                                        0.71f), // 4.37; linToLin(value, 0.0, 1.0, -10.0,     10.0)
-            std::make_unique<juce::AudioParameterFloat> ("phaseShift",
-                                                        "Square Phase",
+                                                        0.3f),  // 0.5; linToLin(value, 0.0, 1.0, 0.0,      1.0)
+            std::make_unique<juce::AudioParameterFloat> ("ampRelease",
+                                                        "Amp. Release",
                                                         0.0f,
                                                         1.0f,
                                                         0.5f), // 180.0; linToLin(value, 0.0, 1.0,   0.0,    360.0)
-            std::make_unique<juce::AudioParameterFloat> ("slideTime", //ok
+            std::make_unique<juce::AudioParameterFloat> ("slideTime",
                                                         "Slide time",
                                                         0.0f,
                                                         1.0f,
                                                         0.6f),
-                                                        //0.6f)
-            std::make_unique<juce::AudioParameterFloat> ("preFilter",
-                                                        "Filt. Pre",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.09f), // 44.486; linToExp(value, 0.0, 1.0,  10.0,    500.0)
-            std::make_unique<juce::AudioParameterFloat> ("postFilter",
-                                                        "Filt. Post",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.05f), // 24.167; linToExp(value, 0.0, 1.0,  10.0,    500.0)
             std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
                                                         "Filt. FeedB.",
                                                         0.0f,
                                                         1.0f,
                                                         0.3f), // 150.0; linToExp(value, 0.0, 1.0,  10.0,    500.0) 
-            std::make_unique<juce::AudioParameterFloat> ("ampSustain",
-                                                        "Amp. Sust.",
+            std::make_unique<juce::AudioParameterFloat> ("softAttack",
+                                                        "Soft Attack",
                                                         0.0f,
                                                         1.0f,
-                                                        0.3f)  // 0.5; linToLin(value, 0.0, 1.0, 0.0,      1.0)
+                                                        0.05f), // 24.167; linToExp(value, 0.0, 1.0,  10.0,    500.0)
+            std::make_unique<juce::AudioParameterFloat> ("normalDecay",
+                                                        "Normal Decay",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.09f), // 44.486; linToExp(value, 0.0, 1.0,  10.0,    500.0)
+            std::make_unique<juce::AudioParameterFloat> ("accentDecay",
+                                                        "Accent Decay",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.71f) // 4.37; linToLin(value, 0.0, 1.0, -10.0,     10.0)
 
        })
 {
@@ -114,21 +116,19 @@ JC303::JC303()
     accent = parameters.getRawParameterValue("accent");
     volume = parameters.getRawParameterValue("volume");
     // MODs parameters
-    // TODO: a button to reset MOD changes to original 303 mode
-    driver = parameters.getRawParameterValue("driver");
-    driverOffset = parameters.getRawParameterValue("driverOffset");
-    phaseShift = parameters.getRawParameterValue("phaseShift");
-    slideTime = parameters.getRawParameterValue("slideTime");
-    preFilter = parameters.getRawParameterValue("preFilter");
-    postFilter = parameters.getRawParameterValue("postFilter");
-    feedbackFilter = parameters.getRawParameterValue("feedbackFilter");
+    sqrDriver = parameters.getRawParameterValue("sqrDriver");
     ampSustain = parameters.getRawParameterValue("ampSustain");
+    ampRelease = parameters.getRawParameterValue("ampRelease");
+    slideTime = parameters.getRawParameterValue("slideTime");
+    feedbackFilter = parameters.getRawParameterValue("feedbackFilter");
+    softAttack = parameters.getRawParameterValue("softAttack");
+    normalDecay = parameters.getRawParameterValue("normalDecay");
+    accentDecay = parameters.getRawParameterValue("accentDecay");
 }
 
 JC303::~JC303()
-{
+{        
 }
-
 
 void JC303::setParameter (Open303Parameters index, float value)
 {
@@ -163,61 +163,68 @@ void JC303::setParameter (Open303Parameters index, float value)
         break;
 
     //
-    // MODS
+    // MODS (mostly based on devilfish mod)
+    // https://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
     //
-    // get devilfish as parameter for now: http://www.synthdiy.com/show/?id=415
-    case TANH_SHAPER_DRIVE: // its valid for square but not super expresive
+    case TANH_SHAPER_DRIVE:
         //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
         open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   35.0,     80.0)  );
         break;
-    case FEEDBACK_HPF:
-        open303Core.setFeedbackHighpass(  linToExp(value, 0.0, 1.0,  350.0,    10.0)  ); // this one is expresive only on higher reesonances
+    case AMP_SUSTAIN:
+        open303Core.setAmpSustain(        linToLin(value, 0.0, 1.0, 0.0,      5.0)  );
+        break;
+    case AMP_RELEASE: 
+        open303Core.setAmpRelease(  linToLin(value, 0.0, 1.0,   0.0,    360.0)  );
         break;
     case SLIDE_TIME:
         //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
         open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 100.0)        );
         break;
-    case AMP_SUSTAIN:
-        //open303Core.setAmpSustain(        linToLin(value, 0.0, 1.0, 0.0,      5.0)  );
-        //open303Core.setNormalAttack(        linToLin(value, 0.0, 1.0, 0.3,      30.0)  );
+    case FEEDBACK_HPF:
+        open303Core.setFeedbackHighpass(  linToExp(value, 0.0, 1.0,  350.0,    10.0)  ); // this one is expresive only on higher reesonances
+        break;
+    case SOFT_ATTACK:
+        open303Core.setNormalAttack(linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
+        break;
+    case NORMAL_DECAY:
+        open303Core.setAmpDecay(        linToLin(value, 0.0, 1.0, 0.3,      30.0)  );
+        break;
+    case ACCENT_DECAY:
         open303Core.setAccentDecay(        linToLin(value, 0.0, 1.0, 30.0,      3000.0)  );
         // setAmpDecay 16 > 3000
         break;
-
-
-    case TANH_SHAPER_OFFSET:
-        open303Core.setTanhShaperOffset(  linToLin(value, 0.0, 1.0, -10.0,     10.0)  );
-        break;
-    case SQUARE_PHASE_SHIFT:
-        open303Core.setSquarePhaseShift(  linToLin(value, 0.0, 1.0,   0.0,    360.0)  );
-        break;
-    case PRE_FILTER_HPF:
-        open303Core.setPreFilterHighpass( linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
-        break;
-    case POST_FILTER_HPF:
-        open303Core.setPostFilterHighpass(linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
-        break;
-        
     //case FILTER_TYPE:
     //    open303Core.filter.setMode(  normalizedValueToIndex(value, TeeBeeFilter::NUM_MODES) );
     //    break;
-
 	}
 }
-/* 
-void JC303::changeListenerCallback(juce::ChangeBroadcaster* source)
+
+void JC303::setDevilFishMod(bool mode)
 {
-    // Handle state changes from Switch
-    if (source == switchComponent->get())
-    {
-        bool buttonState = switchComponent->getButtonState();
-        if (buttonState)
-            juce::Logger::writeToLog("Button state is ON in MainApplication");
-        else
-            juce::Logger::writeToLog("Button state is OFF in MainApplication");
+    if (mode == true) {
+        // set devilfish fixed parameters
+    } else if (mode == false) {
+        // restore original 303 values and block devilfish mod knobs to operate
     }
 }
- */
+
+void JC303::setSwitchModState(bool newState)
+{
+    switchModState = newState;
+    setDevilFishMod(newState);
+}
+
+/* void JC303::parameterValueChanged(int parameterIndex, float newValue)
+{
+    if (parameterIndex == 8) // switchModButton
+    {
+        // Update switchModState when the parameter changes
+        switchModState = (newValue != 0.0f);
+        setDevilFishMod(switchModState);
+        // change interface parameter too!
+    }
+} */
+
 //==============================================================================
 const juce::String JC303::getName() const
 {
@@ -289,15 +296,6 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     // init open303
     open303Core.setSampleRate(sampleRate);
-
-    /*
-    // for debugging only
-    open303Core.setCutoff(3.138152786059267e+002);
-    open303Core.setEnvMod(0.0);
-    open303Core.setEnvMod(100.0);
-    open303Core.setCutoff(2.394411986817546e+003);
-    open303Core.setEnvMod(0.0);
-    */
 }
 
 void JC303::releaseResources()
@@ -368,15 +366,22 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     setParameter(DECAY, *decay);
     setParameter(ACCENT, *accent);
     setParameter(VOLUME, *volume);
-    // MODs
-    setParameter(TANH_SHAPER_DRIVE, *driver);
-    //setParameter(TANH_SHAPER_OFFSET, *driverOffset);
-    //setParameter(SQUARE_PHASE_SHIFT, *phaseShift);
-    setParameter(SLIDE_TIME, *slideTime);
-    //setParameter(PRE_FILTER_HPF, *preFilter);
-    //setParameter(POST_FILTER_HPF, *postFilter);
-    setParameter(FEEDBACK_HPF, *feedbackFilter);
-    setParameter(AMP_SUSTAIN, *ampSustain);
+
+    // processing MODs
+    // Safely read the switchModState within processBlock
+    // using Atomic access
+    bool currentSwitchState = switchModState.get(); 
+
+    if (currentSwitchState) {
+        setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
+        setParameter(AMP_SUSTAIN, *ampSustain);
+        setParameter(AMP_RELEASE, *ampRelease);
+        setParameter(SLIDE_TIME, *slideTime);
+        setParameter(FEEDBACK_HPF, *feedbackFilter);
+        setParameter(SOFT_ATTACK, *softAttack);
+        setParameter(NORMAL_DECAY, *normalDecay);
+        setParameter(ACCENT_DECAY, *accentDecay);
+    }
 
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)
