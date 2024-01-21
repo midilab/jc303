@@ -46,8 +46,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
     normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
     accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
-    // Set up a callback for mod button click
-    //switchModButton->onClick = [this]() { handleSwitchModButton(); };
 
     setControlsLayout();
 
@@ -58,21 +56,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
 JC303Editor::~JC303Editor()
 {
-}
-
-void JC303Editor::handleSwitchModButton()
-{
-    // get our selfs a lock for swtich mod changes
-    //juce::MessageManagerLock lock;
-
-    // Get the state of the mod button
-    bool modButtonState = switchModButton->getToggleState();
-
-    //if (lock.lockWasGained())
-        // Update the switch mod state in the processor
-        //processorRef.setSwitchModState(modButtonState);
-        
-    processorRef.setParameterNotifyingHost(SWITCH_MOD, (float)modButtonState);
 }
 
 //==============================================================================

@@ -21,17 +21,10 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
-    // query switch state
-    bool getSwitchState() const
-    {
-        return switchModButton->getToggleState();
-    }
-
 private:
     juce::Slider* create303Knob();
     juce::Slider* createModKnob(const juce::String& label);
     SwitchButton* createSwitch(const juce::String& label);
-    void handleSwitchModButton();
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
