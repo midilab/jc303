@@ -8,6 +8,7 @@
 #include "gui/SwitchButton.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
+typedef juce::AudioProcessorValueTreeState::ButtonAttachment ButtonAttachment;
 
 //==============================================================================
 class JC303Editor  : public juce::AudioProcessorEditor
@@ -67,6 +68,7 @@ private:
     std::unique_ptr<SliderAttachment> accentAttachment;
     std::unique_ptr<SliderAttachment> volumeAttachment;
     // MODs
+    std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     std::unique_ptr<SliderAttachment> ampReleaseAttachment;
     std::unique_ptr<SliderAttachment> ampSustainAttachment;

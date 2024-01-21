@@ -29,20 +29,8 @@ enum Open303Parameters
   OPEN303_NUM_PARAMETERS
 };
 
-// we need to keep track of defaults 303 internal values to restore in case MODs reset request.
-// driver           =     36.9; dB2amp(TANH_SHAPER_DRIVE) => applies to square wave only (waveTable2.tanhShaperFactor)
-// ampSustain     =     
-// ampRelease       =    
-// slideTime        =     60.0;
-// preFilter        =     
-// softAttack       =     
-// feedbackFilter   =     150.0; (FEEDBACK_HPF) => (filter.setFeedbackHighpassCutoff)
-// ampSustain       =     0.5; => wich is AnalogEnvelope::sustainLevel   = 0.5;
-
-// filterType       =     TeeBeeFilter::TB_303 => it will be a select box with TeeBeeFilter::NUM_MODES options
-
 //==============================================================================
-class JC303  : public juce::AudioProcessor
+class JC303  :  public juce::AudioProcessor
 {
 public:
     //==============================================================================
@@ -57,9 +45,6 @@ public:
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
-
-    // what is the signature for this one on juce7?
-    //void parameterValueChanged(int parameterIndex, float newValue) override;
 
     void setSwitchModState(bool newState);
     void setDevilMod(bool mode);
@@ -116,12 +101,10 @@ private:
     std::atomic<float>* normalDecay = nullptr;
     std::atomic<float>* accentDecay = nullptr;
     //std::atomic<float>* filterType = nullptr;
-    // mod switcc
-    // Atomic variable to safely communicate between GUI and audio threads
     // mod fixed ranges support
-    double decayMin;
-    double decayMax;
-    juce::Atomic<bool> switchModState{ false };
+    juce::Atomic<bool> switchModState = false;
+    juce::Atomic<double> decayMin = 200;
+    juce::Atomic<double> decayMax = 2000;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

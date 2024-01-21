@@ -16,12 +16,12 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // MODs
     // row 1
     addAndMakeVisible(sqrDriverSlider = createModKnob("sqr. driver"));
+    addAndMakeVisible(ampReleaseSlider = createModKnob("amp. release"));
     addAndMakeVisible(ampSustainSlider = createModKnob("amp. sus."));
-    addAndMakeVisible(ampReleaseSlider = createModKnob("amp. rel."));
     addAndMakeVisible(slideTimeSlider = createModKnob("slide time"));
     // row 2
     addAndMakeVisible(feedbackFilterSlider = createModKnob("hpf feedbck"));
-    addAndMakeVisible(softAttackSlider = createModKnob("soft attk."));
+    addAndMakeVisible(softAttackSlider = createModKnob("soft attack"));
     addAndMakeVisible(normalDecaySlider = createModKnob("norm. decay"));
     addAndMakeVisible(accentDecaySlider = createModKnob("acc. decay"));
     // on/off mod switch
@@ -37,6 +37,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
     // MODs
+    switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
     ampReleaseAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
     ampSustainAttachment.reset(new SliderAttachment(valueTreeState, "ampRelease", *ampReleaseSlider));
@@ -62,16 +63,14 @@ JC303Editor::~JC303Editor()
 void JC303Editor::handleSwitchModButton()
 {
     // get our selfs a lock for swtich mod changes
-    juce::MessageManagerLock lock;
+    //juce::MessageManagerLock lock;
 
     // Get the state of the mod button
     bool modButtonState = switchModButton->getToggleState();
 
-    if (lock.lockWasGained())
-    {
+    //if (lock.lockWasGained())/
         // Update the mod state in the processor
         processorRef.setSwitchModState(modButtonState);
-    }
 }
 
 //==============================================================================

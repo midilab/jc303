@@ -67,42 +67,42 @@ JC303::JC303()
                                                         "Square Driver",
                                                         0.0f,
                                                         1.0f,
-                                                        0.61f), // 36.9; linToLin(value, 0.0, 1.0,   0.0,     60.0)
+                                                        0.0f), 
             std::make_unique<juce::AudioParameterFloat> ("ampSustain",
                                                         "Amp. Sustain",
                                                         0.0f,
                                                         1.0f,
-                                                        0.3f),  // 0.5; linToLin(value, 0.0, 1.0, 0.0,      1.0)
+                                                        0.5f), 
             std::make_unique<juce::AudioParameterFloat> ("ampRelease",
                                                         "Amp. Release",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f), // 180.0; linToLin(value, 0.0, 1.0,   0.0,    360.0)
+                                                        0.5f), 
             std::make_unique<juce::AudioParameterFloat> ("slideTime",
                                                         "Slide time",
                                                         0.0f,
                                                         1.0f,
-                                                        0.6f),
+                                                        0.5f),
             std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
-                                                        "Filt. FeedB.",
+                                                        "Filt. FeedBack",
                                                         0.0f,
                                                         1.0f,
-                                                        0.3f), // 150.0; linToExp(value, 0.0, 1.0,  10.0,    500.0) 
+                                                        0.3f),
             std::make_unique<juce::AudioParameterFloat> ("softAttack",
                                                         "Soft Attack",
                                                         0.0f,
                                                         1.0f,
-                                                        0.05f), // 24.167; linToExp(value, 0.0, 1.0,  10.0,    500.0)
+                                                        0.1f), 
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
                                                         0.0f,
                                                         1.0f,
-                                                        0.09f), // 44.486; linToExp(value, 0.0, 1.0,  10.0,    500.0)
+                                                        0.3f), 
             std::make_unique<juce::AudioParameterFloat> ("accentDecay",
                                                         "Accent Decay",
                                                         0.0f,
                                                         1.0f,
-                                                        0.71f) // 4.37; linToLin(value, 0.0, 1.0, -10.0,     10.0)
+                                                        0.1f) 
 
        })
 {
@@ -124,6 +124,13 @@ JC303::JC303()
     softAttack = parameters.getRawParameterValue("softAttack");
     normalDecay = parameters.getRawParameterValue("normalDecay");
     accentDecay = parameters.getRawParameterValue("accentDecay");
+    switchModState = parameters.getParameterAsValue("switchModState").getValue();
+
+    // force true > false, then valuetree
+    // restores the decay correct calculus
+    setDevilMod(true);
+    setDevilMod(false);
+    setDevilMod((bool)switchModState.get());
 }
 
 JC303::~JC303()
@@ -138,59 +145,76 @@ void JC303::setParameter (Open303Parameters index, float value)
 	switch(index)
 	{
     case WAVEFORM:
-        open303Core.setWaveform( linToLin(value, 0.0, 1.0,   0.0,      1.0) );
+        open303Core.setWaveform( linToLin(value, 0.0, 1.0,   0.0,      1.0)     );
         break;
     case TUNING:
-        open303Core.setTuning(   linToLin(value, 0.0, 1.0,  400.0,    480.0) );
+        open303Core.setTuning(   linToLin(value, 0.0, 1.0,  400.0,    480.0)    );
         break;
     case CUTOFF:
-        open303Core.setCutoff(   linToExp(value, 0.0, 1.0, 314.0,    2394.0) );
+        open303Core.setCutoff(   linToExp(value, 0.0, 1.0, 314.0,    2394.0)    );
         break;
     case RESONANCE:
-        open303Core.setResonance(linToLin(value, 0.0, 1.0,   0.0,    100.0) );
+        open303Core.setResonance(linToLin(value, 0.0, 1.0,   0.0,    100.0)     );
         break;
     case ENVMOD:
-        open303Core.setEnvMod(   linToLin(value, 0.0, 1.0,    0.0,   100.0)  );
+        open303Core.setEnvMod(   linToLin(value, 0.0, 1.0,    0.0,   100.0)     );
         break;
     case DECAY:
-        open303Core.setDecay(    linToExp(value, 0.0, 1.0,  decayMin,  decayMax) );
+        open303Core.setDecay(    linToExp(value, 0.0, 1.0,  decayMin.get(),  decayMax.get()));
         break;
     case ACCENT:
-        open303Core.setAccent(   linToLin(value, 0.0, 1.0,   0.0,    100.0) );
+        open303Core.setAccent(   linToLin(value, 0.0, 1.0,   0.0,    100.0)     );
         break;
     case VOLUME:
-        open303Core.setVolume(   linToLin(value, 0.0, 1.0, -60.0,      0.0)  );
+        open303Core.setVolume(   linToLin(value, 0.0, 1.0, -60.0,      0.0)     );
         break;
 
     //
     // MODS (mostly based on devilfish mod)
+    // BUT DONT! dont expect a devilfish clone sound or mail me about!
     // https://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
     //
     case TANH_SHAPER_DRIVE:
         //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
-        open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   35.0,     80.0)  );
+        open303Core.setTanhShaperDrive( linToLin(value, 0.0, 1.0,   30.0,     80.0)  );
         break;
     case AMP_SUSTAIN:
-        open303Core.setAmpSustain(        linToLin(value, 0.0, 1.0, 0.0,      5.0)  );
+        open303Core.setAmpSustain(      linToLin(value, 0.0, 1.0, -60.0,      0.0)  );
         break;
     case AMP_RELEASE: 
-        open303Core.setAmpRelease(  linToLin(value, 0.0, 1.0,   0.0,    360.0)  );
+        open303Core.setAmpRelease(      linToLin(value, 0.0, 1.0,   -1.0,    1.0)  );
         break;
     case SLIDE_TIME:
+        /*
+        The Slide Time pot. Normally the slide time is 60 ms (milliseconds). In the Devil Fish, the
+        Slide Time pot varies the time from 60 to 360 ms, when running from the internal sequencer.
+        When running from an external CV, the time is between 2 and 300 ms. 
+        */
         //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
-        open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 100.0)        );
+        open303Core.setSlideTime(       linToLin(value, 0.0, 1.0, 2.0, 360.0)        );
         break;
     case FEEDBACK_HPF:
-        open303Core.setFeedbackHighpass(  linToExp(value, 0.0, 1.0,  350.0,    10.0)  ); // this one is expresive only on higher reesonances
+        // this one is expresive only on higher reesonances
+        open303Core.setFeedbackHighpass(linToExp(value, 0.0, 1.0,  350.0,    10.0)  );
         break;
     case SOFT_ATTACK:
-        open303Core.setNormalAttack(linToExp(value, 0.0, 1.0,  10.0,    500.0)  );
+        /*
+        The Soft Attack pot varies the attack time of non-accented notes between 0.3 ms and 30 ms.
+        In the TB-303 there was a (typical) 4 ms delay and then a 3 ms attack time. 
+        */
+        open303Core.setNormalAttack(    linToExp(value, 0.0, 1.0,  0.3,    3000.0)  );
         break;
     case NORMAL_DECAY:
-        open303Core.setAmpDecay(        linToLin(value, 0.0, 1.0, 0.3,      30.0)  );
+        /*
+        On non-accented notes, the TB-303’s Main Envelope Generator (MEG) had a decay time
+        between 200 ms and 2 seconds – as controlled by the Decay pot. On accented notes, the
+        decay time was fixed to 200 ms. In the Devil Fish, there are two new pots for MEG decay –
+        Normal Decay and Accent Decay. Both have a range between 30 ms and 3 seconds. 
+        */
+        open303Core.setAmpDecay(        linToLin(value, 0.0, 1.0, 30.0,      3000.0)  );
         break;
     case ACCENT_DECAY:
-        open303Core.setAccentDecay(        linToLin(value, 0.0, 1.0, 30.0,      3000.0)  );
+        open303Core.setAccentDecay(     linToLin(value, 0.0, 1.0, 30.0,      3000.0)  );
         // setAmpDecay 16 > 3000
         break;
     //case FILTER_TYPE:
@@ -202,17 +226,16 @@ void JC303::setParameter (Open303Parameters index, float value)
 void JC303::setDevilMod(bool mode)
 {
     if (mode == true) {
-        
-        // fixed internal tunes, mostly based on devil fish
+        // fixed internal tunning, mostly based on devil fish
         // setAccentAttack(3) 3ms devil vs ?? original
-        open303Core.setAccentAttack(3.0);
+        ////open303Core.setAccentAttack(3.0);
         // devilfish extended decay range
         decayMin = 30.0;
         decayMax = 3000.0;
     } else if (mode == false) {
         // restore original 303 values and block devilfish mod knobs to operate
         open303Core.setTanhShaperDrive(36.9); // dB2amp(36.9); 
-        open303Core.setAmpSustain(-6.0); // dB2amp(newSustain) = 0.5 ~ -6.0205
+        open303Core.setAmpSustain(-6.02); // dB2amp(newSustain) = 0.5 ~ -6.0205 or -8.68589?
         open303Core.setAmpRelease(1.0); // 1.0
         open303Core.setSlideTime(60.0); // 60.0;
         open303Core.setFeedbackHighpass(150.0); // filter.setFeedbackHighpassCutoff(150.0);
@@ -220,7 +243,7 @@ void JC303::setDevilMod(bool mode)
         open303Core.setAmpDecay(1230.0); // ampEnv.setDecay(1230.0);
         open303Core.setAccentDecay(200.0); // 200.0
         // fixed parameters restore
-        open303Core.setAccentAttack(3.0); // 3.0?
+        ////open303Core.setAccentAttack(3.0); // 3.0?
         // original tb303 decay range
         decayMin = 200.0;
         decayMax = 2000.0;
@@ -232,19 +255,6 @@ void JC303::setSwitchModState(bool newState)
     switchModState = newState;
     setDevilMod(newState);
 }
-
-/* 
-// keep track of host changes for switchMod
-void JC303::parameterValueChanged(int parameterIndex, float newValue)
-{
-    if (parameterIndex == 8) // switchModButton
-    {
-        // Update switchModState when the parameter changes
-        switchModState = (newValue != 0.0f);
-        setDevilMod(switchModState);
-        // change interface parameter too!
-    }
-} */
 
 //==============================================================================
 const juce::String JC303::getName() const
@@ -392,6 +402,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // Safely read the switchModState within processBlock
     // using Atomic access
     bool currentSwitchState = switchModState.get(); 
+    //bool currentSwitchState = parameters.getParameterAsValue("switchModState").getValue();
 
     if (currentSwitchState) {
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
