@@ -15,26 +15,23 @@ enum Open303Parameters
   DECAY,
   ACCENT,
   VOLUME,
-
-  FILTER_TYPE,
-
-#ifdef SHOW_INTERNAL_PARAMETERS
-  AMP_SUSTAIN,
+  // MODs
+  SWITCH_MOD,
   TANH_SHAPER_DRIVE,
-  TANH_SHAPER_OFFSET,
-  PRE_FILTER_HPF,
-  FEEDBACK_HPF,
-  POST_FILTER_HPF,
-  SQUARE_PHASE_SHIFT,
-#endif
-
+  AMP_SUSTAIN,
+  AMP_RELEASE,
   SLIDE_TIME,
+  FEEDBACK_HPF,
+  SOFT_ATTACK,
+  NORMAL_DECAY,
+  ACCENT_DECAY,
+  //FILTER_TYPE,
 
   OPEN303_NUM_PARAMETERS
 };
 
 //==============================================================================
-class JC303  : public juce::AudioProcessor
+class JC303  :  public juce::AudioProcessor
 {
 public:
     //==============================================================================
@@ -49,6 +46,8 @@ public:
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
+
+    void setDevilMod(bool mode);
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -90,7 +89,22 @@ private:
     std::atomic<float>* decay = nullptr;
     std::atomic<float>* accent = nullptr;
     std::atomic<float>* volume = nullptr;
+    // MODs
+    std::atomic<float>* switchModState = nullptr;
+    std::atomic<float>* sqrDriver = nullptr;
+    std::atomic<float>* ampSustain = nullptr;
+    std::atomic<float>* ampRelease = nullptr;
     std::atomic<float>* slideTime = nullptr;
+    std::atomic<float>* feedbackFilter = nullptr;
+    std::atomic<float>* softAttack = nullptr;
+    std::atomic<float>* normalDecay = nullptr;
+    std::atomic<float>* accentDecay = nullptr;
+    //std::atomic<float>* filterType = nullptr;
+    // mod fixed ranges support
+    bool lastSwitchModState = false;
+
+    double decayMin = 200;
+    double decayMax = 2000;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

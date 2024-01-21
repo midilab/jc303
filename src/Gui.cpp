@@ -5,15 +5,27 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     : AudioProcessorEditor (&p), processorRef (p), valueTreeState (vts)
 {
     // Create and configure rotary sliders for each parameter
-    addAndMakeVisible(waveformSlider = createSlider());
-    addAndMakeVisible(tuningSlider = createSlider());
-    addAndMakeVisible(cutoffFreqSlider = createSlider());
-    addAndMakeVisible(resonanceSlider = createSlider());
-    addAndMakeVisible(envelopModSlider = createSlider());
-    addAndMakeVisible(decaySlider = createSlider());
-    addAndMakeVisible(accentSlider = createSlider());
-    addAndMakeVisible(volumeSlider = createSlider());
-    addAndMakeVisible(slideTimeSlider = createSlider());
+    addAndMakeVisible(waveformSlider = create303Knob());
+    addAndMakeVisible(tuningSlider = create303Knob());
+    addAndMakeVisible(cutoffFreqSlider = create303Knob());
+    addAndMakeVisible(resonanceSlider = create303Knob());
+    addAndMakeVisible(envelopModSlider = create303Knob());
+    addAndMakeVisible(decaySlider = create303Knob());
+    addAndMakeVisible(accentSlider = create303Knob());
+    addAndMakeVisible(volumeSlider = create303Knob());
+    // MODs
+    // row 1
+    addAndMakeVisible(sqrDriverSlider = createModKnob("sqr. driver"));
+    addAndMakeVisible(ampReleaseSlider = createModKnob("amp. release"));
+    addAndMakeVisible(ampSustainSlider = createModKnob("amp. sus."));
+    addAndMakeVisible(slideTimeSlider = createModKnob("slide time"));
+    // row 2
+    addAndMakeVisible(feedbackFilterSlider = createModKnob("hpf feedbck"));
+    addAndMakeVisible(softAttackSlider = createModKnob("soft attack"));
+    addAndMakeVisible(normalDecaySlider = createModKnob("norm. decay"));
+    addAndMakeVisible(accentDecaySlider = createModKnob("acc. decay"));
+    // on/off mod switch
+    addAndMakeVisible(switchModButton = createSwitch("mod on"));
 
     // attch controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -24,7 +36,16 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     decayAttachment.reset (new SliderAttachment (valueTreeState, "decay", *decaySlider));
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
+    // MODs
+    switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
+    sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
+    ampReleaseAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
+    ampSustainAttachment.reset(new SliderAttachment(valueTreeState, "ampRelease", *ampReleaseSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
+    feedbackFilterAttachment.reset(new SliderAttachment(valueTreeState, "feedbackFilter", *feedbackFilterSlider));
+    softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
+    normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
+    accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
 
     setControlsLayout();
 
@@ -56,16 +77,47 @@ void JC303Editor::resized()
     setControlsLayout();
 }
 
-juce::Slider* JC303Editor::createSlider()
+juce::Slider* JC303Editor::create303Knob()
 {
     auto* slider = new juce::Slider();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider->setLookAndFeel(&lookAndFeel);
+    slider->setLookAndFeel(&knobLookAndFeel);
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-    //slider->setRange(parameter->range.start, parameter->range.end);
-    //slider->setValue(*parameter);
-    //slider->addListener(this);
     return slider;
+}
+
+juce::Slider* JC303Editor::createModKnob(const juce::String& label)
+{
+    auto* slider = new juce::Slider();
+    slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    slider->setLookAndFeel(&modKnobLookAndFeel);
+    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+
+    // Create a label for the text
+    auto* labelComponent = new AttachedLabel();
+    labelComponent->setText(label, juce::dontSendNotification);
+    labelComponent->setJustificationType(juce::Justification::centredTop);
+    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
+    labelComponent->attachToComponent(slider, true);
+
+    return slider;
+}
+
+SwitchButton* JC303Editor::createSwitch(const juce::String& label)
+{
+    //auto* button = new juce::ImageButton();
+    //button->setLookAndFeel(&buttonLookAndFeel);
+    auto* button = new SwitchButton(label);
+    button->setClickingTogglesState(false);
+
+    // Create a label for the text
+    auto* labelComponent = new AttachedLabel();
+    labelComponent->setText(label, juce::dontSendNotification);
+    labelComponent->setJustificationType(juce::Justification::centredTop);
+    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
+    labelComponent->attachToComponent(button, true);
+
+    return button;
 }
 
 void JC303Editor::setControlsLayout()
@@ -86,8 +138,19 @@ void JC303Editor::setControlsLayout()
     pair<int, int> envelopeLocation = {374, 160}; 
     pair<int, int> decayLocation = {496, 160}; 
     pair<int, int> accentLocation = {618, 160}; 
-    // small knobs
-    pair<int, int> slideTimeLocation = {692, 25};
+    // MOD Switch
+    pair<int, int> switchLocation = {412, 21};
+    // MODs knobs
+    // first row
+    pair<int, int> sqrDriverLocation = {482, 15};
+    pair<int, int> ampReleaseLocation = {552, 15};
+    pair<int, int> ampSustainLocation = {622, 15};
+    pair<int, int> slideTimeLocation = {692, 15};
+    // second row
+    pair<int, int> feedbackFilterLocation = {482, 53};
+    pair<int, int> softAttackLocation = {552, 53};
+    pair<int, int> normalAttackLocation = {622, 53};
+    pair<int, int> accentDecayLocation = {692, 53};
 
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);
@@ -97,5 +160,15 @@ void JC303Editor::setControlsLayout()
     envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderWidth, sliderHeight);
     decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderWidth, sliderHeight);
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderWidth, sliderHeight);
+    // MODs
+    sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderWidth / 4, sliderHeight / 4);
+    ampReleaseSlider->setBounds(ampReleaseLocation.first, ampReleaseLocation.second, sliderWidth / 4, sliderHeight / 4);
+    ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderWidth / 4, sliderHeight / 4);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderWidth / 4, sliderHeight / 4);
+    feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
+    softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderWidth / 4, sliderHeight / 4);
+    normalDecaySlider->setBounds(normalAttackLocation.first, normalAttackLocation.second, sliderWidth / 4, sliderHeight / 4);
+    accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderWidth / 4, sliderHeight / 4);
+
+    switchModButton->setBounds(switchLocation.first, switchLocation.second, sliderWidth / 2, sliderHeight / 2);
 }
