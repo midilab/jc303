@@ -47,7 +47,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
     accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
     // Set up a callback for mod button click
-    switchModButton->onClick = [this]() { handleSwitchModButton(); };
+    //switchModButton->onClick = [this]() { handleSwitchModButton(); };
 
     setControlsLayout();
 
@@ -68,9 +68,11 @@ void JC303Editor::handleSwitchModButton()
     // Get the state of the mod button
     bool modButtonState = switchModButton->getToggleState();
 
-    //if (lock.lockWasGained())/
-        // Update the mod state in the processor
-        processorRef.setSwitchModState(modButtonState);
+    //if (lock.lockWasGained())
+        // Update the switch mod state in the processor
+        //processorRef.setSwitchModState(modButtonState);
+        
+    processorRef.setParameterNotifyingHost(SWITCH_MOD, (float)modButtonState);
 }
 
 //==============================================================================

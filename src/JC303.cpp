@@ -12,55 +12,48 @@ JC303::JC303()
                      #endif
                        ),
        parameters (*this, nullptr, juce::Identifier("APVTS"), {
-            std::make_unique<juce::AudioParameterFloat> ("waveform", // parameterID
-                                                        "Waveform",  // parameter name
-                                                        0.0f,        // minimum value
-                                                        1.0f,        // maximum value
-                                                        //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        1.0f),       // default value
+            std::make_unique<juce::AudioParameterFloat> ("waveform", 
+                                                        "Waveform",
+                                                        0.0f,
+                                                        1.0f,
+                                                        1.0f), 
             std::make_unique<juce::AudioParameterFloat> ("tuning",
                                                         "Tuning",
                                                         0.0f,
                                                         1.0f,
                                                         0.5f),
-            std::make_unique<juce::AudioParameterFloat> ("cutoff", // parameterID
-                                                        "Cutoff", // parameter name
-                                                        0.0f,   // minimum value
-                                                        1.0f,   // maximum value
-                                                        //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.0f),       // default value
-            std::make_unique<juce::AudioParameterFloat> ("resonance", // parameterID
-                                                        "Resonance", // parameter name
-                                                        0.0f,   // minimum value
-                                                        1.0f,   // maximum value
-                                                        //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.0f),       // default value
-            std::make_unique<juce::AudioParameterFloat> ("envmod", // parameterID
-                                                        "EnvMod", // parameter name
-                                                        0.0f,   // minimum value
-                                                        1.0f,   // maximum value
-                                                        //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.0f),       // default value
-            std::make_unique<juce::AudioParameterFloat> ("decay", // parameterID
-                                                        "Decay", // parameter name
-                                                        0.0f,   // minimum value
-                                                        1.0f,   // maximum value
-                                                        //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.85f),       // default value
-            std::make_unique<juce::AudioParameterFloat> ("accent", // parameterID
-                                                        "Accent", // parameter name
-                                                        0.0f,   // minimum value
-                                                        1.0f,   // maximum value
-                                                        //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.5f),       // default value
-            std::make_unique<juce::AudioParameterFloat> ("volume", // parameterID
-                                                        "Volume", // parameter name
-                                                        0.0f,   // minimum value
-                                                        1.0f,   // maximum value
-                                                        //juce::NormalisableRange<float> (0.0f, 1.0f), // parameter range
-                                                        0.85f),        // default value
+            std::make_unique<juce::AudioParameterFloat> ("cutoff",
+                                                        "Cutoff", 
+                                                        0.0f,   
+                                                        1.0f,   
+                                                        0.0f),
+            std::make_unique<juce::AudioParameterFloat> ("resonance",
+                                                        "Resonance", 
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f), 
+            std::make_unique<juce::AudioParameterFloat> ("envmod", 
+                                                        "EnvMod", 
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),
+            std::make_unique<juce::AudioParameterFloat> ("decay",
+                                                        "Decay",
+                                                        0.0f,
+                                                        1.0f, 
+                                                        0.85f),
+            std::make_unique<juce::AudioParameterFloat> ("accent", 
+                                                        "Accent", 
+                                                        0.0f, 
+                                                        1.0f, 
+                                                        0.5f), 
+            std::make_unique<juce::AudioParameterFloat> ("volume", 
+                                                        "Volume",
+                                                        0.0f,  
+                                                        1.0f, 
+                                                        0.85f),
             // MODs parameters
-            std::make_unique<juce::AudioParameterBool> ("switchMod",
+            std::make_unique<juce::AudioParameterBool> ("switchModState",
                                                         "Switch Mod",
                                                         false), 
             std::make_unique<juce::AudioParameterFloat> ("sqrDriver",
@@ -82,7 +75,7 @@ JC303::JC303()
                                                         "Slide time",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f),
+                                                        0.55f),
             std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
                                                         "Filt. FeedBack",
                                                         0.0f,
@@ -116,6 +109,7 @@ JC303::JC303()
     accent = parameters.getRawParameterValue("accent");
     volume = parameters.getRawParameterValue("volume");
     // MODs parameters
+    switchModState = parameters.getRawParameterValue("switchModState");
     sqrDriver = parameters.getRawParameterValue("sqrDriver");
     ampSustain = parameters.getRawParameterValue("ampSustain");
     ampRelease = parameters.getRawParameterValue("ampRelease");
@@ -124,13 +118,12 @@ JC303::JC303()
     softAttack = parameters.getRawParameterValue("softAttack");
     normalDecay = parameters.getRawParameterValue("normalDecay");
     accentDecay = parameters.getRawParameterValue("accentDecay");
-    switchModState = parameters.getParameterAsValue("switchModState").getValue();
 
     // force true > false, then valuetree
     // restores the decay correct calculus
     setDevilMod(true);
     setDevilMod(false);
-    setDevilMod((bool)switchModState.get());
+    setDevilMod((bool)*switchModState);
 }
 
 JC303::~JC303()
@@ -160,7 +153,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setEnvMod(   linToLin(value, 0.0, 1.0,    0.0,   100.0)     );
         break;
     case DECAY:
-        open303Core.setDecay(    linToExp(value, 0.0, 1.0,  decayMin.get(),  decayMax.get()));
+        open303Core.setDecay(    linToExp(value, 0.0, 1.0,  decayMin,  decayMax));
         break;
     case ACCENT:
         open303Core.setAccent(   linToLin(value, 0.0, 1.0,   0.0,    100.0)     );
@@ -176,7 +169,7 @@ void JC303::setParameter (Open303Parameters index, float value)
     //
     case TANH_SHAPER_DRIVE:
         //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
-        open303Core.setTanhShaperDrive( linToLin(value, 0.0, 1.0,   30.0,     80.0)  );
+        open303Core.setTanhShaperDrive( linToLin(value, 0.0, 1.0,   25.0,     80.0)  );
         break;
     case AMP_SUSTAIN:
         open303Core.setAmpSustain(      linToLin(value, 0.0, 1.0, -60.0,      0.0)  );
@@ -223,6 +216,7 @@ void JC303::setParameter (Open303Parameters index, float value)
 	}
 }
 
+// toogle/restore 303 original and mod modes
 void JC303::setDevilMod(bool mode)
 {
     if (mode == true) {
@@ -248,12 +242,6 @@ void JC303::setDevilMod(bool mode)
         decayMin = 200.0;
         decayMax = 2000.0;
     }
-}
-
-void JC303::setSwitchModState(bool newState)
-{
-    switchModState = newState;
-    setDevilMod(newState);
 }
 
 //==============================================================================
@@ -399,10 +387,12 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     setParameter(VOLUME, *volume);
 
     // processing MODs
-    // Safely read the switchModState within processBlock
-    // using Atomic access
-    bool currentSwitchState = switchModState.get(); 
-    //bool currentSwitchState = parameters.getParameterAsValue("switchModState").getValue();
+    bool currentSwitchState = (bool)*switchModState; 
+
+    // reset 303 state?
+    if (currentSwitchState != lastSwitchModState) 
+        setDevilMod(currentSwitchState);
+    lastSwitchModState = currentSwitchState;
 
     if (currentSwitchState) {
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);

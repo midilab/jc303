@@ -16,6 +16,7 @@ enum Open303Parameters
   ACCENT,
   VOLUME,
   // MODs
+  SWITCH_MOD,
   TANH_SHAPER_DRIVE,
   AMP_SUSTAIN,
   AMP_RELEASE,
@@ -46,7 +47,6 @@ public:
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
 
-    void setSwitchModState(bool newState);
     void setDevilMod(bool mode);
 
     //==============================================================================
@@ -72,8 +72,6 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    //void changeListenerCallback(juce::ChangeBroadcaster* source) override;
-
 private:
     void render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
@@ -92,6 +90,7 @@ private:
     std::atomic<float>* accent = nullptr;
     std::atomic<float>* volume = nullptr;
     // MODs
+    std::atomic<float>* switchModState = nullptr;
     std::atomic<float>* sqrDriver = nullptr;
     std::atomic<float>* ampSustain = nullptr;
     std::atomic<float>* ampRelease = nullptr;
@@ -102,9 +101,10 @@ private:
     std::atomic<float>* accentDecay = nullptr;
     //std::atomic<float>* filterType = nullptr;
     // mod fixed ranges support
-    juce::Atomic<bool> switchModState = false;
-    juce::Atomic<double> decayMin = 200;
-    juce::Atomic<double> decayMax = 2000;
+    bool lastSwitchModState = false;
+
+    double decayMin = 200;
+    double decayMax = 2000;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)
