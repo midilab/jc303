@@ -20,8 +20,6 @@ Linux Intel x64: [jc303-linux64-plugins.zip](https://github.com/midilab/jc303/re
 
 **Installation**: The platform zip pack will contain a folder per plugin format, just pick the format you want to install and copy the content of the folder to your OS plugin format folder.
 
-**Known issues**: MacOS AU not loading in M1 tested with ableton11, all other MacOS plugins format tested and working fine on M1!
-
 ## Build
 
 Generate the project first before you compile.
