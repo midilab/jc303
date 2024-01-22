@@ -411,6 +411,8 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         const auto message = midiMetadata.getMessage();
         const auto messagePosition = static_cast<int>(message.getTimeStamp());
 
+        render(buffer, currentSample, messagePosition);
+
         if (message.isNoteOn())
         {
             open303Core.noteOn(message.getNoteNumber(), message.getVelocity(), 0);
@@ -428,7 +430,6 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
             continue;
         }
 
-        render(buffer, currentSample, messagePosition);
         currentSample = messagePosition;
     }
     
