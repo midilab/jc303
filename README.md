@@ -18,7 +18,15 @@ Windows Intel x64: [jc303-win64-plugins.zip](https://github.com/midilab/jc303/re
 
 Linux Intel x64: [jc303-linux64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.10.1/jc303-0.10.1-linux64-plugins.zip)
 
-**Installation**: The platform zip pack will contain a folder per plugin format, just pick the format you want to install and copy the content of the folder to your OS plugin format folder.
+## Installation
+The platform zip pack will contain a folder per plugin format, just pick the format you want to install and copy the content of the folder to your OS plugin format folder.
+
+**MacOs De-Quarantine**: MacOs users needs to de-quarantine plugin before load it into any DAW.  
+Open a terminal window and do the following
+```shell
+$ sudo xattr -rd com.apple.quarantine /Library/Audio/Plug-Ins/Components/JC303.component
+```
+This de-quarantine example is for AU, please do the same for other formats you'll be using
 
 ## Build
 
