@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BinaryData.h"
+#include "JuceLibraryCode/BinaryData.h"
 
 //==============================================================================
 class KnobLookAndFeel : public LookAndFeel_V4

@@ -1,6 +1,11 @@
 #include "JC303.h"
-//#include "gui/midilab/Gui.h"
-#include "gui/amadeus/Gui.h"
+
+#ifdef GUI_THEME_HEADER
+#include GUI_THEME_HEADER
+#else
+// the default jc3030 theme
+#include "gui/amadeusp/Gui.h"
+#endif
 
 //==============================================================================
 JC303::JC303()

@@ -30,8 +30,13 @@ This de-quarantine example is for AU, please do the same for other formats you'l
 
 ## Build
 
-Generate the project first before you compile.
+Generate the project first before you compile.  
+  
+Build arguments:  
 
+-D GUI=<gui_theme>  (default: amadeusp)
+You have a option to build with different Gui interface based on directory name inside src/gui/  
+  
 ### Apple Xcode
 
 To generate an **Xcode** project, run:

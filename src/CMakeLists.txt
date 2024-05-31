@@ -25,11 +25,8 @@ target_sources("${PROJECT_NAME}"
         dsp/rosic_RealFunctions.cpp
         dsp/rosic_TeeBeeFilter.cpp
        
-	#gui/midilab/BinaryData.cpp
-        #gui/midilab/Gui.cpp
-
-	gui/amadeus/BinaryData.cpp
-        gui/amadeus/Gui.cpp
+	gui/${GUI_THEME}/JuceLibraryCode/BinaryData.cpp
+        gui/${GUI_THEME}/Gui.cpp
 
         JC303.cpp)
 

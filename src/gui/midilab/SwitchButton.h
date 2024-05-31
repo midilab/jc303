@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "BinaryData.h"
+#include "JuceLibraryCode/BinaryData.h"
 
 class SwitchButton : public juce::Button
 {

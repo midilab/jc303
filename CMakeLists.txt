@@ -7,6 +7,20 @@ project(JC303 VERSION 0.10.1)
 
 set(LIB_JUCE_TAG "7.0.5")
 
+### Gui setup
+# check if the GUI variable is set
+if(DEFINED GUI)
+    # set GUI_THEME_HEADER to the param defined
+    set(GUI_THEME_HEADER "gui/${GUI}/Gui.h")
+    set(GUI_THEME ${GUI})
+else()
+    # Set GUI_THEME_HEADER to the default value 'amadeusp'
+    set(GUI_THEME_HEADER "gui/amadeusp/Gui.h")
+    set(GUI_THEME amadeusp)
+endif()
+
+# Add the GUI_THEME macro definition
+add_definitions(-DGUI_THEME="${GUI_THEME}")
 
 ### IDE Generator pre-config ###
 
