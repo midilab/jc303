@@ -41,7 +41,7 @@ FetchContent_Declare(juce
 
 FetchContent_Declare(juce-clap-extensions
     GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
-    GIT_TAG        54d83e121545490fdbb2d3dec3ba0c1da6005dde
+    GIT_TAG        a3227c52fa082d2df33f4377ed1e050dd8a52595
     GIT_SHALLOW    TRUE
     GIT_CONFIG     advice.detachedHead=false)    # Disable detached HEAD warning for fetching a specific tag
 

@@ -25,9 +25,12 @@ target_sources("${PROJECT_NAME}"
         dsp/rosic_RealFunctions.cpp
         dsp/rosic_TeeBeeFilter.cpp
        
-	JuceLibraryCode/BinaryData.cpp
- 
-        Gui.cpp
+	#gui/midilab/BinaryData.cpp
+        #gui/midilab/Gui.cpp
+
+	gui/amadeus/BinaryData.cpp
+        gui/amadeus/Gui.cpp
+
         JC303.cpp)
 
 # Add subdirectories with source files, if present

@@ -1,5 +1,6 @@
 #include "JC303.h"
-#include "Gui.h"
+//#include "gui/midilab/Gui.h"
+#include "gui/amadeus/Gui.h"
 
 //==============================================================================
 JC303::JC303()
