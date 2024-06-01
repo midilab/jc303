@@ -32,10 +32,12 @@ This de-quarantine example is for AU, please do the same for other formats you'l
 
 Generate the project first before you compile.  
   
-Build arguments:  
 
--D GUI=<gui_theme>  (default: amadeusp)
-You have a option to build with different Gui interface based on directory name inside src/gui/  
+#### cmake options
+
+| Variable | Description | Default |
+|--|--|--|
+| GUI | Select GUI theme interface to use | amadeusp |
   
 ### Apple Xcode
 

@@ -4,7 +4,6 @@
 #include "../../JC303.h"
 #include "JuceLibraryCode/BinaryData.h"
 #include "KnobLookAndFeel.h"
-#include "ModKnobLookAndFeel.h"
 #include "SwitchButton.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
@@ -22,9 +21,8 @@ public:
     void resized() override;
 
 private:
-    juce::Slider* create303Knob();
-    juce::Slider* createModKnob(const juce::String& label);
-    SwitchButton* createSwitch(const juce::String& label);
+    juce::Slider* createKnob(const juce::String& knobType);
+    SwitchButton* createSwitch();
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -74,8 +72,9 @@ private:
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;
 
-    KnobLookAndFeel knobLookAndFeel;
-    ModKnobLookAndFeel modKnobLookAndFeel;
+    KnobLookAndFeel smallKnobLookAndFeel{"small"};
+    KnobLookAndFeel mediumKnobLookAndFeel{"medium"};
+    KnobLookAndFeel largeKnobLookAndFeel{"large"};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303Editor)
 };

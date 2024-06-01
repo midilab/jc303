@@ -4,12 +4,15 @@
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1">
   <MAINGROUP id="CJcFJY" name="jc303-gui">
     <GROUP id="{DD8B1986-2C83-9275-BC5F-6F63D551FF92}" name="Resources">
+      <FILE id="smv2RB" name="filter.png" compile="0" resource="1" file="resources/filter.png"/>
       <FILE id="j1eVLo" name="jc303-gui.png" compile="0" resource="1" file="resources/jc303-gui.png"/>
-      <FILE id="Q666HV" name="jc303-knob.png" compile="0" resource="1" file="resources/jc303-knob.png"/>
-      <FILE id="adKUyb" name="jc303-mod-knob.png" compile="0" resource="1"
-            file="resources/jc303-mod-knob.png"/>
-      <FILE id="qa4BlD" name="jc303-mod-switch.png" compile="0" resource="1"
-            file="resources/jc303-mod-switch.png"/>
+      <FILE id="NaLJPI" name="large-rotary.png" compile="0" resource="1"
+            file="resources/large-rotary.png"/>
+      <FILE id="t7RdFw" name="medium-rotary.png" compile="0" resource="1"
+            file="resources/medium-rotary.png"/>
+      <FILE id="cbkblZ" name="small-rotary.png" compile="0" resource="1"
+            file="resources/small-rotary.png"/>
+      <FILE id="BLcuMX" name="switch.png" compile="0" resource="1" file="resources/switch.png"/>
     </GROUP>
     <GROUP id="{448A74E3-0B21-A88C-6AF0-B8576C880BC5}" name="GUI">
       <FILE id="RK1Gng" name="Gui.cpp" compile="1" resource="0" file="Gui.cpp"/>

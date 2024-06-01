@@ -6,10 +6,10 @@
 class SwitchButton : public juce::Button
 {
 public:
-    SwitchButton(const juce::String& buttonName)
-        : juce::Button(buttonName)
+    SwitchButton()
+        : juce::Button("")
     {
-        imageSwitch = juce::ImageCache::getFromMemory(BinaryData::jc303modswitch_png, BinaryData::jc303modswitch_pngSize);
+        imageSwitch = juce::ImageCache::getFromMemory(BinaryData::switch_png, BinaryData::switch_pngSize);
     }
 
     void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override

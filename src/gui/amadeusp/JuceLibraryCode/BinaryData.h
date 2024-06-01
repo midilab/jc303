@@ -8,20 +8,26 @@
 
 namespace BinaryData
 {
+    extern const char*   filter_png;
+    const int            filter_pngSize = 18566;
+
     extern const char*   jc303gui_png;
     const int            jc303gui_pngSize = 161807;
 
-    extern const char*   jc303knob_png;
-    const int            jc303knob_pngSize = 1380653;
+    extern const char*   largerotary_png;
+    const int            largerotary_pngSize = 3052;
 
-    extern const char*   jc303modknob_png;
-    const int            jc303modknob_pngSize = 49364;
+    extern const char*   mediumrotary_png;
+    const int            mediumrotary_pngSize = 3051;
 
-    extern const char*   jc303modswitch_png;
-    const int            jc303modswitch_pngSize = 4573;
+    extern const char*   smallrotary_png;
+    const int            smallrotary_pngSize = 1214;
+
+    extern const char*   switch_png;
+    const int            switch_pngSize = 2330;
 
     // Number of elements in the namedResourceList and originalFileNames arrays.
-    const int namedResourceListSize = 4;
+    const int namedResourceListSize = 6;
 
     // Points to the start of a list of resource names.
     extern const char* namedResourceList[];

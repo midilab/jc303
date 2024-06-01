@@ -19,8 +19,8 @@ else()
     set(GUI_THEME amadeusp)
 endif()
 
-# Add the GUI_THEME macro definition
-add_definitions(-DGUI_THEME="${GUI_THEME}")
+# Add the GUI_THEME_HEADER macro definition
+add_definitions(-DGUI_THEME_HEADER="${GUI_THEME_HEADER}")
 
 ### IDE Generator pre-config ###
 

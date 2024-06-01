@@ -5,27 +5,27 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     : AudioProcessorEditor (&p), processorRef (p), valueTreeState (vts)
 {
     // Create and configure rotary sliders for each parameter
-    addAndMakeVisible(waveformSlider = create303Knob());
-    addAndMakeVisible(tuningSlider = create303Knob());
-    addAndMakeVisible(cutoffFreqSlider = create303Knob());
-    addAndMakeVisible(resonanceSlider = create303Knob());
-    addAndMakeVisible(envelopModSlider = create303Knob());
-    addAndMakeVisible(decaySlider = create303Knob());
-    addAndMakeVisible(accentSlider = create303Knob());
-    addAndMakeVisible(volumeSlider = create303Knob());
+    addAndMakeVisible(waveformSlider = createKnob("large"));
+    addAndMakeVisible(volumeSlider = createKnob("large"));
+    addAndMakeVisible(tuningSlider = createKnob("medium"));
+    addAndMakeVisible(cutoffFreqSlider = createKnob("medium"));
+    addAndMakeVisible(resonanceSlider = createKnob("medium"));
+    addAndMakeVisible(envelopModSlider = createKnob("medium"));
+    addAndMakeVisible(decaySlider = createKnob("medium"));
+    addAndMakeVisible(accentSlider = createKnob("medium"));
     // MODs
     // row 1
-    addAndMakeVisible(sqrDriverSlider = createModKnob("sqr. driver"));
-    addAndMakeVisible(ampReleaseSlider = createModKnob("amp. release"));
-    addAndMakeVisible(ampSustainSlider = createModKnob("amp. sus."));
-    addAndMakeVisible(slideTimeSlider = createModKnob("slide time"));
+    addAndMakeVisible(sqrDriverSlider = createKnob("small"));
+    addAndMakeVisible(ampReleaseSlider = createKnob("small"));
+    addAndMakeVisible(ampSustainSlider = createKnob("small"));
+    addAndMakeVisible(slideTimeSlider = createKnob("small"));
     // row 2
-    addAndMakeVisible(feedbackFilterSlider = createModKnob("hpf feedbck"));
-    addAndMakeVisible(softAttackSlider = createModKnob("soft attack"));
-    addAndMakeVisible(normalDecaySlider = createModKnob("norm. decay"));
-    addAndMakeVisible(accentDecaySlider = createModKnob("acc. decay"));
+    addAndMakeVisible(feedbackFilterSlider = createKnob("small"));
+    addAndMakeVisible(softAttackSlider = createKnob("small"));
+    addAndMakeVisible(normalDecaySlider = createKnob("small"));
+    addAndMakeVisible(accentDecaySlider = createKnob("small"));
     // on/off mod switch
-    addAndMakeVisible(switchModButton = createSwitch("mod on"));
+    addAndMakeVisible(switchModButton = createSwitch());
 
     // attch controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -77,45 +77,33 @@ void JC303Editor::resized()
     setControlsLayout();
 }
 
-juce::Slider* JC303Editor::create303Knob()
+juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
 {
     auto* slider = new juce::Slider();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider->setLookAndFeel(&knobLookAndFeel);
+    if (knobType == "small")
+    {
+        slider->setLookAndFeel(&smallKnobLookAndFeel);
+    }
+    else if (knobType == "medium")
+    {
+        slider->setLookAndFeel(&mediumKnobLookAndFeel);
+    }
+    else if (knobType == "large")
+    {
+        slider->setLookAndFeel(&largeKnobLookAndFeel);
+    }
+    
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
     return slider;
 }
 
-juce::Slider* JC303Editor::createModKnob(const juce::String& label)
-{
-    auto* slider = new juce::Slider();
-    slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider->setLookAndFeel(&modKnobLookAndFeel);
-    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-
-    // Create a label for the text
-    auto* labelComponent = new AttachedLabel();
-    labelComponent->setText(label, juce::dontSendNotification);
-    labelComponent->setJustificationType(juce::Justification::centredTop);
-    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
-    labelComponent->attachToComponent(slider, true);
-
-    return slider;
-}
-
-SwitchButton* JC303Editor::createSwitch(const juce::String& label)
+SwitchButton* JC303Editor::createSwitch()
 {
     //auto* button = new juce::ImageButton();
     //button->setLookAndFeel(&buttonLookAndFeel);
-    auto* button = new SwitchButton(label);
+    auto* button = new SwitchButton();
     button->setClickingTogglesState(false);
-
-    // Create a label for the text
-    auto* labelComponent = new AttachedLabel();
-    labelComponent->setText(label, juce::dontSendNotification);
-    labelComponent->setJustificationType(juce::Justification::centredTop);
-    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
-    labelComponent->attachToComponent(button, true);
 
     return button;
 }
@@ -124,51 +112,56 @@ void JC303Editor::setControlsLayout()
 {
     // Set the bounds and other properties for each slider
     // Adjust the parameters accordingly to fit your needs
-    const int sliderWidth = 120;
-    const int sliderHeight = 120;
+    const int sliderLargeSize = 70;
+    const int sliderMediumSize = 60;
+    const int sliderSmallSize = 30;
+    const int switchWidth = 72;
+    const int switchHeight = 25;
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {9, 20}; 
-    pair<int, int> volumeLocation = {130, 20}; 
+    pair<int, int> waveFormLocation = {43, 50}; 
+    pair<int, int> volumeLocation = {783, 50}; 
     // second row
-    pair<int, int> tuningLocation = {9, 160}; 
-    pair<int, int> cutoffFreqLocation = {130, 160}; 
-    pair<int, int> resonanceLocation = {252, 160}; 
-    pair<int, int> envelopeLocation = {374, 160}; 
-    pair<int, int> decayLocation = {496, 160}; 
-    pair<int, int> accentLocation = {618, 160}; 
+    pair<int, int> tuningLocation = {160, 155}; 
+    pair<int, int> cutoffFreqLocation = {260, 155}; 
+    pair<int, int> resonanceLocation = {360, 155}; 
+    pair<int, int> envelopeLocation = {460, 155}; 
+    pair<int, int> decayLocation = {560, 155}; 
+    pair<int, int> accentLocation = {670, 155}; 
     // MOD Switch
-    pair<int, int> switchLocation = {412, 21};
+    pair<int, int> switchLocation = {40, 270};
     // MODs knobs
     // first row
-    pair<int, int> sqrDriverLocation = {482, 15};
-    pair<int, int> ampReleaseLocation = {552, 15};
-    pair<int, int> ampSustainLocation = {622, 15};
-    pair<int, int> slideTimeLocation = {692, 15};
+    pair<int, int> sqrDriverLocation = {155, 290};
+    pair<int, int> ampReleaseLocation = {220, 290};
+    pair<int, int> ampSustainLocation = {285, 290};
+    pair<int, int> slideTimeLocation = {350, 290};
     // second row
-    pair<int, int> feedbackFilterLocation = {482, 53};
-    pair<int, int> softAttackLocation = {552, 53};
-    pair<int, int> normalAttackLocation = {622, 53};
-    pair<int, int> accentDecayLocation = {692, 53};
+    pair<int, int> feedbackFilterLocation = {415, 290};
+    pair<int, int> softAttackLocation = {480, 290};
+    pair<int, int> normalAttackLocation = {545, 290};
+    pair<int, int> accentDecayLocation = {610, 290};
 
-    waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
-    volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);
-    tuningSlider->setBounds(tuningLocation.first, tuningLocation.second, sliderWidth, sliderHeight);
-    cutoffFreqSlider->setBounds(cutoffFreqLocation.first, cutoffFreqLocation.second, sliderWidth, sliderHeight);
-    resonanceSlider->setBounds(resonanceLocation.first, resonanceLocation.second, sliderWidth, sliderHeight);
-    envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderWidth, sliderHeight);
-    decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderWidth, sliderHeight);
-    accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderWidth, sliderHeight);
-    // MODs
-    sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderWidth / 4, sliderHeight / 4);
-    ampReleaseSlider->setBounds(ampReleaseLocation.first, ampReleaseLocation.second, sliderWidth / 4, sliderHeight / 4);
-    ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderWidth / 4, sliderHeight / 4);
-    slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderWidth / 4, sliderHeight / 4);
-    feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
-    softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderWidth / 4, sliderHeight / 4);
-    normalDecaySlider->setBounds(normalAttackLocation.first, normalAttackLocation.second, sliderWidth / 4, sliderHeight / 4);
-    accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderWidth / 4, sliderHeight / 4);
+    // large knobs
+    waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
+    volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderLargeSize, sliderLargeSize);
+    // medium knobs
+    tuningSlider->setBounds(tuningLocation.first, tuningLocation.second, sliderMediumSize, sliderMediumSize);
+    cutoffFreqSlider->setBounds(cutoffFreqLocation.first, cutoffFreqLocation.second, sliderMediumSize, sliderMediumSize);
+    resonanceSlider->setBounds(resonanceLocation.first, resonanceLocation.second, sliderMediumSize, sliderMediumSize);
+    envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderMediumSize, sliderMediumSize);
+    decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderMediumSize, sliderMediumSize);
+    accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderMediumSize, sliderMediumSize);
+    // MODs, small knobs
+    sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
+    ampReleaseSlider->setBounds(ampReleaseLocation.first, ampReleaseLocation.second, sliderSmallSize, sliderSmallSize);
+    ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderSmallSize, sliderSmallSize);
+    slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
+    feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderSmallSize, sliderSmallSize);
+    softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderSmallSize, sliderSmallSize);
+    normalDecaySlider->setBounds(normalAttackLocation.first, normalAttackLocation.second, sliderSmallSize, sliderSmallSize);
+    accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderSmallSize, sliderSmallSize);
 
-    switchModButton->setBounds(switchLocation.first, switchLocation.second, sliderWidth / 2, sliderHeight / 2);
+    switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
 }
