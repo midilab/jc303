@@ -24,7 +24,7 @@ namespace BinaryData
     const int            smallrotary_pngSize = 1214;
 
     extern const char*   switch_png;
-    const int            switch_pngSize = 2330;
+    const int            switch_pngSize = 1093;
 
     // Number of elements in the namedResourceList and originalFileNames arrays.
     const int namedResourceListSize = 6;

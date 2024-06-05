@@ -115,8 +115,8 @@ void JC303Editor::setControlsLayout()
     const int sliderLargeSize = 70;
     const int sliderMediumSize = 60;
     const int sliderSmallSize = 30;
-    const int switchWidth = 72;
-    const int switchHeight = 25;
+    const int switchWidth = 50;
+    const int switchHeight = 18;
 
     // knob positioning location
     // first row
@@ -130,7 +130,7 @@ void JC303Editor::setControlsLayout()
     pair<int, int> decayLocation = {560, 155}; 
     pair<int, int> accentLocation = {670, 155}; 
     // MOD Switch
-    pair<int, int> switchLocation = {40, 270};
+    pair<int, int> switchLocation = {50, 285};
     // MODs knobs
     // first row
     pair<int, int> sqrDriverLocation = {155, 290};

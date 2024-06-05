@@ -28,7 +28,7 @@ public:
                            float rotaryStartAngle, float rotaryEndAngle,
                            juce::Slider& slider) override
     {
-        const float radius = juce::jmin (width / 2, height / 2) - 4.0f;
+        const float radius = juce::jmin (width / 2, height / 2);
         const float centreX = x + width * 0.5f;
         const float centreY = y + height * 0.5f;
         const float rx = centreX - radius;
