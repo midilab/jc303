@@ -95,6 +95,9 @@ juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
     }
     
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+
+    // adjust our start and end point for knob
+    slider->setRotaryParameters(0, 5.3, true);
     return slider;
 }
 
@@ -120,28 +123,28 @@ void JC303Editor::setControlsLayout()
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {43, 50}; 
-    pair<int, int> volumeLocation = {783, 50}; 
+    pair<int, int> waveFormLocation = {45, 56}; 
+    pair<int, int> volumeLocation = {783, 56}; 
     // second row
-    pair<int, int> tuningLocation = {160, 155}; 
-    pair<int, int> cutoffFreqLocation = {260, 155}; 
-    pair<int, int> resonanceLocation = {360, 155}; 
-    pair<int, int> envelopeLocation = {460, 155}; 
-    pair<int, int> decayLocation = {560, 155}; 
-    pair<int, int> accentLocation = {670, 155}; 
+    pair<int, int> tuningLocation = {173, 153}; 
+    pair<int, int> cutoffFreqLocation = {272, 153}; 
+    pair<int, int> resonanceLocation = {370, 153}; 
+    pair<int, int> envelopeLocation = {469, 153}; 
+    pair<int, int> decayLocation = {567, 153}; 
+    pair<int, int> accentLocation = {667, 153}; 
     // MOD Switch
-    pair<int, int> switchLocation = {50, 285};
+    pair<int, int> switchLocation = {56, 291};
     // MODs knobs
     // first row
-    pair<int, int> sqrDriverLocation = {155, 290};
-    pair<int, int> ampReleaseLocation = {220, 290};
-    pair<int, int> ampSustainLocation = {285, 290};
-    pair<int, int> slideTimeLocation = {350, 290};
+    pair<int, int> sqrDriverLocation = {155, 295};
+    pair<int, int> ampReleaseLocation = {224, 295};
+    pair<int, int> ampSustainLocation = {292, 295};
+    pair<int, int> slideTimeLocation = {361, 295};
     // second row
-    pair<int, int> feedbackFilterLocation = {415, 290};
-    pair<int, int> softAttackLocation = {480, 290};
-    pair<int, int> normalAttackLocation = {545, 290};
-    pair<int, int> accentDecayLocation = {610, 290};
+    pair<int, int> feedbackFilterLocation = {430, 295};
+    pair<int, int> softAttackLocation = {508, 295};
+    pair<int, int> normalAttackLocation = {587, 295};
+    pair<int, int> accentDecayLocation = {666, 295};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
