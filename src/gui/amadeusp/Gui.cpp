@@ -24,6 +24,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(softAttackSlider = createKnob("small"));
     addAndMakeVisible(normalDecaySlider = createKnob("small"));
     addAndMakeVisible(accentDecaySlider = createKnob("small"));
+    // filter selector
+    addAndMakeVisible(filterSelectorButton = createFilterSelector());
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
 
@@ -37,6 +39,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
     // MODs
+    filterSelectorButtonAttachment.reset(new ButtonAttachment(valueTreeState, "filterSelector", *filterSelectorButton));
     switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
     ampReleaseAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
@@ -103,12 +106,18 @@ juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
 
 SwitchButton* JC303Editor::createSwitch()
 {
-    //auto* button = new juce::ImageButton();
-    //button->setLookAndFeel(&buttonLookAndFeel);
     auto* button = new SwitchButton();
     button->setClickingTogglesState(false);
 
     return button;
+}
+
+FilterSelector* JC303Editor::createFilterSelector()
+{
+    auto* filterSelector = new FilterSelector();
+    filterSelector->setClickingTogglesState(false);
+
+    return filterSelector;
 }
 
 void JC303Editor::setControlsLayout()
@@ -120,6 +129,8 @@ void JC303Editor::setControlsLayout()
     const int sliderSmallSize = 30;
     const int switchWidth = 50;
     const int switchHeight = 18;
+    const int filterSelectorWidth = 100;
+    const int filterSelectorHeight = 50;
 
     // knob positioning location
     // first row
@@ -145,6 +156,7 @@ void JC303Editor::setControlsLayout()
     pair<int, int> softAttackLocation = {508, 295};
     pair<int, int> normalAttackLocation = {587, 295};
     pair<int, int> accentDecayLocation = {666, 295};
+    pair<int, int> filterSelectorLocation = {740, 275};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -167,4 +179,7 @@ void JC303Editor::setControlsLayout()
     accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderSmallSize, sliderSmallSize);
 
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
+    filterSelectorButton->setBounds(filterSelectorLocation.first, filterSelectorLocation.second, filterSelectorWidth, filterSelectorHeight);
+
+    
 }

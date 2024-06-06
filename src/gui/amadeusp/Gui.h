@@ -5,6 +5,7 @@
 #include "JuceLibraryCode/BinaryData.h"
 #include "KnobLookAndFeel.h"
 #include "SwitchButton.h"
+#include "FilterSelector.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 typedef juce::AudioProcessorValueTreeState::ButtonAttachment ButtonAttachment;
@@ -23,13 +24,14 @@ public:
 private:
     juce::Slider* createKnob(const juce::String& knobType);
     SwitchButton* createSwitch();
+    FilterSelector* createFilterSelector();
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
     JC303& processorRef;
 
-    // Declare your Slider members
+    // Main slider controls
     juce::Slider* waveformSlider;
     juce::Slider* tuningSlider;
     juce::Slider* cutoffFreqSlider;
@@ -47,6 +49,7 @@ private:
     juce::Slider* softAttackSlider;
     juce::Slider* normalDecaySlider;
     juce::Slider* accentDecaySlider;
+    FilterSelector* filterSelectorButton;
     SwitchButton* switchModButton;
 
     // declare the attchaments
@@ -60,6 +63,7 @@ private:
     std::unique_ptr<SliderAttachment> volumeAttachment;
     // MODs
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
+    std::unique_ptr<ButtonAttachment> filterSelectorButtonAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     std::unique_ptr<SliderAttachment> ampReleaseAttachment;
     std::unique_ptr<SliderAttachment> ampSustainAttachment;
