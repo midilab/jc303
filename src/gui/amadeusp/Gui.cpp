@@ -144,18 +144,18 @@ void JC303Editor::setControlsLayout()
     pair<int, int> decayLocation = {567, 153}; 
     pair<int, int> accentLocation = {667, 153}; 
     // MOD Switch
-    pair<int, int> switchLocation = {56, 291};
+    pair<int, int> switchLocation = {58, 291};
     // MODs knobs
     // first row
-    pair<int, int> sqrDriverLocation = {155, 295};
-    pair<int, int> ampReleaseLocation = {224, 295};
-    pair<int, int> ampSustainLocation = {292, 295};
-    pair<int, int> slideTimeLocation = {361, 295};
+    pair<int, int> sqrDriverLocation = {156, 294};
+    pair<int, int> ampReleaseLocation = {224, 294};
+    pair<int, int> ampSustainLocation = {292, 294};
+    pair<int, int> slideTimeLocation = {361, 294};
     // second row
-    pair<int, int> feedbackFilterLocation = {430, 295};
-    pair<int, int> softAttackLocation = {508, 295};
-    pair<int, int> normalAttackLocation = {587, 295};
-    pair<int, int> accentDecayLocation = {666, 295};
+    pair<int, int> feedbackFilterLocation = {430, 294};
+    pair<int, int> softAttackLocation = {508, 294};
+    pair<int, int> normalAttackLocation = {587, 294};
+    pair<int, int> accentDecayLocation = {666, 294};
     pair<int, int> filterSelectorLocation = {740, 275};
 
     // large knobs

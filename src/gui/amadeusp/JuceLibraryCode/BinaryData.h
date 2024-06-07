@@ -12,7 +12,7 @@ namespace BinaryData
     const int            filter_pngSize = 18566;
 
     extern const char*   jc303gui_png;
-    const int            jc303gui_pngSize = 161807;
+    const int            jc303gui_pngSize = 153909;
 
     extern const char*   largerotary_png;
     const int            largerotary_pngSize = 3052;
