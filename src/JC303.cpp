@@ -95,7 +95,12 @@ JC303::JC303()
                                                         "Accent Decay",
                                                         0.0f,
                                                         1.0f,
-                                                        0.1f) 
+                                                        0.1f),
+            std::make_unique<juce::AudioParameterInt> ("filterType",
+                                                        "Filter Type",
+                                                        TeeBeeFilter::LP_6,
+                                                        TeeBeeFilter::TB_303,
+                                                        TeeBeeFilter::TB_303), 
 
        })
 {
@@ -118,6 +123,7 @@ JC303::JC303()
     softAttack = parameters.getRawParameterValue("softAttack");
     normalDecay = parameters.getRawParameterValue("normalDecay");
     accentDecay = parameters.getRawParameterValue("accentDecay");
+    filterType = parameters.getRawParameterValue("filterType");
 
     // force true > false, then valuetree
     // restores the decay correct calculus
@@ -210,9 +216,9 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setAccentDecay(     linToLin(value, 0.0, 1.0, 30.0,      3000.0)  );
         // setAmpDecay 16 > 3000
         break;
-    //case FILTER_TYPE:
-    //    open303Core.filter.setMode(  normalizedValueToIndex(value, TeeBeeFilter::NUM_MODES) );
-    //    break;
+    case FILTER_TYPE:
+        open303Core.filter.setMode(  (int)value );
+        break;
 	}
 }
 
@@ -241,6 +247,8 @@ void JC303::setDevilMod(bool mode)
         // original tb303 decay range
         decayMin = 200.0;
         decayMax = 2000.0;
+        // reset filter 
+        open303Core.filter.setMode(TeeBeeFilter::TB_303);
     }
 }
 
@@ -389,7 +397,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // processing MODs
     bool currentSwitchState = (bool)*switchModState; 
 
-    // reset 303 state?
+    // devilfish mod/reset 303 state
     if (currentSwitchState != lastSwitchModState) 
         setDevilMod(currentSwitchState);
     lastSwitchModState = currentSwitchState;
@@ -403,7 +411,11 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(NORMAL_DECAY, *normalDecay);
         setParameter(ACCENT_DECAY, *accentDecay);
+        if (*filterType != lastFilterTypeState)
+            setParameter(FILTER_TYPE, *filterType);
+        lastFilterTypeState = (int)*filterType;
     }
+
 
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)

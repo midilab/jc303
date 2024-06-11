@@ -25,7 +25,7 @@ enum Open303Parameters
   SOFT_ATTACK,
   NORMAL_DECAY,
   ACCENT_DECAY,
-  //FILTER_TYPE,
+  FILTER_TYPE,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -99,9 +99,9 @@ private:
     std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* normalDecay = nullptr;
     std::atomic<float>* accentDecay = nullptr;
-    //std::atomic<float>* filterType = nullptr;
-    // mod fixed ranges support
+    std::atomic<float>* filterType = nullptr;
     bool lastSwitchModState = false;
+    int lastFilterTypeState = rosic::TeeBeeFilter::TB_303;
 
     double decayMin = 200;
     double decayMax = 2000;

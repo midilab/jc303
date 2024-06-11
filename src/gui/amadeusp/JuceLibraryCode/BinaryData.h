@@ -9,22 +9,22 @@
 namespace BinaryData
 {
     extern const char*   filter_png;
-    const int            filter_pngSize = 18566;
+    const int            filter_pngSize = 76075;
 
     extern const char*   jc303gui_png;
-    const int            jc303gui_pngSize = 153909;
+    const int            jc303gui_pngSize = 433987;
 
     extern const char*   largerotary_png;
-    const int            largerotary_pngSize = 3052;
+    const int            largerotary_pngSize = 6201;
 
     extern const char*   mediumrotary_png;
-    const int            mediumrotary_pngSize = 3051;
+    const int            mediumrotary_pngSize = 6960;
 
     extern const char*   smallrotary_png;
-    const int            smallrotary_pngSize = 1214;
+    const int            smallrotary_pngSize = 2449;
 
     extern const char*   switch_png;
-    const int            switch_pngSize = 1093;
+    const int            switch_pngSize = 7665;
 
     // Number of elements in the namedResourceList and originalFileNames arrays.
     const int namedResourceListSize = 6;

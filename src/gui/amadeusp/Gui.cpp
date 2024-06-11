@@ -39,7 +39,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
     // MODs
-    filterSelectorButtonAttachment.reset(new ButtonAttachment(valueTreeState, "filterSelector", *filterSelectorButton));
     switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
     ampReleaseAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
@@ -49,6 +48,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
     normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
     accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
+    filterSelectorButtonAttachment.reset(new ButtonAttachment(valueTreeState, "filterSelector", *filterSelectorButton));
 
     setControlsLayout();
 
@@ -64,15 +64,18 @@ JC303Editor::~JC303Editor()
 //==============================================================================
 void JC303Editor::paint (juce::Graphics& g)
 {
-    // (Our component is opaque, so we must completely fill the background with a solid colour)
+    // Fill the background with a solid colour
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
 
+    // Set the drawing colour and font
     g.setColour (juce::Colours::white);
     g.setFont (15.0f);
 
-    // main gui is a simple background with labels
+    // Get the background image from memory
     juce::Image background = ImageCache::getFromMemory (BinaryData::jc303gui_png, BinaryData::jc303gui_pngSize);
-    g.drawImageAt (background, 0, 0);
+
+    // Draw the image to fill the entire component area
+    g.drawImage (background, getLocalBounds().toFloat());
 }
 
 void JC303Editor::resized()
@@ -180,6 +183,4 @@ void JC303Editor::setControlsLayout()
 
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
     filterSelectorButton->setBounds(filterSelectorLocation.first, filterSelectorLocation.second, filterSelectorWidth, filterSelectorHeight);
-
-    
 }
