@@ -190,7 +190,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         When running from an external CV, the time is between 2 and 300 ms. 
         */
         //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
-        open303Core.setSlideTime(       linToLin(value, 0.0, 1.0, 2.0, 360.0)        );
+        open303Core.setSlideTime(       linToLin(value, 0.0, 1.0, 2.0, 360.0)       );
         break;
     case FEEDBACK_HPF:
         // this one is expresive only on higher reesonances
@@ -210,14 +210,16 @@ void JC303::setParameter (Open303Parameters index, float value)
         decay time was fixed to 200 ms. In the Devil Fish, there are two new pots for MEG decay –
         Normal Decay and Accent Decay. Both have a range between 30 ms and 3 seconds. 
         */
-        open303Core.setAmpDecay(        linToLin(value, 0.0, 1.0, 30.0,      3000.0)  );
+        open303Core.setAmpDecay(        linToLin(value, 0.0, 1.0, 30.0,      3000.0));
         break;
     case ACCENT_DECAY:
-        open303Core.setAccentDecay(     linToLin(value, 0.0, 1.0, 30.0,      3000.0)  );
+        open303Core.setAccentDecay(     linToLin(value, 0.0, 1.0, 30.0,      3000.0));
         // setAmpDecay 16 > 3000
         break;
     case FILTER_TYPE:
-        open303Core.filter.setMode(  (int)value );
+        open303Core.filter.setMode((int)value);
+        open303Core.filter.calculateCoefficientsExact();
+        open303Core.filter.reset();
         break;
 	}
 }
@@ -232,6 +234,9 @@ void JC303::setDevilMod(bool mode)
         // devilfish extended decay range
         decayMin = 30.0;
         decayMax = 3000.0;
+        open303Core.filter.setMode((int)*filterType);
+        open303Core.filter.calculateCoefficientsExact();
+        open303Core.filter.reset();
     } else if (mode == false) {
         // restore original 303 values and block devilfish mod knobs to operate
         open303Core.setTanhShaperDrive(36.9); // dB2amp(36.9); 
@@ -249,6 +254,8 @@ void JC303::setDevilMod(bool mode)
         decayMax = 2000.0;
         // reset filter 
         open303Core.filter.setMode(TeeBeeFilter::TB_303);
+        open303Core.filter.calculateCoefficientsExact();
+        open303Core.filter.reset();
     }
 }
 

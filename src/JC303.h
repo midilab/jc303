@@ -101,7 +101,7 @@ private:
     std::atomic<float>* accentDecay = nullptr;
     std::atomic<float>* filterType = nullptr;
     bool lastSwitchModState = false;
-    int lastFilterTypeState = rosic::TeeBeeFilter::TB_303;
+    int lastFilterTypeState = TeeBeeFilter::TB_303;
 
     double decayMin = 200;
     double decayMax = 2000;
