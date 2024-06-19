@@ -14,12 +14,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(accentSlider = create303Knob());
     addAndMakeVisible(volumeSlider = create303Knob());
     // MODs
-    // row 1
     addAndMakeVisible(sqrDriverSlider = createModKnob("sqr. driver"));
-    addAndMakeVisible(ampReleaseSlider = createModKnob("amp. release"));
-    addAndMakeVisible(ampSustainSlider = createModKnob("amp. sus."));
+    addAndMakeVisible(overdriveLevelSlider = createModKnob("overdrive"));
+    addAndMakeVisible(overdriveToneSlider = createModKnob("ovr. tone"));
     addAndMakeVisible(slideTimeSlider = createModKnob("slide time"));
-    // row 2
     addAndMakeVisible(feedbackFilterSlider = createModKnob("hpf feedbck"));
     addAndMakeVisible(softAttackSlider = createModKnob("soft attack"));
     addAndMakeVisible(normalDecaySlider = createModKnob("norm. decay"));
@@ -39,8 +37,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // MODs
     switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
-    ampReleaseAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
-    ampSustainAttachment.reset(new SliderAttachment(valueTreeState, "ampRelease", *ampReleaseSlider));
+    overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
+    overdriveToneAttachment.reset(new SliderAttachment(valueTreeState, "overdriveTone", *overdriveToneSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
     feedbackFilterAttachment.reset(new SliderAttachment(valueTreeState, "feedbackFilter", *feedbackFilterSlider));
     softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
@@ -143,8 +141,8 @@ void JC303Editor::setControlsLayout()
     // MODs knobs
     // first row
     pair<int, int> sqrDriverLocation = {482, 15};
-    pair<int, int> ampReleaseLocation = {552, 15};
-    pair<int, int> ampSustainLocation = {622, 15};
+    pair<int, int> overdriveLevelALocation = {552, 15};
+    pair<int, int> overdriveToneLocation = {622, 15};
     pair<int, int> slideTimeLocation = {692, 15};
     // second row
     pair<int, int> feedbackFilterLocation = {482, 53};
@@ -162,8 +160,8 @@ void JC303Editor::setControlsLayout()
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderWidth, sliderHeight);
     // MODs
     sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderWidth / 4, sliderHeight / 4);
-    ampReleaseSlider->setBounds(ampReleaseLocation.first, ampReleaseLocation.second, sliderWidth / 4, sliderHeight / 4);
-    ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderWidth / 4, sliderHeight / 4);
+    overdriveLevelSlider->setBounds(overdriveLevelALocation.first, overdriveLevelALocation.second, sliderWidth / 4, sliderHeight / 4);
+    overdriveToneSlider->setBounds(overdriveToneLocation.first, overdriveToneLocation.second, sliderWidth / 4, sliderHeight / 4);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderWidth / 4, sliderHeight / 4);
     feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderWidth / 4, sliderHeight / 4);
     softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderWidth / 4, sliderHeight / 4);

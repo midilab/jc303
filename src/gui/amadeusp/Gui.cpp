@@ -13,23 +13,19 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(envelopModSlider = createKnob("medium"));
     addAndMakeVisible(decaySlider = createKnob("medium"));
     addAndMakeVisible(accentSlider = createKnob("medium"));
-    // MODs
-    // row 1
-    addAndMakeVisible(sqrDriverSlider = createKnob("small"));
-    addAndMakeVisible(ampReleaseSlider = createKnob("small"));
-    addAndMakeVisible(ampSustainSlider = createKnob("small"));
-    addAndMakeVisible(slideTimeSlider = createKnob("small"));
-    // row 2
-    addAndMakeVisible(feedbackFilterSlider = createKnob("small"));
-    addAndMakeVisible(softAttackSlider = createKnob("small"));
+    // MODs row
     addAndMakeVisible(normalDecaySlider = createKnob("small"));
     addAndMakeVisible(accentDecaySlider = createKnob("small"));
-    // filter selector
-    addAndMakeVisible(filterSelectorButton = createFilterSelector());
+    addAndMakeVisible(feedbackFilterSlider = createKnob("small"));
+    addAndMakeVisible(softAttackSlider = createKnob("small"));
+    addAndMakeVisible(slideTimeSlider = createKnob("small"));
+    addAndMakeVisible(sqrDriverSlider = createKnob("small"));
+    addAndMakeVisible(overdriveLevelSlider = createKnob("small"));
+    addAndMakeVisible(overdriveToneSlider = createKnob("small"));
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
 
-    // attch controls to processor parameters tree
+    // attach controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
     tuningAttachment.reset (new SliderAttachment (valueTreeState, "tuning", *tuningSlider));
     cutoffFreqAttachment.reset (new SliderAttachment (valueTreeState, "cutoff", *cutoffFreqSlider));
@@ -38,18 +34,17 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     decayAttachment.reset (new SliderAttachment (valueTreeState, "decay", *decaySlider));
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
-    // MODs
+    // MODs row
     switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
-    ampReleaseAttachment.reset(new SliderAttachment(valueTreeState, "ampSustain", *ampSustainSlider));
-    ampSustainAttachment.reset(new SliderAttachment(valueTreeState, "ampRelease", *ampReleaseSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
     feedbackFilterAttachment.reset(new SliderAttachment(valueTreeState, "feedbackFilter", *feedbackFilterSlider));
     softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
     normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
     accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
-    filterSelectorButtonAttachment.reset(new ButtonAttachment(valueTreeState, "filterSelector", *filterSelectorButton));
-
+    overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
+    overdriveToneAttachment.reset(new SliderAttachment(valueTreeState, "overdriveTone", *overdriveToneSlider));
+    
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
@@ -115,14 +110,6 @@ SwitchButton* JC303Editor::createSwitch()
     return button;
 }
 
-FilterSelector* JC303Editor::createFilterSelector()
-{
-    auto* filterSelector = new FilterSelector();
-    filterSelector->setClickingTogglesState(false);
-
-    return filterSelector;
-}
-
 void JC303Editor::setControlsLayout()
 {
     // Set the bounds and other properties for each slider
@@ -132,8 +119,6 @@ void JC303Editor::setControlsLayout()
     const int sliderSmallSize = 30;
     const int switchWidth = 50;
     const int switchHeight = 18;
-    const int filterSelectorWidth = 100;
-    const int filterSelectorHeight = 50;
 
     // knob positioning location
     // first row
@@ -146,20 +131,17 @@ void JC303Editor::setControlsLayout()
     pair<int, int> envelopeLocation = {469, 153}; 
     pair<int, int> decayLocation = {567, 153}; 
     pair<int, int> accentLocation = {667, 153}; 
-    // MOD Switch
+    // MODs switch
     pair<int, int> switchLocation = {58, 291};
-    // MODs knobs
-    // first row
+    // MODs knobs row
     pair<int, int> sqrDriverLocation = {156, 294};
-    pair<int, int> ampReleaseLocation = {224, 294};
-    pair<int, int> ampSustainLocation = {292, 294};
     pair<int, int> slideTimeLocation = {361, 294};
-    // second row
     pair<int, int> feedbackFilterLocation = {430, 294};
     pair<int, int> softAttackLocation = {508, 294};
     pair<int, int> normalAttackLocation = {587, 294};
     pair<int, int> accentDecayLocation = {666, 294};
-    pair<int, int> filterSelectorLocation = {740, 275};
+    pair<int, int> overdriveLevelLocation = {224, 294};
+    pair<int, int> overdriveToneLocation = {292, 294};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -173,14 +155,12 @@ void JC303Editor::setControlsLayout()
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderMediumSize, sliderMediumSize);
     // MODs, small knobs
     sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
-    ampReleaseSlider->setBounds(ampReleaseLocation.first, ampReleaseLocation.second, sliderSmallSize, sliderSmallSize);
-    ampSustainSlider->setBounds(ampSustainLocation.first, ampSustainLocation.second, sliderSmallSize, sliderSmallSize);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
     feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderSmallSize, sliderSmallSize);
     softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderSmallSize, sliderSmallSize);
     normalDecaySlider->setBounds(normalAttackLocation.first, normalAttackLocation.second, sliderSmallSize, sliderSmallSize);
     accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderSmallSize, sliderSmallSize);
-
+    overdriveLevelSlider->setBounds(overdriveLevelLocation.first, overdriveLevelLocation.second, sliderSmallSize, sliderSmallSize);
+    overdriveToneSlider->setBounds(overdriveToneLocation.first, overdriveToneLocation.second, sliderSmallSize, sliderSmallSize);
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
-    filterSelectorButton->setBounds(filterSelectorLocation.first, filterSelectorLocation.second, filterSelectorWidth, filterSelectorHeight);
 }

@@ -56,36 +56,6 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("switchModState",
                                                         "Switch Mod",
                                                         false), 
-            std::make_unique<juce::AudioParameterFloat> ("sqrDriver",
-                                                        "Square Driver",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.0f), 
-            std::make_unique<juce::AudioParameterFloat> ("ampSustain",
-                                                        "Amp. Sustain",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.5f), 
-            std::make_unique<juce::AudioParameterFloat> ("ampRelease",
-                                                        "Amp. Release",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.5f), 
-            std::make_unique<juce::AudioParameterFloat> ("slideTime",
-                                                        "Slide time",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.55f),
-            std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
-                                                        "Filt. FeedBack",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.3f),
-            std::make_unique<juce::AudioParameterFloat> ("softAttack",
-                                                        "Soft Attack",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.1f), 
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
                                                         0.0f,
@@ -96,12 +66,36 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.1f),
-            std::make_unique<juce::AudioParameterInt> ("filterType",
-                                                        "Filter Type",
-                                                        TeeBeeFilter::LP_6,
-                                                        TeeBeeFilter::TB_303,
-                                                        TeeBeeFilter::TB_303), 
-
+            std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
+                                                        "Filt. FeedBack",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.3f),
+            std::make_unique<juce::AudioParameterFloat> ("softAttack",
+                                                        "Soft Attack",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.1f), 
+            std::make_unique<juce::AudioParameterFloat> ("slideTime",
+                                                        "Slide time",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.55f),
+            std::make_unique<juce::AudioParameterFloat> ("sqrDriver",
+                                                        "Square Driver",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f), 
+            std::make_unique<juce::AudioParameterFloat> ("overdriveLevel",
+                                                        "Overdrive",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f), 
+            std::make_unique<juce::AudioParameterFloat> ("overdriveTone",
+                                                        "Overdrive Tone",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f), 
        })
 {
     // assign a pointer to use it around for each parameter
@@ -115,15 +109,14 @@ JC303::JC303()
     volume = parameters.getRawParameterValue("volume");
     // MODs parameters
     switchModState = parameters.getRawParameterValue("switchModState");
-    sqrDriver = parameters.getRawParameterValue("sqrDriver");
-    ampSustain = parameters.getRawParameterValue("ampSustain");
-    ampRelease = parameters.getRawParameterValue("ampRelease");
-    slideTime = parameters.getRawParameterValue("slideTime");
-    feedbackFilter = parameters.getRawParameterValue("feedbackFilter");
-    softAttack = parameters.getRawParameterValue("softAttack");
     normalDecay = parameters.getRawParameterValue("normalDecay");
     accentDecay = parameters.getRawParameterValue("accentDecay");
-    filterType = parameters.getRawParameterValue("filterType");
+    feedbackFilter = parameters.getRawParameterValue("feedbackFilter");
+    softAttack = parameters.getRawParameterValue("softAttack");
+    slideTime = parameters.getRawParameterValue("slideTime");
+    sqrDriver = parameters.getRawParameterValue("sqrDriver");
+    overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
+    overdriveTone = parameters.getRawParameterValue("overdriveTone");
 
     // force true > false, then valuetree
     // restores the decay correct calculus
@@ -173,36 +166,6 @@ void JC303::setParameter (Open303Parameters index, float value)
     // BUT DONT! dont expect a devilfish clone sound or mail me about!
     // https://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
     //
-    case TANH_SHAPER_DRIVE:
-        //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
-        open303Core.setTanhShaperDrive( linToLin(value, 0.0, 1.0,   25.0,     80.0)  );
-        break;
-    case AMP_SUSTAIN:
-        open303Core.setAmpSustain(      linToLin(value, 0.0, 1.0, -60.0,      0.0)  );
-        break;
-    case AMP_RELEASE: 
-        open303Core.setAmpRelease(      linToLin(value, 0.0, 1.0,   -1.0,    1.0)  );
-        break;
-    case SLIDE_TIME:
-        /*
-        The Slide Time pot. Normally the slide time is 60 ms (milliseconds). In the Devil Fish, the
-        Slide Time pot varies the time from 60 to 360 ms, when running from the internal sequencer.
-        When running from an external CV, the time is between 2 and 300 ms. 
-        */
-        //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
-        open303Core.setSlideTime(       linToLin(value, 0.0, 1.0, 2.0, 360.0)       );
-        break;
-    case FEEDBACK_HPF:
-        // this one is expresive only on higher reesonances
-        open303Core.setFeedbackHighpass(linToExp(value, 0.0, 1.0,  350.0,    10.0)  );
-        break;
-    case SOFT_ATTACK:
-        /*
-        The Soft Attack pot varies the attack time of non-accented notes between 0.3 ms and 30 ms.
-        In the TB-303 there was a (typical) 4 ms delay and then a 3 ms attack time. 
-        */
-        open303Core.setNormalAttack(    linToExp(value, 0.0, 1.0,  0.3,    3000.0)  );
-        break;
     case NORMAL_DECAY:
         /*
         On non-accented notes, the TB-303’s Main Envelope Generator (MEG) had a decay time
@@ -216,10 +179,36 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setAccentDecay(     linToLin(value, 0.0, 1.0, 30.0,      3000.0));
         // setAmpDecay 16 > 3000
         break;
-    case FILTER_TYPE:
-        open303Core.filter.setMode((int)value);
-        open303Core.filter.calculateCoefficientsExact();
-        open303Core.filter.reset();
+    case FEEDBACK_HPF:
+        // this one is expresive only on higher reesonances
+        //open303Core.setFeedbackHighpass(linToExp(value, 0.0, 1.0,  350.0,    10.0)  );
+        open303Core.setFeedbackHighpass(linToExp(value, 0.0, 1.0,  350.0,    100.0) );
+        break;
+    case SOFT_ATTACK:
+        /*
+        The Soft Attack pot varies the attack time of non-accented notes between 0.3 ms and 30 ms.
+        In the TB-303 there was a (typical) 4 ms delay and then a 3 ms attack time. 
+        */
+        open303Core.setNormalAttack(    linToExp(value, 0.0, 1.0,  0.3,    3000.0)  );
+        break;
+    case SLIDE_TIME:
+        /*
+        The Slide Time pot. Normally the slide time is 60 ms (milliseconds). In the Devil Fish, the
+        Slide Time pot varies the time from 60 to 360 ms, when running from the internal sequencer.
+        When running from an external CV, the time is between 2 and 300 ms. 
+        */
+        //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
+        open303Core.setSlideTime(       linToLin(value, 0.0, 1.0, 2.0, 360.0)       );
+        break;
+    case TANH_SHAPER_DRIVE:
+        //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
+        open303Core.setTanhShaperDrive( linToLin(value, 0.0, 1.0,   25.0,     80.0)  );
+        break;
+    case OVERDRIVE_LEVEL:
+        //overdrive.setLevel(      linToLin(value, 0.0, 1.0, -60.0,      0.0)  );
+        break;
+    case OVERDRIVE_TONE: 
+        //overdrive.setTone(      linToLin(value, 0.0, 1.0,   -1.0,    1.0)  );
         break;
 	}
 }
@@ -234,14 +223,11 @@ void JC303::setDevilMod(bool mode)
         // devilfish extended decay range
         decayMin = 30.0;
         decayMax = 3000.0;
-        open303Core.filter.setMode((int)*filterType);
-        open303Core.filter.calculateCoefficientsExact();
-        open303Core.filter.reset();
     } else if (mode == false) {
         // restore original 303 values and block devilfish mod knobs to operate
         open303Core.setTanhShaperDrive(36.9); // dB2amp(36.9); 
-        open303Core.setAmpSustain(-6.02); // dB2amp(newSustain) = 0.5 ~ -6.0205 or -8.68589?
-        open303Core.setAmpRelease(1.0); // 1.0
+        //open303Core.setAmpSustain(-6.02); // dB2amp(newSustain) = 0.5 ~ -6.0205 or -8.68589?
+        //open303Core.setAmpRelease(1.0); // 1.0
         open303Core.setSlideTime(60.0); // 60.0;
         open303Core.setFeedbackHighpass(150.0); // filter.setFeedbackHighpassCutoff(150.0);
         open303Core.setNormalAttack(3.0); // 3.0;
@@ -252,10 +238,8 @@ void JC303::setDevilMod(bool mode)
         // original tb303 decay range
         decayMin = 200.0;
         decayMax = 2000.0;
-        // reset filter 
-        open303Core.filter.setMode(TeeBeeFilter::TB_303);
-        open303Core.filter.calculateCoefficientsExact();
-        open303Core.filter.reset();
+        // set overdrive off
+        //...
     }
 }
 
@@ -410,17 +394,14 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     lastSwitchModState = currentSwitchState;
 
     if (currentSwitchState) {
-        setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
-        setParameter(AMP_SUSTAIN, *ampSustain);
-        setParameter(AMP_RELEASE, *ampRelease);
-        setParameter(SLIDE_TIME, *slideTime);
-        setParameter(FEEDBACK_HPF, *feedbackFilter);
-        setParameter(SOFT_ATTACK, *softAttack);
         setParameter(NORMAL_DECAY, *normalDecay);
         setParameter(ACCENT_DECAY, *accentDecay);
-        if (*filterType != lastFilterTypeState)
-            setParameter(FILTER_TYPE, *filterType);
-        lastFilterTypeState = (int)*filterType;
+        setParameter(FEEDBACK_HPF, *feedbackFilter);
+        setParameter(SOFT_ATTACK, *softAttack);
+        setParameter(SLIDE_TIME, *slideTime);
+        setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
+        setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
+        setParameter(OVERDRIVE_TONE, *overdriveTone);
     }
 
 

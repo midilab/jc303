@@ -31,7 +31,7 @@ private:
     // access the processor object that created it.
     JC303& processorRef;
 
-    // Declare your Slider members
+    // Main slider controls
     juce::Slider* waveformSlider;
     juce::Slider* tuningSlider;
     juce::Slider* cutoffFreqSlider;
@@ -41,14 +41,14 @@ private:
     juce::Slider* accentSlider;
     juce::Slider* volumeSlider;
     // MODs
-    juce::Slider* sqrDriverSlider;
-    juce::Slider* ampReleaseSlider;
-    juce::Slider* ampSustainSlider;
-    juce::Slider* slideTimeSlider;
-    juce::Slider* feedbackFilterSlider;
-    juce::Slider* softAttackSlider;
     juce::Slider* normalDecaySlider;
     juce::Slider* accentDecaySlider;
+    juce::Slider* feedbackFilterSlider;
+    juce::Slider* softAttackSlider;
+    juce::Slider* slideTimeSlider;
+    juce::Slider* sqrDriverSlider;
+    juce::Slider* overdriveLevelSlider;
+    juce::Slider* overdriveToneSlider;
     SwitchButton* switchModButton;
 
     // declare the attchaments
@@ -62,14 +62,14 @@ private:
     std::unique_ptr<SliderAttachment> volumeAttachment;
     // MODs
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
-    std::unique_ptr<SliderAttachment> sqrDriverAttachment;
-    std::unique_ptr<SliderAttachment> ampReleaseAttachment;
-    std::unique_ptr<SliderAttachment> ampSustainAttachment;
-    std::unique_ptr<SliderAttachment> slideTimeAttachment;
-    std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
-    std::unique_ptr<SliderAttachment> softAttackAttachment;
     std::unique_ptr<SliderAttachment> normalDecayAttachment;
     std::unique_ptr<SliderAttachment> accentDecayAttachment;
+    std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
+    std::unique_ptr<SliderAttachment> softAttackAttachment;
+    std::unique_ptr<SliderAttachment> slideTimeAttachment;
+    std::unique_ptr<SliderAttachment> sqrDriverAttachment;
+    std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
+    std::unique_ptr<SliderAttachment> overdriveToneAttachment;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;

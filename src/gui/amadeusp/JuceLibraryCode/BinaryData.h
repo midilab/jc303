@@ -8,9 +8,6 @@
 
 namespace BinaryData
 {
-    extern const char*   filter_png;
-    const int            filter_pngSize = 156839;
-
     extern const char*   jc303gui_png;
     const int            jc303gui_pngSize = 1254683;
 
@@ -27,7 +24,7 @@ namespace BinaryData
     const int            switch_pngSize = 24930;
 
     // Number of elements in the namedResourceList and originalFileNames arrays.
-    const int namedResourceListSize = 6;
+    const int namedResourceListSize = 5;
 
     // Points to the start of a list of resource names.
     extern const char* namedResourceList[];

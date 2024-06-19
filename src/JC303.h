@@ -17,15 +17,14 @@ enum Open303Parameters
   VOLUME,
   // MODs
   SWITCH_MOD,
-  TANH_SHAPER_DRIVE,
-  AMP_SUSTAIN,
-  AMP_RELEASE,
-  SLIDE_TIME,
-  FEEDBACK_HPF,
-  SOFT_ATTACK,
   NORMAL_DECAY,
   ACCENT_DECAY,
-  FILTER_TYPE,
+  FEEDBACK_HPF,
+  SOFT_ATTACK,
+  SLIDE_TIME,
+  TANH_SHAPER_DRIVE,
+  OVERDRIVE_LEVEL,
+  OVERDRIVE_TONE,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -91,17 +90,15 @@ private:
     std::atomic<float>* volume = nullptr;
     // MODs
     std::atomic<float>* switchModState = nullptr;
-    std::atomic<float>* sqrDriver = nullptr;
-    std::atomic<float>* ampSustain = nullptr;
-    std::atomic<float>* ampRelease = nullptr;
-    std::atomic<float>* slideTime = nullptr;
-    std::atomic<float>* feedbackFilter = nullptr;
-    std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* normalDecay = nullptr;
     std::atomic<float>* accentDecay = nullptr;
-    std::atomic<float>* filterType = nullptr;
+    std::atomic<float>* feedbackFilter = nullptr;
+    std::atomic<float>* softAttack = nullptr;
+    std::atomic<float>* slideTime = nullptr;
+    std::atomic<float>* sqrDriver = nullptr;
+    std::atomic<float>* overdriveLevel = nullptr;
+    std::atomic<float>* overdriveTone = nullptr;
     bool lastSwitchModState = false;
-    int lastFilterTypeState = TeeBeeFilter::TB_303;
 
     double decayMin = 200;
     double decayMax = 2000;

@@ -5,7 +5,6 @@
 #include "JuceLibraryCode/BinaryData.h"
 #include "KnobLookAndFeel.h"
 #include "SwitchButton.h"
-#include "FilterSelector.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 typedef juce::AudioProcessorValueTreeState::ButtonAttachment ButtonAttachment;
@@ -24,7 +23,6 @@ public:
 private:
     juce::Slider* createKnob(const juce::String& knobType);
     SwitchButton* createSwitch();
-    FilterSelector* createFilterSelector();
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -41,15 +39,14 @@ private:
     juce::Slider* accentSlider;
     juce::Slider* volumeSlider;
     // MODs
-    juce::Slider* sqrDriverSlider;
-    juce::Slider* ampReleaseSlider;
-    juce::Slider* ampSustainSlider;
-    juce::Slider* slideTimeSlider;
-    juce::Slider* feedbackFilterSlider;
-    juce::Slider* softAttackSlider;
     juce::Slider* normalDecaySlider;
     juce::Slider* accentDecaySlider;
-    FilterSelector* filterSelectorButton;
+    juce::Slider* feedbackFilterSlider;
+    juce::Slider* softAttackSlider;
+    juce::Slider* slideTimeSlider;
+    juce::Slider* sqrDriverSlider;
+    juce::Slider* overdriveLevelSlider;
+    juce::Slider* overdriveToneSlider;
     SwitchButton* switchModButton;
 
     // declare the attchaments
@@ -63,15 +60,14 @@ private:
     std::unique_ptr<SliderAttachment> volumeAttachment;
     // MODs
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
-    std::unique_ptr<ButtonAttachment> filterSelectorButtonAttachment;
-    std::unique_ptr<SliderAttachment> sqrDriverAttachment;
-    std::unique_ptr<SliderAttachment> ampReleaseAttachment;
-    std::unique_ptr<SliderAttachment> ampSustainAttachment;
-    std::unique_ptr<SliderAttachment> slideTimeAttachment;
-    std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
-    std::unique_ptr<SliderAttachment> softAttackAttachment;
     std::unique_ptr<SliderAttachment> normalDecayAttachment;
     std::unique_ptr<SliderAttachment> accentDecayAttachment;
+    std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
+    std::unique_ptr<SliderAttachment> softAttackAttachment;
+    std::unique_ptr<SliderAttachment> slideTimeAttachment;
+    std::unique_ptr<SliderAttachment> sqrDriverAttachment;
+    std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
+    std::unique_ptr<SliderAttachment> overdriveToneAttachment;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;
