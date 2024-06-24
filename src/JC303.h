@@ -2,7 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-#include "dsp/rosic_Open303.h"
+#include "dsp/open303/rosic_Open303.h"
 using namespace rosic;
 
 enum Open303Parameters
@@ -24,7 +24,7 @@ enum Open303Parameters
   SLIDE_TIME,
   TANH_SHAPER_DRIVE,
   OVERDRIVE_LEVEL,
-  OVERDRIVE_TONE,
+  OVERDRIVE_DRY_WET,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -97,7 +97,7 @@ private:
     std::atomic<float>* slideTime = nullptr;
     std::atomic<float>* sqrDriver = nullptr;
     std::atomic<float>* overdriveLevel = nullptr;
-    std::atomic<float>* overdriveTone = nullptr;
+    std::atomic<float>* overdriveDryWet = nullptr;
     bool lastSwitchModState = false;
 
     double decayMin = 200;

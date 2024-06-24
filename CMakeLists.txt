@@ -56,12 +56,18 @@ FetchContent_Declare(juce
 FetchContent_Declare(juce-clap-extensions
     GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
     GIT_TAG        a3227c52fa082d2df33f4377ed1e050dd8a52595
-    GIT_SHALLOW    TRUE
+    GIT_SHALLOW    FALSE
     GIT_CONFIG     advice.detachedHead=false)    # Disable detached HEAD warning for fetching a specific tag
 
+FetchContent_Declare(rtneural
+    GIT_REPOSITORY https://github.com/jatinchowdhury18/RTNeural.git
+    GIT_TAG        c8d044398c1ac05958015f5fec622a5ecdea2f70
+    GIT_SHALLOW    FALSE
+    GIT_CONFIG     advice.detachedHead=false)    # Disable detached HEAD warning for fetching a specific tag
 
 FetchContent_MakeAvailable(juce)
 FetchContent_MakeAvailable(juce-clap-extensions)
+FetchContent_MakeAvailable(rtneural)
 
 
 ### Plugin Project Setup ###

@@ -87,12 +87,12 @@ JC303::JC303()
                                                         1.0f,
                                                         0.0f), 
             std::make_unique<juce::AudioParameterFloat> ("overdriveLevel",
-                                                        "Overdrive",
+                                                        "Drive",
                                                         0.0f,
                                                         1.0f,
                                                         0.5f), 
-            std::make_unique<juce::AudioParameterFloat> ("overdriveTone",
-                                                        "Overdrive Tone",
+            std::make_unique<juce::AudioParameterFloat> ("overdriveDryWet",
+                                                        "Dry / Wet",
                                                         0.0f,
                                                         1.0f,
                                                         0.5f), 
@@ -116,7 +116,7 @@ JC303::JC303()
     slideTime = parameters.getRawParameterValue("slideTime");
     sqrDriver = parameters.getRawParameterValue("sqrDriver");
     overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
-    overdriveTone = parameters.getRawParameterValue("overdriveTone");
+    overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
 
     // force true > false, then valuetree
     // restores the decay correct calculus
@@ -207,7 +207,7 @@ void JC303::setParameter (Open303Parameters index, float value)
     case OVERDRIVE_LEVEL:
         //overdrive.setLevel(      linToLin(value, 0.0, 1.0, -60.0,      0.0)  );
         break;
-    case OVERDRIVE_TONE: 
+    case OVERDRIVE_DRY_WET: 
         //overdrive.setTone(      linToLin(value, 0.0, 1.0,   -1.0,    1.0)  );
         break;
 	}
@@ -351,9 +351,13 @@ void JC303::render(juce::AudioBuffer<float>& buffer, int beginSample, int endSam
     auto* firstChannel = buffer.getWritePointer(0);
     for (auto sample = beginSample; sample < endSample; ++sample)
     {
+        // processing open303
         firstChannel[sample] += (float) open303Core.getSample();
+        // processing neuralpi - from guitarml (we do only make use of LSTM modeling processing, no IR, EQ, Efx...)
+        // ...
     }
 
+    // copy mono channel to other ones...
     for (int channel = 1; channel < buffer.getNumChannels(); ++channel)
     {
         auto* channelData = buffer.getWritePointer(channel);
@@ -401,7 +405,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         setParameter(SLIDE_TIME, *slideTime);
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
         setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
-        setParameter(OVERDRIVE_TONE, *overdriveTone);
+        setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
     }
 
 
