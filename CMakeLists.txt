@@ -6,6 +6,8 @@ project(JC303 VERSION 0.10.1)
 ### Dependency versions ###
 
 set(LIB_JUCE_TAG "7.0.5")
+set(LIB_CLAP_TAG "a3227c52fa082d2df33f4377ed1e050dd8a52595")
+set(LIB_RTNEURAL_TAG "c8d044398c1ac05958015f5fec622a5ecdea2f70")
 
 ### Gui setup
 # check if the GUI variable is set
@@ -48,27 +50,25 @@ FetchContent_Declare(juce
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
     GIT_TAG        ${LIB_JUCE_TAG}
     GIT_SHALLOW    TRUE
-    GIT_CONFIG     advice.detachedHead=false    # Disable detached HEAD warning for fetching a specific tag
+    GIT_CONFIG     advice.detachedHead=false
     SOURCE_DIR     "${FETCHCONTENT_BASE_DIR}/JUCE"
     SUBBUILD_DIR   "${FETCHCONTENT_BASE_DIR}/JUCE-Subbuild"
     BINARY_DIR     "${FETCHCONTENT_BASE_DIR}/JUCE-Build")
+FetchContent_MakeAvailable(juce)
 
 FetchContent_Declare(juce-clap-extensions
     GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
-    GIT_TAG        a3227c52fa082d2df33f4377ed1e050dd8a52595
-    GIT_SHALLOW    FALSE
-    GIT_CONFIG     advice.detachedHead=false)    # Disable detached HEAD warning for fetching a specific tag
+    GIT_TAG        ${LIB_CLAP_TAG}
+    GIT_CONFIG     advice.detachedHead=false)    
+FetchContent_MakeAvailable(juce-clap-extensions)
 
+set(RTNEURAL_XSIMD ON CACHE BOOL "Use RTNeural with this backend" FORCE)
 FetchContent_Declare(rtneural
     GIT_REPOSITORY https://github.com/jatinchowdhury18/RTNeural.git
-    GIT_TAG        c8d044398c1ac05958015f5fec622a5ecdea2f70
-    GIT_SHALLOW    FALSE
-    GIT_CONFIG     advice.detachedHead=false)    # Disable detached HEAD warning for fetching a specific tag
-
-FetchContent_MakeAvailable(juce)
-FetchContent_MakeAvailable(juce-clap-extensions)
+    GIT_TAG        ${LIB_RTNEURAL_TAG}
+    GIT_CONFIG     advice.detachedHead=false)      
 FetchContent_MakeAvailable(rtneural)
-
+include_directories(${rtneural_SOURCE_DIR})
 
 ### Plugin Project Setup ###
 
@@ -161,6 +161,7 @@ juce_generate_juce_header("${PROJECT_NAME}")
 target_compile_definitions("${PROJECT_NAME}"
     PUBLIC
         # JUCE_WEB_BROWSER and JUCE_USE_CURL would be on by default, but you might not need them.
+        JUCE_DISPLAY_SPLASH_SCREEN=0
         JUCE_WEB_BROWSER=0  # If you remove this, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_plugin` call
         JUCE_USE_CURL=0     # If you remove this, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
         JUCE_VST3_CAN_REPLACE_VST2=0)
@@ -181,6 +182,8 @@ target_link_libraries("${PROJECT_NAME}"
     PRIVATE
         # Assets                # If we'd created a binary data target, we'd link to it here
         juce::juce_audio_utils
+        # RTNeural
+        RTNeural
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

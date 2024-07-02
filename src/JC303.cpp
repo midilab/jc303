@@ -348,12 +348,12 @@ bool JC303::isBusesLayoutSupported (const BusesLayout& layouts) const
 
 void JC303::render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample)
 {
-    auto* firstChannel = buffer.getWritePointer(0);
+    auto* monoChannel = buffer.getWritePointer(0);
     for (auto sample = beginSample; sample < endSample; ++sample)
     {
         // processing open303
-        firstChannel[sample] += (float) open303Core.getSample();
-        // processing neuralpi - from guitarml (we do only make use of LSTM modeling processing, no IR, EQ, Efx...)
+        monoChannel[sample] += (float) open303Core.getSample();
+        // processing distortion: neuralpi - from guitarml (we do only make use of LSTM modeling inference, no IR, EQ, Efx...)
         // ...
     }
 
@@ -361,8 +361,8 @@ void JC303::render(juce::AudioBuffer<float>& buffer, int beginSample, int endSam
     for (int channel = 1; channel < buffer.getNumChannels(); ++channel)
     {
         auto* channelData = buffer.getWritePointer(channel);
-        std::copy(firstChannel + beginSample, 
-            firstChannel + endSample, 
+        std::copy(monoChannel + beginSample, 
+            monoChannel + endSample, 
             channelData + beginSample);
     }
 }
