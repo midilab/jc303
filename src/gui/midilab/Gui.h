@@ -2,7 +2,6 @@
 
 #include <JuceHeader.h>
 #include "../../JC303.h"
-#include "JuceLibraryCode/BinaryData.h"
 #include "KnobLookAndFeel.h"
 #include "ModKnobLookAndFeel.h"
 #include "SwitchButton.h"

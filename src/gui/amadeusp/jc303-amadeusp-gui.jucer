@@ -4,7 +4,7 @@
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1">
   <MAINGROUP id="CJcFJY" name="jc303-gui">
     <GROUP id="{DD8B1986-2C83-9275-BC5F-6F63D551FF92}" name="Resources">
-      <FILE id="oV4GmT" name="jc303-gui.png" compile="0" resource="1" file="resources/jc303-gui.png"/>
+      <FILE id="sdCGOF" name="jc-303-gui.png" compile="0" resource="1" file="resources/jc-303-gui.png"/>
       <FILE id="Zoqsaa" name="large-rotary.png" compile="0" resource="1"
             file="resources/large-rotary.png"/>
       <FILE id="ZOrprT" name="medium-rotary.png" compile="0" resource="1"

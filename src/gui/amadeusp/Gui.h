@@ -2,7 +2,6 @@
 
 #include <JuceHeader.h>
 #include "../../JC303.h"
-#include "JuceLibraryCode/BinaryData.h"
 #include "KnobLookAndFeel.h"
 #include "SwitchButton.h"
 
@@ -46,7 +45,7 @@ private:
     juce::Slider* slideTimeSlider;
     juce::Slider* sqrDriverSlider;
     juce::Slider* overdriveLevelSlider;
-    juce::Slider* overdriveToneSlider;
+    juce::Slider* overdriveDryWetSlider;
     SwitchButton* switchModButton;
 
     // declare the attchaments
@@ -59,7 +58,6 @@ private:
     std::unique_ptr<SliderAttachment> accentAttachment;
     std::unique_ptr<SliderAttachment> volumeAttachment;
     // MODs
-    std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
     std::unique_ptr<SliderAttachment> normalDecayAttachment;
     std::unique_ptr<SliderAttachment> accentDecayAttachment;
     std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
@@ -67,7 +65,8 @@ private:
     std::unique_ptr<SliderAttachment> slideTimeAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
-    std::unique_ptr<SliderAttachment> overdriveToneAttachment;
+    std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
+    std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;
