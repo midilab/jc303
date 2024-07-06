@@ -1,9 +1,14 @@
 #pragma once
 
-#include <juce_audio_processors/juce_audio_processors.h>
+//#include <juce_audio_processors/juce_audio_processors.h>
+#include <JuceHeader.h>
 
+// Open303
 #include "dsp/open303/rosic_Open303.h"
 using namespace rosic;
+
+// NeuralPi (LSTM only version)
+#include "dsp/neuralpi/NeuralPi.h"
 
 enum Open303Parameters
 {
@@ -75,8 +80,9 @@ private:
     void render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
 
-    // the embedded core dsp object:
+    // embedded core dsp objects
     Open303 open303Core;
+    NeuralPi neuralPi;
 
     //==============================================================================
     juce::AudioProcessorValueTreeState parameters;

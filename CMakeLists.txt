@@ -11,15 +11,12 @@ set(LIB_RTNEURAL_TAG "c8d044398c1ac05958015f5fec622a5ecdea2f70")
 
 ### Gui setup
 # check if the GUI variable is set
-if(DEFINED GUI)
-    # set GUI_THEME_HEADER to the param defined
-    set(GUI_THEME_HEADER "gui/${GUI}/Gui.h")
-    set(GUI_THEME ${GUI})
-else()
-    # Set GUI_THEME_HEADER to the default value 'amadeusp'
-    set(GUI_THEME_HEADER "gui/amadeusp/Gui.h")
-    set(GUI_THEME amadeusp)
+if(NOT DEFINED GUI)
+    # no GUI set defaults to amadeusp
+    set(GUI "amadeusp")
 endif()
+set(GUI_THEME_HEADER "gui/${GUI}/Gui.h")
+set(GUI_THEME ${GUI})
 
 # Add the GUI_THEME_HEADER macro definition
 add_definitions(-DGUI_THEME_HEADER="${GUI_THEME_HEADER}")
@@ -68,7 +65,12 @@ FetchContent_Declare(rtneural
     GIT_TAG        ${LIB_RTNEURAL_TAG}
     GIT_CONFIG     advice.detachedHead=false)      
 FetchContent_MakeAvailable(rtneural)
-include_directories(${rtneural_SOURCE_DIR})
+# we add modules as include directory to make use of same json module instead of downloading it again as a separated dependency
+include_directories(${rtneural_SOURCE_DIR} ${rtneural_SOURCE_DIR}/modules)
+add_subdirectory(src/dsp/neuralpi)
+
+# gui resources BinaryData via CMakeLists.txt
+add_subdirectory(src/gui/${GUI})
 
 ### Plugin Project Setup ###
 
@@ -180,9 +182,10 @@ target_compile_definitions("${PROJECT_NAME}"
 
 target_link_libraries("${PROJECT_NAME}"
     PRIVATE
-        # Assets                # If we'd created a binary data target, we'd link to it here
+        BinaryData
+        BinaryDataNeuralPi
         juce::juce_audio_utils
-        # RTNeural
+        #juce::juce_dsp
         RTNeural
     PUBLIC
         juce::juce_recommended_config_flags
