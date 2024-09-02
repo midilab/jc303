@@ -12,7 +12,7 @@ The Open303 engine part of this software is also licensed under the MIT License.
 
 Supports Windows, Linux and macOS. You may find CLAP, VST3, LV2 and AU formats available to download.
 
-MacOS Intel x64 and M1: [jc303-macos-universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.10.1/jc303-0.10.1-macos-universal-plugins.zip)
+MacOS Universal - Intel and ARM: [jc303-macos-universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.10.1/jc303-0.10.1-macos-universal-plugins.zip)
 
 Windows Intel x64: [jc303-win64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.10.1/jc303-0.10.1-win64-plugins.zip)
 
@@ -31,7 +31,10 @@ This de-quarantine example is for AU, please do the same for other formats you'l
 ## Build
 
 Generate the project first before you compile.  
-  
+
+#### VST2 Plugin
+
+No distribution of VST2 plugin binaries is allowed without a license, but if you have the sdk and the license to use it just copy the vstsdk2.4/ SDK folder to the root of this project before run cmake.
 
 #### cmake options
 
@@ -86,5 +89,6 @@ cmake --build build --config Release
 1. ~~Binary release for MacOS, Windows and Linux~~
 2. ~~Graphical User Interface~~
 3. ~~Internal parameters for engine tunning -Inspired on Devilfish Mod~~
-4. Preset Support
-5. Step Sequencer
+4. Overdrive
+5. Preset Support
+6. Step Sequencer
