@@ -1,9 +1,12 @@
 #pragma once
 
-#include <juce_audio_processors/juce_audio_processors.h>
+//#include <juce_audio_processors/juce_audio_processors.h>
+#include <JuceHeader.h>
 
-#include "dsp/rosic_Open303.h"
+// Open303
+#include "dsp/open303/rosic_Open303.h"
 using namespace rosic;
+
 
 enum Open303Parameters
 {
@@ -17,15 +20,12 @@ enum Open303Parameters
   VOLUME,
   // MODs
   SWITCH_MOD,
-  TANH_SHAPER_DRIVE,
-  AMP_SUSTAIN,
-  AMP_RELEASE,
-  SLIDE_TIME,
-  FEEDBACK_HPF,
-  SOFT_ATTACK,
   NORMAL_DECAY,
   ACCENT_DECAY,
-  //FILTER_TYPE,
+  FEEDBACK_HPF,
+  SOFT_ATTACK,
+  SLIDE_TIME,
+  TANH_SHAPER_DRIVE,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -73,10 +73,10 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
 private:
-    void render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
+    void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
 
-    // the embedded core dsp object:
+    // embedded core dsp objects
     Open303 open303Core;
 
     //==============================================================================
@@ -91,16 +91,12 @@ private:
     std::atomic<float>* volume = nullptr;
     // MODs
     std::atomic<float>* switchModState = nullptr;
-    std::atomic<float>* sqrDriver = nullptr;
-    std::atomic<float>* ampSustain = nullptr;
-    std::atomic<float>* ampRelease = nullptr;
-    std::atomic<float>* slideTime = nullptr;
-    std::atomic<float>* feedbackFilter = nullptr;
-    std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* normalDecay = nullptr;
     std::atomic<float>* accentDecay = nullptr;
-    //std::atomic<float>* filterType = nullptr;
-    // mod fixed ranges support
+    std::atomic<float>* feedbackFilter = nullptr;
+    std::atomic<float>* softAttack = nullptr;
+    std::atomic<float>* slideTime = nullptr;
+    std::atomic<float>* sqrDriver = nullptr;
     bool lastSwitchModState = false;
 
     double decayMin = 200;

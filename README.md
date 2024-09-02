@@ -30,8 +30,15 @@ This de-quarantine example is for AU, please do the same for other formats you'l
 
 ## Build
 
-Generate the project first before you compile.
+Generate the project first before you compile.  
+  
 
+#### cmake options
+
+| Variable | Description | Default |
+|--|--|--|
+| GUI | Select GUI theme interface to use | amadeusp |
+  
 ### Apple Xcode
 
 To generate an **Xcode** project, run:

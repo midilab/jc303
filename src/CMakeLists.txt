@@ -5,29 +5,28 @@
 
 target_sources("${PROJECT_NAME}"
     PRIVATE
-        dsp/GlobalFunctions.cpp
-        dsp/rosic_AcidPattern.cpp
-        dsp/rosic_AcidSequencer.cpp
-        dsp/rosic_AnalogEnvelope.cpp
-        dsp/rosic_BiquadFilter.cpp
-        dsp/rosic_BlendOscillator.cpp
-        dsp/rosic_Complex.cpp
-        dsp/rosic_DecayEnvelope.cpp
-        dsp/rosic_EllipticQuarterBandFilter.cpp
-        dsp/rosic_FourierTransformerRadix2.cpp
-        dsp/rosic_FunctionTemplates.cpp
-        dsp/rosic_LeakyIntegrator.cpp
-        dsp/rosic_MidiNoteEvent.cpp
-        dsp/rosic_MipMappedWaveTable.cpp
-        dsp/rosic_NumberManipulations.cpp
-        dsp/rosic_OnePoleFilter.cpp
-        dsp/rosic_Open303.cpp
-        dsp/rosic_RealFunctions.cpp
-        dsp/rosic_TeeBeeFilter.cpp
+        dsp/open303/GlobalFunctions.cpp
+        dsp/open303/rosic_AcidPattern.cpp
+        dsp/open303/rosic_AcidSequencer.cpp
+        dsp/open303/rosic_AnalogEnvelope.cpp
+        dsp/open303/rosic_BiquadFilter.cpp
+        dsp/open303/rosic_BlendOscillator.cpp
+        dsp/open303/rosic_Complex.cpp
+        dsp/open303/rosic_DecayEnvelope.cpp
+        dsp/open303/rosic_EllipticQuarterBandFilter.cpp
+        dsp/open303/rosic_FourierTransformerRadix2.cpp
+        dsp/open303/rosic_FunctionTemplates.cpp
+        dsp/open303/rosic_LeakyIntegrator.cpp
+        dsp/open303/rosic_MidiNoteEvent.cpp
+        dsp/open303/rosic_MipMappedWaveTable.cpp
+        dsp/open303/rosic_NumberManipulations.cpp
+        dsp/open303/rosic_OnePoleFilter.cpp
+        dsp/open303/rosic_Open303.cpp
+        dsp/open303/rosic_RealFunctions.cpp
+        dsp/open303/rosic_TeeBeeFilter.cpp
        
-	JuceLibraryCode/BinaryData.cpp
- 
-        Gui.cpp
+        gui/${GUI_THEME}/Gui.cpp
+
         JC303.cpp)
 
 # Add subdirectories with source files, if present
