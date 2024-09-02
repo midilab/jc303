@@ -190,7 +190,9 @@ void JC303::setParameter (Open303Parameters index, float value)
         break;
     case TANH_SHAPER_DRIVE:
         //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
-        open303Core.setTanhShaperDrive( linToLin(value, 0.0, 1.0,   25.0,     80.0)  );
+        double shaper = linToLin(value, 0.0, 1.0,   25.0,     80.0);
+        if (shaper != open303Core.getTanhShaperDrive())
+            open303Core.setTanhShaperDrive(shaper);
         break;
 	}
 }
