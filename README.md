@@ -85,6 +85,6 @@ cmake --build build --config Release
 
 1. ~~Binary release for MacOS, Windows and Linux~~
 2. ~~Graphical User Interface~~
-3. Filter type and internal parameters for engine tunning exposed to GUI
+3. ~~Internal parameters for engine tunning -Inspired on Devilfish Mod~~
 4. Preset Support
 5. Step Sequencer

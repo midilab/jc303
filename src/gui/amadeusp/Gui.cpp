@@ -130,7 +130,7 @@ void JC303Editor::setControlsLayout()
     // MODs switch
     pair<int, int> switchLocation = {55, 301};
     // MODs knobs row
-    pair<int, int> normalAttackLocation = {145, 299};
+    pair<int, int> normalDecayLocation = {145, 299};
     pair<int, int> accentDecayLocation = {274, 299};
     pair<int, int> feedbackFilterLocation = {402, 299};
     pair<int, int> softAttackLocation = {530, 299};
@@ -149,7 +149,7 @@ void JC303Editor::setControlsLayout()
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderMediumSize, sliderMediumSize);
     // MODs, small knobs, switch
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
-    normalDecaySlider->setBounds(normalAttackLocation.first, normalAttackLocation.second, sliderSmallSize, sliderSmallSize);
+    normalDecaySlider->setBounds(normalDecayLocation.first, normalDecayLocation.second, sliderSmallSize, sliderSmallSize);
     accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderSmallSize, sliderSmallSize);
     feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderSmallSize, sliderSmallSize);
     softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderSmallSize, sliderSmallSize);
