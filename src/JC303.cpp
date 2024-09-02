@@ -70,7 +70,7 @@ JC303::JC303()
                                                         "Filt. FeedBack",
                                                         0.0f,
                                                         1.0f,
-                                                        0.3f),
+                                                        0.54f),
             std::make_unique<juce::AudioParameterFloat> ("softAttack",
                                                         "Soft Attack",
                                                         0.0f,
@@ -85,17 +85,7 @@ JC303::JC303()
                                                         "Square Driver",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f), 
-            std::make_unique<juce::AudioParameterFloat> ("overdriveLevel",
-                                                        "Drive",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.0f), 
-            std::make_unique<juce::AudioParameterFloat> ("overdriveDryWet",
-                                                        "Dry/Wet",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.5f), 
+                                                        0.25f), 
        })
 {
     // assign a pointer to use it around for each parameter
@@ -115,8 +105,6 @@ JC303::JC303()
     softAttack = parameters.getRawParameterValue("softAttack");
     slideTime = parameters.getRawParameterValue("slideTime");
     sqrDriver = parameters.getRawParameterValue("sqrDriver");
-    overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
-    overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
 
     // force true > false, then valuetree
     // restores the decay correct calculus
@@ -203,12 +191,6 @@ void JC303::setParameter (Open303Parameters index, float value)
     case TANH_SHAPER_DRIVE:
         //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
         open303Core.setTanhShaperDrive( linToLin(value, 0.0, 1.0,   25.0,     80.0)  );
-        break;
-    case OVERDRIVE_LEVEL:
-        neuralPi.setDriver(value);
-        break;
-    case OVERDRIVE_DRY_WET: 
-        neuralPi.setDryWet(value);
         break;
 	}
 }
@@ -312,8 +294,6 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     // init open303
     open303Core.setSampleRate(sampleRate);
-    // init neuralPi
-    neuralPi.init(sampleRate, samplesPerBlock);
 }
 
 void JC303::releaseResources()
@@ -346,28 +326,12 @@ bool JC303::isBusesLayoutSupported (const BusesLayout& layouts) const
   #endif
 }
 
-void JC303::render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample)
+void JC303::render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample)
 {
     auto* monoChannel = buffer.getWritePointer(0);
-    for (auto sample = beginSample; sample < endSample; ++sample) {
+    for (auto sample = beginSample; sample < endSample; ++sample)
         // processing open303
         monoChannel[sample] += (float) open303Core.getSample();
-
-    }
-
-    // only render if driver is turned on
-    if (*overdriveLevel > 0)
-        // processing distortion: neuralPi - from guitarml (we do only make use of LSTM modeling inference, no IR, EQ, Efx...)
-        neuralPi.process(buffer, beginSample, endSample);
-
-    // copy mono channel to other ones...
-    for (int channel = 1; channel < buffer.getNumChannels(); ++channel)
-    {
-        auto* channelData = buffer.getWritePointer(channel);
-        std::copy(monoChannel + beginSample, 
-            monoChannel + endSample, 
-            channelData + beginSample);
-    }
 }
 
 void JC303::processBlock (juce::AudioBuffer<float>& buffer,
@@ -409,17 +373,14 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
     }
 
-    // neuralPi overdrive state
-    setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
-    setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
-
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)
     {
         const auto message = midiMetadata.getMessage();
         const auto messagePosition = static_cast<int>(message.getTimeStamp());
 
-        render(buffer, currentSample, messagePosition);
+        // render open303
+        render303(buffer, currentSample, messagePosition);
 
         if (message.isNoteOn())
         {
@@ -441,8 +402,12 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         currentSample = messagePosition;
     }
 
-    // render the audio output
-    render(buffer, currentSample, buffer.getNumSamples());
+    // render open303
+    render303(buffer, currentSample, buffer.getNumSamples());
+
+    // copy mono channel to other ones...
+    for (int ch = 1; ch < buffer.getNumChannels(); ++ch)
+        buffer.copyFrom(ch, 0, buffer, 0, 0, buffer.getNumSamples());
 }
 
 //==============================================================================

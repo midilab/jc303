@@ -7,8 +7,6 @@
 #include "dsp/open303/rosic_Open303.h"
 using namespace rosic;
 
-// NeuralPi (LSTM only version)
-#include "dsp/neuralpi/NeuralPi.h"
 
 enum Open303Parameters
 {
@@ -28,8 +26,6 @@ enum Open303Parameters
   SOFT_ATTACK,
   SLIDE_TIME,
   TANH_SHAPER_DRIVE,
-  OVERDRIVE_LEVEL,
-  OVERDRIVE_DRY_WET,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -77,12 +73,11 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
 private:
-    void render(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
+    void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
 
     // embedded core dsp objects
     Open303 open303Core;
-    NeuralPi neuralPi;
 
     //==============================================================================
     juce::AudioProcessorValueTreeState parameters;
@@ -102,8 +97,6 @@ private:
     std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* slideTime = nullptr;
     std::atomic<float>* sqrDriver = nullptr;
-    std::atomic<float>* overdriveLevel = nullptr;
-    std::atomic<float>* overdriveDryWet = nullptr;
     bool lastSwitchModState = false;
 
     double decayMin = 200;

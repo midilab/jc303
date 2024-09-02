@@ -20,8 +20,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(softAttackSlider = createKnob("small"));
     addAndMakeVisible(slideTimeSlider = createKnob("small"));
     addAndMakeVisible(sqrDriverSlider = createKnob("small"));
-    addAndMakeVisible(overdriveLevelSlider = createKnob("small"));
-    addAndMakeVisible(overdriveDryWetSlider = createKnob("small"));
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
 
@@ -41,8 +39,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
-    overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
-    overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
 
     setControlsLayout();
@@ -135,13 +131,11 @@ void JC303Editor::setControlsLayout()
     pair<int, int> switchLocation = {55, 301};
     // MODs knobs row
     pair<int, int> normalAttackLocation = {145, 299};
-    pair<int, int> accentDecayLocation = {234, 299};
-    pair<int, int> feedbackFilterLocation = {322, 299};
-    pair<int, int> softAttackLocation = {410, 299};
-    pair<int, int> slideTimeLocation = {499, 299};
-    pair<int, int> sqrDriverLocation = {587, 299};
-    pair<int, int> overdriveLevelLocation = {695, 299};
-    pair<int, int> overdriveDryWetLocation = {783, 299};
+    pair<int, int> accentDecayLocation = {274, 299};
+    pair<int, int> feedbackFilterLocation = {402, 299};
+    pair<int, int> softAttackLocation = {530, 299};
+    pair<int, int> slideTimeLocation = {659, 299};
+    pair<int, int> sqrDriverLocation = {787, 299};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -161,6 +155,4 @@ void JC303Editor::setControlsLayout()
     softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderSmallSize, sliderSmallSize);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
     sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
-    overdriveLevelSlider->setBounds(overdriveLevelLocation.first, overdriveLevelLocation.second, sliderSmallSize, sliderSmallSize);
-    overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderSmallSize, sliderSmallSize);
 }

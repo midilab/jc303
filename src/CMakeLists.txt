@@ -24,9 +24,6 @@ target_sources("${PROJECT_NAME}"
         dsp/open303/rosic_Open303.cpp
         dsp/open303/rosic_RealFunctions.cpp
         dsp/open303/rosic_TeeBeeFilter.cpp
-
-        dsp/neuralpi/RTNeuralLSTM.cpp
-        dsp/neuralpi/NeuralPi.cpp
        
         gui/${GUI_THEME}/Gui.cpp
 

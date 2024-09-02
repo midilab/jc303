@@ -7,7 +7,6 @@ project(JC303 VERSION 0.10.1)
 
 set(LIB_JUCE_TAG "7.0.5")
 set(LIB_CLAP_TAG "a3227c52fa082d2df33f4377ed1e050dd8a52595")
-set(LIB_RTNEURAL_TAG "c8d044398c1ac05958015f5fec622a5ecdea2f70")
 
 ### Gui setup
 # check if the GUI variable is set
@@ -59,15 +58,6 @@ FetchContent_Declare(juce-clap-extensions
     GIT_CONFIG     advice.detachedHead=false)    
 FetchContent_MakeAvailable(juce-clap-extensions)
 
-set(RTNEURAL_XSIMD ON CACHE BOOL "Use RTNeural with this backend" FORCE)
-FetchContent_Declare(rtneural
-    GIT_REPOSITORY https://github.com/jatinchowdhury18/RTNeural.git
-    GIT_TAG        ${LIB_RTNEURAL_TAG}
-    GIT_CONFIG     advice.detachedHead=false)      
-FetchContent_MakeAvailable(rtneural)
-# we add modules as include directory to make use of same json module instead of downloading it again as a separated dependency
-include_directories(${rtneural_SOURCE_DIR} ${rtneural_SOURCE_DIR}/modules)
-add_subdirectory(src/dsp/neuralpi)
 
 # gui resources BinaryData via CMakeLists.txt
 add_subdirectory(src/gui/${GUI})
@@ -183,15 +173,11 @@ target_compile_definitions("${PROJECT_NAME}"
 target_link_libraries("${PROJECT_NAME}"
     PRIVATE
         BinaryData
-        BinaryDataNeuralPi
         juce::juce_audio_utils
-        #juce::juce_dsp
-        RTNeural
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
-
 
 ### IDE Generator post-config ###
 

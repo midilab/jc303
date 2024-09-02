@@ -44,8 +44,6 @@ private:
     juce::Slider* softAttackSlider;
     juce::Slider* slideTimeSlider;
     juce::Slider* sqrDriverSlider;
-    juce::Slider* overdriveLevelSlider;
-    juce::Slider* overdriveDryWetSlider;
     SwitchButton* switchModButton;
 
     // declare the attchaments
@@ -64,8 +62,6 @@ private:
     std::unique_ptr<SliderAttachment> softAttackAttachment;
     std::unique_ptr<SliderAttachment> slideTimeAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
-    std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
-    std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
 
     // our value tree state
