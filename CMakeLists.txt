@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(JC303 VERSION 0.10.1)
+project(JC303 VERSION 0.11.0)
 
 
 ### Dependency versions ###

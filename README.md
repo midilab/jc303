@@ -10,15 +10,18 @@ The Open303 engine part of this software is also licensed under the MIT License.
 
 ## Download
 
-Supports Windows, Linux and macOS. You may find CLAP, VST3, LV2 and AU formats available to download.
+Supports Windows, Linux and MacOS. You may find CLAP, VST3, LV2 and AU formats available to download. For VST2 plugin you need to compile it by your own self using vst2 sdk from Steinberg - vstsdk2.4.
 
-MacOS Universal - Intel and ARM: [jc303-macos-universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.10.1/jc303-0.10.1-macos-universal-plugins.zip)
+MacOS Universal - Intel and ARM: [jc303-macos-universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.11.0/jc303-0.11.0-macos-universal-plugins.zip)
 
-Windows Intel x64: [jc303-win64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.10.1/jc303-0.10.1-win64-plugins.zip)
+Windows Intel x64: [jc303-win64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.11.0/jc303-0.11.0-windows_x64-plugins.zip)
 
-Linux Intel x64: [jc303-linux64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.10.1/jc303-0.10.1-linux64-plugins.zip)
+Linux Intel x64: [jc303-linux64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.11.0/jc303-0.11.0-linux_x64-plugins.zip)  
+
+Linux ARM: Soon...  
 
 ## Installation
+
 The platform zip pack will contain a folder per plugin format, just pick the format you want to install and copy the content of the folder to your OS plugin format folder.
 
 **MacOs De-Quarantine**: MacOs users needs to de-quarantine plugin before load it into any DAW.  
@@ -30,11 +33,7 @@ This de-quarantine example is for AU, please do the same for other formats you'l
 
 ## Build
 
-Generate the project first before you compile.  
-
-#### VST2 Plugin
-
-No distribution of VST2 plugin binaries is allowed without a license, but if you have the sdk and the license to use it just copy the vstsdk2.4/ SDK folder to the root of this project before run cmake.
+Generate the cmake project build files first for the OS of your choice.  
 
 #### cmake options
 
@@ -66,6 +65,8 @@ cmake -B build -G "Visual Studio 17"
 
 Install the dependecies:
 
+#### Ubuntu
+
 ```sh
 sudo apt install build-essential gcc cmake libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libasound2-dev
 ```
@@ -78,11 +79,15 @@ cmake -B build
 
 ## Compile
 
-To compiled the generated IDE project from the command line, run:
+To compiled from the command line, run:
 
 ```sh
 cmake --build build --config Release
 ```
+
+#### VST2 Plugin
+
+No distribution of VST2 plugin binaries is allowed without a license, but if you have the sdk and the license to use it just copy the vstsdk2.4/ SDK folder to the root of this project before run cmake.
 
 ## Roadmap
 
