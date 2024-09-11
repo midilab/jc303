@@ -333,7 +333,7 @@ void JC303::render303(juce::AudioBuffer<float>& buffer, int beginSample, int end
     auto* monoChannel = buffer.getWritePointer(0);
     for (auto sample = beginSample; sample < endSample; ++sample)
         // processing open303
-        monoChannel[sample] += (float) open303Core.getSample();
+        monoChannel[sample] = (float) open303Core.getSample();
 }
 
 void JC303::processBlock (juce::AudioBuffer<float>& buffer,
@@ -381,9 +381,6 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         const auto message = midiMetadata.getMessage();
         const auto messagePosition = static_cast<int>(message.getTimeStamp());
 
-        // render open303
-        render303(buffer, currentSample, messagePosition);
-
         if (message.isNoteOn())
         {
             open303Core.noteOn(message.getNoteNumber(), message.getVelocity(), 0);
@@ -401,6 +398,8 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
             continue;
         }
 
+        // render open303
+        render303(buffer, currentSample, messagePosition);
         currentSample = messagePosition;
     }
 
