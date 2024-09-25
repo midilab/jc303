@@ -24,10 +24,10 @@ target_sources("${PROJECT_NAME}"
         dsp/open303/rosic_Open303.cpp
         dsp/open303/rosic_RealFunctions.cpp
         dsp/open303/rosic_TeeBeeFilter.cpp
-       
+        
         gui/${GUI_THEME}/Gui.cpp
 
         JC303.cpp)
 
-# Add subdirectories with source files, if present
-# add_subdirectory(<name>)
+# add dsp source code for overdrive based on guitarml from BYOD
+add_subdirectory(dsp/guitarml-byod)
