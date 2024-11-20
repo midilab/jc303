@@ -1,12 +1,18 @@
 # this guitarml port is based on Chowdhury-DSP BYOD git commit 6ef1720c830795b2fcc45b0ebbf0c217e18de5f3
 
-# chowdhury stuffs is coded mostly on c++20
+# rtneural-utils needs c++20
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Ensure your target enforces C++20
+target_compile_features("${PROJECT_NAME}" PRIVATE cxx_std_20)
 
 # set library dependency versions
 set(LIB_RTNEURAL_TAG "04cb333bc4b174760958a77c7ce076eae38fe8e4") 
 set(LIB_CHOWDSP_UTILS_TAG "b1ac3eb802171e65d22151fbadce81d1f300616d") 
 set(LIB_CHOWDSP_MATH_APPROX_TAG "0c68d4d17242d707ba07fa7f1901692b7ed72d58") 
+set(LIB_VARIANT_TAG "3fce49cfca50ba3b05026d41ffc4911a8e653378") 
 
 
 include(FetchContent)
@@ -16,24 +22,26 @@ FetchContent_Declare(rtneural
     GIT_REPOSITORY https://github.com/jatinchowdhury18/RTNeural.git
     GIT_TAG        ${LIB_RTNEURAL_TAG}
     GIT_CONFIG     advice.detachedHead=false)
-FetchContent_MakeAvailable(rtneural)
-include_directories(${rtneural_SOURCE_DIR})
 
 # chowdsp_utils fetch
 FetchContent_Declare(chowdsp_utils
     GIT_REPOSITORY https://github.com/Chowdhury-DSP/chowdsp_utils.git
     GIT_TAG        ${LIB_CHOWDSP_UTILS_TAG}
     GIT_CONFIG     advice.detachedHead=false)
-FetchContent_MakeAvailable(chowdsp_utils)
-include_directories(${chowdsp_utils_SOURCE_DIR})
 
 # chowdsp math_approx fetch
 FetchContent_Declare(math_approx
     GIT_REPOSITORY https://github.com/Chowdhury-DSP/math_approx.git
     GIT_TAG        ${LIB_CHOWDSP_MATH_APPROX_TAG}
     GIT_CONFIG     advice.detachedHead=false)
-FetchContent_MakeAvailable(math_approx)
-include_directories(${math_approx_SOURCE_DIR})
+
+# ea_variant fetch
+FetchContent_Declare(ea_variant
+    GIT_REPOSITORY https://github.com/eyalamirmusic/Variant.git
+    GIT_TAG        ${LIB_VARIANT_TAG}
+    GIT_CONFIG     advice.detachedHead=false)
+
+FetchContent_MakeAvailable(rtneural chowdsp_utils math_approx ea_variant)
 
 # cmake dependencies
 include(cmake/WarningFlags.cmake)
@@ -44,11 +52,13 @@ include(cmake/RuntimeSIMDLib.cmake)
 make_lib_simd_runtime(dsp_accelerated
     SOURCES
         processors/drive/neural_utils/RNNAccelerated.cpp
+        #processors/drive/GuitarMLAmp.cpp
         #processors/other/poly_octave/PolyOctaveV2FilterBankImpl.cpp
 )
 foreach(target IN ITEMS dsp_accelerated_sse_or_arm dsp_accelerated_avx)
     target_link_libraries(${target}
         PRIVATE
+            ea_variant
             math_approx
             config_flags
             juce::juce_recommended_lto_flags
@@ -56,6 +66,7 @@ foreach(target IN ITEMS dsp_accelerated_sse_or_arm dsp_accelerated_avx)
     )
     target_include_directories(${target}
         PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}"
             ${rtneural_SOURCE_DIR}
             ${rtneural_SOURCE_DIR}/modules/xsimd/include
     )
@@ -80,6 +91,28 @@ if (MSVC)
     target_compile_options("${PROJECT_NAME}" PRIVATE /bigobj)
 endif ()
 
+
+target_link_libraries("${PROJECT_NAME}" 
+  PUBLIC
+    RTNeural
+    ea_variant
+    math_approx
+    config_flags
+    juce::juce_recommended_lto_flags
+    warning_flags
+    juce::juce_core
+    juce::juce_dsp
+    chowdsp::chowdsp_dsp_utils
+)
+
+target_sources("${PROJECT_NAME}"
+    PRIVATE
+      processors/drive/GuitarMLAmp.cpp
+)
+
+target_precompile_headers("${PROJECT_NAME}" PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch.h>")
+target_include_directories("${PROJECT_NAME}" PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 # should we keep models here?
 #juce_add_binary_data(BinaryGuitarMLModels 
 #HEADER_NAME 
@@ -95,8 +128,3 @@ endif ()
 # Need to build BinaryGuitarMLModels with -fPIC flag on Linux
 #set_target_properties(BinaryGuitarMLModels PROPERTIES
 #    POSITION_INDEPENDENT_CODE TRUE)
-
-#target_sources("${PROJECT_NAME}"
-#    PRIVATE
-#      processors/drive/neural_utils/RNNAccelerated.cpp
-#)

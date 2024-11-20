@@ -1,6 +1,6 @@
 #include "GuitarMLAmp.h"
-#include "gui/utils/ErrorMessageView.h"
-#include "gui/utils/ModulatableSlider.h"
+/* #include "gui/utils/ErrorMessageView.h"
+#include "gui/utils/ModulatableSlider.h" */
 
 namespace RONNTags
 {
@@ -26,21 +26,21 @@ const String customModelTag = "custom_model";
 constexpr std::string_view modelNameTag = "byod_guitarml_model_name";
 } // namespace RONNTags
 
-GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createParameterLayout(), um)
+GuitarMLAmp::GuitarMLAmp ()
 {
-    using namespace ParameterHelpers;
-    loadParameterPointer (gainParam, vts, RONNTags::gainTag);
-    conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
-    loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
-    addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
+    /* using namespace ParameterHelpers;
+    loadParameterPointer (gainParam, vts, RONNTags::gainTag); */
+    //conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
+    /* loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
+    addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag); */
 
     loadModel (0); // load Blues Jr. model by default
 
-    uiOptions.backgroundColour = Colours::cornsilk.darker();
+    /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;
     uiOptions.info.description = "An implementation of the neural LSTM guitar amp modeller used by the GuitarML project. Supports loading custom models that are compatible with the GuitarML Protues plugin";
     uiOptions.info.authors = StringArray { "Keith Bloemer", "Jatin Chowdhury" };
-    uiOptions.info.infoLink = "https://guitarml.com";
+    uiOptions.info.infoLink = "https://guitarml.com"; */
 
 #if JUCE_INTEL
     if (juce::SystemStats::hasAVX() && juce::SystemStats::hasFMA3())
@@ -54,9 +54,7 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
 #endif
 }
 
-GuitarMLAmp::~GuitarMLAmp() = default;
-
-ParamLayout GuitarMLAmp::createParameterLayout()
+/* ParamLayout GuitarMLAmp::createParameterLayout()
 {
     using namespace ParameterHelpers;
     auto params = createBaseParams();
@@ -66,7 +64,7 @@ ParamLayout GuitarMLAmp::createParameterLayout()
     emplace_param<chowdsp::BoolParameter> (params, RONNTags::sampleRateCorrFilterTag, "Sample Rate Correction Filter", true);
 
     return { params.begin(), params.end() };
-}
+} */
 
 void GuitarMLAmp::loadModelFromJson (const chowdsp::json& modelJson, const String& newModelName)
 {
@@ -272,7 +270,7 @@ void GuitarMLAmp::processAudio (AudioBuffer<float>& buffer)
     dcBlocker.processAudio (buffer);
 }
 
-std::unique_ptr<XmlElement> GuitarMLAmp::toXML()
+/* std::unique_ptr<XmlElement> GuitarMLAmp::toXML()
 {
     auto xml = BaseProcessor::toXML();
     xml->setAttribute (RONNTags::customModelTag, cachedModel.dump());
@@ -428,4 +426,4 @@ void GuitarMLAmp::addToPopupMenu (PopupMenu& menu)
     menu.addItem ("Download more models", []
                   { URL { "https://guitarml.com/tonelibrary/tonelib-pro.html" }.launchInDefaultBrowser(); });
     menu.addSeparator();
-}
+} */

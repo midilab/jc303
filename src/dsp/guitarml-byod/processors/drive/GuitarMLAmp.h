@@ -2,26 +2,26 @@
 
 #include "neural_utils/ResampledRNNAccelerated.h"
 
-#include "../BaseProcessor.h"
-#include "../utility/DCBlocker.h"
+/* #include "../BaseProcessor.h" */
+#include "../DCBlocker.h"
 
-class GuitarMLAmp : public BaseProcessor
+class GuitarMLAmp /* : public BaseProcessor */
 {
 public:
-    explicit GuitarMLAmp (UndoManager* um = nullptr);
-    ~GuitarMLAmp() override;
+    GuitarMLAmp ();
+    ~GuitarMLAmp();
 
-    ProcessorType getProcessorType() const override { return Drive; }
-    static ParamLayout createParameterLayout();
+    /* ProcessorType getProcessorType() const override { return Drive; }
+    static ParamLayout createParameterLayout(); */
 
-    void prepare (double sampleRate, int samplesPerBlock) override;
-    void processAudio (AudioBuffer<float>& buffer) override;
+    void prepare (double sampleRate, int samplesPerBlock);
+    void processAudio (AudioBuffer<float>& buffer);
 
-    std::unique_ptr<XmlElement> toXML() override;
+    /* std::unique_ptr<XmlElement> toXML() override;
     void fromXML (XmlElement* xml, const chowdsp::Version& version, bool loadPosition) override;
 
     bool getCustomComponents (OwnedArray<Component>& customComps, chowdsp::HostContextProvider& hcp) override;
-    void addToPopupMenu (PopupMenu& menu) override;
+    void addToPopupMenu (PopupMenu& menu) override; */
 
     void loadModel (int modelIndex, Component* parentComponent = nullptr);
     String getCurrentModelName() const;
@@ -69,5 +69,5 @@ private:
 
     float normalizationGain = 1.0f;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GuitarMLAmp)
+    /* JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GuitarMLAmp) */
 };

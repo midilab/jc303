@@ -27,7 +27,5 @@ target_sources("${PROJECT_NAME}"
         
         gui/${GUI_THEME}/Gui.cpp
 
-        JC303.cpp)
-
-# add dsp source code for overdrive based on guitarml from BYOD
-add_subdirectory(dsp/guitarml-byod)
+        JC303.cpp
+)
