@@ -26,16 +26,16 @@ public:
         return { params.begin(), params.end() };
     } */
 
-    void prepare (double sampleRate, int samplesPerBlock) override
+    void prepare (double sampleRate, int samplesPerBlock) /* override */
     {
-        dsp::ProcessSpec spec { sampleRate, (uint32) samplesPerBlock, 2 };
-        filter.prepare (spec);
+        //dsp::ProcessSpec spec { sampleRate, (uint32) samplesPerBlock, 2 };
+        //filter.prepare (spec);
     }
 
-    void processAudio (AudioBuffer<float>& buffer) override
+    void processAudio (AudioBuffer<float>& buffer) /* override */
     {
-        filter.setCutoffFrequency (*freqHzParam);
-        filter.processBlock (buffer);
+        //filter.setCutoffFrequency (*freqHzParam);
+        //filter.processBlock (buffer);
     }
 
 private:

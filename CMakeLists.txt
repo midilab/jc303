@@ -176,6 +176,7 @@ target_link_libraries("${PROJECT_NAME}"
 
 # Add the subdirectory with source files.
 add_subdirectory(src)
+include_directories(src)
 
 # add dsp source code for overdrive based on guitarml from BYOD
 add_subdirectory(src/dsp/guitarml-byod)

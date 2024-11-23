@@ -181,10 +181,10 @@ void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent)
                                              {
                                                  loadModel (0);
                                                  const auto errorMessage = String { "Unable to load GuitarML model from file!\n\n" } + exc.what();
-                                                 ErrorMessageView::showErrorMessage ("GuitarML Error",
+                                                 /* ErrorMessageView::showErrorMessage ("GuitarML Error",
                                                                                      errorMessage,
                                                                                      "OK",
-                                                                                     safeParent.getComponent());
+                                                                                     safeParent.getComponent()); */
                                              }
                                          });
     }
