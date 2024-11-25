@@ -5,14 +5,14 @@
 namespace RONNTags
 {
 const juce::StringArray guitarMLModelResources {
-    "BluesJrAmp_VolKnob_json",
     "TS9_DriveKnob_json",
+    "BluesJrAmp_VolKnob_json",
     "MesaRecMini_ModernChannel_GainKnob_json",
 };
 
 const juce::StringArray guitarMLModelNames {
-    "Blues Jr.",
     "TS9",
+    "Blues Jr.",
     "Mesa Mini Rectifier (Modern)",
 };
 
@@ -26,13 +26,13 @@ const String customModelTag = "custom_model";
 constexpr std::string_view modelNameTag = "byod_guitarml_model_name";
 } // namespace RONNTags
 
-GuitarMLAmp::GuitarMLAmp ()
+GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createParameterLayout(), um)
 {
-    /* using namespace ParameterHelpers;
-    loadParameterPointer (gainParam, vts, RONNTags::gainTag); */
-    //conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
-    /* loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
-    addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag); */
+    using namespace ParameterHelpers;
+    loadParameterPointer (gainParam, vts, RONNTags::gainTag);
+    conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
+    loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
+    addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
 
     loadModel (0); // load Blues Jr. model by default
 
@@ -54,7 +54,9 @@ GuitarMLAmp::GuitarMLAmp ()
 #endif
 }
 
-/* ParamLayout GuitarMLAmp::createParameterLayout()
+GuitarMLAmp::~GuitarMLAmp() = default;
+
+ParamLayout GuitarMLAmp::createParameterLayout()
 {
     using namespace ParameterHelpers;
     auto params = createBaseParams();
@@ -64,7 +66,7 @@ GuitarMLAmp::GuitarMLAmp ()
     emplace_param<chowdsp::BoolParameter> (params, RONNTags::sampleRateCorrFilterTag, "Sample Rate Correction Filter", true);
 
     return { params.begin(), params.end() };
-} */
+}
 
 void GuitarMLAmp::loadModelFromJson (const chowdsp::json& modelJson, const String& newModelName)
 {
@@ -269,8 +271,8 @@ void GuitarMLAmp::processAudio (AudioBuffer<float>& buffer)
 
     dcBlocker.processAudio (buffer);
 }
-
-/* std::unique_ptr<XmlElement> GuitarMLAmp::toXML()
+/* 
+std::unique_ptr<XmlElement> GuitarMLAmp::toXML()
 {
     auto xml = BaseProcessor::toXML();
     xml->setAttribute (RONNTags::customModelTag, cachedModel.dump());
@@ -426,4 +428,5 @@ void GuitarMLAmp::addToPopupMenu (PopupMenu& menu)
     menu.addItem ("Download more models", []
                   { URL { "https://guitarml.com/tonelibrary/tonelib-pro.html" }.launchInDefaultBrowser(); });
     menu.addSeparator();
-} */
+}
+ */

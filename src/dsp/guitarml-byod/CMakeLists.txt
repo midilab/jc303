@@ -38,6 +38,7 @@ FetchContent_MakeAvailable(rtneural math_approx ea_variant)
 
 target_sources("${PROJECT_NAME}"
     PRIVATE
+      processors/BaseProcessor.cpp
       processors/drive/GuitarMLAmp.cpp
 )
 
@@ -105,16 +106,16 @@ if (MSVC)
 endif ()
 
 # should we keep models here?
-#juce_add_binary_data(BinaryGuitarMLModels 
-#HEADER_NAME 
-#    BinaryGuitarMLModels.h 
-#NAMESPACE 
-#    BinaryGuitarMLModels 
-#SOURCES
-#    models/BluesJr.json
-#    models/TS9.json
-#    models/HT40_Overdrive.json
-#)
+juce_add_binary_data(BinaryGuitarMLModels 
+HEADER_NAME 
+    BinaryGuitarMLModels.h 
+NAMESPACE 
+    BinaryGuitarMLModels 
+SOURCES
+    models/TS9_DriveKnob.json
+    models/BluesJrAmp_VolKnob.json
+    models/MesaRecMini_ModernChannel_GainKnob.json
+)
 
 # Need to build BinaryGuitarMLModels with -fPIC flag on Linux
 #set_target_properties(BinaryGuitarMLModels PROPERTIES
