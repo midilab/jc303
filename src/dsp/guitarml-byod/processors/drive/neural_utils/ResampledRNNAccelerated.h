@@ -1,7 +1,8 @@
 #pragma once
 
 #include "RNNAccelerated.h"
-#include <pch.h>
+//#include <pch.h>
+#include "../../../pch.h"
 
 template <int numIns, int hiddenSize, int RecurrentLayerType = RecurrentLayerType::LSTMLayer>
 class ResampledRNNAccelerated

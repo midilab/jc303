@@ -7,6 +7,7 @@ project(JC303 VERSION 0.12.0)
 
 set(LIB_JUCE_TAG "7.0.5")
 set(LIB_CLAP_TAG "a3227c52fa082d2df33f4377ed1e050dd8a52595")
+set(LIB_CHOWDSP_UTILS_TAG "b1ac3eb802171e65d22151fbadce81d1f300616d") 
 
 ### Gui setup
 # check if the GUI variable is set
@@ -56,7 +57,12 @@ FetchContent_Declare(juce-clap-extensions
     GIT_TAG        ${LIB_CLAP_TAG}
     GIT_CONFIG     advice.detachedHead=false)    
 
-FetchContent_MakeAvailable(juce juce-clap-extensions)
+FetchContent_Declare(chowdsp_utils
+    GIT_REPOSITORY https://github.com/Chowdhury-DSP/chowdsp_utils.git
+    GIT_TAG        ${LIB_CHOWDSP_UTILS_TAG}
+    GIT_CONFIG     advice.detachedHead=false)
+
+FetchContent_MakeAvailable(juce juce-clap-extensions chowdsp_utils)
 
 # gui resources BinaryData via CMakeLists.txt
 add_subdirectory(src/gui/${GUI})

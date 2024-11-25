@@ -10,7 +10,6 @@ target_compile_features("${PROJECT_NAME}" PRIVATE cxx_std_20)
 
 # set library dependency versions
 set(LIB_RTNEURAL_TAG "04cb333bc4b174760958a77c7ce076eae38fe8e4") 
-set(LIB_CHOWDSP_UTILS_TAG "b1ac3eb802171e65d22151fbadce81d1f300616d") 
 set(LIB_CHOWDSP_MATH_APPROX_TAG "0c68d4d17242d707ba07fa7f1901692b7ed72d58") 
 set(LIB_VARIANT_TAG "3fce49cfca50ba3b05026d41ffc4911a8e653378") 
 
@@ -21,12 +20,6 @@ include(FetchContent)
 FetchContent_Declare(rtneural
     GIT_REPOSITORY https://github.com/jatinchowdhury18/RTNeural.git
     GIT_TAG        ${LIB_RTNEURAL_TAG}
-    GIT_CONFIG     advice.detachedHead=false)
-
-# chowdsp_utils fetch
-FetchContent_Declare(chowdsp_utils
-    GIT_REPOSITORY https://github.com/Chowdhury-DSP/chowdsp_utils.git
-    GIT_TAG        ${LIB_CHOWDSP_UTILS_TAG}
     GIT_CONFIG     advice.detachedHead=false)
 
 # chowdsp math_approx fetch
@@ -41,7 +34,7 @@ FetchContent_Declare(ea_variant
     GIT_TAG        ${LIB_VARIANT_TAG}
     GIT_CONFIG     advice.detachedHead=false)
 
-FetchContent_MakeAvailable(rtneural chowdsp_utils math_approx ea_variant)
+FetchContent_MakeAvailable(rtneural math_approx ea_variant)
 
 target_sources("${PROJECT_NAME}"
     PRIVATE
@@ -97,10 +90,10 @@ target_link_libraries("${PROJECT_NAME}"
     ea_variant
     math_approx
     config_flags
-    juce::juce_recommended_lto_flags
     warning_flags
     juce::juce_core
     juce::juce_dsp
+    juce::juce_recommended_lto_flags
     chowdsp::chowdsp_dsp_utils
     chowdsp::chowdsp_plugin_base
     chowdsp::chowdsp_json
@@ -128,5 +121,5 @@ endif ()
 #    POSITION_INDEPENDENT_CODE TRUE)
 
 # precompiled pch and set some compiler directives to force compilation to use cxx instead of c
-target_precompile_headers("${PROJECT_NAME}" PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch.h>")
-target_include_directories("${PROJECT_NAME}" PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+#target_precompile_headers("${PROJECT_NAME}" PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch.h>")
+#target_include_directories("${PROJECT_NAME}" PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

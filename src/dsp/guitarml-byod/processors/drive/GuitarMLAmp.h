@@ -3,11 +3,8 @@
 #include "neural_utils/ResampledRNNAccelerated.h"
 
 
-#include <pch.h>
-//#include <chowdsp_json/chowdsp_json.h>
-//#include <chowdsp_parameters/chowdsp_parameters.h>
-//#include <chowdsp_plugin_state/chowdsp_plugin_state.h>
-//#include <chowdsp_parameters/chowdsp_parameters.h>
+//#include <pch.h>
+#include "../../pch.h"
 
 /* #include "../BaseProcessor.h" */
 #include "../DCBlocker.h"
