@@ -1,6 +1,7 @@
 #include "GuitarMLAmp.h"
 /* #include "gui/utils/ErrorMessageView.h"
 #include "gui/utils/ModulatableSlider.h" */
+#include "BinaryDataGuitarMLModels.h"
 
 namespace RONNTags
 {
@@ -34,7 +35,7 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
     loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
     addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
 
-    loadModel (0); // load Blues Jr. model by default
+    loadModel (0); // load TS9 model by default
 
     /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;
@@ -133,7 +134,7 @@ void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent)
     if (juce::isPositiveAndBelow (modelIndex, RONNTags::numBuiltInModels))
     {
         int modelDataSize = 0;
-        const auto* modelData = BinaryData::getNamedResource (RONNTags::guitarMLModelResources[modelIndex].toRawUTF8(), modelDataSize);
+        const auto* modelData = BinaryDataGuitarMLModels::getNamedResource (RONNTags::guitarMLModelResources[modelIndex].toRawUTF8(), modelDataSize);
         jassert (modelData != nullptr);
 
         const auto modelJson = chowdsp::JSONUtils::fromBinaryData (modelData, modelDataSize);

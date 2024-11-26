@@ -98,6 +98,7 @@ target_link_libraries("${PROJECT_NAME}"
     chowdsp::chowdsp_dsp_utils
     chowdsp::chowdsp_plugin_base
     chowdsp::chowdsp_json
+    BinaryDataGuitarMLModels
 )
 
 # special flags for MSVC
@@ -105,21 +106,20 @@ if (MSVC)
     target_compile_options("${PROJECT_NAME}" PRIVATE /bigobj)
 endif ()
 
-# should we keep models here?
-juce_add_binary_data(BinaryGuitarMLModels 
-HEADER_NAME 
-    BinaryGuitarMLModels.h 
-NAMESPACE 
-    BinaryGuitarMLModels 
-SOURCES
+# generate binary data for guitarml models
+juce_add_binary_data(BinaryDataGuitarMLModels 
+  HEADER_NAME 
+    BinaryDataGuitarMLModels.h 
+  NAMESPACE 
+    BinaryDataGuitarMLModels 
+  SOURCES
     models/TS9_DriveKnob.json
     models/BluesJrAmp_VolKnob.json
     models/MesaRecMini_ModernChannel_GainKnob.json
 )
 
-# Need to build BinaryGuitarMLModels with -fPIC flag on Linux
-#set_target_properties(BinaryGuitarMLModels PROPERTIES
-#    POSITION_INDEPENDENT_CODE TRUE)
+# Need to build BinaryDataGuitarMLModels with -fPIC flag on Linux
+set_target_properties(BinaryDataGuitarMLModels PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 
 # precompiled pch and set some compiler directives to force compilation to use cxx instead of c
 #target_precompile_headers("${PROJECT_NAME}" PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch.h>")

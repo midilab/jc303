@@ -86,6 +86,16 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.25f), 
+            std::make_unique<juce::AudioParameterFloat> ("overdriveLevel",
+                                                        "Drive",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f), 
+            std::make_unique<juce::AudioParameterFloat> ("overdriveDryWet",
+                                                        "Dry/Wet",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f), 
        })
 {
     // assign a pointer to use it around for each parameter
@@ -105,6 +115,9 @@ JC303::JC303()
     softAttack = parameters.getRawParameterValue("softAttack");
     slideTime = parameters.getRawParameterValue("slideTime");
     sqrDriver = parameters.getRawParameterValue("sqrDriver");
+    // overdrive parameters
+    overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
+    overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
 
     // force true > false, then valuetree
     // restores the decay correct calculus
@@ -149,6 +162,14 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setVolume(   linToLin(value, 0.0, 1.0, -60.0,      0.0)     );
         break;
 
+    // Overdrive
+    case OVERDRIVE_LEVEL:
+        //guitarML.setDriver(value);
+        break;
+    case OVERDRIVE_DRY_WET: 
+        //guitarML.setDryWet(value);
+        break;
+        
     //
     // MODS (mostly based on devilfish mod)
     // BUT DONT! dont expect a devilfish clone sound or mail me about!
@@ -296,6 +317,8 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     // init open303
     open303Core.setSampleRate(sampleRate);
+    // init guitarML
+    guitarML.prepare(sampleRate, samplesPerBlock);
 }
 
 void JC303::releaseResources()
@@ -375,6 +398,10 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
     }
 
+    // procesing overdrive
+    setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
+    setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
+
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)
     {
@@ -405,6 +432,11 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
 
     // render open303
     render303(buffer, currentSample, buffer.getNumSamples());
+
+    // only render if driver is turned on
+    if (*overdriveLevel > 0)
+        // processing distortion: guitarML - from BYOD
+        guitarML.processAudio(buffer);
 
     // copy mono channel to other ones...
     for (int ch = 1; ch < buffer.getNumChannels(); ++ch)
