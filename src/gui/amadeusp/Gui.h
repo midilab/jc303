@@ -45,6 +45,9 @@ private:
     juce::Slider* slideTimeSlider;
     juce::Slider* sqrDriverSlider;
     SwitchButton* switchModButton;
+    // Overdrive
+    juce::Slider* overdriveLevelSlider;
+    juce::Slider* overdriveDryWetSlider;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -63,6 +66,9 @@ private:
     std::unique_ptr<SliderAttachment> slideTimeAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
+    // Overdrive
+    std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
+    std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;
