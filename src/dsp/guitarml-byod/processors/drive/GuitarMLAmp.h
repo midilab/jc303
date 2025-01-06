@@ -26,6 +26,20 @@ public:
     void loadModel (int modelIndex, Component* parentComponent = nullptr);
     String getCurrentModelName() const;
 
+    // added by midilab
+    void setDriver (float value) {
+        // if this model is not conditioned:
+        //if (gainParam != nullptr) {
+        //    gainParam->setValueNotifyingHost(value);
+        //}
+        // for conditioned models
+        conditionParamHandler = value; 
+    }
+
+    void setDryWet (float value) {
+        //...
+    }
+
 private:
     void loadModelFromJson (const chowdsp::json& modelJson, const String& newModelName = {});
     using ModelChangeBroadcaster = chowdsp::Broadcaster<void()>;
@@ -39,6 +53,9 @@ private:
     SpinLock modelChangingMutex;
     double processSampleRate = 96000.0;
     std::shared_ptr<FileChooser> customModelChooser;
+
+    // added by midilab
+    std::atomic<float> conditionParamHandler = 0.0;
 
     template <int numIns, int hiddenSize>
     using GuitarML_LSTM = EA::Variant<rnn_sse_arm::RNNAccelerated<numIns, hiddenSize, RecurrentLayerType::LSTMLayer, (int) RTNeural::SampleRateCorrectionMode::LinInterp>

@@ -95,7 +95,7 @@ JC303::JC303()
                                                         "Dry/Wet",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f), 
+                                                        0.0f)
        })
 {
     // assign a pointer to use it around for each parameter
@@ -164,10 +164,11 @@ void JC303::setParameter (Open303Parameters index, float value)
 
     // Overdrive
     case OVERDRIVE_LEVEL:
-        //guitarML.setDriver(value);
+        //guitarML.setDriver(     linToLin(value, 0.0, 1.0, -1.0,      1.0)       );
+        guitarML.setDriver(value);
         break;
     case OVERDRIVE_DRY_WET: 
-        //guitarML.setDryWet(value);
+        guitarML.setDryWet(     linToLin(value, 0.0, 1.0, -1.0,      1.0)       );
         break;
         
     //
@@ -434,7 +435,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     render303(buffer, currentSample, buffer.getNumSamples());
 
     // only render if driver is turned on
-    if (*overdriveLevel > 0)
+    if (*overdriveDryWet > 0)
         // processing distortion: guitarML - from BYOD
         guitarML.processAudioBlock(buffer);
 

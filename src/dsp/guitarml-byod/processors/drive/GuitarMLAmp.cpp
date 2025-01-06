@@ -33,11 +33,12 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
 {
     using namespace ParameterHelpers;
     loadParameterPointer (gainParam, vts, RONNTags::gainTag);
-    conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
+    //conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
+    conditionParam.setParameterHandle (&conditionParamHandler);
     loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
     addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
 
-    loadModel (0); // load TS9 model by default
+    loadModel (2); // load TS9 model by default
 
     /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;
