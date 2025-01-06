@@ -137,14 +137,14 @@ void JC303Editor::setControlsLayout()
     pair<int, int> switchLocation = {55, 301};
     // MODs knobs row
     pair<int, int> normalDecayLocation = {145, 299};
-    pair<int, int> accentDecayLocation = {274, 299};
-    pair<int, int> feedbackFilterLocation = {402, 299};
-    pair<int, int> softAttackLocation = {530, 299};
-    pair<int, int> slideTimeLocation = {659, 299};
-    pair<int, int> sqrDriverLocation = {787, 299};
+    pair<int, int> accentDecayLocation = {234, 299};
+    pair<int, int> feedbackFilterLocation = {322, 299};
+    pair<int, int> softAttackLocation = {410, 299};
+    pair<int, int> slideTimeLocation = {499, 299};
+    pair<int, int> sqrDriverLocation = {587, 299};
     // Overdrive
-    pair<int, int> overdriveLevelLocation = {695, 220};
-    pair<int, int> overdriveDryWetLocation = {783, 220};
+    pair<int, int> overdriveLevelLocation = {695, 299};
+    pair<int, int> overdriveDryWetLocation = {783, 299};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
