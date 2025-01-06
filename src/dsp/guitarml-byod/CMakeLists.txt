@@ -8,6 +8,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ensure target enforces C++20
 target_compile_features("${PROJECT_NAME}" PRIVATE cxx_std_20)
 
+# Ensure CMAKE_BUILD_TYPE is set to Release if not explicitly provided
+# This way we can provide optmizations without change default build instructions
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the build type (e.g. Debug, Release, RelWithDebInfo)" FORCE)
+endif()
+
+# Provide options for CMAKE_BUILD_TYPE for clarity
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo")
+
 # set library dependency versions
 set(LIB_RTNEURAL_TAG "04cb333bc4b174760958a77c7ce076eae38fe8e4") 
 set(LIB_CHOWDSP_MATH_APPROX_TAG "0c68d4d17242d707ba07fa7f1901692b7ed72d58") 
