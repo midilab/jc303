@@ -22,6 +22,9 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(sqrDriverSlider = createModKnob("s_drive"));
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch("mod on"));
+    // overdrive
+    addAndMakeVisible(overdriveLevelSlider = createModKnob("overdrive"));
+    addAndMakeVisible(overdriveDryWetSlider = createModKnob("dry_wet"));
 
     // attch controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -40,7 +43,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
     normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
     accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
-
+    // overdrive
+    overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
+    overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
+    
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
@@ -141,6 +147,9 @@ void JC303Editor::setControlsLayout()
     pair<int, int> softAttackLocation = {606, 34};
     pair<int, int> slideTimeLocation = {658, 34};
     pair<int, int> sqrDriverLocation = {710, 34};
+    // overdrive
+    pair<int, int> overdriveLevelLocation = {275, 110};
+    pair<int, int> overdriveDryWetLocation = {361, 110};
 
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderWidth, sliderHeight);
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderWidth, sliderHeight);
@@ -157,6 +166,8 @@ void JC303Editor::setControlsLayout()
     softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderWidth / 4, sliderHeight / 4);
     normalDecaySlider->setBounds(normalDecayLocation.first, normalDecayLocation.second, sliderWidth / 4, sliderHeight / 4);
     accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderWidth / 4, sliderHeight / 4);
-
     switchModButton->setBounds(switchLocation.first, switchLocation.second, sliderWidth / 2, sliderHeight / 2);
+    // overdrive
+    overdriveLevelSlider->setBounds(overdriveLevelLocation.first, overdriveLevelLocation.second, sliderWidth / 4, sliderHeight / 4);
+    overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderWidth / 4, sliderHeight / 4);
 }

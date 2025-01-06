@@ -103,6 +103,7 @@ private:
     std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* slideTime = nullptr;
     std::atomic<float>* sqrDriver = nullptr;
+    // overdrive
     std::atomic<float>* overdriveLevel = nullptr;
     std::atomic<float>* overdriveDryWet = nullptr;
     bool lastSwitchModState = false;

@@ -45,7 +45,7 @@ private:
     juce::Slider* slideTimeSlider;
     juce::Slider* sqrDriverSlider;
     SwitchButton* switchModButton;
-    // Overdrive
+    // overdrive
     juce::Slider* overdriveLevelSlider;
     juce::Slider* overdriveDryWetSlider;
 
@@ -66,7 +66,7 @@ private:
     std::unique_ptr<SliderAttachment> slideTimeAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
-    // Overdrive
+    // overdrive
     std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
     std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
 

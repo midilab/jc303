@@ -22,7 +22,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(sqrDriverSlider = createKnob("small"));
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
-    // Overdrive
+    // overdrive
     addAndMakeVisible(overdriveLevelSlider = createKnob("small"));
     addAndMakeVisible(overdriveDryWetSlider = createKnob("small"));
 
@@ -43,7 +43,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
     switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
-    // Overdrive
+    // overdrive
     overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     
@@ -142,7 +142,7 @@ void JC303Editor::setControlsLayout()
     pair<int, int> softAttackLocation = {410, 299};
     pair<int, int> slideTimeLocation = {499, 299};
     pair<int, int> sqrDriverLocation = {587, 299};
-    // Overdrive
+    // overdrive
     pair<int, int> overdriveLevelLocation = {695, 299};
     pair<int, int> overdriveDryWetLocation = {783, 299};
 
@@ -164,7 +164,7 @@ void JC303Editor::setControlsLayout()
     softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderSmallSize, sliderSmallSize);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
     sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
-    // Overdrive
+    // overdrive
     overdriveLevelSlider->setBounds(overdriveLevelLocation.first, overdriveLevelLocation.second, sliderSmallSize, sliderSmallSize);
     overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderSmallSize, sliderSmallSize);
 }
