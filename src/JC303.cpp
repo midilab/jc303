@@ -318,7 +318,7 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     // init open303
     open303Core.setSampleRate(sampleRate);
     // init guitarML
-    guitarML.prepare(sampleRate, samplesPerBlock);
+    guitarML.prepareProcessing(sampleRate, samplesPerBlock);
 }
 
 void JC303::releaseResources()
@@ -436,7 +436,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // only render if driver is turned on
     if (*overdriveLevel > 0)
         // processing distortion: guitarML - from BYOD
-        guitarML.processAudio(buffer);
+        guitarML.processAudioBlock(buffer);
 
     // copy mono channel to other ones...
     for (int ch = 1; ch < buffer.getNumChannels(); ++ch)
