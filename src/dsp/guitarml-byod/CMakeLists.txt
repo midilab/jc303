@@ -21,6 +21,7 @@ FetchContent_Declare(rtneural
     GIT_REPOSITORY https://github.com/jatinchowdhury18/RTNeural.git
     GIT_TAG        ${LIB_RTNEURAL_TAG}
     GIT_CONFIG     advice.detachedHead=false)
+set(RTNEURAL_XSIMD ON CACHE BOOL "Use RTNeural with XSIMD backend" FORCE)
 
 # chowdsp math_approx fetch
 FetchContent_Declare(math_approx
@@ -56,7 +57,6 @@ make_lib_simd_runtime(dsp_accelerated
 foreach(target IN ITEMS dsp_accelerated_sse_or_arm dsp_accelerated_avx)
     target_link_libraries(${target}
         PRIVATE
-            ea_variant
             math_approx
             config_flags
             juce::juce_recommended_lto_flags
@@ -87,18 +87,19 @@ target_compile_definitions(dsp_accelerated_avx PRIVATE RTNEURAL_DEFAULT_ALIGNMEN
 target_link_libraries("${PROJECT_NAME}" 
   PRIVATE
     dsp_accelerated
-    RTNeural
     ea_variant
     math_approx
-    config_flags
-    warning_flags
     juce::juce_core
     juce::juce_dsp
-    juce::juce_recommended_lto_flags
     chowdsp::chowdsp_dsp_utils
     chowdsp::chowdsp_plugin_base
     chowdsp::chowdsp_json
+    RTNeural
     BinaryDataGuitarMLModels
+  PUBLIC
+    config_flags
+    juce::juce_recommended_lto_flags
+    warning_flags
 )
 
 # special flags for MSVC
@@ -116,6 +117,7 @@ juce_add_binary_data(BinaryDataGuitarMLModels
     models/TS9_DriveKnob.json
     models/BluesJrAmp_VolKnob.json
     models/MesaRecMini_ModernChannel_GainKnob.json
+    models/bass_face_model_96k.json
 )
 
 # Need to build BinaryDataGuitarMLModels with -fPIC flag on Linux

@@ -9,12 +9,14 @@ const juce::StringArray guitarMLModelResources {
     "TS9_DriveKnob_json",
     "BluesJrAmp_VolKnob_json",
     "MesaRecMini_ModernChannel_GainKnob_json",
+    "bass_face_model_96k_json",
 };
 
 const juce::StringArray guitarMLModelNames {
     "TS9",
     "Blues Jr.",
     "Mesa Mini Rectifier (Modern)",
+    "Bassface 96k",
 };
 
 const auto numBuiltInModels = (int) guitarMLModelResources.size();
@@ -235,7 +237,7 @@ void GuitarMLAmp::processAudio (AudioBuffer<float>& buffer)
     if (! modelChangingLock.isLocked())
         return;
 
-    const auto numChannels = buffer.getNumChannels();
+    const auto numChannels = 1; //buffer.getNumChannels();
     const auto numSamples = buffer.getNumSamples();
 
     if (modelArch == ModelArch::LSTM40NoCond)

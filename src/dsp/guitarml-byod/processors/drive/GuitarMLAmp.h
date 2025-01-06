@@ -37,7 +37,7 @@ private:
     chowdsp::Gain<float> inGain;
 
     SpinLock modelChangingMutex;
-    double processSampleRate = 96000.0;
+    double processSampleRate = 48000.0;
     std::shared_ptr<FileChooser> customModelChooser;
 
     template <int numIns, int hiddenSize>
