@@ -3,29 +3,6 @@
 #include "gui/utils/ModulatableSlider.h" */
 #include "BinaryDataGuitarMLModels.h"
 
-namespace RONNTags
-{
-const juce::StringArray guitarMLModelResources {
-    "TS9_DriveKnob_json",
-    "BluesJrAmp_VolKnob_json",
-    "MesaRecMini_ModernChannel_GainKnob_json",
-};
-
-const juce::StringArray guitarMLModelNames {
-    "TS9",
-    "Blues Jr.",
-    "Mesa Mini Rectifier (Modern)",
-};
-
-const auto numBuiltInModels = (int) guitarMLModelResources.size();
-
-const String modelTag = "model";
-const String gainTag = "gain";
-const String conditionTag = "condition";
-const String sampleRateCorrFilterTag = "sample_rate_corr_filter";
-const String customModelTag = "custom_model";
-constexpr std::string_view modelNameTag = "byod_guitarml_model_name";
-} // namespace RONNTags
 
 GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createParameterLayout(), um)
 {
@@ -35,8 +12,11 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
     loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
     addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
 
-    //loadModel (0); // load TS9 model by default
-    loadModel (2); // load Mesa Mini Rectifier model by default
+    // model indexing from RONNTags::guitarMLModelResources and RONNTags::guitarMLModelNames
+    //loadModel (0); // load Ibanez TS9 model by default
+    loadModel (1); // load MXR 78 model by default
+    //loadModel (2); // load Boss MT2 model by default
+    //loadModel (3); // load Ibanez TS808 model by default
 
     /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;
@@ -144,8 +124,8 @@ void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent)
         // The Mesa model is a bit loud, so let's normalize the level down a bit
         // Eventually it would be good to do this sort of thing programmatically.
         // so that it could work for custom loaded models as well.
-        if (modelIndex == 2)
-            normalizationGain = 0.5f;
+        //if (modelIndex == 2)
+        //    normalizationGain = 0.5f;
     }
     else if (modelIndex == RONNTags::numBuiltInModels)
     {

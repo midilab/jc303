@@ -5,6 +5,33 @@
 #include "../BaseProcessor.h"
 #include "../utility/DCBlocker.h"
 
+namespace RONNTags
+{
+const juce::StringArray guitarMLModelResources {
+    "TS9_DriveKnob_json",
+    "MXR78_pedal_DistKnob_json",
+    "BossMT2_PedalHighGain_json",
+    "Ibanez808TubeScreamer_json",
+};
+
+const juce::StringArray guitarMLModelNames {
+    "Ibanez TS9",
+    "MXR 78",
+    "Boss MT2",
+    "Ibanez TS808"
+};
+
+const auto numBuiltInModels = (int) guitarMLModelResources.size();
+
+const String modelTag = "model";
+const String gainTag = "gain";
+const String conditionTag = "condition";
+const String sampleRateCorrFilterTag = "sample_rate_corr_filter";
+const String customModelTag = "custom_model";
+constexpr std::string_view modelNameTag = "byod_guitarml_model_name";
+} // namespace RONNTags
+
+
 class GuitarMLAmp : public BaseProcessor
 {
 public:
@@ -29,15 +56,9 @@ public:
     // added by midilab
     void setDriver (float value) {
         if (modelArch == ModelArch::LSTM40NoCond)
-        {
-            // DB: -18.0 - 18.0
-            getVTS().getParameter("gain")->setValue(jmap(value, 0.0f, 1.0f, -18.0f, 18.0f));
-        }
+            getVTS().getParameter(RONNTags::gainTag)->setValue(value);
         else if (modelArch == ModelArch::LSTM40Cond)
-        {
-            // percentage: 0.0 - 1.0
-            getVTS().getParameter("condition")->setValue(value);
-        }
+            getVTS().getParameter(RONNTags::conditionTag)->setValue(value);
     }
 
     void setDryWet (float value) {
