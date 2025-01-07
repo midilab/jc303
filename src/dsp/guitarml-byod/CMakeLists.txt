@@ -126,7 +126,6 @@ juce_add_binary_data(BinaryDataGuitarMLModels
     models/TS9_DriveKnob.json
     models/BluesJrAmp_VolKnob.json
     models/MesaRecMini_ModernChannel_GainKnob.json
-    models/bass_face_model_96k.json
 )
 
 # Need to build BinaryDataGuitarMLModels with -fPIC flag on Linux

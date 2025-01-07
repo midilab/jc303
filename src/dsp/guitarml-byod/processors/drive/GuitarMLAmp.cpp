@@ -9,14 +9,12 @@ const juce::StringArray guitarMLModelResources {
     "TS9_DriveKnob_json",
     "BluesJrAmp_VolKnob_json",
     "MesaRecMini_ModernChannel_GainKnob_json",
-    "bass_face_model_96k_json",
 };
 
 const juce::StringArray guitarMLModelNames {
     "TS9",
     "Blues Jr.",
     "Mesa Mini Rectifier (Modern)",
-    "Bassface 96k",
 };
 
 const auto numBuiltInModels = (int) guitarMLModelResources.size();
@@ -33,12 +31,12 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
 {
     using namespace ParameterHelpers;
     loadParameterPointer (gainParam, vts, RONNTags::gainTag);
-    //conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
-    conditionParam.setParameterHandle (&conditionParamHandler);
+    conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
     loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
     addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
 
-    loadModel (2); // load TS9 model by default
+    //loadModel (0); // load TS9 model by default
+    loadModel (2); // load Mesa Mini Rectifier model by default
 
     /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;

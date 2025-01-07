@@ -168,7 +168,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         guitarML.setDriver(value);
         break;
     case OVERDRIVE_DRY_WET: 
-        guitarML.setDryWet(     linToLin(value, 0.0, 1.0, -1.0,      1.0)       );
+        //guitarML.setDryWet( );
         break;
         
     //
