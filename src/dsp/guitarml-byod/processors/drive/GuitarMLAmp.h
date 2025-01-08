@@ -62,6 +62,7 @@ public:
     String getCurrentModelName() const;
 
     // added by midilab
+    int getCurrentModelIndex() { return currentModelIndex; }
     void setDriver (float value) {
         if (modelArch == ModelArch::LSTM40NoCond)
             getVTS().getParameter(RONNTags::gainTag)->setValue(value);
@@ -115,6 +116,9 @@ private:
     DCBlocker dcBlocker;
 
     float normalizationGain = 1.0f;
+
+    // added by midilab
+    int currentModelIndex = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GuitarMLAmp)
 };

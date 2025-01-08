@@ -13,17 +13,7 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
     addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
 
     // model indexing from RONNTags::guitarMLModelResources and RONNTags::guitarMLModelNames
-    /* 
-    "MXR 78",
-    "Ibanez TS9",
-    "Ibanez Mostortion Clone",
-    "Mooer CaliMkIV",
-    "Boss MT2",
-    "Ibanez TS808",
-    "BigMuff",
-    "Pro Co RAT Distortion", 
-    */
-    loadModel (0);
+    loadModel (currentModelIndex);
 
     /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;
@@ -133,6 +123,7 @@ void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent)
         // so that it could work for custom loaded models as well.
         //if (modelIndex == 2)
         //    normalizationGain = 0.5f;
+        currentModelIndex = modelIndex;
     }
     else if (modelIndex == RONNTags::numBuiltInModels)
     {

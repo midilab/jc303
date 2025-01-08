@@ -109,7 +109,6 @@ private:
     std::atomic<float>* switchOverdriveState = nullptr;
     std::atomic<float>* overdriveLevel = nullptr;
     std::atomic<float>* overdriveDryWet = nullptr;
-    bool lastOverdriveModelIndex = false;
 
     double decayMin = 200;
     double decayMax = 2000;

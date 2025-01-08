@@ -411,10 +411,8 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
 
     // procesing overdrive
     // any model change request?
-    if(*overdriveModelIndex != lastOverdriveModelIndex) {
+    if(*overdriveModelIndex != guitarML.getCurrentModelIndex())
         guitarML.loadModel(*overdriveModelIndex);
-    }
-    lastOverdriveModelIndex = *overdriveModelIndex;
 
     if (*switchOverdriveState) {
         setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
