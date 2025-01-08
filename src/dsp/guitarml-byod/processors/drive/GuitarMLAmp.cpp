@@ -13,10 +13,17 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
     addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
 
     // model indexing from RONNTags::guitarMLModelResources and RONNTags::guitarMLModelNames
-    //loadModel (0); // load Ibanez TS9 model by default
-    loadModel (1); // load MXR 78 model by default
-    //loadModel (2); // load Boss MT2 model by default
-    //loadModel (3); // load Ibanez TS808 model by default
+    /* 
+    "MXR 78",
+    "Ibanez TS9",
+    "Ibanez Mostortion Clone",
+    "Mooer CaliMkIV",
+    "Boss MT2",
+    "Ibanez TS808",
+    "BigMuff",
+    "Pro Co RAT Distortion", 
+    */
+    loadModel (0);
 
     /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;

@@ -103,10 +103,13 @@ private:
     std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* slideTime = nullptr;
     std::atomic<float>* sqrDriver = nullptr;
+    bool lastSwitchModState = false;
     // overdrive
+    std::atomic<float>* overdriveModelIndex = nullptr;
+    std::atomic<float>* switchOverdriveState = nullptr;
     std::atomic<float>* overdriveLevel = nullptr;
     std::atomic<float>* overdriveDryWet = nullptr;
-    bool lastSwitchModState = false;
+    bool lastOverdriveModelIndex = false;
 
     double decayMin = 200;
     double decayMax = 2000;

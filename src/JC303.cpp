@@ -53,9 +53,6 @@ JC303::JC303()
                                                         1.0f, 
                                                         0.85f),
             // MODs parameters
-            std::make_unique<juce::AudioParameterBool> ("switchModState",
-                                                        "Switch Mod",
-                                                        false), 
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
                                                         0.0f,
@@ -86,16 +83,29 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.25f), 
+            std::make_unique<juce::AudioParameterBool> ("switchModState",
+                                                        "Switch Mod",
+                                                        false), 
+            // overdrive
+            // AudioParameterChoice??
+            std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
+                                                        "Overdrive Model Index",
+                                                        0,
+                                                        7,
+                                                        0), 
             std::make_unique<juce::AudioParameterFloat> ("overdriveLevel",
                                                         "Drive",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f), 
+                                                        1.0f), 
             std::make_unique<juce::AudioParameterFloat> ("overdriveDryWet",
                                                         "Dry/Wet",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f)
+                                                        1.0f),
+            std::make_unique<juce::AudioParameterBool> ("switchOverdriveState",
+                                                        "Switch Overdrive Mod",
+                                                        false)
        })
 {
     // assign a pointer to use it around for each parameter
@@ -116,6 +126,8 @@ JC303::JC303()
     slideTime = parameters.getRawParameterValue("slideTime");
     sqrDriver = parameters.getRawParameterValue("sqrDriver");
     // overdrive parameters
+    overdriveModelIndex = parameters.getRawParameterValue("overdriveModelIndex");
+    switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
     overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
     overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
 
@@ -123,7 +135,7 @@ JC303::JC303()
     // restores the decay correct calculus
     setDevilMod(true);
     setDevilMod(false);
-    setDevilMod((bool)*switchModState);
+    setDevilMod(*switchModState);
 }
 
 JC303::~JC303()
@@ -383,14 +395,12 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     setParameter(VOLUME, *volume);
 
     // processing MODs
-    bool currentSwitchState = (bool)*switchModState; 
-
     // devilfish mod/reset 303 state
-    if (currentSwitchState != lastSwitchModState) 
-        setDevilMod(currentSwitchState);
-    lastSwitchModState = currentSwitchState;
+    if (*switchModState != lastSwitchModState) 
+        setDevilMod(*switchModState);
+    lastSwitchModState = *switchModState;
 
-    if (currentSwitchState) {
+    if (*switchModState) {
         setParameter(NORMAL_DECAY, *normalDecay);
         setParameter(ACCENT_DECAY, *accentDecay);
         setParameter(FEEDBACK_HPF, *feedbackFilter);
@@ -400,8 +410,16 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     }
 
     // procesing overdrive
-    setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
-    setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
+    // any model change request?
+    if(*overdriveModelIndex != lastOverdriveModelIndex) {
+        guitarML.loadModel(*overdriveModelIndex);
+    }
+    lastOverdriveModelIndex = *overdriveModelIndex;
+
+    if (*switchOverdriveState) {
+        setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
+        setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
+    }
 
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)
@@ -435,7 +453,8 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     render303(buffer, currentSample, buffer.getNumSamples());
 
     // only render if driver is turned on
-    if (*overdriveDryWet > 0)
+    if (*switchOverdriveState)
+    //if (*overdriveDryWet > 0)
         // processing distortion: guitarML - from BYOD
         guitarML.processAudioBlock(buffer);
 
