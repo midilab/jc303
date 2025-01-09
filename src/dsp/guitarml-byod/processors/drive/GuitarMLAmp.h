@@ -8,8 +8,8 @@
 namespace RONNTags
 {
 const juce::StringArray guitarMLModelResources {
-    "MXR78_pedal_DistKnob_json",
     "TS9_DriveKnob_json",
+    "MXR78_pedal_DistKnob_json",
     "Ibanez_Mostortion_Clone_GainKnob_json",
     "Mooer_CaliMkIV_GainKnob_json",
     "BossMT2_PedalHighGain_json",
@@ -19,8 +19,8 @@ const juce::StringArray guitarMLModelResources {
 };
 
 const juce::StringArray guitarMLModelNames {
-    "MXR 78",
     "Ibanez TS9",
+    "MXR 78",
     "Ibanez Mostortion Clone",
     "Mooer CaliMkIV",
     "Boss MT2",
@@ -69,7 +69,6 @@ public:
         else if (modelArch == ModelArch::LSTM40Cond)
             getVTS().getParameter(RONNTags::conditionTag)->setValue(value);
     }
-
     void setDryWet (float value) {
         //..
     }

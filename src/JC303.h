@@ -79,6 +79,8 @@ private:
     void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
 
+    void loadOverdriveModel(int modelIndex);
+
     // embedded core dsp objects
     // Open303
     Open303 open303Core;

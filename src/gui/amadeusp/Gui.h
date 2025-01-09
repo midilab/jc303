@@ -19,8 +19,11 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    void setModelName(String modelName);
+
 private:
     juce::Slider* createKnob(const juce::String& knobType);
+    juce::Label* createOverdriveLabel();
     SwitchButton* createSwitch();
     void setControlsLayout();
 
@@ -50,6 +53,7 @@ private:
     juce::Slider* overdriveLevelSlider;
     juce::Slider* overdriveDryWetSlider;
     SwitchButton* switchOverdriveButton;
+    juce::Label* overdriveModelNameLabel;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;

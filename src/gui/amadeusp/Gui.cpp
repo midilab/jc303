@@ -28,6 +28,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(overdriveDryWetSlider = createKnob("small"));
     // on/off overdrive switch
     addAndMakeVisible(switchOverdriveButton = createSwitch());
+    // overdrive model name
+    addAndMakeVisible(overdriveModelNameLabel = createOverdriveLabel());
 
     // attach controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -117,6 +119,21 @@ SwitchButton* JC303Editor::createSwitch()
     return button;
 }
 
+juce::Label* JC303Editor::createOverdriveLabel()
+{
+    auto* label = new juce::Label();
+    label->setText("", juce::dontSendNotification);
+    label->setFont(juce::Font(16.0f));
+    //label->setJustificationType(juce::Justification::centred);
+    
+    return label;
+}
+
+void JC303Editor::setModelName(String modelName)
+{
+    overdriveModelNameLabel->setText(modelName, juce::dontSendNotification);
+}
+
 void JC303Editor::setControlsLayout()
 {
     // Set the bounds and other properties for each slider
@@ -126,6 +143,8 @@ void JC303Editor::setControlsLayout()
     const int sliderSmallSize = 30;
     const int switchWidth = 50;
     const int switchHeight = 18;
+    const int labelWidth = 300;
+    const int labelHeight = 50;
 
     // knob positioning location
     // first row
@@ -152,7 +171,9 @@ void JC303Editor::setControlsLayout()
     pair<int, int> overdriveLevelLocation = {695, 299};
     pair<int, int> overdriveDryWetLocation = {783, 299};
     // overdrive switch
-    pair<int, int> overdriveSwitchLocation = {730, 250};
+    pair<int, int> overdriveSwitchLocation = {840, 301};
+    // overdrive model name
+    pair<int, int> overdriveModelNameLocation = {666, 233};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -177,4 +198,5 @@ void JC303Editor::setControlsLayout()
     overdriveLevelSlider->setBounds(overdriveLevelLocation.first, overdriveLevelLocation.second, sliderSmallSize, sliderSmallSize);
     overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderSmallSize, sliderSmallSize);
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
+    overdriveModelNameLabel->setBounds(overdriveModelNameLocation.first, overdriveModelNameLocation.second, labelWidth, labelHeight);
 }
