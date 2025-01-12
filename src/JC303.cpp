@@ -91,7 +91,7 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
                                                         0,
-                                                        7,
+                                                        RONNTags::guitarMLModelResources.size() - 1,
                                                         0), 
             std::make_unique<juce::AudioParameterFloat> ("overdriveLevel",
                                                         "Drive",
