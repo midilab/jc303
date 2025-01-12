@@ -4,6 +4,7 @@
 #include "../../JC303.h"
 #include "KnobLookAndFeel.h"
 #include "SwitchButton.h"
+#include "OverdriveModelSelect.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 typedef juce::AudioProcessorValueTreeState::ButtonAttachment ButtonAttachment;
@@ -19,11 +20,8 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
-    void setModelName(String modelName);
-
 private:
     juce::Slider* createKnob(const juce::String& knobType);
-    juce::Label* createOverdriveLabel();
     SwitchButton* createSwitch();
     void setControlsLayout();
 
@@ -49,11 +47,9 @@ private:
     juce::Slider* sqrDriverSlider;
     SwitchButton* switchModButton;
     // overdrive
-    juce::Slider* overdriveModelIndexSlider;
     juce::Slider* overdriveLevelSlider;
     juce::Slider* overdriveDryWetSlider;
     SwitchButton* switchOverdriveButton;
-    juce::Label* overdriveModelNameLabel;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -73,10 +69,11 @@ private:
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
     // overdrive
-    std::unique_ptr<SliderAttachment> overdriveModelIndexAttachment;
     std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
     std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
     std::unique_ptr<ButtonAttachment> switchOverdriveButtonAttachment;
+    // previous, next buttons and model name display component
+    OverdriveModelSelect* overdriveModelSelect;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;

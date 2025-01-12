@@ -27,8 +27,11 @@ enum Open303Parameters
   SOFT_ATTACK,
   SLIDE_TIME,
   TANH_SHAPER_DRIVE,
+  // Overdrive
+  OVERDRIVE_SWITCH,
   OVERDRIVE_LEVEL,
   OVERDRIVE_DRY_WET,
+  OVERDRIVE_MODEL_INDEX,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -78,8 +81,6 @@ public:
 private:
     void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
-
-    void loadOverdriveModel(int modelIndex);
 
     // embedded core dsp objects
     // Open303

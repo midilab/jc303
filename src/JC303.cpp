@@ -136,9 +136,6 @@ JC303::JC303()
     setDevilMod(true);
     setDevilMod(false);
     setDevilMod(*switchModState);
-    // overdrive model name
-    if (*switchOverdriveState)
-        loadOverdriveModel(*overdriveModelIndex);
 }
 
 JC303::~JC303()
@@ -179,7 +176,6 @@ void JC303::setParameter (Open303Parameters index, float value)
 
     // Overdrive
     case OVERDRIVE_LEVEL:
-        //guitarML.setDriver(     linToLin(value, 0.0, 1.0, -1.0,      1.0)       );
         guitarML.setDriver(value);
         break;
     case OVERDRIVE_DRY_WET: 
@@ -375,16 +371,6 @@ void JC303::render303(juce::AudioBuffer<float>& buffer, int beginSample, int end
         monoChannel[sample] = (float) open303Core.getSample();
 }
 
-void JC303::loadOverdriveModel(int modelIndex)
-{
-    // load new model
-    guitarML.loadModel(modelIndex);
-    // update model name text label component
-    String currentModel = guitarML.getCurrentModelName();
-    if (auto* editor = dynamic_cast<JC303Editor*>(getActiveEditor()))
-        editor->setModelName(currentModel);
-}
-
 void JC303::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
@@ -427,8 +413,12 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
         setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
         // any model change request?
-        if(*overdriveModelIndex != guitarML.getCurrentModelIndex())
-            loadOverdriveModel(*overdriveModelIndex);
+        if(*overdriveModelIndex != guitarML.getCurrentModelIndex()) {
+            // load new model
+            guitarML.loadModel(*overdriveModelIndex);
+            // to avoid any loadModel error to triger infinite loadModel tries
+            *overdriveModelIndex = guitarML.getCurrentModelIndex();
+        }
     }
 
     // handle midi note messages
