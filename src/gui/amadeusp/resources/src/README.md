@@ -1,10 +1,16 @@
-# Redesign, JC-303, Amadeus Paulussen
-## General
-* All the graphics are exported as 1x, 2x and 4x PNGs.
-* The fonts and Inkscape document are added in `src/` as well.
-* The positions of the interactive elements for JUCE are stored in 
+# UI Design, JC-303
+The JC-303 UI was made by [Amadeus Paulussen](https://amadeuspaulussen.com/) using Inkscape on Manjaro Linux.
 
-## Fonts
-I tried to contact the author of the Omegle font used for the JC-303 logo, but I was never able to reach them. Not sure if this is a problem?
+## Contents
+```
+├── ui-jc303.svg (JC-303 UI Inkscape SVG project)
+├── ui-jc303.png (JC-303 UI Inkscape @4x preview PNG export)
+├── _export (Rastered PNG assets for JUCE in @1x, @2x, @3x and @4x resolution)
+└── _fonts
+    ├── Erbos Draco Monospaced NBP (LED font by Nate Halley used to display preset names for the overdrive section)
+    ├── Inter (Font by Rasmus Andersson used to display labels throughout the UI)
+    └── Omegle (Font by 177Studio used for the JC-303 logo type)
+```
 
-[amadeuspaulussen.com](https://amadeuspaulussen.com), [amadeus@paulussen.id](mailto:amadeus@paulussen.id)
+## License
+The JC-303 UI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
