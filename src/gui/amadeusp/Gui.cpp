@@ -57,7 +57,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
-    setSize (900, 440);
+    setSize (930, 363);
 }
 
 JC303Editor::~JC303Editor()
@@ -127,35 +127,35 @@ void JC303Editor::setControlsLayout()
     const int sliderSmallSize = 30;
     const int switchWidth = 50;
     const int switchHeight = 18;
-    const int selectModellWidth = 250;
+    const int selectModellWidth = 127;
     const int selectModelHeight = 50;
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {45, 56}; 
-    pair<int, int> volumeLocation = {783, 56}; 
+    pair<int, int> waveFormLocation = {46, 140}; 
+    pair<int, int> volumeLocation = {813, 140}; 
     // second row
-    pair<int, int> tuningLocation = {173, 148}; 
-    pair<int, int> cutoffFreqLocation = {272, 148}; 
-    pair<int, int> resonanceLocation = {370, 148}; 
-    pair<int, int> envelopeLocation = {469, 148}; 
-    pair<int, int> decayLocation = {567, 148}; 
-    pair<int, int> accentLocation = {667, 148}; 
+    pair<int, int> tuningLocation = {188, 139}; 
+    pair<int, int> cutoffFreqLocation = {287, 139}; 
+    pair<int, int> resonanceLocation = {386, 139}; 
+    pair<int, int> envelopeLocation = {485, 139}; 
+    pair<int, int> decayLocation = {584, 139}; 
+    pair<int, int> accentLocation = {683, 139}; 
     // MODs knobs row
-    pair<int, int> normalDecayLocation = {145, 299};
-    pair<int, int> accentDecayLocation = {234, 299};
-    pair<int, int> feedbackFilterLocation = {322, 299};
-    pair<int, int> softAttackLocation = {410, 299};
-    pair<int, int> slideTimeLocation = {499, 299};
-    pair<int, int> sqrDriverLocation = {587, 299};
+    pair<int, int> normalDecayLocation = {147, 273};
+    pair<int, int> accentDecayLocation = {208, 273};
+    pair<int, int> feedbackFilterLocation = {269, 273};
+    pair<int, int> softAttackLocation = {330, 273};
+    pair<int, int> slideTimeLocation = {391, 273};
+    pair<int, int> sqrDriverLocation = {452, 273};
     // MODs switch
-    pair<int, int> switchLocation = {55, 301};
+    pair<int, int> switchLocation = {55, 273};
     // overdrive
-    pair<int, int> overdriveLevelLocation = {695, 299};
-    pair<int, int> overdriveDryWetLocation = {783, 299};
+    pair<int, int> overdriveLevelLocation = {566, 273};
+    pair<int, int> overdriveDryWetLocation = {749, 273};
     // overdrive switch
-    pair<int, int> overdriveSwitchLocation = {840, 301};
-    pair<int, int> overdriveModelSelectLocation = {630, 360};
+    pair<int, int> overdriveSwitchLocation = {828, 273};
+    pair<int, int> overdriveModelSelectLocation = {610, 270};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);

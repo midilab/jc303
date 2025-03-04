@@ -87,7 +87,6 @@ JC303::JC303()
                                                         "Switch Mod",
                                                         false), 
             // overdrive
-            // AudioParameterChoice??
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
                                                         0,

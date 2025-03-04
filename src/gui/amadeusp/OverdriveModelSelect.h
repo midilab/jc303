@@ -29,7 +29,7 @@ public:
         // Attach the listener
         valueTreeState.addParameterListener("overdriveModelIndex", this);
 
-        setSize(250, 50);
+        setSize(127, 50);
     }
 
     ~OverdriveModelSelect() override
@@ -67,22 +67,25 @@ public:
 
     void resized() override
     {
-        auto area = getLocalBounds().reduced(10);
-        
+        //auto area = getLocalBounds().reduced(10);
+    
         // Define button sizes
-        int buttonWidth = 25;
-        int buttonHeight = 25;
+        int buttonWidth = 15;
+        int buttonHeight = 15;
+        int labelWidth = 127;
         int labelHeight = 25;
-        
-        // Calculate the space for the label
-        int labelWidth = area.getWidth() - (2 * buttonWidth) - 25;
-
-        // Set button bounds
-        prevButton.setBounds(area.removeFromLeft(buttonWidth));
-        area.removeFromLeft(10); // Padding between button and label
-        modelName.setBounds(area.removeFromLeft(labelWidth).removeFromTop(labelHeight));
-        area.removeFromLeft(10); // Padding between label and button
-        nextButton.setBounds(area.removeFromLeft(buttonWidth));
+    
+        // Set the label bounds (spans the full width)
+        modelName.setBounds(0, 0, labelWidth, labelHeight);
+    
+        // Add space between the label and buttons (10px padding)
+        //area.removeFromTop(10);  // Padding between label and buttons
+    
+        // Set prevButton bounds (aligned to the left, 10px below the label)
+        prevButton.setBounds(0, 22, buttonWidth, buttonHeight);
+    
+        // Set nextButton bounds (aligned to the right, 10px below the label)
+        nextButton.setBounds(110, 22, buttonWidth, buttonHeight);
     }
 
 private:

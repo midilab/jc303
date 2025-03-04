@@ -19,14 +19,14 @@ const juce::StringArray guitarMLModelResources {
 };
 
 const juce::StringArray guitarMLModelNames {
-    "Ibanez TS9",
-    "MXR 78",
+    "Ibanez TS9", //
+    "MXR 78", //
     "Ibanez Mostortion Clone",
-    "Mooer CaliMkIV",
+    "Mooer CaliMkIV", //
     "Boss MT2",
     "Ibanez TS808",
     "BigMuff",
-    "Pro Co RAT Distortion",
+    "Pro Co RAT Distortion", //
 };
 
 const auto numBuiltInModels = (int) guitarMLModelResources.size();
