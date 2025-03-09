@@ -69,9 +69,6 @@ public:
         else if (modelArch == ModelArch::LSTM40Cond)
             getVTS().getParameter(RONNTags::conditionTag)->setValue(value);
     }
-    void setDryWet (float value) {
-        //..
-    }
 
 private:
     void loadModelFromJson (const chowdsp::json& modelJson, const String& newModelName = {});

@@ -87,6 +87,7 @@ private:
     Open303 open303Core;
     // GuitarML - BYOD
     GuitarMLAmp guitarML;
+    juce::dsp::DryWetMixer<float> overdriveMix;
 
     //==============================================================================
     juce::AudioProcessorValueTreeState parameters;

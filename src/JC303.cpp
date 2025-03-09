@@ -330,6 +330,8 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     open303Core.setSampleRate(sampleRate);
     // init guitarML
     guitarML.prepareProcessing(sampleRate, samplesPerBlock);
+    overdriveMix.prepare ({ sampleRate, (uint32_t) samplesPerBlock, 2 });
+    overdriveMix.setMixingRule (juce::dsp::DryWetMixingRule::sin3dB);
 }
 
 void JC303::releaseResources()
@@ -407,19 +409,6 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
     }
 
-    // procesing overdrive
-    if (*switchOverdriveState) {
-        setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
-        setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
-        // any model change request?
-        if(*overdriveModelIndex != guitarML.getCurrentModelIndex()) {
-            // load new model
-            guitarML.loadModel(*overdriveModelIndex);
-            // to avoid any loadModel error to triger infinite loadModel tries
-            *overdriveModelIndex = guitarML.getCurrentModelIndex();
-        }
-    }
-
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)
     {
@@ -451,10 +440,25 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // render open303
     render303(buffer, currentSample, buffer.getNumSamples());
 
-    // only render if driver is turned on
-    if (*switchOverdriveState)
+    // render overdrive
+    if (*switchOverdriveState) {
+        setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
+        //setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
+        // any model change request?
+        if(*overdriveModelIndex != guitarML.getCurrentModelIndex()) {
+            // load new model
+            guitarML.loadModel(*overdriveModelIndex);
+            // to avoid any loadModel error to triger infinite loadModel tries
+            *overdriveModelIndex = guitarML.getCurrentModelIndex();
+        }
+        // preparing dry/wet signal
+        overdriveMix.setWetMixProportion(*overdriveDryWet);
+        overdriveMix.pushDrySamples(buffer);
         // processing distortion: guitarML - from BYOD
         guitarML.processAudioBlock(buffer);
+        // processing dry/wet signal
+        overdriveMix.mixWetSamples(buffer);
+    }
 
     // copy mono channel to other ones...
     for (int ch = 1; ch < buffer.getNumChannels(); ++ch)
