@@ -96,7 +96,7 @@ JC303::JC303()
                                                         "Drive",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f), 
+                                                        1.0f), 
             std::make_unique<juce::AudioParameterFloat> ("overdriveDryWet",
                                                         "Dry/Wet",
                                                         0.0f,
@@ -178,7 +178,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         guitarML.setDriver(value);
         break;
     case OVERDRIVE_DRY_WET: 
-        //guitarML.setDryWet( );
+        overdriveMix.setWetMixProportion(value);
         break;
         
     //
@@ -330,6 +330,7 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     open303Core.setSampleRate(sampleRate);
     // init guitarML
     guitarML.prepareProcessing(sampleRate, samplesPerBlock);
+    // init overdrive dry/wet processor
     overdriveMix.prepare ({ sampleRate, (uint32_t) samplesPerBlock, 2 });
     overdriveMix.setMixingRule (juce::dsp::DryWetMixingRule::sin3dB);
 }
@@ -440,10 +441,10 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // render open303
     render303(buffer, currentSample, buffer.getNumSamples());
 
-    // render overdrive
+    // render GuitarML overdrive
     if (*switchOverdriveState) {
         setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
-        //setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
+        setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
         // any model change request?
         if(*overdriveModelIndex != guitarML.getCurrentModelIndex()) {
             // load new model
@@ -452,7 +453,6 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
             *overdriveModelIndex = guitarML.getCurrentModelIndex();
         }
         // preparing dry/wet signal
-        overdriveMix.setWetMixProportion(*overdriveDryWet);
         overdriveMix.pushDrySamples(buffer);
         // processing distortion: guitarML - from BYOD
         guitarML.processAudioBlock(buffer);
