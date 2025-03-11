@@ -32,6 +32,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // overdrive model select component
     addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, RONNTags::guitarMLModelNames));
 
+    // Easter egg mr. smile
+    addAndMakeVisible(acidSmile);
 
     // attach controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -137,7 +139,9 @@ void JC303Editor::setControlsLayout()
     const int ledWidth = 15;
     const int ledHeight = 15;
     const int selectModellWidth = 127;
-    const int selectModelHeight = 50;
+    const int selectModelHeight = 100;
+    const int acidSmileWidth = 56.25; //225/4;
+    const int acidSmileHeight = 77.5; //310/4;
 
     // knob positioning location
     // first row
@@ -166,7 +170,10 @@ void JC303Editor::setControlsLayout()
     // overdrive switch
     pair<int, int> overdriveSwitchLocation = {826, 273};
     pair<int, int> overdriveLedLocation = {856, 243};
-    pair<int, int> overdriveModelSelectLocation = {610, 270};
+    pair<int, int> overdriveModelSelectLocation = {610, 265};
+
+    // Easter egg mr. smile
+    pair<int, int> acidSmileLocation = {484, 16}; 
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -193,4 +200,7 @@ void JC303Editor::setControlsLayout()
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
     ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
     overdriveModelSelect->setBounds(overdriveModelSelectLocation.first, overdriveModelSelectLocation.second, selectModellWidth, selectModelHeight);
+
+    // Easter egg mr. smile
+    acidSmile.setBounds(acidSmileLocation.first, acidSmileLocation.second, acidSmileWidth, acidSmileHeight);
 }

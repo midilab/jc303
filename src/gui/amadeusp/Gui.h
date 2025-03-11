@@ -6,6 +6,7 @@
 #include "SwitchButton.h"
 #include "SwitchLed.h"
 #include "OverdriveModelSelect.h"
+#include "AcidSmile.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 typedef juce::AudioProcessorValueTreeState::ButtonAttachment ButtonAttachment;
@@ -85,6 +86,9 @@ private:
     KnobLookAndFeel smallKnobLookAndFeel{"small"};
     KnobLookAndFeel mediumKnobLookAndFeel{"medium"};
     KnobLookAndFeel largeKnobLookAndFeel{"large"};
+
+    // Easter egg mr. acid smile.
+    AcidSmile acidSmile;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303Editor)
 };
