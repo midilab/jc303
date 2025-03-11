@@ -22,11 +22,13 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(sqrDriverSlider = createKnob("small"));
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
+    addAndMakeVisible(ledModButton = createLed("switchModState"));
     // overdrive
     addAndMakeVisible(overdriveLevelSlider = createKnob("small"));
     addAndMakeVisible(overdriveDryWetSlider = createKnob("small"));
     // on/off overdrive switch
     addAndMakeVisible(switchOverdriveButton = createSwitch());
+    addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
     addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, RONNTags::guitarMLModelNames));
 
@@ -118,15 +120,22 @@ SwitchButton* JC303Editor::createSwitch()
     return button;
 }
 
+SwitchLed* JC303Editor::createLed(const juce::String& paramID)
+{
+    auto* led = new SwitchLed(valueTreeState, paramID);
+    return led;
+}
+
 void JC303Editor::setControlsLayout()
 {
-    // Set the bounds and other properties for each slider
-    // Adjust the parameters accordingly to fit your needs
+    // Set the bounds and other properties for each gui component
     const int sliderLargeSize = 70;
     const int sliderMediumSize = 60;
     const int sliderSmallSize = 30;
     const int switchWidth = 50;
     const int switchHeight = 18;
+    const int ledWidth = 15;
+    const int ledHeight = 15;
     const int selectModellWidth = 127;
     const int selectModelHeight = 50;
 
@@ -149,12 +158,14 @@ void JC303Editor::setControlsLayout()
     pair<int, int> slideTimeLocation = {391, 273};
     pair<int, int> sqrDriverLocation = {452, 273};
     // MODs switch
-    pair<int, int> switchLocation = {55, 273};
+    pair<int, int> switchLocation = {52, 273};
+    pair<int, int> modLedLocation = {82, 243};
     // overdrive
     pair<int, int> overdriveLevelLocation = {566, 273};
     pair<int, int> overdriveDryWetLocation = {749, 273};
     // overdrive switch
-    pair<int, int> overdriveSwitchLocation = {828, 273};
+    pair<int, int> overdriveSwitchLocation = {826, 273};
+    pair<int, int> overdriveLedLocation = {856, 243};
     pair<int, int> overdriveModelSelectLocation = {610, 270};
 
     // large knobs
@@ -175,9 +186,11 @@ void JC303Editor::setControlsLayout()
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
     sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
+    ledModButton->setBounds(modLedLocation.first, modLedLocation.second, ledWidth, ledHeight);
     // overdrive
     overdriveLevelSlider->setBounds(overdriveLevelLocation.first, overdriveLevelLocation.second, sliderSmallSize, sliderSmallSize);
     overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderSmallSize, sliderSmallSize);
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
+    ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
     overdriveModelSelect->setBounds(overdriveModelSelectLocation.first, overdriveModelSelectLocation.second, selectModellWidth, selectModelHeight);
 }

@@ -4,6 +4,7 @@ juce_add_binary_data(BinaryData SOURCES
     resources/medium-rotary.png
     resources/small-rotary.png
     resources/switch.png
+    resources/dark-led-step-sequencer.png
 )
 
 # Need to build BinaryData with -fPIC flag on Linux
