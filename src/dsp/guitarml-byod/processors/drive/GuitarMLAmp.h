@@ -8,10 +8,10 @@
 namespace RONNTags
 {
 const juce::StringArray guitarMLModelResources {
-    "Mooer_CaliMkIV_GainKnob_json",
+    "TS9_DriveKnob_json",
     "MXR78_pedal_DistKnob_json",
     "Ibanez_Mostortion_Clone_GainKnob_json",
-    "TS9_DriveKnob_json",
+    "Mooer_CaliMkIV_GainKnob_json",
     "BossMT2_PedalHighGain_json",
     "Ibanez808TubeScreamer_json",
     "BigMuff_V6_T6_S9_json",
@@ -19,10 +19,10 @@ const juce::StringArray guitarMLModelResources {
 };
 
 const juce::StringArray guitarMLModelNames {
-    "Mooer CaliMkIV", //
+    "Ibanez TS9", //
     "MXR 78", //
     "Ibanez Mostortion Clone",
-    "Ibanez TS9", //
+    "Mooer CaliMkIV", //
     "Boss MT2",
     "Ibanez TS808",
     "BigMuff",

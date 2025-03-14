@@ -8,7 +8,7 @@ juce_add_binary_data(BinaryData SOURCES
     resources/left-arrow-presets.png
     resources/right-arrow-presets.png
     resources/acid-smile.png
-    resources/ErbosDraco1StOpenNbpRegular-l5wX.ttf
+    resources/Inter.ttc
 )
 
 # Need to build BinaryData with -fPIC flag on Linux

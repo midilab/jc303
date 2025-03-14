@@ -8,8 +8,9 @@ public:
         : valueTreeState(vts), modelNameList(modelNamesList)
     {
         // 
-        erbosDracoMonoFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttf, BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttfSize));
-        erbosDracoMonoFont.setHeight(11.0f);
+        customFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::Inter_ttc, BinaryData::Inter_ttcSize));
+        customFont.setHeight(12.0f);
+        
         // 
         imageLeftArrow = juce::ImageCache::getFromMemory(BinaryData::leftarrowpresets_png, BinaryData::leftarrowpresets_pngSize);
         imageRightArrow = juce::ImageCache::getFromMemory(BinaryData::rightarrowpresets_png, BinaryData::rightarrowpresets_pngSize);
@@ -20,7 +21,7 @@ public:
         addAndMakeVisible(modelName);
         
         // 
-        modelName.setFont(erbosDracoMonoFont);
+        modelName.setFont(customFont);
         modelName.setJustificationType(juce::Justification::centredLeft);
 
         // Set the images for the ImageButtons
@@ -142,7 +143,7 @@ private:
     juce::Label modelName;
     juce::StringArray modelNameList;
 
-    juce::Font erbosDracoMonoFont;
+    juce::Font customFont;
     juce::Image imageLeftArrow;
     juce::Image imageRightArrow;
 };
