@@ -12,7 +12,6 @@ The JC-303 UI is made by [Amadeus Paulussen](https://amadeuspaulussen.com/) usin
 ├── ├── presets-release (Rastered PNG assets for JUCE in @1x, @2x, @3x and @4x resolution)
 ├── ├── sequencer-release (Rastered PNG assets for JUCE in @1x, @2x, @3x and @4x resolution)
 └── _fonts
-    ├── Erbos Draco Monospaced NBP (LED font by Nate Halley used to display preset names for the overdrive section)
     ├── Inter (Font by Rasmus Andersson used to display labels throughout the UI)
     └── Omegle (Font by 177Studio used for the JC-303 logo type)
 ```
