@@ -78,9 +78,16 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    juce::StringArray getModelListNames() { return modelListNames; }
+    
 private:
     void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
+
+    // presets and overdrive models user data management
+    void setupDataDirectories();
+    void installTones();
+    int loadOverdriveTones();
 
     // embedded core dsp objects
     // Open303
@@ -88,6 +95,11 @@ private:
     // GuitarML - BYOD
     GuitarMLAmp guitarML;
     juce::dsp::DryWetMixer<float> overdriveMix;
+
+    // presets storage: user documents folder
+    File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
+    File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";
+    juce::StringArray modelListNames;
 
     //==============================================================================
     juce::AudioProcessorValueTreeState parameters;

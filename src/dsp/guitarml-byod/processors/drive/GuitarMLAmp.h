@@ -62,7 +62,23 @@ public:
     String getCurrentModelName() const;
 
     // added by midilab
+    void setModelList(juce::Array<juce::File> modelFileList) { modelList = modelFileList; }
+    int getModelListSize() { return modelList.size(); }
     int getCurrentModelIndex() { return currentModelIndex; }
+    void loadUserModel(int modelIndex) {
+        if (modelIndex >= modelList.size())
+            modelIndex = modelList.size() - 1;
+        try
+        {
+            const auto modelFile = modelList[modelIndex];
+            const auto modelJson = chowdsp::JSONUtils::fromFile (modelFile);
+            loadModelFromJson (modelJson, modelFile.getFileNameWithoutExtension());
+            currentModelIndex = modelIndex;
+        } catch (const std::exception& exc) {
+            loadModel (0);
+            //const auto errorMessage = String { "Unable to load GuitarML model from file!\n\n" } + exc.what();
+        }
+    }
     void setDriver (float value) {
         if (modelArch == ModelArch::LSTM40NoCond)
             getVTS().getParameter(RONNTags::gainTag)->setValue(value);
@@ -114,7 +130,11 @@ private:
     float normalizationGain = 1.0f;
 
     // added by midilab
+    juce::Array<juce::File> modelList;
     int currentModelIndex = 0;
+    // presets storage: user documents folder
+    File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
+    File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GuitarMLAmp)
 };

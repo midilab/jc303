@@ -8,8 +8,11 @@ public:
         : valueTreeState(vts), modelNameList(modelNamesList)
     {
         // 
-        customFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::Inter_ttc, BinaryData::Inter_ttcSize));
-        customFont.setHeight(12.0f);
+        customFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttf, BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttfSize));
+        customFont.setHeight(11.0f);
+
+        //customFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::Inter_ttc, BinaryData::Inter_ttcSize));
+        //customFont.setHeight(12.0f);
         
         // 
         imageLeftArrow = juce::ImageCache::getFromMemory(BinaryData::leftarrowpresets_png, BinaryData::leftarrowpresets_pngSize);

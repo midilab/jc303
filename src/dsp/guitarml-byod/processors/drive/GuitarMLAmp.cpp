@@ -13,7 +13,8 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
     addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
 
     // model indexing from RONNTags::guitarMLModelResources and RONNTags::guitarMLModelNames
-    loadModel (currentModelIndex);
+    //loadModel (currentModelIndex);
+    loadModel (0);
 
     /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;

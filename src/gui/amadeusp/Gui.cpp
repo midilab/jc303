@@ -30,7 +30,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(switchOverdriveButton = createSwitch());
     addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
-    addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, RONNTags::guitarMLModelNames));
+    addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, processorRef.getModelListNames()));
 
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);

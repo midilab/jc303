@@ -123,14 +123,14 @@ juce_add_binary_data(BinaryDataGuitarMLModels
   NAMESPACE 
     BinaryDataGuitarMLModels 
   SOURCES
-    models/acid/TS9_DriveKnob.json
-    models/acid/MXR78_pedal_DistKnob.json
-    models/acid/Ibanez_Mostortion_Clone_GainKnob.json
-    models/acid/Mooer_CaliMkIV_GainKnob.json
-    models/acid/BossMT2_PedalHighGain.json
-    models/acid/Ibanez808TubeScreamer.json
-    models/acid/BigMuff_V6_T6_S9.json
-    models/acid/ProcoRatPedal_HighGain.json
+    models/AcidPack/TS9_DriveKnob.json
+    models/AcidPack/MXR78_pedal_DistKnob.json
+    models/AcidPack/Ibanez_Mostortion_Clone_GainKnob.json
+    models/AcidPack/Mooer_CaliMkIV_GainKnob.json
+    models/AcidPack/BossMT2_PedalHighGain.json
+    models/AcidPack/Ibanez808TubeScreamer.json
+    models/AcidPack/BigMuff_V6_T6_S9.json
+    models/AcidPack/ProcoRatPedal_HighGain.json
 )
 
 # Need to build BinaryDataGuitarMLModels with -fPIC flag on Linux
