@@ -487,6 +487,7 @@ int JC303::loadOverdriveTones()
     {
         juce::Array<juce::File> results;
         juce::Array<juce::File> modelFileList;
+        juce::StringArray modelListNames;
         userAppDataDirectory_tones.findChildFiles(results, juce::File::findFiles, true, "*.json");
         // TODO: sort by 1.file name and 2.fodler name alphabetically
         for (int i = 0; i < results.size(); i++) {
@@ -498,7 +499,7 @@ int JC303::loadOverdriveTones()
             // Add the modified file name to modelListNames
             modelListNames.add(fileName);
         }
-        guitarML.setModelList(modelFileList);
+        guitarML.setModelList(modelFileList, modelListNames);
         return guitarML.getModelListSize();
     }
     return 1; // to avoid -1 at overdrive indexes startup

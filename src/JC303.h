@@ -78,7 +78,7 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    juce::StringArray getModelListNames() { return modelListNames; }
+    juce::StringArray getModelListNames() { return guitarML.getModelListNames(); }
     
 private:
     void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
@@ -99,7 +99,6 @@ private:
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
     File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";
-    juce::StringArray modelListNames;
 
     //==============================================================================
     juce::AudioProcessorValueTreeState parameters;

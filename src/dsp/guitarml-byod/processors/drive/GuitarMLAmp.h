@@ -60,23 +60,39 @@ public:
 
     void loadModel (int modelIndex, Component* parentComponent = nullptr);
     String getCurrentModelName() const;
-
+    
     // added by midilab
-    void setModelList(juce::Array<juce::File> modelFileList) { modelList = modelFileList; }
-    int getModelListSize() { return modelList.size(); }
+    void setModelList(juce::Array<juce::File> modelFileList, juce::StringArray modelNameList) { 
+        // modelList should contain built in models data first
+        modelListNames.addArray(RONNTags::guitarMLModelNames);
+        // add each element of modelNameList to the end of modelListNames
+        modelListNames.addArray(modelNameList);
+        // this list is only for user json files. no buil-in here
+        modelList = modelFileList;
+    }
+    juce::StringArray getModelListNames() { return modelListNames; }
+    int getModelListSize() { return RONNTags::numBuiltInModels + modelList.size(); }
     int getCurrentModelIndex() { return currentModelIndex; }
     void loadUserModel(int modelIndex) {
-        if (modelIndex >= modelList.size())
-            modelIndex = modelList.size() - 1;
-        try
-        {
-            const auto modelFile = modelList[modelIndex];
-            const auto modelJson = chowdsp::JSONUtils::fromFile (modelFile);
-            loadModelFromJson (modelJson, modelFile.getFileNameWithoutExtension());
-            currentModelIndex = modelIndex;
-        } catch (const std::exception& exc) {
-            loadModel (0);
-            //const auto errorMessage = String { "Unable to load GuitarML model from file!\n\n" } + exc.what();
+        if (modelIndex >= getModelListSize())
+            modelIndex = getModelListSize() - 1;
+        if (modelIndex < 0)
+            modelIndex = 0;
+        // load built-in model
+        if (modelIndex < RONNTags::numBuiltInModels) {
+            loadModel (modelIndex);
+        // load user model
+        } else {
+            try
+            {
+                const auto modelFile = modelList[modelIndex];
+                const auto modelJson = chowdsp::JSONUtils::fromFile (modelFile);
+                loadModelFromJson (modelJson, modelFile.getFileNameWithoutExtension());
+                currentModelIndex = modelIndex;
+            } catch (const std::exception& exc) {
+                loadModel (0);
+                //const auto errorMessage = String { "Unable to load GuitarML model from file!\n\n" } + exc.what();
+            }
         }
     }
     void setDriver (float value) {
@@ -130,11 +146,9 @@ private:
     float normalizationGain = 1.0f;
 
     // added by midilab
-    juce::Array<juce::File> modelList;
+    juce::Array<juce::File> modelList;    
+    juce::StringArray modelListNames;
     int currentModelIndex = 0;
-    // presets storage: user documents folder
-    File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
-    File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GuitarMLAmp)
 };
