@@ -123,14 +123,43 @@ juce_add_binary_data(BinaryDataGuitarMLModels
   NAMESPACE 
     BinaryDataGuitarMLModels 
   SOURCES
-    models/AcidPack/TS9_DriveKnob.json
-    models/AcidPack/MXR78_pedal_DistKnob.json
-    models/AcidPack/Ibanez_Mostortion_Clone_GainKnob.json
-    models/AcidPack/Mooer_CaliMkIV_GainKnob.json
-    models/AcidPack/BossMT2_PedalHighGain.json
-    models/AcidPack/Ibanez808TubeScreamer.json
-    models/AcidPack/BigMuff_V6_T6_S9.json
-    models/AcidPack/ProcoRatPedal_HighGain.json
+    models/JC303/AguilarAgro_Bright_Bass.json
+    models/JC303/AguilarAgro_Dark_Bass.json
+    models/JC303/BadCat50_MedGain_PREAMP.json
+    models/JC303/BigMuff_V6_T3_S5.json
+    models/JC303/BlackstarHT40_AmpClean.json
+    models/JC303/BlackstarHT40_GainKnob_SM57mic.json
+    models/JC303/BossMT2_PedalHighGain.json
+    models/JC303/DumbleKit_HighG_DirectOut.json
+    models/JC303/ElCoyote_Trainwreck_Crunch.json
+    models/JC303/ENGL_E430_Clean_EdoardoNapoli.json
+    models/JC303/ENGL_E645_Clean_EdoardoNapoli.json
+    models/JC303/EthosLeadChan_GainKnob.json
+    models/JC303/Filmosound_with_cab.json
+    models/JC303/Friedman_BEOD_Pedal_GainKnob.json
+    models/JC303/GoatPedal_HighGain.json
+    models/JC303/Ibanez808TubeScreamer.json
+    models/JC303/Ibanez_Mostortion_Clone_GainKnob.json
+    models/JC303/Jeckyl_and_Hyde_Distortion_DriveKnob.json
+    models/JC303/LittleBigMuff_HighGainPedal.json
+    models/JC303/MesaMiniRec_HighGain_DirectOut.json
+    models/JC303/Mooer_CaliMkIV_GainKnob.json
+    models/JC303/MXR78_pedal_DistKnob.json
+    models/JC303/PorkLoinPedal_LowGain.json
+    models/JC303/PrinceOfToneClone_Dist_Knob.json
+    models/JC303/PrinceOfToneClone_OD_Knob.json
+    models/JC303/PrincetonAmp_Clean.json
+    models/JC303/ProcoRatPedal_HighGain.json
+    models/JC303/ProteinBlue_pedal_DriveKnob.json
+    models/JC303/RevvG3_Pedal_GainKnob.json
+    models/JC303/ShiftTwin_Clean2_PREAMP.json
+    models/JC303/ShiftTwin_StampedeDT_PREAMP.json
+    models/JC303/Sovtek50_DodFX56B_DIRECT.json
+    models/JC303/Sovtek50_MedGain_DIRECT.json
+    models/JC303/Splawn_OD_FractalFM3_HighGain.json
+    models/JC303/Supro_Bold_DriveKnob.json
+    models/JC303/TRexMudhoney_plus_PorkLoin_HighGain.json
+    models/JC303/TS9_DriveKnob.json
 )
 
 # Need to build BinaryDataGuitarMLModels with -fPIC flag on Linux
