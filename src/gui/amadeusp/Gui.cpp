@@ -22,14 +22,18 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(sqrDriverSlider = createKnob("small"));
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
+    addAndMakeVisible(ledModButton = createLed("switchModState"));
     // overdrive
     addAndMakeVisible(overdriveLevelSlider = createKnob("small"));
     addAndMakeVisible(overdriveDryWetSlider = createKnob("small"));
     // on/off overdrive switch
     addAndMakeVisible(switchOverdriveButton = createSwitch());
+    addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
-    addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, RONNTags::guitarMLModelNames));
+    addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, processorRef.getModelListNames()));
 
+    // Easter egg mr. smile
+    addAndMakeVisible(acidSmile);
 
     // attach controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -57,7 +61,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
-    setSize (900, 440);
+    setSize (930, 363);
 }
 
 JC303Editor::~JC303Editor()
@@ -118,44 +122,58 @@ SwitchButton* JC303Editor::createSwitch()
     return button;
 }
 
+SwitchLed* JC303Editor::createLed(const juce::String& paramID)
+{
+    auto* led = new SwitchLed(valueTreeState, paramID);
+    return led;
+}
+
 void JC303Editor::setControlsLayout()
 {
-    // Set the bounds and other properties for each slider
-    // Adjust the parameters accordingly to fit your needs
+    // Set the bounds and other properties for each gui component
     const int sliderLargeSize = 70;
     const int sliderMediumSize = 60;
     const int sliderSmallSize = 30;
     const int switchWidth = 50;
     const int switchHeight = 18;
-    const int selectModellWidth = 250;
-    const int selectModelHeight = 50;
+    const int ledWidth = 15;
+    const int ledHeight = 15;
+    const int selectModellWidth = 127;
+    const int selectModelHeight = 100;
+    const int acidSmileWidth = 56.25; //225/4;
+    const int acidSmileHeight = 77.5; //310/4;
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {45, 56}; 
-    pair<int, int> volumeLocation = {783, 56}; 
+    pair<int, int> waveFormLocation = {46, 140}; 
+    pair<int, int> volumeLocation = {813, 140}; 
     // second row
-    pair<int, int> tuningLocation = {173, 148}; 
-    pair<int, int> cutoffFreqLocation = {272, 148}; 
-    pair<int, int> resonanceLocation = {370, 148}; 
-    pair<int, int> envelopeLocation = {469, 148}; 
-    pair<int, int> decayLocation = {567, 148}; 
-    pair<int, int> accentLocation = {667, 148}; 
+    pair<int, int> tuningLocation = {188, 139}; 
+    pair<int, int> cutoffFreqLocation = {287, 139}; 
+    pair<int, int> resonanceLocation = {386, 139}; 
+    pair<int, int> envelopeLocation = {485, 139}; 
+    pair<int, int> decayLocation = {584, 139}; 
+    pair<int, int> accentLocation = {683, 139}; 
     // MODs knobs row
-    pair<int, int> normalDecayLocation = {145, 299};
-    pair<int, int> accentDecayLocation = {234, 299};
-    pair<int, int> feedbackFilterLocation = {322, 299};
-    pair<int, int> softAttackLocation = {410, 299};
-    pair<int, int> slideTimeLocation = {499, 299};
-    pair<int, int> sqrDriverLocation = {587, 299};
+    pair<int, int> normalDecayLocation = {147, 273};
+    pair<int, int> accentDecayLocation = {208, 273};
+    pair<int, int> feedbackFilterLocation = {269, 273};
+    pair<int, int> softAttackLocation = {330, 273};
+    pair<int, int> slideTimeLocation = {391, 273};
+    pair<int, int> sqrDriverLocation = {452, 273};
     // MODs switch
-    pair<int, int> switchLocation = {55, 301};
+    pair<int, int> switchLocation = {52, 273};
+    pair<int, int> modLedLocation = {82, 243};
     // overdrive
-    pair<int, int> overdriveLevelLocation = {695, 299};
-    pair<int, int> overdriveDryWetLocation = {783, 299};
+    pair<int, int> overdriveLevelLocation = {566, 273};
+    pair<int, int> overdriveDryWetLocation = {749, 273};
     // overdrive switch
-    pair<int, int> overdriveSwitchLocation = {840, 301};
-    pair<int, int> overdriveModelSelectLocation = {630, 360};
+    pair<int, int> overdriveSwitchLocation = {826, 273};
+    pair<int, int> overdriveLedLocation = {856, 243};
+    pair<int, int> overdriveModelSelectLocation = {610, 265};
+
+    // Easter egg mr. smile
+    pair<int, int> acidSmileLocation = {484, 16}; 
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -175,9 +193,14 @@ void JC303Editor::setControlsLayout()
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
     sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
+    ledModButton->setBounds(modLedLocation.first, modLedLocation.second, ledWidth, ledHeight);
     // overdrive
     overdriveLevelSlider->setBounds(overdriveLevelLocation.first, overdriveLevelLocation.second, sliderSmallSize, sliderSmallSize);
     overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderSmallSize, sliderSmallSize);
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
+    ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
     overdriveModelSelect->setBounds(overdriveModelSelectLocation.first, overdriveModelSelectLocation.second, selectModellWidth, selectModelHeight);
+
+    // Easter egg mr. smile
+    acidSmile.setBounds(acidSmileLocation.first, acidSmileLocation.second, acidSmileWidth, acidSmileHeight);
 }

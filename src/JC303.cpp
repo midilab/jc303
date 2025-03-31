@@ -87,22 +87,21 @@ JC303::JC303()
                                                         "Switch Mod",
                                                         false), 
             // overdrive
-            // AudioParameterChoice??
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
                                                         0,
-                                                        RONNTags::guitarMLModelResources.size() - 1,
+                                                        loadOverdriveTones() - 1,
                                                         0), 
             std::make_unique<juce::AudioParameterFloat> ("overdriveLevel",
                                                         "Drive",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f), 
+                                                        0.25f), 
             std::make_unique<juce::AudioParameterFloat> ("overdriveDryWet",
                                                         "Dry/Wet",
                                                         0.0f,
                                                         1.0f,
-                                                        1.0f),
+                                                        0.5f),
             std::make_unique<juce::AudioParameterBool> ("switchOverdriveState",
                                                         "Switch Overdrive Mod",
                                                         false)
@@ -136,6 +135,16 @@ JC303::JC303()
     setDevilMod(true);
     setDevilMod(false);
     setDevilMod(*switchModState);
+
+    // presets and overdrive models
+    setupDataDirectories();
+    //installTones();
+    //loadOverdriveTones();
+    // Sort jsonFiles alphabetically
+    /* std::sort(jsonFiles.begin(), jsonFiles.end());
+    if (jsonFiles.size() > 0) {
+        loadConfig(jsonFiles[current_model_index]);
+    } */
 }
 
 JC303::~JC303()
@@ -174,14 +183,20 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setVolume(   linToLin(value, 0.0, 1.0, -60.0,      0.0)     );
         break;
 
-    // Overdrive
+    // Overdrive - By GuitarML BYOD implementation
     case OVERDRIVE_LEVEL:
+        // conditioned param or gain if model is not conditioned
         guitarML.setDriver(value);
         break;
     case OVERDRIVE_DRY_WET: 
-        //guitarML.setDryWet( );
+        overdriveMix.setWetMixProportion(value);
         break;
-        
+    case OVERDRIVE_MODEL_INDEX: 
+        // load new model
+        //guitarML.loadModel(value);
+        guitarML.loadUserModel(value);
+        break;
+
     //
     // MODS (mostly based on devilfish mod)
     // BUT DONT! dont expect a devilfish clone sound or mail me about!
@@ -331,6 +346,9 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     open303Core.setSampleRate(sampleRate);
     // init guitarML
     guitarML.prepareProcessing(sampleRate, samplesPerBlock);
+    // init overdrive dry/wet processor
+    overdriveMix.prepare ({ sampleRate, (uint32_t) samplesPerBlock, 2 });
+    overdriveMix.setMixingRule (juce::dsp::DryWetMixingRule::sin3dB);
 }
 
 void JC303::releaseResources()
@@ -408,19 +426,6 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
     }
 
-    // procesing overdrive
-    if (*switchOverdriveState) {
-        setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
-        setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
-        // any model change request?
-        if(*overdriveModelIndex != guitarML.getCurrentModelIndex()) {
-            // load new model
-            guitarML.loadModel(*overdriveModelIndex);
-            // to avoid any loadModel error to triger infinite loadModel tries
-            *overdriveModelIndex = guitarML.getCurrentModelIndex();
-        }
-    }
-
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)
     {
@@ -452,15 +457,126 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // render open303
     render303(buffer, currentSample, buffer.getNumSamples());
 
-    // only render if driver is turned on
-    if (*switchOverdriveState)
+    // render GuitarML overdrive
+    if (*switchOverdriveState) {
+        setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
+        setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
+        // any model change request?
+        if(*overdriveModelIndex != guitarML.getCurrentModelIndex()) {
+            setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
+            // to avoid any loadModel error to triger infinite loadModel tries
+            *overdriveModelIndex = guitarML.getCurrentModelIndex();
+        }
+        // preparing dry/wet signal
+        overdriveMix.pushDrySamples(buffer);
         // processing distortion: guitarML - from BYOD
         guitarML.processAudioBlock(buffer);
+        // processing dry/wet signal
+        overdriveMix.mixWetSamples(buffer);
+    }
 
-    // copy mono channel to other ones...
+    // copy mono channel to stereo
     for (int ch = 1; ch < buffer.getNumChannels(); ++ch)
         buffer.copyFrom(ch, 0, buffer, 0, 0, buffer.getNumSamples());
 }
+
+int JC303::loadOverdriveTones()
+{
+    setupDataDirectories();
+    if (userAppDataDirectory_tones.isDirectory())
+    {
+        juce::Array<juce::File> results;
+        juce::Array<juce::File> modelFileList;
+        juce::StringArray modelListNames;
+        userAppDataDirectory_tones.findChildFiles(results, juce::File::findFiles, true, "*.json");
+        // TODO: sort by 1.file name and 2.fodler name alphabetically
+        for (int i = 0; i < results.size(); i++) {
+            modelFileList.add(results.getReference(i).getFullPathName()); 
+            // Get the file name without extension
+            juce::String fileName = modelFileList[i].getFileNameWithoutExtension();
+            // Replace underscores with spaces
+            fileName = fileName.replace("_", " ");
+            // Add the modified file name to modelListNames
+            modelListNames.add(fileName);
+        }
+        guitarML.setModelList(modelFileList, modelListNames);
+        return guitarML.getModelListSize();
+    }
+    return 1; // to avoid -1 at overdrive indexes startup
+}
+
+void JC303::setupDataDirectories()
+{
+    // User app data directory
+    File userAppDataTempFile = userAppDataDirectory.getChildFile("tmp.pdl");
+
+    File userAppDataTempFile_tones = userAppDataDirectory_tones.getChildFile("tmp.pdl");
+
+    // Create (and delete) temp file if necessary, so that user doesn't have
+    // to manually create directories
+    if (!userAppDataDirectory.exists()) {
+        userAppDataTempFile.create();
+    }
+    if (userAppDataTempFile.existsAsFile()) {
+        userAppDataTempFile.deleteFile();
+    }
+
+    if (!userAppDataDirectory_tones.exists()) {
+        userAppDataTempFile_tones.create();
+    }
+    if (userAppDataTempFile_tones.existsAsFile()) {
+        userAppDataTempFile_tones.deleteFile();
+    }
+}
+
+void JC303::installTones()
+//====================================================================
+// Description: Checks that the default tones
+//  are installed to the NeuralPi directory, and if not, 
+//  copy them from the binary data in the plugin to that directory.
+//
+//====================================================================
+{
+    // Default tones
+    /* File ts9_tone = userAppDataDirectory_tones.getFullPathName() + "/TS9.json";
+    File bjdirty_tone = userAppDataDirectory_tones.getFullPathName() + "/BluesJR.json";
+    File ht40od_tone = userAppDataDirectory_tones.getFullPathName() + "/HT40_Overdrive.json";
+
+    if (ts9_tone.existsAsFile() == false) {
+        std::string string_command = ts9_tone.getFullPathName().toStdString();
+        const char* char_ts9_tone = &string_command[0];
+
+        std::ofstream myfile;
+        myfile.open(char_ts9_tone);
+        myfile << BinaryDataNeuralPi::TS9_json;
+
+        myfile.close();
+    }
+
+    if (bjdirty_tone.existsAsFile() == false) {
+        std::string string_command = bjdirty_tone.getFullPathName().toStdString();
+        const char* char_bjdirty = &string_command[0];
+
+        std::ofstream myfile;
+        myfile.open(char_bjdirty);
+        myfile << BinaryDataNeuralPi::BluesJr_json;
+
+        myfile.close();
+    }
+
+    if (ht40od_tone.existsAsFile() == false) {
+        std::string string_command = ht40od_tone.getFullPathName().toStdString();
+        const char* char_ht40od = &string_command[0];
+
+        std::ofstream myfile;
+        myfile.open(char_ht40od);
+        myfile << BinaryDataNeuralPi::HT40_Overdrive_json;
+
+        myfile.close();
+    } */
+    
+}
+
 
 //==============================================================================
 bool JC303::hasEditor() const
