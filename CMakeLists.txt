@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(JC303 VERSION 0.11.0)
+project(JC303 VERSION 0.12.0)
 
 
 ### Dependency versions ###
 
 set(LIB_JUCE_TAG "7.0.5")
 set(LIB_CLAP_TAG "a3227c52fa082d2df33f4377ed1e050dd8a52595")
+set(LIB_CHOWDSP_UTILS_TAG "b1ac3eb802171e65d22151fbadce81d1f300616d") 
 
 ### Gui setup
 # check if the GUI variable is set
@@ -50,14 +51,18 @@ FetchContent_Declare(juce
     SOURCE_DIR     "${FETCHCONTENT_BASE_DIR}/JUCE"
     SUBBUILD_DIR   "${FETCHCONTENT_BASE_DIR}/JUCE-Subbuild"
     BINARY_DIR     "${FETCHCONTENT_BASE_DIR}/JUCE-Build")
-FetchContent_MakeAvailable(juce)
 
 FetchContent_Declare(juce-clap-extensions
     GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
     GIT_TAG        ${LIB_CLAP_TAG}
     GIT_CONFIG     advice.detachedHead=false)    
-FetchContent_MakeAvailable(juce-clap-extensions)
 
+FetchContent_Declare(chowdsp_utils
+    GIT_REPOSITORY https://github.com/Chowdhury-DSP/chowdsp_utils.git
+    GIT_TAG        ${LIB_CHOWDSP_UTILS_TAG}
+    GIT_CONFIG     advice.detachedHead=false)
+
+FetchContent_MakeAvailable(juce juce-clap-extensions chowdsp_utils)
 
 # gui resources BinaryData via CMakeLists.txt
 add_subdirectory(src/gui/${GUI})
@@ -134,10 +139,6 @@ get_property(project_targets DIRECTORY "${PROJECT_SOURCE_DIR}" PROPERTY BUILDSYS
 
 set_target_properties(${project_targets} PROPERTIES CXX_EXTENSIONS OFF)
 
-# Add the subdirectory with source files.
-add_subdirectory(src)
-include_directories(src)
-
 # `juce_generate_juce_header` will create a JuceHeader.h for a given target, which will be generated
 # into your build tree. The include path for this header will be automatically added to the target.
 # NOTE: JuceHeader.h is generated when the target is built.
@@ -178,6 +179,13 @@ target_link_libraries("${PROJECT_NAME}"
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# Add the subdirectory with source files.
+add_subdirectory(src)
+include_directories(src)
+
+# add dsp source code for overdrive based on guitarml from BYOD
+add_subdirectory(src/dsp/guitarml-byod)
 
 ### IDE Generator post-config ###
 

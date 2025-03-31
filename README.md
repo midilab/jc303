@@ -41,6 +41,10 @@ Generate the cmake project build files first for the OS of your choice.
 |--|--|--|
 | GUI | Select GUI theme interface to use | amadeusp |
   
+Avaliable themes: amadeusp, midilab  
+  
+To change JC303 GUI theme add the following to the first cmake call: -D GUI=midilab  
+  
 ### Apple Xcode
 
 To generate an **Xcode** project, run:

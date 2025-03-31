@@ -4,6 +4,9 @@
 #include "../../JC303.h"
 #include "KnobLookAndFeel.h"
 #include "SwitchButton.h"
+#include "SwitchLed.h"
+#include "OverdriveModelSelect.h"
+#include "AcidSmile.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 typedef juce::AudioProcessorValueTreeState::ButtonAttachment ButtonAttachment;
@@ -22,6 +25,7 @@ public:
 private:
     juce::Slider* createKnob(const juce::String& knobType);
     SwitchButton* createSwitch();
+    SwitchLed* createLed(const juce::String& paramID);
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -45,6 +49,12 @@ private:
     juce::Slider* slideTimeSlider;
     juce::Slider* sqrDriverSlider;
     SwitchButton* switchModButton;
+    SwitchLed* ledModButton;
+    // overdrive
+    juce::Slider* overdriveLevelSlider;
+    juce::Slider* overdriveDryWetSlider;
+    SwitchButton* switchOverdriveButton;
+    SwitchLed* ledOverdriveButton;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -63,6 +73,12 @@ private:
     std::unique_ptr<SliderAttachment> slideTimeAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
+    // overdrive
+    std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
+    std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
+    std::unique_ptr<ButtonAttachment> switchOverdriveButtonAttachment;
+    // previous, next buttons and model name display component
+    OverdriveModelSelect* overdriveModelSelect;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;
@@ -70,6 +86,9 @@ private:
     KnobLookAndFeel smallKnobLookAndFeel{"small"};
     KnobLookAndFeel mediumKnobLookAndFeel{"medium"};
     KnobLookAndFeel largeKnobLookAndFeel{"large"};
+
+    // Easter egg mr. acid smile.
+    AcidSmile acidSmile;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303Editor)
 };

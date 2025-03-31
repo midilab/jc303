@@ -1,12 +1,13 @@
 #pragma once
 
-//#include <juce_audio_processors/juce_audio_processors.h>
 #include <JuceHeader.h>
 
 // Open303
 #include "dsp/open303/rosic_Open303.h"
 using namespace rosic;
 
+// GuitarML BYOD implementation
+#include "dsp/guitarml-byod/processors/drive/GuitarMLAmp.h"
 
 enum Open303Parameters
 {
@@ -26,6 +27,11 @@ enum Open303Parameters
   SOFT_ATTACK,
   SLIDE_TIME,
   TANH_SHAPER_DRIVE,
+  // Overdrive
+  OVERDRIVE_SWITCH,
+  OVERDRIVE_LEVEL,
+  OVERDRIVE_DRY_WET,
+  OVERDRIVE_MODEL_INDEX,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -72,12 +78,27 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    juce::StringArray getModelListNames() { return guitarML.getModelListNames(); }
+    
 private:
     void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
 
+    // presets and overdrive models user data management
+    void setupDataDirectories();
+    void installTones();
+    int loadOverdriveTones();
+
     // embedded core dsp objects
+    // Open303
     Open303 open303Core;
+    // GuitarML - BYOD
+    GuitarMLAmp guitarML;
+    juce::dsp::DryWetMixer<float> overdriveMix;
+
+    // presets storage: user documents folder
+    File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
+    File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";
 
     //==============================================================================
     juce::AudioProcessorValueTreeState parameters;
@@ -98,6 +119,11 @@ private:
     std::atomic<float>* slideTime = nullptr;
     std::atomic<float>* sqrDriver = nullptr;
     bool lastSwitchModState = false;
+    // overdrive
+    std::atomic<float>* overdriveModelIndex = nullptr;
+    std::atomic<float>* switchOverdriveState = nullptr;
+    std::atomic<float>* overdriveLevel = nullptr;
+    std::atomic<float>* overdriveDryWet = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;
