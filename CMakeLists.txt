@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
+if(WIN32)
+    set(CMAKE_SYSTEM_VERSION 7.1 CACHE STRING INTERNAL FORCE) # Windows SDK for Windows 7 and up
+endif()
 
 project(JC303 VERSION 0.12.0)
 
