@@ -37,7 +37,8 @@ enum Open303Parameters
 };
 
 //==============================================================================
-class JC303  :  public juce::AudioProcessor
+class JC303  :  public juce::AudioProcessor,
+                public juce::AudioProcessorValueTreeState::Listener
 {
 public:
     //==============================================================================
@@ -78,8 +79,11 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    //==============================================================================
+    void parameterChanged(const juce::String& parameterID, float newValue) override;
+
     juce::StringArray getModelListNames() { return guitarML.getModelListNames(); }
-    
+
 private:
     void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
@@ -127,6 +131,9 @@ private:
 
     double decayMin = 200;
     double decayMax = 2000;
+
+    // Flag to track if any parameter has changed
+    std::atomic<bool> parametersNeedUpdate { false };
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

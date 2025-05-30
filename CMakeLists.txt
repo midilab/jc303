@@ -10,7 +10,7 @@ project(JC303 VERSION 0.12.0)
 
 set(LIB_JUCE_TAG "7.0.5")
 set(LIB_CLAP_TAG "a3227c52fa082d2df33f4377ed1e050dd8a52595")
-set(LIB_CHOWDSP_UTILS_TAG "b1ac3eb802171e65d22151fbadce81d1f300616d") 
+set(LIB_CHOWDSP_UTILS_TAG "ffc70ba399f9afaeefb996eb14e55a1d487270b8")
 
 ### Gui setup
 # check if the GUI variable is set
@@ -58,7 +58,7 @@ FetchContent_Declare(juce
 FetchContent_Declare(juce-clap-extensions
     GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
     GIT_TAG        ${LIB_CLAP_TAG}
-    GIT_CONFIG     advice.detachedHead=false)    
+    GIT_CONFIG     advice.detachedHead=false)
 
 FetchContent_Declare(chowdsp_utils
     GIT_REPOSITORY https://github.com/Chowdhury-DSP/chowdsp_utils.git
@@ -112,7 +112,7 @@ juce_add_plugin("${PROJECT_NAME}"
     IS_MIDI_EFFECT FALSE                        # Is this plugin a MIDI effect?
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE           # Does the editor need keyboard focus?
 
-    LV2URI http://github.com/midilab/JC303/
+    LV2URI http://github.com/midilab/JC303
 
     VST3_CATEGORIES "Generator Instrument"      # Should be one or more, separated by spaces, of the following:
                                                 # Fx, Instrument, Analyzer, Delay, Distortion, Drum, Dynamics, EQ, External,
@@ -126,7 +126,7 @@ juce_add_plugin("${PROJECT_NAME}"
                                                 # kAudioUnitType_Panner
 
     COPY_PLUGIN_AFTER_BUILD FALSE)              # Should the plugin be installed to a default location after building?
-                                                # NOTE: Writing to the default install locations might require administrator privileges on Windows.
+# NOTE: Writing to the default install locations might require administrator privileges on Windows.
 
 clap_juce_extensions_plugin(
     TARGET "${PROJECT_NAME}"
@@ -166,8 +166,8 @@ target_compile_definitions("${PROJECT_NAME}"
 # NOTE: Conversion to binary-data happens when the target is built.
 
 # juce_add_binary_data(Assets       # Name of a static library target that will include all the binary resources
-    # HEADER_NAME ...               # Name of the generated header. "BinaryData.h" is used by default
-    # NAMESPACE ...                 # Namespace of the generated binary data class. "BinaryData" is used by default
+# HEADER_NAME ...               # Name of the generated header. "BinaryData.h" is used by default
+# NAMESPACE ...                 # Namespace of the generated binary data class. "BinaryData" is used by default
 #   SOURCES ...)                    # List of asset files of any kind that should be built into the static library
 
 # `target_link_libraries` links libraries and JUCE modules to other libraries or executables. Here,
@@ -223,4 +223,3 @@ if(TARGET Assets)
     get_target_property(project_assets Assets SOURCES)
     source_group("" FILES ${project_assets})
 endif()
-

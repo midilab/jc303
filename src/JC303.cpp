@@ -12,52 +12,52 @@ JC303::JC303()
                      #endif
                        ),
        parameters (*this, nullptr, juce::Identifier("APVTS"), {
-            std::make_unique<juce::AudioParameterFloat> ("waveform", 
+            std::make_unique<juce::AudioParameterFloat> ("waveform",
                                                         "Waveform",
                                                         0.0f,
                                                         1.0f,
-                                                        1.0f), 
+                                                        1.0f),
             std::make_unique<juce::AudioParameterFloat> ("tuning",
                                                         "Tuning",
                                                         0.0f,
                                                         1.0f,
                                                         0.5f),
             std::make_unique<juce::AudioParameterFloat> ("cutoff",
-                                                        "Cutoff", 
-                                                        0.0f,   
-                                                        1.0f,   
-                                                        0.0f),
-            std::make_unique<juce::AudioParameterFloat> ("resonance",
-                                                        "Resonance", 
+                                                        "Cutoff",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f), 
-            std::make_unique<juce::AudioParameterFloat> ("envmod", 
-                                                        "EnvMod", 
+                                                        0.0f),
+            std::make_unique<juce::AudioParameterFloat> ("resonance",
+                                                        "Resonance",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),
+            std::make_unique<juce::AudioParameterFloat> ("envmod",
+                                                        "EnvMod",
                                                         0.0f,
                                                         1.0f,
                                                         0.0f),
             std::make_unique<juce::AudioParameterFloat> ("decay",
                                                         "Decay",
                                                         0.0f,
-                                                        1.0f, 
+                                                        1.0f,
                                                         0.85f),
-            std::make_unique<juce::AudioParameterFloat> ("accent", 
-                                                        "Accent", 
-                                                        0.0f, 
-                                                        1.0f, 
-                                                        0.5f), 
-            std::make_unique<juce::AudioParameterFloat> ("volume", 
+            std::make_unique<juce::AudioParameterFloat> ("accent",
+                                                        "Accent",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f),
+            std::make_unique<juce::AudioParameterFloat> ("volume",
                                                         "Volume",
-                                                        0.0f,  
-                                                        1.0f, 
+                                                        0.0f,
+                                                        1.0f,
                                                         0.85f),
             // MODs parameters
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
                                                         0.0f,
                                                         1.0f,
-                                                        0.3f), 
+                                                        0.3f),
             std::make_unique<juce::AudioParameterFloat> ("accentDecay",
                                                         "Accent Decay",
                                                         0.0f,
@@ -72,7 +72,7 @@ JC303::JC303()
                                                         "Soft Attack",
                                                         0.0f,
                                                         1.0f,
-                                                        0.1f), 
+                                                        0.1f),
             std::make_unique<juce::AudioParameterFloat> ("slideTime",
                                                         "Slide time",
                                                         0.0f,
@@ -82,21 +82,21 @@ JC303::JC303()
                                                         "Square Driver",
                                                         0.0f,
                                                         1.0f,
-                                                        0.25f), 
+                                                        0.25f),
             std::make_unique<juce::AudioParameterBool> ("switchModState",
                                                         "Switch Mod",
-                                                        false), 
+                                                        false),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
                                                         0,
                                                         loadOverdriveTones() - 1,
-                                                        0), 
+                                                        0),
             std::make_unique<juce::AudioParameterFloat> ("overdriveLevel",
                                                         "Drive",
                                                         0.0f,
                                                         1.0f,
-                                                        0.25f), 
+                                                        0.25f),
             std::make_unique<juce::AudioParameterFloat> ("overdriveDryWet",
                                                         "Dry/Wet",
                                                         0.0f,
@@ -145,10 +145,110 @@ JC303::JC303()
     if (jsonFiles.size() > 0) {
         loadConfig(jsonFiles[current_model_index]);
     } */
+
+    // Add parameter listeners
+    parameters.addParameterListener("waveform", this);
+    parameters.addParameterListener("tuning", this);
+    parameters.addParameterListener("cutoff", this);
+    parameters.addParameterListener("resonance", this);
+    parameters.addParameterListener("envmod", this);
+    parameters.addParameterListener("decay", this);
+    parameters.addParameterListener("accent", this);
+    parameters.addParameterListener("volume", this);
+    parameters.addParameterListener("normalDecay", this);
+    parameters.addParameterListener("accentDecay", this);
+    parameters.addParameterListener("feedbackFilter", this);
+    parameters.addParameterListener("softAttack", this);
+    parameters.addParameterListener("slideTime", this);
+    parameters.addParameterListener("sqrDriver", this);
+    parameters.addParameterListener("switchModState", this);
+    parameters.addParameterListener("overdriveLevel", this);
+    parameters.addParameterListener("overdriveDryWet", this);
+    parameters.addParameterListener("overdriveModelIndex", this);
+    parameters.addParameterListener("switchOverdriveState", this);
 }
 
 JC303::~JC303()
-{        
+{
+    parameters.removeParameterListener("waveform", this);
+    parameters.removeParameterListener("tuning", this);
+    parameters.removeParameterListener("cutoff", this);
+    parameters.removeParameterListener("resonance", this);
+    parameters.removeParameterListener("envmod", this);
+    parameters.removeParameterListener("decay", this);
+    parameters.removeParameterListener("accent", this);
+    parameters.removeParameterListener("volume", this);
+    parameters.removeParameterListener("normalDecay", this);
+    parameters.removeParameterListener("accentDecay", this);
+    parameters.removeParameterListener("feedbackFilter", this);
+    parameters.removeParameterListener("softAttack", this);
+    parameters.removeParameterListener("slideTime", this);
+    parameters.removeParameterListener("sqrDriver", this);
+    parameters.removeParameterListener("switchModState", this);
+    parameters.removeParameterListener("overdriveLevel", this);
+    parameters.removeParameterListener("overdriveDryWet", this);
+    parameters.removeParameterListener("overdriveModelIndex", this);
+    parameters.removeParameterListener("switchOverdriveState", this);
+}
+
+// Parameter change callback
+void JC303::parameterChanged(const juce::String& parameterID, float newValue)
+{
+    // Map parameter ID to enum and update immediately or set flag
+    if (parameterID == "waveform") {
+        setParameter(WAVEFORM, newValue);
+    }
+    else if (parameterID == "tuning") {
+        setParameter(TUNING, newValue);
+    }
+    else if (parameterID == "cutoff") {
+        setParameter(CUTOFF, newValue);
+    }
+    else if (parameterID == "resonance") {
+        setParameter(RESONANCE, newValue);
+    }
+    else if (parameterID == "envmod") {
+        setParameter(ENVMOD, newValue);
+    }
+    else if (parameterID == "decay") {
+        setParameter(DECAY, newValue);
+    }
+    else if (parameterID == "accent") {
+        setParameter(ACCENT, newValue);
+    }
+    else if (parameterID == "volume") {
+        setParameter(VOLUME, newValue);
+    }
+    else if (parameterID == "switchModState") {
+        setDevilMod(newValue > 0.5f);
+    }
+    else if (parameterID == "normalDecay" && *switchModState) {
+        setParameter(NORMAL_DECAY, newValue);
+    }
+    else if (parameterID == "accentDecay" && *switchModState) {
+        setParameter(ACCENT_DECAY, newValue);
+    }
+    else if (parameterID == "feedbackFilter" && *switchModState) {
+        setParameter(FEEDBACK_HPF, newValue);
+    }
+    else if (parameterID == "softAttack" && *switchModState) {
+        setParameter(SOFT_ATTACK, newValue);
+    }
+    else if (parameterID == "slideTime" && *switchModState) {
+        setParameter(SLIDE_TIME, newValue);
+    }
+    else if (parameterID == "sqrDriver" && *switchModState) {
+        setParameter(TANH_SHAPER_DRIVE, newValue);
+    }
+    else if (parameterID == "overdriveLevel" && *switchOverdriveState) {
+        setParameter(OVERDRIVE_LEVEL, newValue);
+    }
+    else if (parameterID == "overdriveDryWet" && *switchOverdriveState) {
+        setParameter(OVERDRIVE_DRY_WET, newValue);
+    }
+    else if (parameterID == "overdriveModelIndex" && *switchOverdriveState) {
+        setParameter(OVERDRIVE_MODEL_INDEX, newValue);
+    }
 }
 
 void JC303::setParameter (Open303Parameters index, float value)
@@ -188,10 +288,10 @@ void JC303::setParameter (Open303Parameters index, float value)
         // conditioned param or gain if model is not conditioned
         guitarML.setDriver(value);
         break;
-    case OVERDRIVE_DRY_WET: 
+    case OVERDRIVE_DRY_WET:
         overdriveMix.setWetMixProportion(value);
         break;
-    case OVERDRIVE_MODEL_INDEX: 
+    case OVERDRIVE_MODEL_INDEX:
         // load new model
         //guitarML.loadModel(value);
         guitarML.loadUserModel(value);
@@ -207,7 +307,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         On non-accented notes, the TB-303’s Main Envelope Generator (MEG) had a decay time
         between 200 ms and 2 seconds – as controlled by the Decay pot. On accented notes, the
         decay time was fixed to 200 ms. In the Devil Fish, there are two new pots for MEG decay –
-        Normal Decay and Accent Decay. Both have a range between 30 ms and 3 seconds. 
+        Normal Decay and Accent Decay. Both have a range between 30 ms and 3 seconds.
         */
         open303Core.setAmpDecay(        linToLin(value, 0.0, 1.0, 30.0,      3000.0));
         break;
@@ -223,7 +323,7 @@ void JC303::setParameter (Open303Parameters index, float value)
     case SOFT_ATTACK:
         /*
         The Soft Attack pot varies the attack time of non-accented notes between 0.3 ms and 30 ms.
-        In the TB-303 there was a (typical) 4 ms delay and then a 3 ms attack time. 
+        In the TB-303 there was a (typical) 4 ms delay and then a 3 ms attack time.
         */
         open303Core.setNormalAttack(    linToExp(value, 0.0, 1.0,  0.3,    3000.0)  );
         break;
@@ -231,7 +331,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         /*
         The Slide Time pot. Normally the slide time is 60 ms (milliseconds). In the Devil Fish, the
         Slide Time pot varies the time from 60 to 360 ms, when running from the internal sequencer.
-        When running from an external CV, the time is between 2 and 300 ms. 
+        When running from an external CV, the time is between 2 and 300 ms.
         */
         //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
         open303Core.setSlideTime(       linToLin(value, 0.0, 1.0, 2.0, 360.0)       );
@@ -257,7 +357,7 @@ void JC303::setDevilMod(bool mode)
         decayMax = 3000.0;
     } else if (mode == false) {
         // restore original 303 values and block devilfish mod knobs to operate
-        open303Core.setTanhShaperDrive(36.9); // dB2amp(36.9); 
+        open303Core.setTanhShaperDrive(36.9); // dB2amp(36.9);
         //open303Core.setAmpSustain(-6.02); // dB2amp(newSustain) = 0.5 ~ -6.0205 or -8.68589?
         //open303Core.setAmpRelease(1.0); // 1.0
         open303Core.setSlideTime(60.0); // 60.0;
@@ -401,31 +501,6 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // update parameters
-    setParameter(WAVEFORM, *waveForm);
-    setParameter(TUNING, *tuning);
-    setParameter(CUTOFF, *cutoffFreq);
-    setParameter(RESONANCE, *resonance);
-    setParameter(ENVMOD, *envelopMod);
-    setParameter(DECAY, *decay);
-    setParameter(ACCENT, *accent);
-    setParameter(VOLUME, *volume);
-
-    // processing MODs
-    // devilfish mod/reset 303 state
-    if (*switchModState != lastSwitchModState) 
-        setDevilMod(*switchModState);
-    lastSwitchModState = *switchModState;
-
-    if (*switchModState) {
-        setParameter(NORMAL_DECAY, *normalDecay);
-        setParameter(ACCENT_DECAY, *accentDecay);
-        setParameter(FEEDBACK_HPF, *feedbackFilter);
-        setParameter(SOFT_ATTACK, *softAttack);
-        setParameter(SLIDE_TIME, *slideTime);
-        setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
-    }
-
     // handle midi note messages
     for (const auto midiMetadata : midiMessages)
     {
@@ -491,7 +566,7 @@ int JC303::loadOverdriveTones()
         userAppDataDirectory_tones.findChildFiles(results, juce::File::findFiles, true, "*.json");
         // TODO: sort by 1.file name and 2.fodler name alphabetically
         for (int i = 0; i < results.size(); i++) {
-            modelFileList.add(results.getReference(i).getFullPathName()); 
+            modelFileList.add(results.getReference(i).getFullPathName());
             // Get the file name without extension
             juce::String fileName = modelFileList[i].getFileNameWithoutExtension();
             // Replace underscores with spaces
@@ -532,7 +607,7 @@ void JC303::setupDataDirectories()
 void JC303::installTones()
 //====================================================================
 // Description: Checks that the default tones
-//  are installed to the NeuralPi directory, and if not, 
+//  are installed to the NeuralPi directory, and if not,
 //  copy them from the binary data in the plugin to that directory.
 //
 //====================================================================
@@ -574,7 +649,7 @@ void JC303::installTones()
 
         myfile.close();
     } */
-    
+
 }
 
 
