@@ -130,11 +130,25 @@ JC303::JC303()
     overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
     overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
 
-    // force true > false, then valuetree
-    // restores the decay correct calculus
-    setDevilMod(true);
-    setDevilMod(false);
+    // force initial user values(some hosts migth not do it using value tree state)
+    setParameter(WAVEFORM, *waveForm);
+    setParameter(TUNING, *tuning);
+    setParameter(CUTOFF, *cutoffFreq);
+    setParameter(RESONANCE, *resonance);
+    setParameter(ENVMOD, *envelopMod);
+    setParameter(DECAY, *decay);
+    setParameter(ACCENT, *accent);
+    setParameter(VOLUME, *volume);
     setDevilMod(*switchModState);
+    setParameter(NORMAL_DECAY, *normalDecay);
+    setParameter(ACCENT_DECAY, *accentDecay);
+    setParameter(FEEDBACK_HPF, *feedbackFilter);
+    setParameter(SOFT_ATTACK, *softAttack);
+    setParameter(SLIDE_TIME, *slideTime);
+    setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
+    setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
+    setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
+    setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
 
     // presets and overdrive models
     setupDataDirectories();
@@ -240,13 +254,13 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "sqrDriver" && *switchModState) {
         setParameter(TANH_SHAPER_DRIVE, newValue);
     }
-    else if (parameterID == "overdriveLevel" && *switchOverdriveState) {
+    else if (parameterID == "overdriveLevel") {
         setParameter(OVERDRIVE_LEVEL, newValue);
     }
-    else if (parameterID == "overdriveDryWet" && *switchOverdriveState) {
+    else if (parameterID == "overdriveDryWet") {
         setParameter(OVERDRIVE_DRY_WET, newValue);
     }
-    else if (parameterID == "overdriveModelIndex" && *switchOverdriveState) {
+    else if (parameterID == "overdriveModelIndex") {
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
     }
 }
@@ -259,28 +273,44 @@ void JC303::setParameter (Open303Parameters index, float value)
 	switch(index)
 	{
     case WAVEFORM:
-        open303Core.setWaveform( linToLin(value, 0.0, 1.0,   0.0,      1.0)     );
+        open303Core.setWaveform(
+            linToLin(value, 0.0, 1.0,   0.0,      1.0)
+        );
         break;
     case TUNING:
-        open303Core.setTuning(   linToLin(value, 0.0, 1.0,  400.0,    480.0)    );
+        open303Core.setTuning(
+            linToLin(value, 0.0, 1.0,  400.0,    480.0)
+        );
         break;
     case CUTOFF:
-        open303Core.setCutoff(   linToExp(value, 0.0, 1.0, 314.0,    2394.0)    );
+        open303Core.setCutoff(
+            linToExp(value, 0.0, 1.0, 314.0,    2394.0)
+        );
         break;
     case RESONANCE:
-        open303Core.setResonance(linToLin(value, 0.0, 1.0,   0.0,    100.0)     );
+        open303Core.setResonance(
+            linToLin(value, 0.0, 1.0,   0.0,    100.0)
+        );
         break;
     case ENVMOD:
-        open303Core.setEnvMod(   linToLin(value, 0.0, 1.0,    0.0,   100.0)     );
+        open303Core.setEnvMod(
+            linToLin(value, 0.0, 1.0,    0.0,   100.0)
+        );
         break;
     case DECAY:
-        open303Core.setDecay(    linToExp(value, 0.0, 1.0,  decayMin,  decayMax));
+        open303Core.setDecay(
+            linToExp(value, 0.0, 1.0,  decayMin,  decayMax)
+        );
         break;
     case ACCENT:
-        open303Core.setAccent(   linToLin(value, 0.0, 1.0,   0.0,    100.0)     );
+        open303Core.setAccent(
+            linToLin(value, 0.0, 1.0,   0.0,    100.0)
+        );
         break;
     case VOLUME:
-        open303Core.setVolume(   linToLin(value, 0.0, 1.0, -60.0,      0.0)     );
+        open303Core.setVolume(
+            linToLin(value, 0.0, 1.0, -60.0,      0.0)
+        );
         break;
 
     // Overdrive - By GuitarML BYOD implementation
@@ -309,23 +339,31 @@ void JC303::setParameter (Open303Parameters index, float value)
         decay time was fixed to 200 ms. In the Devil Fish, there are two new pots for MEG decay –
         Normal Decay and Accent Decay. Both have a range between 30 ms and 3 seconds.
         */
-        open303Core.setAmpDecay(        linToLin(value, 0.0, 1.0, 30.0,      3000.0));
+        open303Core.setAmpDecay(
+            linToLin(value, 0.0, 1.0, 30.0,      3000.0)
+        );
         break;
     case ACCENT_DECAY:
-        open303Core.setAccentDecay(     linToLin(value, 0.0, 1.0, 30.0,      3000.0));
         // setAmpDecay 16 > 3000
+        open303Core.setAccentDecay(
+            linToLin(value, 0.0, 1.0, 30.0,      3000.0)
+        );
         break;
     case FEEDBACK_HPF:
         // this one is expresive only on higher reesonances
-        //open303Core.setFeedbackHighpass(linToExp(value, 0.0, 1.0,  350.0,    10.0)  );
-        open303Core.setFeedbackHighpass(linToExp(value, 0.0, 1.0,  350.0,    100.0) );
+        open303Core.setFeedbackHighpass(
+            //linToExp(value, 0.0, 1.0,  350.0,    10.0)
+            linToExp(value, 0.0, 1.0,  350.0,    100.0)
+        );
         break;
     case SOFT_ATTACK:
         /*
         The Soft Attack pot varies the attack time of non-accented notes between 0.3 ms and 30 ms.
         In the TB-303 there was a (typical) 4 ms delay and then a 3 ms attack time.
         */
-        open303Core.setNormalAttack(    linToExp(value, 0.0, 1.0,  0.3,    3000.0)  );
+        open303Core.setNormalAttack(
+            linToExp(value, 0.0, 1.0,  0.3,    3000.0)
+        );
         break;
     case SLIDE_TIME:
         /*
@@ -333,14 +371,16 @@ void JC303::setParameter (Open303Parameters index, float value)
         Slide Time pot varies the time from 60 to 360 ms, when running from the internal sequencer.
         When running from an external CV, the time is between 2 and 300 ms.
         */
-        //open303Core.setSlideTime(         linToLin(value, 0.0, 1.0, 0.0, 60.0)        );
-        open303Core.setSlideTime(       linToLin(value, 0.0, 1.0, 2.0, 360.0)       );
+        open303Core.setSlideTime(
+            //linToLin(value, 0.0, 1.0, 0.0, 60.0)
+            linToLin(value, 0.0, 1.0, 2.0, 360.0)
+        );
         break;
     case TANH_SHAPER_DRIVE:
-        //open303Core.setTanhShaperDrive(   linToLin(value, 0.0, 1.0,   0.0,     60.0)  );
-        double shaper = linToLin(value, 0.0, 1.0,   25.0,     80.0);
-        if (shaper != open303Core.getTanhShaperDrive())
-            open303Core.setTanhShaperDrive(shaper);
+        open303Core.setTanhShaperDrive(
+            //linToLin(value, 0.0, 1.0,   0.0,     60.0)
+            linToLin(value, 0.0, 1.0,   25.0,     80.0)
+        );
         break;
 	}
 }
@@ -355,21 +395,33 @@ void JC303::setDevilMod(bool mode)
         // devilfish extended decay range
         decayMin = 30.0;
         decayMax = 3000.0;
+        setParameter(NORMAL_DECAY, *normalDecay);
+        setParameter(ACCENT_DECAY, *accentDecay);
+        setParameter(FEEDBACK_HPF, *feedbackFilter);
+        setParameter(SOFT_ATTACK, *softAttack);
+        setParameter(SLIDE_TIME, *slideTime);
+        setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
     } else if (mode == false) {
         // restore original 303 values and block devilfish mod knobs to operate
-        open303Core.setTanhShaperDrive(36.9); // dB2amp(36.9);
-        //open303Core.setAmpSustain(-6.02); // dB2amp(newSustain) = 0.5 ~ -6.0205 or -8.68589?
-        //open303Core.setAmpRelease(1.0); // 1.0
-        open303Core.setSlideTime(60.0); // 60.0;
-        open303Core.setFeedbackHighpass(150.0); // filter.setFeedbackHighpassCutoff(150.0);
-        open303Core.setNormalAttack(3.0); // 3.0;
-        open303Core.setAmpDecay(1230.0); // ampEnv.setDecay(1230.0);
-        open303Core.setAccentDecay(200.0); // 200.0
-        // fixed parameters restore
-        ////open303Core.setAccentAttack(3.0); // 3.0?
         // original tb303 decay range
         decayMin = 200.0;
         decayMax = 2000.0;
+        // NORMAL_DECAY
+        open303Core.setAmpDecay(1230.0); // ampEnv.setDecay(1230.0);
+        // ACCENT_DECAY
+        open303Core.setAccentDecay(200.0); // 200.0
+        // FEEDBACK_HPF
+        open303Core.setFeedbackHighpass(150.0); // filter.setFeedbackHighpassCutoff(150.0);
+        // SOFT_ATTACK
+        open303Core.setNormalAttack(3.0); // 3.0;
+        // SLIDE_TIME
+        open303Core.setSlideTime(60.0); // 60.0;
+        // TANH_SHAPER_DRIVE
+        open303Core.setTanhShaperDrive(36.9); // dB2amp(36.9);
+        //open303Core.setAmpSustain(-6.02); // dB2amp(newSustain) = 0.5 ~ -6.0205 or -8.68589?
+        //open303Core.setAmpRelease(1.0); // 1.0
+        // fixed parameters restore
+        ////open303Core.setAccentAttack(3.0); // 3.0?
     }
 }
 
@@ -534,14 +586,6 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
 
     // render GuitarML overdrive
     if (*switchOverdriveState) {
-        setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
-        setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
-        // any model change request?
-        if(*overdriveModelIndex != guitarML.getCurrentModelIndex()) {
-            setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
-            // to avoid any loadModel error to triger infinite loadModel tries
-            *overdriveModelIndex = guitarML.getCurrentModelIndex();
-        }
         // preparing dry/wet signal
         overdriveMix.pushDrySamples(buffer);
         // processing distortion: guitarML - from BYOD
