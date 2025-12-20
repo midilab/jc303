@@ -15,6 +15,11 @@ DiodeLadderFilter::DiodeLadderFilter()
   octaveMode          =    true;  // default to TB-303 style
   K                   =     0.0;
 
+  // DC blocker state
+  dcR = 0.999;
+  dcPrev = 0.0;
+  dcOut = 0.0;
+
   // Initialize coefficients
   alpha = 0.0;
   alpha2 = 0.0;
@@ -59,4 +64,6 @@ void DiodeLadderFilter::reset()
   z2 = 0.0;
   z3 = 0.0;
   z4 = 0.0;
+  dcPrev = 0.0;
+  dcOut = 0.0;
 }
