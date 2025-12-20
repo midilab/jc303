@@ -11,8 +11,10 @@
 #include "rosic_LeakyIntegrator.h"
 #include "rosic_EllipticQuarterBandFilter.h"
 #include "rosic_AcidSequencer.h"
+#include "dfl_LFO.h"
 
 #include <list>
+using dfl::LFO;
 using namespace std; // for the noteList
 
 namespace rosic
@@ -45,9 +47,16 @@ namespace rosic
     /** Sets the sample-rate (in Hz). */
     void setSampleRate(double newSampleRate);
 
-    /** Sets up the waveform continuously between saw and square - the input should be in the range 
+    /** Sets up the waveform continuously between saw and square - the input should be in the range
     0...1 where 0 means pure saw and 1 means pure square. */
     void setWaveform(double newWaveform) { oscillator.setBlendFactor(newWaveform); }
+
+    /** Sets the pulse width for the square wave (1-50%). */
+    void setPulseWidth(double newPulseWidth)
+    {
+      basePulseWidth = newPulseWidth;
+      oscillator.setPulseWidth(newPulseWidth);
+    }
 
     /** Sets the master tuning frequency for note A4 (usually 440 Hz). */
     void setTuning(double newTuning) { tuning = newTuning; }
@@ -132,13 +141,30 @@ namespace rosic
     approximately 3-4 seconds.  */
     void setAmpDecay(double newAmpDecay) { ampEnv.setDecay(newAmpDecay); }
 
-    /** Sets the amplitudes envelope's release time (in milliseconds). On the normal 303, this 
+    /** Sets the amplitudes envelope's release time (in milliseconds). On the normal 303, this
     parameter was fixed to .....  */
-    void setAmpRelease(double newAmpRelease) 
-    { 
+    void setAmpRelease(double newAmpRelease)
+    {
       normalAmpRelease = newAmpRelease;
-      ampEnv.setRelease(newAmpRelease); 
+      ampEnv.setRelease(newAmpRelease);
     }
+
+    // LFO parameter settings:
+
+    /** Sets the LFO waveform (0=Triangle, 1=Saw Up, 2=Saw Down, 3=Square, 4=Random, 5=Pink Noise). */
+    void setLfoWaveform(int waveform) { lfo.setWaveform(waveform); }
+
+    /** Sets the LFO rate in Hz (0.1 to 1000.0). */
+    void setLfoRate(double rate) { lfo.setRate(rate); }
+
+    /** Sets the LFO pitch modulation depth in semitones (-12 to +12). */
+    void setLfoPitchDepth(double depth) { lfoPitchDepth = depth; }
+
+    /** Sets the LFO PWM modulation depth (0.0 to 1.0, bipolar oscillation around base PW). */
+    void setLfoPwmDepth(double depth) { lfoPwmDepth = depth; }
+
+    /** Sets the LFO filter modulation depth (-1.0 to +1.0, maps to +/- 2 octaves). */
+    void setLfoFilterDepth(double depth) { lfoFilterDepth = depth; }
 
     //-----------------------------------------------------------------------------------------------
     // inquiry:
@@ -250,6 +276,7 @@ namespace rosic
     BiquadFilter              notch;
     EllipticQuarterBandFilter antiAliasFilter;
     AcidSequencer             sequencer;
+    LFO                       lfo;
 
   protected:
 
@@ -308,6 +335,14 @@ namespace rosic
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
 
+    // Pulse width
+    double basePulseWidth;   // base pulse width (before LFO modulation)
+
+    // LFO modulation depths
+    double lfoPitchDepth;    // LFO pitch modulation depth in semitones (-12 to +12)
+    double lfoPwmDepth;      // LFO PWM modulation depth (0.0 to 1.0)
+    double lfoFilterDepth;   // LFO filter modulation depth (-1.0 to +1.0)
+
     list<MidiNoteEvent> noteList;
 
   };
@@ -357,22 +392,58 @@ namespace rosic
       }
     }
 
+    // LFO modulation - only process if at least one depth is non-zero
+    double pitchModFactor = 1.0;
+    double lfoFilterMod = 0.0;
+
+    if (lfoPitchDepth != 0.0 || lfoPwmDepth != 0.0 || lfoFilterDepth != 0.0)
+    {
+      // Get LFO output (0.0 to +1.0 unipolar, convert to bipolar for modulation)
+      double lfoValue = lfo.getSample() * 2.0 - 1.0;  // Convert unipolar to bipolar
+
+      // Apply LFO pitch modulation (in semitones, converted to frequency multiplier)
+      if (lfoPitchDepth != 0.0)
+      {
+        double semitones = lfoValue * lfoPitchDepth;
+        pitchModFactor = pow(2.0, semitones / 12.0);
+      }
+
+      // Apply LFO PWM modulation (bipolar, oscillates around base PW)
+      if (lfoPwmDepth != 0.0)
+      {
+        // lfoValue goes -1 to +1, depth is 0-1 (percentage of range)
+        double pwmMod = lfoValue * lfoPwmDepth * 49.0;  // Max +/- 49% swing
+        double modulatedPulseWidth = basePulseWidth + pwmMod;
+        // Clamp to valid range (1% to 99%)
+        if (modulatedPulseWidth < 1.0) modulatedPulseWidth = 1.0;
+        if (modulatedPulseWidth > 99.0) modulatedPulseWidth = 99.0;
+        oscillator.setPulseWidth(modulatedPulseWidth);
+      }
+
+      // Apply LFO filter modulation (bipolar, in octaves)
+      if (lfoFilterDepth != 0.0)
+      {
+        lfoFilterMod = lfoValue * lfoFilterDepth * 2.0;  // +/- 2 octaves max
+      }
+    }
+
     // calculate instantaneous oscillator frequency and set up the oscillator:
-    double instFreq = pitchSlewLimiter.getSample(oscFreq);
+    // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
+    double instFreq = pitchSlewLimiter.getSample(oscFreq) * pitchModFactor;
     oscillator.setFrequency(instFreq*pitchWheelFactor);
     oscillator.calculateIncrement();
 
-    // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and 
+    // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
     // set up the filter:
     double mainEnvOut = mainEnv.getSample();
     double tmp1       = n1 * rc1.getSample(mainEnvOut);
     double tmp2       = 0.0;
     if( accentGain > 0.0 )
       tmp2 = mainEnvOut;
-    tmp2 = n2 * rc2.getSample(tmp2);  
+    tmp2 = n2 * rc2.getSample(tmp2);
     tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
     tmp2 = accentGain*tmp2;
-    double instCutoff = cutoff * pow(2.0, tmp1+tmp2);
+    double instCutoff = cutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);
     filter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
