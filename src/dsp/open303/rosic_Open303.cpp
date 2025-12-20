@@ -29,6 +29,7 @@ Open303::Open303()
   noteOffCountDown =     0;
   slideToNextNote  = false;
   idle             = true;
+  currentFilterType = FILTER_TEEBEE;
 
   setEnvMod(25.0);
 
@@ -99,12 +100,33 @@ void Open303::setSampleRate(double newSampleRate)
 
   oscillator.setSampleRate    (  oversampling*newSampleRate);
   filter.setSampleRate        (  oversampling*newSampleRate);
+  diodeFilter.setSampleRate   (  oversampling*newSampleRate);
 }
 
 void Open303::setCutoff(double newCutoff)
 {
   cutoff = newCutoff;
   calculateEnvModScalerAndOffset();
+}
+
+void Open303::setResonance(double newResonance)
+{
+  // Apply skewing for more intuitive control (aggressive at high end)
+  double skewedResonance = newResonance * newResonance * newResonance;
+
+  filter.setResonance(newResonance);
+  diodeFilter.setResonance(skewedResonance);
+}
+
+void Open303::setFilterType(FilterType newType)
+{
+  currentFilterType = newType;
+
+  // Configure diode filter octave mode based on filter type
+  if(currentFilterType == FILTER_DIODE_OCTAVE)
+    diodeFilter.setOctaveMode(true);
+  else
+    diodeFilter.setOctaveMode(false);
 }
 
 void Open303::setEnvMod(double newEnvMod)
@@ -217,6 +239,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   {
     oscillator.resetPhase();
     filter.reset();
+    diodeFilter.reset();
     highpass1.reset();
     highpass2.reset();
     allpass.reset();
