@@ -6,6 +6,7 @@
 #include "rosic_BlendOscillator.h"
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
+#include "dfl_DiodeLadderFilter.h"
 #include "rosic_AnalogEnvelope.h"
 #include "rosic_DecayEnvelope.h"
 #include "rosic_LeakyIntegrator.h"
@@ -17,6 +18,17 @@ using namespace std; // for the noteList
 
 namespace rosic
 {
+  // Import dfl classes
+  using dfl::DiodeLadderFilter;
+
+  /** Filter types available for selection. */
+  enum FilterType
+  {
+    FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
+    FILTER_DIODE,           // Diode ladder (4-pole, 24dB/oct)
+    FILTER_DIODE_OCTAVE,    // Diode ladder with 1st pole one octave above (~18dB/oct)
+    NUM_FILTER_TYPES
+  };
 
   /**
 
@@ -56,9 +68,22 @@ namespace rosic
     void setCutoff(double newCutoff); 
 
     /** Sets the resonance amount for the filter. */
-    void setResonance(double newResonance) { filter.setResonance(newResonance); }
+    void setResonance(double newResonance);
 
-    /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator 
+    /** Sets the filter type. */
+    void setFilterType(FilterType newType);
+
+    /** Returns the current filter type. */
+    FilterType getFilterType() const { return currentFilterType; }
+
+    /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
+     *  Uses AC-coupled input to modulate filter cutoff frequency. */
+    void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
+
+    /** Returns the Filter FM depth. */
+    double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
+
+    /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator
     (in percent). */
     void setEnvMod(double newEnvMod);
 
@@ -240,6 +265,7 @@ namespace rosic
     MipMappedWaveTable        waveTable1, waveTable2;
     BlendOscillator           oscillator;
     TeeBeeFilter              filter;
+    DiodeLadderFilter         diodeFilter;
     AnalogEnvelope            ampEnv; 
     DecayEnvelope             mainEnv;
     LeakyIntegrator           pitchSlewLimiter;
@@ -307,6 +333,7 @@ namespace rosic
     int    noteOffCountDown; // a countdown variable till next note-off in sequencer mode
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
+    FilterType currentFilterType;  // currently selected filter type
 
     list<MidiNoteEvent> noteList;
 
@@ -374,6 +401,7 @@ namespace rosic
     tmp2 = accentGain*tmp2;
     double instCutoff = cutoff * pow(2.0, tmp1+tmp2);
     filter.setCutoff(instCutoff);
+    diodeFilter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut; 
@@ -385,9 +413,13 @@ namespace rosic
     double tmp;
     for(int i=1; i<=oversampling; i++)
     {
-      tmp  = -oscillator.getSample();         // the raw oscillator signal 
+      tmp  = -oscillator.getSample();         // the raw oscillator signal
       tmp  = highpass1.getSample(tmp);        // pre-filter highpass
-      tmp  = filter.getSample(tmp);           // now it's filtered
+      // Apply selected filter
+      if(currentFilterType == FILTER_TEEBEE)
+        tmp = filter.getSample(tmp);
+      else
+        tmp = diodeFilter.getSample(tmp);
       tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
 
     }
