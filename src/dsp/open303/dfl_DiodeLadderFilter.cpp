@@ -20,6 +20,10 @@ DiodeLadderFilter::DiodeLadderFilter()
   dcPrev = 0.0;
   dcOut = 0.0;
 
+  // Filter FM (Devilfish mod)
+  filterFmDepth = 0.0;    // Default: off
+  acCouplingState = 0.0;  // AC coupling HPF state
+
   // Initialize coefficients
   alpha = 0.0;
   alpha2 = 0.0;
@@ -66,4 +70,5 @@ void DiodeLadderFilter::reset()
   z4 = 0.0;
   dcPrev = 0.0;
   dcOut = 0.0;
+  acCouplingState = 0.0;  // Reset AC coupling filter
 }

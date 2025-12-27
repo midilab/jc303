@@ -76,7 +76,14 @@ namespace rosic
     /** Returns the current filter type. */
     FilterType getFilterType() const { return currentFilterType; }
 
-    /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator 
+    /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
+     *  Uses AC-coupled input to modulate filter cutoff frequency. */
+    void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
+
+    /** Returns the Filter FM depth. */
+    double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
+
+    /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator
     (in percent). */
     void setEnvMod(double newEnvMod);
 
