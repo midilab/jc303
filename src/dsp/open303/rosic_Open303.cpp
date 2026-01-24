@@ -30,6 +30,12 @@ Open303::Open303()
   slideToNextNote  = false;
   idle             = true;
 
+  // Pulse width and LFO defaults
+  basePulseWidth   =    50.0;
+  lfoPitchDepth    =     0.0;
+  lfoPwmDepth      =     0.0;
+  lfoFilterDepth   =     0.0;
+
   setEnvMod(25.0);
 
   oscillator.setWaveTable1(&waveTable1);
@@ -83,6 +89,7 @@ Open303::~Open303()
 
 void Open303::setSampleRate(double newSampleRate)
 {
+  sampleRate = newSampleRate;
   mainEnv.setSampleRate         (       newSampleRate);
   ampEnv.setSampleRate          (       newSampleRate);
   pitchSlewLimiter.setSampleRate((float)newSampleRate);
@@ -90,6 +97,7 @@ void Open303::setSampleRate(double newSampleRate)
   rc1.setSampleRate(             (float)newSampleRate);
   rc2.setSampleRate(             (float)newSampleRate);
   sequencer.setSampleRate(              newSampleRate);
+  lfo.setSampleRate(                    newSampleRate);
 
   highpass2.setSampleRate     (         newSampleRate);
   allpass.setSampleRate       (         newSampleRate);

@@ -245,7 +245,7 @@ void MipMappedWaveTable::fillWithSquare303()
 {
   // generate the saw-wave:
   int    N  = tableLength;
-  double k  = 0.5;
+  double k  = symmetry;  // Use symmetry parameter for pulse width
   int    N1 = clip(roundToInt(k*(N-1)), 1, N-1);
   int    N2 = N-N1;
   double s1 = 1.0 / (N1-1);
