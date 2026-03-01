@@ -327,7 +327,7 @@ namespace rosic
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (-1.0 to +1.0)
-    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume)
+    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch)
 
     list<MidiNoteEvent> noteList;
 
@@ -378,9 +378,10 @@ namespace rosic
       }
     }
 
-    // LFO modulation - only process if lfo depth is greater than zero
+    // LFO modulation - only process if lfoDepth is greater than zero
     double lfoFilterMod = 0.0;
     double volumeModFactor = 1.0;
+    double pitchModFactor = 1.0;
 
     if (lfoDepth > 0.0)
     {
@@ -389,18 +390,26 @@ namespace rosic
 
       switch (lfoDestination) {
         case 0:
-            // Apply LFO filter modulation 0.0-1.0 (convert to bipolar, in octaves)
-            lfoFilterMod = lfoValue * (lfoDepth - 1.0) * 2.0;  // +/- 2 octaves max
+            // Apply LFO filter modulation (convert to bipolar, in octaves)
+            // linToLin(lfoDepth, 0.0, 1.0, -1.0, 1.0) == lfoDepth * 2 - 1
+            lfoFilterMod = lfoValue * (lfoDepth * 2 - 1) * 2.0;  // +/- 2 octaves max
             break;
         case 1:
-            // Apply LFO volume modulation - Vibrato (convert to linear amplitude multiplier)
-            volumeModFactor = 1.0 + (lfoValue * lfoDepth * 0.5);  // +/- 50% volume variation
+            // Apply LFO volume modulation - tremolo (convert to linear amplitude multiplier)
+            volumeModFactor = 1.0 - lfoDepth + (lfoValue * lfoDepth);
+            break;
+        case 2:
+            // Apply LFO pitch modulation (in semitones, converted to frequency multiplier -12 to +12 semitones)
+            // linToLin(lfoDepth, 0.0, 1.0, -12.0, 12.0) == lfoDepth * 24 - 12
+            double semitones = lfoValue * (lfoDepth * 24 - 12);
+            pitchModFactor = pow(2.0, semitones / 12.0);
             break;
       }
     }
 
     // calculate instantaneous oscillator frequency and set up the oscillator:
-    double instFreq = pitchSlewLimiter.getSample(oscFreq);
+    // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
+    double instFreq = pitchSlewLimiter.getSample(oscFreq) * pitchModFactor;
     oscillator.setFrequency(instFreq*pitchWheelFactor);
     oscillator.calculateIncrement();
 

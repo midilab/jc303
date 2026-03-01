@@ -105,7 +105,7 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterInt> ("lfoDestination",
                                                         "LFO Destination",
                                                         0,
-                                                        1,
+                                                        2,
                                                         0),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
@@ -453,13 +453,11 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case LFO_DEPTH:
-        // Map 0.0-1.0 to 0.0-2.0 (unipolar to be converted later to bipolar -1, +1)
-        open303Core.setLfoDepth(
-            linToLin(value, 0.0, 1.0, 0.0, 2.0)
-        );
+        // 0.0-1.0
+        open303Core.setLfoDepth(value);
         break;
     case LFO_DESTINATION:
-        // 0 - filter cutoff, 1 - volume(vibrato style)
+        // 0 - filter cutoff, 1 - volume(tremolo style), 2 - pitch
         open303Core.setLfoDestination(static_cast<int>(value));
         break;
 	}
