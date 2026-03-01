@@ -30,11 +30,9 @@ Open303::Open303()
   slideToNextNote  = false;
   idle             = true;
 
-  // Pulse width and LFO defaults
-  basePulseWidth   =    50.0;
-  lfoPitchDepth    =     0.0;
-  lfoPwmDepth      =     0.0;
-  lfoFilterDepth   =     0.0;
+  // LFO defaults
+  lfoDepth         =    0.0;
+  lfoDestination   =    0;
 
   setEnvMod(25.0);
 
@@ -89,7 +87,6 @@ Open303::~Open303()
 
 void Open303::setSampleRate(double newSampleRate)
 {
-  sampleRate = newSampleRate;
   mainEnv.setSampleRate         (       newSampleRate);
   ampEnv.setSampleRate          (       newSampleRate);
   pitchSlewLimiter.setSampleRate((float)newSampleRate);
@@ -107,6 +104,7 @@ void Open303::setSampleRate(double newSampleRate)
 
   oscillator.setSampleRate    (  oversampling*newSampleRate);
   filter.setSampleRate        (  oversampling*newSampleRate);
+  sampleRate = newSampleRate;
 }
 
 void Open303::setCutoff(double newCutoff)

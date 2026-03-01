@@ -14,7 +14,7 @@
 #include "dfl_LFO.h"
 
 #include <list>
-using dfl::LFO;
+
 using namespace std; // for the noteList
 
 namespace rosic
@@ -51,28 +51,21 @@ namespace rosic
     0...1 where 0 means pure saw and 1 means pure square. */
     void setWaveform(double newWaveform) { oscillator.setBlendFactor(newWaveform); }
 
-    /** Sets the pulse width for the square wave (1-50%). */
-    void setPulseWidth(double newPulseWidth)
-    {
-      basePulseWidth = newPulseWidth;
-      oscillator.setPulseWidth(newPulseWidth);
-    }
-
     /** Sets the master tuning frequency for note A4 (usually 440 Hz). */
     void setTuning(double newTuning) { tuning = newTuning; }
 
     /** Sets the filter's nominal cutoff frequency (in Hz). */
-    void setCutoff(double newCutoff); 
+    void setCutoff(double newCutoff);
 
     /** Sets the resonance amount for the filter. */
     void setResonance(double newResonance) { filter.setResonance(newResonance); }
 
-    /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator 
+    /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator
     (in percent). */
     void setEnvMod(double newEnvMod);
 
-    /** Sets the main envelope's decay time for non-accented notes (in milliseconds). 
-    Devil Fish provides range of 30...3000 ms for this parameter. On the normal 303, this 
+    /** Sets the main envelope's decay time for non-accented notes (in milliseconds).
+    Devil Fish provides range of 30...3000 ms for this parameter. On the normal 303, this
     parameter had a range of 200...2000 ms.  */
     void setDecay(double newDecay) { normalDecay = newDecay; }
 
@@ -80,23 +73,23 @@ namespace rosic
     void setAccent(double newAccent);
 
     /** Sets the master volume level (in dB). */
-    void setVolume(double newVolume);     
+    void setVolume(double newVolume);
 
     //  from here: parameter settings which were not available to the user in the 303:
 
-    /** Sets the amplitudes envelope's sustain level in decibels. Devil Fish uses the second half 
-    of the range of the (amplitude) decay pot for this and lets the user adjust it between 0 
+    /** Sets the amplitudes envelope's sustain level in decibels. Devil Fish uses the second half
+    of the range of the (amplitude) decay pot for this and lets the user adjust it between 0
     and 100% of the full volume. In the normal 303, this parameter was fixed to zero. */
     void setAmpSustain(double newAmpSustain) { ampEnv.setSustainInDecibels(newAmpSustain); }
 
-    /** Sets the drive (in dB) for the tanh-shaper for 303-square waveform - internal parameter, to 
+    /** Sets the drive (in dB) for the tanh-shaper for 303-square waveform - internal parameter, to
     be scrapped eventually. */
-    void setTanhShaperDrive(double newDrive) 
+    void setTanhShaperDrive(double newDrive)
     { waveTable2.setTanhShaperDriveFor303Square(newDrive); }
 
-    /** Sets the offset (as raw value for the tanh-shaper for 303-square waveform - internal 
+    /** Sets the offset (as raw value for the tanh-shaper for 303-square waveform - internal
     parameter, to be scrapped eventually. */
-    void setTanhShaperOffset(double newOffset) 
+    void setTanhShaperOffset(double newOffset)
     { waveTable2.setTanhShaperOffsetFor303Square(newOffset); }
 
     /** Sets the cutoff frequency for the highpass before the main filter. */
@@ -115,29 +108,29 @@ namespace rosic
     /** Sets the slide-time (in ms). The TB-303 had a slide time of 60 ms. */
     void setSlideTime(double newSlideTime);
 
-    /** Sets the filter envelope's attack time for non-accented notes (in milliseconds). 
+    /** Sets the filter envelope's attack time for non-accented notes (in milliseconds).
     Devil Fish provides range of 0.3...30 ms for this parameter. */
-    void setNormalAttack(double newNormalAttack) 
-    { 
-      normalAttack = newNormalAttack; 
+    void setNormalAttack(double newNormalAttack)
+    {
+      normalAttack = newNormalAttack;
       rc1.setTimeConstant(normalAttack);
     }
 
-    /** Sets the filter envelope's attack time for accented notes (in milliseconds). In the 
+    /** Sets the filter envelope's attack time for accented notes (in milliseconds). In the
     Devil Fish, accented notes have a fixed attack time of 3 ms.  */
-    void setAccentAttack(double newAccentAttack) 
-    { 
-      accentAttack = newAccentAttack; 
+    void setAccentAttack(double newAccentAttack)
+    {
+      accentAttack = newAccentAttack;
       rc2.setTimeConstant(accentAttack);
     }
 
-    /** Sets the filter envelope's decay time for accented notes (in milliseconds). 
-    Devil Fish provides range of 30...3000 ms for this parameter. On the normal 303, this 
+    /** Sets the filter envelope's decay time for accented notes (in milliseconds).
+    Devil Fish provides range of 30...3000 ms for this parameter. On the normal 303, this
     parameter was fixed to 200 ms.  */
     void setAccentDecay(double newAccentDecay) { accentDecay = newAccentDecay; }
 
-    /** Sets the amplitudes envelope's decay time (in milliseconds). Devil Fish provides range of 
-    16...3000 ms for this parameter. On the normal 303, this parameter was fixed to 
+    /** Sets the amplitudes envelope's decay time (in milliseconds). Devil Fish provides range of
+    16...3000 ms for this parameter. On the normal 303, this parameter was fixed to
     approximately 3-4 seconds.  */
     void setAmpDecay(double newAmpDecay) { ampEnv.setDecay(newAmpDecay); }
 
@@ -157,19 +150,16 @@ namespace rosic
     /** Sets the LFO rate in Hz (0.1 to 1000.0). */
     void setLfoRate(double rate) { lfo.setRate(rate); }
 
-    /** Sets the LFO pitch modulation depth in semitones (-12 to +12). */
-    void setLfoPitchDepth(double depth) { lfoPitchDepth = depth; }
+    /** Sets the LFO depth (-1.0 to +1.0). */
+    void setLfoDepth(double depth) { lfoDepth = depth; }
 
-    /** Sets the LFO PWM modulation depth (0.0 to 1.0, bipolar oscillation around base PW). */
-    void setLfoPwmDepth(double depth) { lfoPwmDepth = depth; }
-
-    /** Sets the LFO filter modulation depth (-1.0 to +1.0, maps to +/- 2 octaves). */
-    void setLfoFilterDepth(double depth) { lfoFilterDepth = depth; }
+    /** Sets the LFO destination (volume, cutoff). */
+    void setLfoDestination(double dest) { lfoDestination = dest; }
 
     //-----------------------------------------------------------------------------------------------
     // inquiry:
 
-    /** Returns the waveform as a continuous value between 0...1 where 0 means pure saw and 1 means 
+    /** Returns the waveform as a continuous value between 0...1 where 0 means pure saw and 1 means
     pure square. */
     double getWaveform() const { return oscillator.getBlendFactor(); }
 
@@ -182,7 +172,7 @@ namespace rosic
     /** Returns the filter's resonance amount (in percent) */
     double getResonance() const { return filter.getResonance(); }
 
-    /** Returns the modulation depth of the filter's cutoff frequency by the filter-envelope 
+    /** Returns the modulation depth of the filter's cutoff frequency by the filter-envelope
     generator (in percent). */
     double getEnvMod() const { return envMod; }
 
@@ -200,20 +190,20 @@ namespace rosic
     /** Returns the amplitudes envelope's sustain level (in dB). */
     double getAmpSustain() const { return amp2dB(ampEnv.getSustain()); }
 
-    /** Returns the drive (in dB) for the tanh-shaper for 303-square waveform - internal parameter, 
+    /** Returns the drive (in dB) for the tanh-shaper for 303-square waveform - internal parameter,
     to be scrapped eventually. */
-    double getTanhShaperDrive() const 
+    double getTanhShaperDrive() const
     { return waveTable2.getTanhShaperDriveFor303Square(); }
 
-    /** Returns the offset (as raw value for the tanh-shaper for 303-square waveform - internal 
-    parameter, to be scrapped eventually. */   
-    double getTanhShaperOffset() const 
+    /** Returns the offset (as raw value for the tanh-shaper for 303-square waveform - internal
+    parameter, to be scrapped eventually. */
+    double getTanhShaperOffset() const
     { return waveTable2.getTanhShaperOffsetFor303Square(); }
 
     /** Returns the cutoff frequency for the highpass before the main filter. */
     double getPreFilterHighpass() const { return highpass1.getCutoff(); }
 
-    /** Retruns the cutoff frequency for the highpass inside the feedback loop of the main 
+    /** Retruns the cutoff frequency for the highpass inside the feedback loop of the main
     filter. */
     double getFeedbackHighpass() const { return filter.getFeedbackHighpassCutoff(); }
 
@@ -246,49 +236,49 @@ namespace rosic
     // audio processing:
 
     /** Calculates onse output sample at a time. */
-    INLINE double getSample(); 
+    INLINE double getSample();
 
     //-----------------------------------------------------------------------------------------------
     // event handling:
 
-    /** Accepts note-on events (note offs are also handled here as note ons with velocity zero). */ 
+    /** Accepts note-on events (note offs are also handled here as note ons with velocity zero). */
     void noteOn(int noteNumber, int velocity, double detune);
 
     /** Turns all possibly running notes off. */
     void allNotesOff();
 
-    /** Sets the pitchbend value in semitones. */ 
-    void setPitchBend(double newPitchBend);  
+    /** Sets the pitchbend value in semitones. */
+    void setPitchBend(double newPitchBend);
 
     //-----------------------------------------------------------------------------------------------
-    // embedded objects: 
+    // embedded objects:
 
     MipMappedWaveTable        waveTable1, waveTable2;
     BlendOscillator           oscillator;
     TeeBeeFilter              filter;
-    AnalogEnvelope            ampEnv; 
+    AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
     LeakyIntegrator           pitchSlewLimiter;
     //LeakyIntegrator           ampDeClicker;
     BiquadFilter              ampDeClicker;
     LeakyIntegrator           rc1, rc2;
-    OnePoleFilter             highpass1, highpass2, allpass; 
+    OnePoleFilter             highpass1, highpass2, allpass;
     BiquadFilter              notch;
     EllipticQuarterBandFilter antiAliasFilter;
     AcidSequencer             sequencer;
-    LFO                       lfo;
+    dfl::LFO                  lfo;
 
   protected:
 
-    /** Triggers a note (called either directly in noteOn or in getSample when the sequencer is 
+    /** Triggers a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
     void triggerNote(int noteNumber, bool hasAccent);
 
-    /** Slides to a note (called either directly in noteOn or in getSample when the sequencer is 
+    /** Slides to a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
     void slideToNote(int noteNumber, bool hasAccent);
 
-    /** Releases a note (called either directly in noteOn or in getSample when the sequencer is 
+    /** Releases a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
     void releaseNote(int noteNumber);
 
@@ -335,13 +325,9 @@ namespace rosic
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
 
-    // Pulse width
-    double basePulseWidth;   // base pulse width (before LFO modulation)
-
-    // LFO modulation depths
-    double lfoPitchDepth;    // LFO pitch modulation depth in semitones (-12 to +12)
-    double lfoPwmDepth;      // LFO PWM modulation depth (0.0 to 1.0)
-    double lfoFilterDepth;   // LFO filter modulation depth (-1.0 to +1.0)
+    // LFO modulation depth
+    double lfoDepth;    // LFO depth (-1.0 to +1.0)
+    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume)
 
     list<MidiNoteEvent> noteList;
 
@@ -392,44 +378,29 @@ namespace rosic
       }
     }
 
-    // LFO modulation - only process if at least one depth is non-zero
-    double pitchModFactor = 1.0;
+    // LFO modulation - only process if lfo depth is greater than zero
     double lfoFilterMod = 0.0;
+    double volumeModFactor = 1.0;
 
-    if (lfoPitchDepth != 0.0 || lfoPwmDepth != 0.0 || lfoFilterDepth != 0.0)
+    if (lfoDepth > 0.0)
     {
       // Get LFO output (0.0 to +1.0 unipolar, convert to bipolar for modulation)
       double lfoValue = lfo.getSample() * 2.0 - 1.0;  // Convert unipolar to bipolar
 
-      // Apply LFO pitch modulation (in semitones, converted to frequency multiplier)
-      if (lfoPitchDepth != 0.0)
-      {
-        double semitones = lfoValue * lfoPitchDepth;
-        pitchModFactor = pow(2.0, semitones / 12.0);
-      }
-
-      // Apply LFO PWM modulation (bipolar, oscillates around base PW)
-      if (lfoPwmDepth != 0.0)
-      {
-        // lfoValue goes -1 to +1, depth is 0-1 (percentage of range)
-        double pwmMod = lfoValue * lfoPwmDepth * 49.0;  // Max +/- 49% swing
-        double modulatedPulseWidth = basePulseWidth + pwmMod;
-        // Clamp to valid range (1% to 99%)
-        if (modulatedPulseWidth < 1.0) modulatedPulseWidth = 1.0;
-        if (modulatedPulseWidth > 99.0) modulatedPulseWidth = 99.0;
-        oscillator.setPulseWidth(modulatedPulseWidth);
-      }
-
-      // Apply LFO filter modulation (bipolar, in octaves)
-      if (lfoFilterDepth != 0.0)
-      {
-        lfoFilterMod = lfoValue * lfoFilterDepth * 2.0;  // +/- 2 octaves max
+      switch (lfoDestination) {
+        case 0:
+            // Apply LFO filter modulation 0.0-1.0 (convert to bipolar, in octaves)
+            lfoFilterMod = lfoValue * (lfoDepth - 1.0) * 2.0;  // +/- 2 octaves max
+            break;
+        case 1:
+            // Apply LFO volume modulation - Vibrato (convert to linear amplitude multiplier)
+            volumeModFactor = 1.0 + (lfoValue * lfoDepth * 0.5);  // +/- 50% volume variation
+            break;
       }
     }
 
     // calculate instantaneous oscillator frequency and set up the oscillator:
-    // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
-    double instFreq = pitchSlewLimiter.getSample(oscFreq) * pitchModFactor;
+    double instFreq = pitchSlewLimiter.getSample(oscFreq);
     oscillator.setFrequency(instFreq*pitchWheelFactor);
     oscillator.calculateIncrement();
 
@@ -447,16 +418,16 @@ namespace rosic
     filter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
-    //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut; 
+    //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
     if( ampEnv.isNoteOn() )
-      ampEnvOut += 0.45*mainEnvOut + accentGain*4.0*mainEnvOut; 
+      ampEnvOut += 0.45*mainEnvOut + accentGain*4.0*mainEnvOut;
     ampEnvOut = ampDeClicker.getSample(ampEnvOut);
 
     // oversampled calculations:
     double tmp;
     for(int i=1; i<=oversampling; i++)
     {
-      tmp  = -oscillator.getSample();         // the raw oscillator signal 
+      tmp  = -oscillator.getSample();         // the raw oscillator signal
       tmp  = highpass1.getSample(tmp);        // pre-filter highpass
       tmp  = filter.getSample(tmp);           // now it's filtered
       tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
@@ -466,14 +437,15 @@ namespace rosic
     // these filters may actually operate without oversampling (but only if we reset them in
     // triggerNote - avoid clicks)
     tmp  = allpass.getSample(tmp);
-    tmp  = highpass2.getSample(tmp);        
-    tmp  = notch.getSample(tmp);
+    tmp  = highpass2.getSample(tmp);
+    tmp = notch.getSample(tmp);
     tmp *= ampEnvOut;                       // amplified
     tmp *= ampScaler;
+    tmp *= volumeModFactor;                 // LFO volume modulation
 
     // find out whether we may switch ourselves off for the next call:
     idle = false;
-    //idle = (sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached() 
+    //idle = (sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached()
     //        && fabs(tmp) < 0.000001); // ampEnvOut < 0.000001;
 
     return tmp;
@@ -481,4 +453,4 @@ namespace rosic
 
 }
 
-#endif 
+#endif

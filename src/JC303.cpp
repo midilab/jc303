@@ -83,11 +83,6 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.25f),
-            std::make_unique<juce::AudioParameterFloat> ("pulseWidth",
-                                                        "Pulse Width",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.5f),
             std::make_unique<juce::AudioParameterBool> ("switchModState",
                                                         "Switch Mod",
                                                         false),
@@ -102,21 +97,16 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.25f),
-            std::make_unique<juce::AudioParameterFloat> ("lfoPitchDepth",
-                                                        "LFO Pitch",
+            std::make_unique<juce::AudioParameterFloat> ("lfoDepth",
+                                                        "LFO Depth",
                                                         0.0f,
                                                         1.0f,
                                                         0.0f),
-            std::make_unique<juce::AudioParameterFloat> ("lfoPwmDepth",
-                                                        "LFO PWM",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.0f),
-            std::make_unique<juce::AudioParameterFloat> ("lfoFilterDepth",
-                                                        "LFO Filter",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.0f),
+            std::make_unique<juce::AudioParameterInt> ("lfoDestination",
+                                                        "LFO Destination",
+                                                        0,
+                                                        1,
+                                                        0),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
@@ -155,13 +145,11 @@ JC303::JC303()
     softAttack = parameters.getRawParameterValue("softAttack");
     slideTime = parameters.getRawParameterValue("slideTime");
     sqrDriver = parameters.getRawParameterValue("sqrDriver");
-    pulseWidth = parameters.getRawParameterValue("pulseWidth");
     // LFO parameters
     lfoWaveform = parameters.getRawParameterValue("lfoWaveform");
     lfoRate = parameters.getRawParameterValue("lfoRate");
-    lfoPitchDepth = parameters.getRawParameterValue("lfoPitchDepth");
-    lfoPwmDepth = parameters.getRawParameterValue("lfoPwmDepth");
-    lfoFilterDepth = parameters.getRawParameterValue("lfoFilterDepth");
+    lfoDepth = parameters.getRawParameterValue("lfoDepth");
+    lfoDestination = parameters.getRawParameterValue("lfoDestination");
     // overdrive parameters
     overdriveModelIndex = parameters.getRawParameterValue("overdriveModelIndex");
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
@@ -184,13 +172,12 @@ JC303::JC303()
     setParameter(SOFT_ATTACK, *softAttack);
     setParameter(SLIDE_TIME, *slideTime);
     setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
-    setParameter(PULSE_WIDTH, *pulseWidth);
     // LFO parameters
     setParameter(LFO_WAVEFORM, *lfoWaveform);
     setParameter(LFO_RATE, *lfoRate);
-    setParameter(LFO_PITCH_DEPTH, *lfoPitchDepth);
-    setParameter(LFO_PWM_DEPTH, *lfoPwmDepth);
-    setParameter(LFO_FILTER_DEPTH, *lfoFilterDepth);
+    setParameter(LFO_DEPTH, *lfoDepth);
+    setParameter(LFO_DESTINATION, *lfoDestination);
+    // overdrive parameters
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
     setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
@@ -220,14 +207,13 @@ JC303::JC303()
     parameters.addParameterListener("softAttack", this);
     parameters.addParameterListener("slideTime", this);
     parameters.addParameterListener("sqrDriver", this);
-    parameters.addParameterListener("pulseWidth", this);
     parameters.addParameterListener("switchModState", this);
     // LFO parameter listeners
     parameters.addParameterListener("lfoWaveform", this);
     parameters.addParameterListener("lfoRate", this);
-    parameters.addParameterListener("lfoPitchDepth", this);
-    parameters.addParameterListener("lfoPwmDepth", this);
-    parameters.addParameterListener("lfoFilterDepth", this);
+    parameters.addParameterListener("lfoDepth", this);
+    parameters.addParameterListener("lfoDestination", this);
+    // overdrive parameter listeners
     parameters.addParameterListener("overdriveLevel", this);
     parameters.addParameterListener("overdriveDryWet", this);
     parameters.addParameterListener("overdriveModelIndex", this);
@@ -250,14 +236,13 @@ JC303::~JC303()
     parameters.removeParameterListener("softAttack", this);
     parameters.removeParameterListener("slideTime", this);
     parameters.removeParameterListener("sqrDriver", this);
-    parameters.removeParameterListener("pulseWidth", this);
     parameters.removeParameterListener("switchModState", this);
     // LFO parameter listeners
     parameters.removeParameterListener("lfoWaveform", this);
     parameters.removeParameterListener("lfoRate", this);
-    parameters.removeParameterListener("lfoPitchDepth", this);
-    parameters.removeParameterListener("lfoPwmDepth", this);
-    parameters.removeParameterListener("lfoFilterDepth", this);
+    parameters.removeParameterListener("lfoDepth", this);
+    parameters.removeParameterListener("lfoDestination", this);
+    // overdrive parameter listeners
     parameters.removeParameterListener("overdriveLevel", this);
     parameters.removeParameterListener("overdriveDryWet", this);
     parameters.removeParameterListener("overdriveModelIndex", this);
@@ -313,9 +298,6 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "sqrDriver" && *switchModState) {
         setParameter(TANH_SHAPER_DRIVE, newValue);
     }
-    else if (parameterID == "pulseWidth") {
-        setParameter(PULSE_WIDTH, newValue);
-    }
     // LFO parameters
     else if (parameterID == "lfoWaveform") {
         setParameter(LFO_WAVEFORM, newValue);
@@ -323,15 +305,13 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "lfoRate") {
         setParameter(LFO_RATE, newValue);
     }
-    else if (parameterID == "lfoPitchDepth") {
-        setParameter(LFO_PITCH_DEPTH, newValue);
+    else if (parameterID == "lfoDepth") {
+        setParameter(LFO_DEPTH, newValue);
     }
-    else if (parameterID == "lfoPwmDepth") {
-        setParameter(LFO_PWM_DEPTH, newValue);
+    else if (parameterID == "lfoDestination") {
+        setParameter(LFO_DESTINATION, newValue);
     }
-    else if (parameterID == "lfoFilterDepth") {
-        setParameter(LFO_FILTER_DEPTH, newValue);
-    }
+    // overdrive parameter
     else if (parameterID == "overdriveLevel") {
         setParameter(OVERDRIVE_LEVEL, newValue);
     }
@@ -462,12 +442,6 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
 
-    case PULSE_WIDTH:
-        open303Core.setPulseWidth(
-            linToLin(value, 0.0, 1.0,   1.0,     50.0)
-        );
-        break;
-
     // LFO parameters
     case LFO_WAVEFORM:
         open303Core.setLfoWaveform(static_cast<int>(value));
@@ -478,21 +452,15 @@ void JC303::setParameter (Open303Parameters index, float value)
             linToExp(value, 0.0, 1.0, 0.1, 20.0)
         );
         break;
-    case LFO_PITCH_DEPTH:
-        // Map 0.0-1.0 to -12 to +12 semitones (bipolar)
-        open303Core.setLfoPitchDepth(
-            linToLin(value, 0.0, 1.0, -12.0, 12.0)
+    case LFO_DEPTH:
+        // Map 0.0-1.0 to 0.0-2.0 (unipolar to be converted later to bipolar -1, +1)
+        open303Core.setLfoDepth(
+            linToLin(value, 0.0, 1.0, 0.0, 2.0)
         );
         break;
-    case LFO_PWM_DEPTH:
-        // Direct mapping 0.0-1.0
-        open303Core.setLfoPwmDepth(value);
-        break;
-    case LFO_FILTER_DEPTH:
-        // Map 0.0-1.0 to -1.0 to +1.0 (bipolar)
-        open303Core.setLfoFilterDepth(
-            linToLin(value, 0.0, 1.0, -1.0, 1.0)
-        );
+    case LFO_DESTINATION:
+        // 0 - filter cutoff, 1 - volume(vibrato style)
+        open303Core.setLfoDestination(static_cast<int>(value));
         break;
 	}
 }
@@ -659,7 +627,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     auto currentSample = 0;
     const auto numSamples = buffer.getNumSamples();
-    
+
     // clear buffer
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -671,7 +639,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     {
         const auto message = midiMetadata.getMessage();
         const auto samplePosition = midiMetadata.samplePosition;
-        
+
         // validate sample position
         if (samplePosition < currentSample || samplePosition >= numSamples)
             continue;
