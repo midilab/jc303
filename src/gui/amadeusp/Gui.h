@@ -22,6 +22,8 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    void setScaleFactor(float scale) override { juce::AudioProcessorEditor::setScaleFactor(1.0f); }
+
 private:
     juce::Slider* createKnob(const juce::String& knobType);
     SwitchButton* createSwitch();

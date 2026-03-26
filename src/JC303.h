@@ -9,6 +9,9 @@ using namespace rosic;
 // GuitarML BYOD implementation
 #include "dsp/guitarml-byod/processors/drive/GuitarMLAmp.h"
 
+// Acid Sequencer
+#include "sequencer/AcidSequencer303.h"
+
 enum Open303Parameters
 {
   WAVEFORM = 0,
@@ -89,8 +92,27 @@ public:
 
     juce::StringArray getModelListNames() { return guitarML.getModelListNames(); }
 
+    // ── Sequencer public API (called from Editor / host automation) ───────────
+
+    /** Direct access for the Editor — pattern editing, randomize, display. */
+    AcidSequencer303& getSequencer() { return _sequencer; }
+
+    /** Sync source: Internal (own BPM), Host (DAW transport), MidiClock. */
+    void setSequencerSyncMode  (AcidSequencer303::SyncMode  m) { _sequencer.setSyncMode  (m); }
+    /** Start trigger: TransportStart (play/MIDI Start) or NoteTriggered. */
+    void setSequencerStartMode (AcidSequencer303::StartMode m) { _sequencer.setStartMode (m); }
+
+    /** Internal BPM — only active when SyncMode == Internal. */
+    void  setSequencerTempo (float bpm) { _sequencer.setTempo (bpm); }
+    float getSequencerTempo()     const { return _sequencer.getTempo(); }
+
+    /** Hard start / stop from the UI. */
+    void sequencerStart() { _sequencer.start(); }
+    void sequencerStop()  { _sequencer.stop();  }
+
 private:
-    void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
+    void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
+    void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
 
     // presets and overdrive models user data management
@@ -104,6 +126,27 @@ private:
     // GuitarML - BYOD
     GuitarMLAmp guitarML;
     juce::dsp::DryWetMixer<float> overdriveMix;
+
+    // ── Acid Sequencer ────────────────────────────────────────────────────────
+    AcidSequencer303 _sequencer;
+
+    // Pending note events populated by the sequencer callback during
+    // _sequencer.processBlock(), then flushed into Open303 inside the
+    // existing MIDI render loop. 64 slots >> anything a mono 16-step
+    // sequencer can produce per audio buffer.
+    struct PendingNote
+    {
+        Acid303EventType type;
+        uint8_t          note;
+        uint8_t          velocity;
+        int              sampleOffset;
+    };
+    static constexpr int kPendingMax = 64;
+    PendingNote  _pendingNotes[kPendingMax];
+    int          _pendingCount { 0 };
+
+    // Tracks host play state across buffers to detect start/stop edges
+    bool _wasHostPlaying { false };
 
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
