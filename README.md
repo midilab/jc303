@@ -89,6 +89,23 @@ To compiled from the command line, run:
 cmake --build build --config Release
 ```
 
+## Docker build
+
+Build x86_64 release (default behavior)
+```sh
+docker build --build-arg RELEASE_ARCH=X86_64 -t jc303-linux-builder-x86_64 .
+```
+
+Build arm64 release
+```sh
+docker build --build-arg RELEASE_ARCH=ARM64 -t jc303-linux-builder-arm64 .
+```
+
+Run – mounts current directory → /jc303
+```sh
+docker run -it --rm -v "$(pwd):/jc303" jc303-linux-builder
+```
+
 #### VST2 Plugin
 
 No distribution of VST2 plugin binaries is allowed without a license, but if you have the sdk and the license to use it just copy the vstsdk2.4/ SDK folder to the root of this project before run cmake.

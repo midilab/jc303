@@ -148,6 +148,15 @@ private:
     // Tracks host play state across buffers to detect start/stop edges
     bool _wasHostPlaying { false };
 
+    // Currently held note from the sequencer (-1 = none).
+    // Prevents stale NoteOffs from closing a new note after a slide,
+    // and detects wrap-around ties (same pitch re-firing at pattern start).
+    int  _heldNote         { -1    };
+
+    // Slide flag from the last dispatched step, carried across buffer
+    // boundaries so the *receiving* step's NoteOn gets slide=1 correctly.
+    bool _lastStepHadSlide { false };
+
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
     File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";

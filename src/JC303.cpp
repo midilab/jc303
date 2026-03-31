@@ -232,7 +232,22 @@ JC303::JC303()
 
     _sequencer.setTrackLength (16);
 
-    _sequencer.acidRandomize (80, 50, 30, 30, 3, 30, 48);
+    /** acidRandomize — complete port of Engine303::acidRandomize().
+     *
+     *  Generates a random pattern across all SEQ303_STEP_MAX steps.
+     *
+     *  @param fill               0–100  % chance each step is ON (not rest)
+     *  @param accentProbability  0–100  % chance of accent on an ON step
+     *  @param slideProbability   0–100  % chance of slide on an ON step
+     *  @param tieProbability     0–100  % chance of tie on a REST step
+     *                            (only considered when the previous step had
+     *                             a note on it or was itself a tie)
+     *  @param numberOfTones      0 = full chromatic; 1–12 = snap to N equally-
+     *                            spaced semitone intervals
+     *  @param lowerNote          lowest MIDI note in the random pitch range
+     *  @param rangeNote          range above lowerNote (exclusive upper bound)
+     */
+    _sequencer.acidRandomize (80, 50, 50, 50, 3, 30, 48);
 
     _sequencer.start();
 }
@@ -559,8 +574,11 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     // 960 PPQN is the JUCE default and is compatible with all major DAWs.
     // The sequencer adapts all pulse maths to this resolution.
     _sequencer.prepare (sampleRate, 960.0);
-    _pendingCount   = 0;
-    _wasHostPlaying = false;
+    _pendingCount     = 0;
+    _wasHostPlaying   = false;
+    _heldNote         = -1;
+    _lastStepHadSlide = false;
+    _heldNote       = -1;
 }
 
 void JC303::releaseResources()
@@ -602,7 +620,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
 
     // ── Gather host transport info ────────────────────────────────────────────
     double ppqAtStart    = 0.0;
-    double hostBpm       = static_cast<double> (_sequencer.getTempo()); // internal fallback
+    double hostBpm       = static_cast<double> (_sequencer.getTempo());
     bool   hostIsPlaying = false;
 
     if (auto* ph = getPlayHead())
@@ -621,7 +639,11 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         if (hostIsPlaying && ! _wasHostPlaying)
             _sequencer.start();
         else if (! hostIsPlaying && _wasHostPlaying)
+        {
             _sequencer.stop();
+            _heldNote         = -1;
+            _lastStepHadSlide = false;
+        }
     }
     _wasHostPlaying = hostIsPlaying;
 
@@ -648,6 +670,67 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         _pendingNotes[j + 1] = key;
     }
 
+    // ── dispatchSeqNote ───────────────────────────────────────────────────────
+    //
+    // Bridges sequencer note events to Open303.
+    //
+    // TIE (rest+tie steps):
+    //   The sequencer never emits a NoteOn for a tied rest — it just extends
+    //   the gate countdown of the previous note.  Ties are fully transparent
+    //   here; no special handling is needed.
+    //
+    // SLIDE:
+    //   The slide flag lives on the step that *sends* the glide, not the one
+    //   that receives it.  We save it in _lastStepHadSlide after each NoteOn
+    //   so the next NoteOn can pass slide=1 to Open303, which performs the
+    //   portamento without retriggering the envelope.
+    //
+    // WRAP-AROUND TIE (same pitch re-firing at pattern boundary):
+    //   If the last step(s) of a pattern are rest+tie, the sequencer extends
+    //   the gate past the pattern end.  When step 0 then fires with the same
+    //   pitch still ringing, we skip the re-trigger so there is no click.
+    //   _lastStepHadSlide is preserved so the glide carry still works.
+    //
+    // NoteOff:
+    //   Always forwarded unconditionally.  This is the key fix — suppressing
+    //   NoteOffs to handle slide caused stuck notes because it prevented the
+    //   gate from closing.  Open303 handles note-stealing internally; we just
+    //   need to close every gate we opened.
+    //
+    auto dispatchSeqNote = [&] (const PendingNote& ev)
+    {
+        if (ev.type == Acid303EventType::NoteOn)
+        {
+            if (_heldNote >= 0 && ev.note == static_cast<uint8_t>(_heldNote))
+            {
+                // Wrap-around tie: same pitch already ringing from a gate
+                // extension across the pattern boundary — do not re-trigger.
+                // Keep _lastStepHadSlide as-is so slide carry is unaffected.
+            }
+            else
+            {
+                // Normal new note, or slide into a different pitch.
+                // _lastStepHadSlide was set by the previous NoteOn dispatch.
+                const int slide = _lastStepHadSlide ? 1 : 0;
+                open303Core.noteOn (ev.note, ev.velocity, slide);
+                _heldNote = static_cast<int>(ev.note);
+            }
+
+            // Save the slide flag of the step we just played so the *next*
+            // NoteOn dispatch knows whether to use slide=1.
+            _lastStepHadSlide = _sequencer.slideOn (_sequencer.getCurrentStep());
+        }
+        else // NoteOff — always forward, never drop
+        {
+            open303Core.noteOn (ev.note, 0, 0);
+            if (ev.note == static_cast<uint8_t>(_heldNote))
+            {
+                _heldNote         = -1;
+                _lastStepHadSlide = false;
+            }
+        }
+    };
+
     // ── Interleaved render: sequencer events + external MIDI ──────────────────
     // Walk sequencer events and incoming MIDI together in time order.
     // Render an audio sub-block before each event, then dispatch to Open303.
@@ -658,7 +741,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
 
     for (const auto midiMetadata : midiMessages)
     {
-        const auto message      = midiMetadata.getMessage();
+        const auto message        = midiMetadata.getMessage();
         const auto samplePosition = midiMetadata.samplePosition;
 
         if (samplePosition < currentSample || samplePosition >= numSamples)
@@ -668,8 +751,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         while (seqIdx < _pendingCount
                && _pendingNotes[seqIdx].sampleOffset <= samplePosition)
         {
-            const PendingNote& ev  = _pendingNotes[seqIdx];
-            const int evPos        = juce::jlimit (0, numSamples - 1, ev.sampleOffset);
+            const PendingNote& ev = _pendingNotes[seqIdx];
+            const int evPos = juce::jlimit (0, numSamples - 1, ev.sampleOffset);
 
             if (evPos > currentSample)
             {
@@ -677,17 +760,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
                 currentSample = evPos;
             }
 
-            // Open303::noteOn(note, velocity, slide) — slide is the 3rd parameter
-            if (ev.type == Acid303EventType::NoteOn)
-            {
-                const int slide = _sequencer.slideOn (_sequencer.getCurrentStep()) ? 1 : 0;
-                open303Core.noteOn (ev.note, ev.velocity, slide);
-            }
-            else
-            {
-                open303Core.noteOn (ev.note, 0, 0);
-            }
-
+            dispatchSeqNote (ev);
             ++seqIdx;
         }
 
@@ -720,8 +793,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // Flush any remaining sequencer events after the last MIDI message
     while (seqIdx < _pendingCount)
     {
-        const PendingNote& ev  = _pendingNotes[seqIdx];
-        const int evPos        = juce::jlimit (0, numSamples - 1, ev.sampleOffset);
+        const PendingNote& ev = _pendingNotes[seqIdx];
+        const int evPos = juce::jlimit (0, numSamples - 1, ev.sampleOffset);
 
         if (evPos > currentSample)
         {
@@ -729,16 +802,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             currentSample = evPos;
         }
 
-        if (ev.type == Acid303EventType::NoteOn)
-        {
-            const int slide = _sequencer.slideOn (_sequencer.getCurrentStep()) ? 1 : 0;
-            open303Core.noteOn (ev.note, ev.velocity, slide);
-        }
-        else
-        {
-            open303Core.noteOn (ev.note, 0, 0);
-        }
-
+        dispatchSeqNote (ev);
         ++seqIdx;
     }
 
