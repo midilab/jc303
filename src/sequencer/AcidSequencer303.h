@@ -13,7 +13,7 @@
  * quantity from that single number:
  *
  *   pulsesPerStep     = ppqn / 4          (one 16th-note)
- *   noteLengthPulses  = pulsesPerStep * (20/24)   original 83% gate ratio
+ *   noteLengthPulses  = pulsesPerStep * (12/24)   original 50% gate ratio
  *   slideExtraPulses  = pulsesPerStep * (20/24)   slide overhang ratio
  *   tie extension     = i * pulsesPerStep          (one step per tied rest)
  *
@@ -42,21 +42,19 @@
 #include "Harmonizer.h"
 
 // =============================================================================
-// Constants  (mirror engine_303.h #defines, PPQN-scaled at runtime)
+// Constants  — exact values from engine_303.h
 // =============================================================================
-static constexpr int      SEQ303_STEP_MAX         = 16;
-static constexpr int      SEQ303_NOTE_STACK_SIZE   = 4;
-static constexpr uint8_t  SEQ303_NOTE_VELOCITY     = 100;
-static constexpr uint8_t  SEQ303_ACCENT_VELOCITY   = 127;
+static constexpr int      SEQ303_STEP_MAX         = 16;   // STEP_MAX_SIZE_303
+static constexpr int      SEQ303_NOTE_STACK_SIZE   = 3;    // NOTE_STACK_SIZE_303
+static constexpr uint8_t  SEQ303_NOTE_VELOCITY     = 70;   // NOTE_VELOCITY_303
+static constexpr uint8_t  SEQ303_ACCENT_VELOCITY   = 127;  // ACCENT_VELOCITY_303
 static constexpr uint8_t  SEQ303_DEFAULT_NOTE      = 36;   // C2
 
-// Original engine_303 at 96 PPQN:
-//   NOTE_LENGTH_303 = 20  (pulses, out of 24-per-step → ~83 % gate)
-//   slide extra     = 20  (pulses)
-//   tie extension   = i * 24 pulses  (one full step per tied-rest slot)
-// We preserve all ratios so the behaviour is identical at any ppqn.
-static constexpr double SEQ303_NOTE_LENGTH_RATIO = 20.0 / 24.0;
-static constexpr double SEQ303_SLIDE_EXTRA_RATIO = 20.0 / 24.0;
+// NOTE_LENGTH_303 = 12 pulses at 96 PPQN  →  12/24 = 50% gate (original TB-303).
+// Slide extra = 20 pulses at 96 PPQN (extends the gate slightly past the next note-on).
+// Both are stored as ratios so they scale correctly at any host PPQN.
+static constexpr double SEQ303_NOTE_LENGTH_RATIO = 12.0 / 24.0;  // 50% gate
+static constexpr double SEQ303_SLIDE_EXTRA_RATIO = 20.0 / 24.0;  // slide overhang
 
 // =============================================================================
 // Data structures
@@ -470,7 +468,7 @@ public:
 
         // Mute + silence stack before rewriting pattern (mirrors original)
         _mute.store (true);
-        clearStackInternal (true);
+        clearTrack ();
 
         {
             juce::SpinLock::ScopedLockType lk (_dataLock);

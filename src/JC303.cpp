@@ -247,7 +247,7 @@ JC303::JC303()
      *  @param lowerNote          lowest MIDI note in the random pitch range
      *  @param rangeNote          range above lowerNote (exclusive upper bound)
      */
-    _sequencer.acidRandomize (80, 50, 50, 50, 3, 30, 48);
+    _sequencer.acidRandomize (80, 50, 30, 100, 3, 30, 48);
 
     _sequencer.start();
 }
@@ -483,6 +483,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(SLIDE_TIME, *slideTime);
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
+        _sequencer.acidRandomize (80, 50, 30, 100, 3, 30, 48);
     } else if (mode == false) {
         decayMin = 200.0;
         decayMax = 2000.0;
@@ -512,11 +513,8 @@ bool JC303::acceptsMidi() const
 
 bool JC303::producesMidi() const
 {
-   #if JucePlugin_ProducesMidiOutput
+    // The sequencer always outputs MIDI so the DAW can route it to other instruments.
     return true;
-   #else
-    return false;
-   #endif
 }
 
 bool JC303::isMidiEffect() const
@@ -697,8 +695,15 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     //   gate from closing.  Open303 handles note-stealing internally; we just
     //   need to close every gate we opened.
     //
+    // MIDI output buffer — built up during rendering, replaces midiMessages
+    // at the end so the DAW receives sample-accurate note events on the
+    // plugin's MIDI output port.
+    juce::MidiBuffer midiOut;
+
     auto dispatchSeqNote = [&] (const PendingNote& ev)
     {
+        const int samplePos = juce::jlimit (0, numSamples - 1, ev.sampleOffset);
+
         if (ev.type == Acid303EventType::NoteOn)
         {
             if (_heldNote >= 0 && ev.note == static_cast<uint8_t>(_heldNote))
@@ -714,6 +719,10 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
                 const int slide = _lastStepHadSlide ? 1 : 0;
                 open303Core.noteOn (ev.note, ev.velocity, slide);
                 _heldNote = static_cast<int>(ev.note);
+
+                // MIDI out: NoteOn
+                midiOut.addEvent (juce::MidiMessage::noteOn  (1, ev.note, static_cast<uint8_t>(ev.velocity)),
+                                  samplePos);
             }
 
             // Save the slide flag of the step we just played so the *next*
@@ -723,6 +732,11 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         else // NoteOff — always forward, never drop
         {
             open303Core.noteOn (ev.note, 0, 0);
+
+            // MIDI out: NoteOff
+            midiOut.addEvent (juce::MidiMessage::noteOff (1, ev.note),
+                              samplePos);
+
             if (ev.note == static_cast<uint8_t>(_heldNote))
             {
                 _heldNote         = -1;
@@ -808,6 +822,11 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
 
     // Render remaining samples
     render303 (buffer, currentSample, numSamples);
+
+    // Replace the incoming MIDI buffer with the sequencer's output so the
+    // DAW receives sample-accurate NoteOn/NoteOff on the plugin's MIDI output.
+    // Incoming transport/clock messages are intentionally not forwarded.
+    midiMessages.swapWith (midiOut);
 }
 
 void JC303::processBlock (juce::AudioBuffer<float>& buffer,
