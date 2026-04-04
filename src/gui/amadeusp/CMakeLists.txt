@@ -8,6 +8,8 @@ juce_add_binary_data(BinaryData SOURCES
     resources/left-arrow-presets.png
     resources/right-arrow-presets.png
     resources/acid-smile.png
+    resources/small-button-step-sequencer.png
+    resources/large-button-step-sequencer.png
     resources/ErbosDraco1StOpenNbpRegular-l5wX.ttf
 )
 

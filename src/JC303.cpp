@@ -123,10 +123,52 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.25f),
-            std::make_unique<juce::AudioParameterBool> ("switchOverdriveState",
+             std::make_unique<juce::AudioParameterBool> ("switchOverdriveState",
                                                         "Switch Overdrive Mod",
-                                                        false)
-       })
+                                                        false),
+             // generative sequencer parameters
+             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
+                                                        "Seq Generative Fill",
+                                                        0.0f,
+                                                        100.0f,
+                                                        80.0f),
+             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeAccentProbability",
+                                                        "Seq Generative Accent Prob",
+                                                        0.0f,
+                                                        100.0f,
+                                                        50.0f),
+             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeSlideProbability",
+                                                        "Seq Generative Slide Prob",
+                                                        0.0f,
+                                                        100.0f,
+                                                        30.0f),
+             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeTieProbability",
+                                                        "Seq Generative Tie Prob",
+                                                        0.0f,
+                                                        100.0f,
+                                                        100.0f),
+             std::make_unique<juce::AudioParameterFloat> ("numberOfTones",
+                                                        "Number Of Tones",
+                                                        0.0f,
+                                                        12.0f,
+                                                        3.0f),
+             std::make_unique<juce::AudioParameterFloat> ("lowerNote",
+                                                        "Lower Note",
+                                                        0.0f,
+                                                        127.0f,
+                                                        30.0f),
+             std::make_unique<juce::AudioParameterFloat> ("rangeNote",
+                                                        "Range Note",
+                                                        0.0f,
+                                                        127.0f,
+                                                        48.0f),
+             std::make_unique<juce::AudioParameterBool> ("seqPlayState",
+                                                         "Seq Play State",
+                                                         false),
+             std::make_unique<juce::AudioParameterBool> ("seqGenerate",
+                                                         "Seq Generate",
+                                                         false)
+        })
 {
     // assign a pointer to use it around for each parameter
     waveForm = parameters.getRawParameterValue("waveform");
@@ -155,6 +197,16 @@ JC303::JC303()
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
     overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
     overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
+    // generative sequencer parameters
+    seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
+    seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
+    seqGenerativeSlideProbability = parameters.getRawParameterValue("seqGenerativeSlideProbability");
+    seqGenerativeTieProbability = parameters.getRawParameterValue("seqGenerativeTieProbability");
+    numberOfTones = parameters.getRawParameterValue("numberOfTones");
+    lowerNote = parameters.getRawParameterValue("lowerNote");
+    rangeNote = parameters.getRawParameterValue("rangeNote");
+    seqPlayState = parameters.getRawParameterValue("seqPlayState");
+    seqGenerate = parameters.getRawParameterValue("seqGenerate");
 
     // force initial user values(some hosts migth not do it using value tree state)
     setParameter(WAVEFORM, *waveForm);
@@ -213,6 +265,9 @@ JC303::JC303()
     parameters.addParameterListener("overdriveDryWet", this);
     parameters.addParameterListener("overdriveModelIndex", this);
     parameters.addParameterListener("switchOverdriveState", this);
+    // generative sequencer parameter listener
+    parameters.addParameterListener("seqPlayState", this);
+    parameters.addParameterListener("seqGenerate", this);
 
     // ── Sequencer callback ────────────────────────────────────────────────────
     // Runs on the audio thread. Stores each event into _pendingNotes[] so
@@ -224,32 +279,11 @@ JC303::JC303()
             _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset };
     };
 
-
-    // TODO: remove — auto-start for testing without UI
+    // Just for tests... remove it later
     _sequencer.setSyncMode  (AcidSequencer303::SyncMode::Internal);
     _sequencer.setStartMode (AcidSequencer303::StartMode::TransportStart);
     _sequencer.setTempo     (120.0f);
-
     _sequencer.setTrackLength (16);
-
-    /** acidRandomize — complete port of Engine303::acidRandomize().
-     *
-     *  Generates a random pattern across all SEQ303_STEP_MAX steps.
-     *
-     *  @param fill               0–100  % chance each step is ON (not rest)
-     *  @param accentProbability  0–100  % chance of accent on an ON step
-     *  @param slideProbability   0–100  % chance of slide on an ON step
-     *  @param tieProbability     0–100  % chance of tie on a REST step
-     *                            (only considered when the previous step had
-     *                             a note on it or was itself a tie)
-     *  @param numberOfTones      0 = full chromatic; 1–12 = snap to N equally-
-     *                            spaced semitone intervals
-     *  @param lowerNote          lowest MIDI note in the random pitch range
-     *  @param rangeNote          range above lowerNote (exclusive upper bound)
-     */
-    _sequencer.acidRandomize (80, 50, 30, 100, 3, 30, 48);
-
-    _sequencer.start();
 }
 
 JC303::~JC303()
@@ -279,6 +313,9 @@ JC303::~JC303()
     parameters.removeParameterListener("overdriveDryWet", this);
     parameters.removeParameterListener("overdriveModelIndex", this);
     parameters.removeParameterListener("switchOverdriveState", this);
+    // generative sequencer
+    parameters.removeParameterListener("seqPlayState", this);
+    parameters.removeParameterListener("seqGenerate", this);
 }
 
 // Parameter change callback
@@ -352,6 +389,34 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "overdriveModelIndex") {
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
+    }
+    else if (parameterID == "seqPlayState") {
+        if (newValue > 0.5f) {
+            _sequencer.start();
+        } else {
+            _sequencer.stop();
+        }
+    }
+    else if (parameterID == "seqGenerate") {
+        _sequencerMuted.store(true, std::memory_order_release);
+
+        if (_heldNote >= 0) {
+            open303Core.noteOn(_heldNote, 0, 0);
+            _heldNote = -1;
+            _lastStepHadSlide = false;
+        }
+
+        _sequencer.acidRandomize(
+            static_cast<uint8_t>(*seqGenerativeFill),
+            static_cast<uint8_t>(*seqGenerativeAccentProbability),
+            static_cast<uint8_t>(*seqGenerativeSlideProbability),
+            static_cast<uint8_t>(*seqGenerativeTieProbability),
+            static_cast<uint8_t>(*numberOfTones),
+            static_cast<uint8_t>(*lowerNote),
+            static_cast<uint8_t>(*rangeNote)
+        );
+
+        _sequencerMuted.store(false, std::memory_order_release);
     }
 }
 
@@ -483,7 +548,6 @@ void JC303::setDevilMod(bool mode)
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(SLIDE_TIME, *slideTime);
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
-        _sequencer.acidRandomize (80, 50, 30, 100, 3, 30, 48);
     } else if (mode == false) {
         decayMin = 200.0;
         decayMax = 2000.0;
@@ -706,6 +770,9 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
 
         if (ev.type == Acid303EventType::NoteOn)
         {
+            if (_sequencerMuted.load(std::memory_order_acquire))
+                return;
+
             if (_heldNote >= 0 && ev.note == static_cast<uint8_t>(_heldNote))
             {
                 // Wrap-around tie: same pitch already ringing from a gate

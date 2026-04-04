@@ -32,6 +32,17 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // overdrive model select component
     addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, processorRef.getModelListNames()));
 
+    // generative sequencer controls
+    addAndMakeVisible(seqPlayButton = createSwitchStepSeq());
+    addAndMakeVisible(seqGenerativeFillSlider = createKnob("small"));
+    addAndMakeVisible(seqGenerativeAccentProbabilitySlider = createKnob("small"));
+    addAndMakeVisible(seqGenerativeSlideProbabilitySlider = createKnob("small"));
+    addAndMakeVisible(seqGenerativeTieProbabilitySlider = createKnob("small"));
+    addAndMakeVisible(numberOfTonesSlider = createKnob("small"));
+    addAndMakeVisible(lowerNoteSlider = createKnob("small"));
+    addAndMakeVisible(rangeNoteSlider = createKnob("small"));
+    addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press));
+
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);
 
@@ -56,7 +67,18 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     switchOverdriveButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchOverdriveState", *switchOverdriveButton));
-    
+
+    // generative sequencer attachments
+    seqGenerativeFillAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeFill", *seqGenerativeFillSlider));
+    seqGenerativeAccentProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeAccentProbability", *seqGenerativeAccentProbabilitySlider));
+    seqGenerativeSlideProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeSlideProbability", *seqGenerativeSlideProbabilitySlider));
+    seqGenerativeTieProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeTieProbability", *seqGenerativeTieProbabilitySlider));
+    numberOfTonesAttachment.reset(new SliderAttachment(valueTreeState, "numberOfTones", *numberOfTonesSlider));
+    lowerNoteAttachment.reset(new SliderAttachment(valueTreeState, "lowerNote", *lowerNoteSlider));
+    rangeNoteAttachment.reset(new SliderAttachment(valueTreeState, "rangeNote", *rangeNoteSlider));
+    seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
+    seqGenerateButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqGenerate", *seqGenerateButton));
+
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
@@ -106,7 +128,7 @@ juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
     {
         slider->setLookAndFeel(&largeKnobLookAndFeel);
     }
-    
+
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 
     // adjust our start and end point for knob
@@ -119,6 +141,12 @@ SwitchButton* JC303Editor::createSwitch()
     auto* button = new SwitchButton();
     button->setClickingTogglesState(false);
 
+    return button;
+}
+
+SwitchStepSeqButton* JC303Editor::createSwitchStepSeq(SwitchStepSeqButton::Mode mode)
+{
+    auto* button = new SwitchStepSeqButton(mode);
     return button;
 }
 
@@ -140,20 +168,24 @@ void JC303Editor::setControlsLayout()
     const int ledHeight = 15;
     const int selectModellWidth = 127;
     const int selectModelHeight = 100;
-    const int acidSmileWidth = 56.25; //225/4;
-    const int acidSmileHeight = 77.5; //310/4;
+    const float acidSmileWidth = 56.25; //225/4;
+    const float acidSmileHeight = 77.5; //310/4;
+    const float seqPlayButtonWidth = 100 / 2;
+    const float seqPlayButtonHeight = 70 / 2;
+    const float seqGenerateButtonWidth = 60 / 2;
+    const float seqGenerateButtonHeight = 36 / 2;
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {46, 140}; 
-    pair<int, int> volumeLocation = {813, 140}; 
+    pair<int, int> waveFormLocation = {46, 140};
+    pair<int, int> volumeLocation = {813, 140};
     // second row
-    pair<int, int> tuningLocation = {188, 139}; 
-    pair<int, int> cutoffFreqLocation = {287, 139}; 
-    pair<int, int> resonanceLocation = {386, 139}; 
-    pair<int, int> envelopeLocation = {485, 139}; 
-    pair<int, int> decayLocation = {584, 139}; 
-    pair<int, int> accentLocation = {683, 139}; 
+    pair<int, int> tuningLocation = {188, 139};
+    pair<int, int> cutoffFreqLocation = {287, 139};
+    pair<int, int> resonanceLocation = {386, 139};
+    pair<int, int> envelopeLocation = {485, 139};
+    pair<int, int> decayLocation = {584, 139};
+    pair<int, int> accentLocation = {683, 139};
     // MODs knobs row
     pair<int, int> normalDecayLocation = {147, 273};
     pair<int, int> accentDecayLocation = {208, 273};
@@ -173,7 +205,18 @@ void JC303Editor::setControlsLayout()
     pair<int, int> overdriveModelSelectLocation = {610, 265};
 
     // Easter egg mr. smile
-    pair<int, int> acidSmileLocation = {484, 16}; 
+    pair<int, int> acidSmileLocation = {484, 16};
+
+    // generative sequencer controls (top row, left to right)
+    pair<int, int> seqPlayButtonLocation = {0, 0};
+    pair<int, int> seqGenerativeFillLocation = {50, 0};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {90, 0};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {130, 0};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {170, 0};
+    pair<int, int> numberOfTonesLocation = {210, 0};
+    pair<int, int> lowerNoteLocation = {250, 0};
+    pair<int, int> rangeNoteLocation = {290, 0};
+    pair<int, int> seqGenerateButtonLocation = {330, 0};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -203,4 +246,15 @@ void JC303Editor::setControlsLayout()
 
     // Easter egg mr. smile
     acidSmile.setBounds(acidSmileLocation.first, acidSmileLocation.second, acidSmileWidth, acidSmileHeight);
+
+    // generative sequencer controls
+    seqPlayButton->setBounds(seqPlayButtonLocation.first, seqPlayButtonLocation.second, seqPlayButtonWidth, seqPlayButtonHeight);
+    seqGenerativeFillSlider->setBounds(seqGenerativeFillLocation.first, seqGenerativeFillLocation.second, sliderSmallSize, sliderSmallSize);
+    seqGenerativeAccentProbabilitySlider->setBounds(seqGenerativeAccentProbabilityLocation.first, seqGenerativeAccentProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
+    seqGenerativeSlideProbabilitySlider->setBounds(seqGenerativeSlideProbabilityLocation.first, seqGenerativeSlideProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
+    seqGenerativeTieProbabilitySlider->setBounds(seqGenerativeTieProbabilityLocation.first, seqGenerativeTieProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
+    numberOfTonesSlider->setBounds(numberOfTonesLocation.first, numberOfTonesLocation.second, sliderSmallSize, sliderSmallSize);
+    lowerNoteSlider->setBounds(lowerNoteLocation.first, lowerNoteLocation.second, sliderSmallSize, sliderSmallSize);
+    rangeNoteSlider->setBounds(rangeNoteLocation.first, rangeNoteLocation.second, sliderSmallSize, sliderSmallSize);
+    seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second, seqGenerateButtonWidth, seqGenerateButtonHeight);
 }

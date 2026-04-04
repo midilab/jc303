@@ -4,6 +4,7 @@
 #include "../../JC303.h"
 #include "KnobLookAndFeel.h"
 #include "SwitchButton.h"
+#include "SwitchStepSeqButton.h"
 #include "SwitchLed.h"
 #include "OverdriveModelSelect.h"
 #include "AcidSmile.h"
@@ -27,7 +28,9 @@ public:
 private:
     juce::Slider* createKnob(const juce::String& knobType);
     SwitchButton* createSwitch();
+    SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle);
     SwitchLed* createLed(const juce::String& paramID);
+    juce::Label* createLabel(const juce::String& text);
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -57,6 +60,25 @@ private:
     juce::Slider* overdriveDryWetSlider;
     SwitchButton* switchOverdriveButton;
     SwitchLed* ledOverdriveButton;
+    // generative sequencer
+    juce::Slider* seqGenerativeFillSlider;
+    juce::Slider* seqGenerativeAccentProbabilitySlider;
+    juce::Slider* seqGenerativeSlideProbabilitySlider;
+    juce::Slider* seqGenerativeTieProbabilitySlider;
+    juce::Slider* numberOfTonesSlider;
+    juce::Slider* lowerNoteSlider;
+    juce::Slider* rangeNoteSlider;
+    SwitchStepSeqButton* seqPlayButton;
+    SwitchStepSeqButton* seqGenerateButton;
+    juce::Label* seqPlayLabel;
+    juce::Label* seqGenerativeFillLabel;
+    juce::Label* seqGenerativeAccentProbabilityLabel;
+    juce::Label* seqGenerativeSlideProbabilityLabel;
+    juce::Label* seqGenerativeTieProbabilityLabel;
+    juce::Label* numberOfTonesLabel;
+    juce::Label* lowerNoteLabel;
+    juce::Label* rangeNoteLabel;
+    juce::Label* seqGenerateLabel;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -79,6 +101,16 @@ private:
     std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
     std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
     std::unique_ptr<ButtonAttachment> switchOverdriveButtonAttachment;
+    // generative sequencer
+    std::unique_ptr<SliderAttachment> seqGenerativeFillAttachment;
+    std::unique_ptr<SliderAttachment> seqGenerativeAccentProbabilityAttachment;
+    std::unique_ptr<SliderAttachment> seqGenerativeSlideProbabilityAttachment;
+    std::unique_ptr<SliderAttachment> seqGenerativeTieProbabilityAttachment;
+    std::unique_ptr<SliderAttachment> numberOfTonesAttachment;
+    std::unique_ptr<SliderAttachment> lowerNoteAttachment;
+    std::unique_ptr<SliderAttachment> rangeNoteAttachment;
+    std::unique_ptr<ButtonAttachment> seqPlayButtonAttachment;
+    std::unique_ptr<ButtonAttachment> seqGenerateButtonAttachment;
     // previous, next buttons and model name display component
     OverdriveModelSelect* overdriveModelSelect;
 

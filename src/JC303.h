@@ -157,6 +157,9 @@ private:
     // boundaries so the *receiving* step's NoteOn gets slide=1 correctly.
     bool _lastStepHadSlide { false };
 
+    // Mute flag for sequencer (used during acidRandomize to prevent note triggering)
+    std::atomic<bool> _sequencerMuted { false };
+
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
     File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";
@@ -189,6 +192,16 @@ private:
     std::atomic<float>* switchOverdriveState = nullptr;
     std::atomic<float>* overdriveLevel = nullptr;
     std::atomic<float>* overdriveDryWet = nullptr;
+    // generative sequencer
+    std::atomic<float>* seqGenerativeFill = nullptr;
+    std::atomic<float>* seqGenerativeAccentProbability = nullptr;
+    std::atomic<float>* seqGenerativeSlideProbability = nullptr;
+    std::atomic<float>* seqGenerativeTieProbability = nullptr;
+    std::atomic<float>* numberOfTones = nullptr;
+    std::atomic<float>* lowerNote = nullptr;
+    std::atomic<float>* rangeNote = nullptr;
+    std::atomic<float>* seqPlayState = nullptr;
+    std::atomic<float>* seqGenerate = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;
