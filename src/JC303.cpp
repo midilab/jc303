@@ -149,7 +149,7 @@ JC303::JC303()
                                                         100.0f),
              std::make_unique<juce::AudioParameterFloat> ("numberOfTones",
                                                         "Number Of Tones",
-                                                        0.0f,
+                                                        1.0f,
                                                         12.0f,
                                                         3.0f),
              std::make_unique<juce::AudioParameterFloat> ("lowerNote",

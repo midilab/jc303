@@ -11,6 +11,8 @@ juce_add_binary_data(BinaryData SOURCES
     resources/small-button-step-sequencer.png
     resources/large-button-step-sequencer.png
     resources/ErbosDraco1StOpenNbpRegular-l5wX.ttf
+    # TODO: remove after finish UI end version
+    resources/jc303-mod-knob.png
 )
 
 # Need to build BinaryData with -fPIC flag on Linux

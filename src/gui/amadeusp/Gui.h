@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "../../JC303.h"
 #include "KnobLookAndFeel.h"
+#include "ModKnobLookAndFeel.h"
 #include "SwitchButton.h"
 #include "SwitchStepSeqButton.h"
 #include "SwitchLed.h"
@@ -26,9 +27,10 @@ public:
     void setScaleFactor(float scale) override { juce::AudioProcessorEditor::setScaleFactor(1.0f); }
 
 private:
-    juce::Slider* createKnob(const juce::String& knobType);
+    juce::Slider* createKnob(const juce::String& knobType, bool useModLookAndFeel = false);
+    juce::Slider* createModKnob(const juce::String& label);
     SwitchButton* createSwitch();
-    SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle);
+    SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle, const juce::String& labelText = "");
     SwitchLed* createLed(const juce::String& paramID);
     juce::Label* createLabel(const juce::String& text);
     void setControlsLayout();
@@ -70,15 +72,6 @@ private:
     juce::Slider* rangeNoteSlider;
     SwitchStepSeqButton* seqPlayButton;
     SwitchStepSeqButton* seqGenerateButton;
-    juce::Label* seqPlayLabel;
-    juce::Label* seqGenerativeFillLabel;
-    juce::Label* seqGenerativeAccentProbabilityLabel;
-    juce::Label* seqGenerativeSlideProbabilityLabel;
-    juce::Label* seqGenerativeTieProbabilityLabel;
-    juce::Label* numberOfTonesLabel;
-    juce::Label* lowerNoteLabel;
-    juce::Label* rangeNoteLabel;
-    juce::Label* seqGenerateLabel;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -120,6 +113,7 @@ private:
     KnobLookAndFeel smallKnobLookAndFeel{"small"};
     KnobLookAndFeel mediumKnobLookAndFeel{"medium"};
     KnobLookAndFeel largeKnobLookAndFeel{"large"};
+    ModKnobLookAndFeel modKnobLookAndFeel;
 
     // Easter egg mr. acid smile.
     AcidSmile acidSmile;
