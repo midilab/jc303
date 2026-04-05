@@ -42,6 +42,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(lowerNoteSlider = createModKnob("LOW"));
     addAndMakeVisible(rangeNoteSlider = createModKnob("RANGE"));
     addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, "GEN"));
+    addAndMakeVisible(seqClearButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, "CLEAR"));
     // generative sequencer new controls
     addAndMakeVisible(seqHarmonizerSlider = createModKnob("HARM"));
     addAndMakeVisible(seqLengthSlider = createModKnob("LEN"));
@@ -82,6 +83,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     rangeNoteAttachment.reset(new SliderAttachment(valueTreeState, "rangeNote", *rangeNoteSlider));
     seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
     seqGenerateButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqGenerate", *seqGenerateButton));
+    seqClearButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqClear", *seqClearButton));
     seqHarmonizerAttachment.reset(new SliderAttachment(valueTreeState, "seqHarmonizer", *seqHarmonizerSlider));
     seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
     seqShiftAttachment.reset(new SliderAttachment(valueTreeState, "seqShift", *seqShiftSlider));
@@ -237,7 +239,9 @@ void JC303Editor::setControlsLayout()
     pair<int, int> acidSmileLocation = {484, 16};
 
     // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {110, 25};
+    pair<int, int> seqPlayButtonLocation = {110, 13};
+    pair<int, int> seqGenerateButtonLocation = {110, 51};
+    pair<int, int> seqClearButtonLocation = {110, 70};
     pair<int, int> seqGenerativeFillLocation = {170, 20};
     pair<int, int> seqGenerativeAccentProbabilityLocation = {210, 20};
     pair<int, int> seqGenerativeSlideProbabilityLocation = {250, 20};
@@ -248,7 +252,6 @@ void JC303Editor::setControlsLayout()
     pair<int, int> rangeNoteLocation = {250, 60};
     pair<int, int> seqHarmonizerLocation = {290, 60};
     pair<int, int> seqShiftLocation = {330, 60};
-    pair<int, int> seqGenerateButtonLocation = {110, 65};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -289,6 +292,7 @@ void JC303Editor::setControlsLayout()
     lowerNoteSlider->setBounds(lowerNoteLocation.first, lowerNoteLocation.second, sliderSmallSize, sliderSmallSize);
     rangeNoteSlider->setBounds(rangeNoteLocation.first, rangeNoteLocation.second, sliderSmallSize, sliderSmallSize);
     seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second, seqGenerateButtonWidth, seqGenerateButtonHeight);
+    seqClearButton->setBounds(seqClearButtonLocation.first, seqClearButtonLocation.second, seqGenerateButtonWidth, seqGenerateButtonHeight);
     // generative sequencer new controls
     seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
     seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);

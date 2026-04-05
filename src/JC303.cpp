@@ -181,8 +181,11 @@ JC303::JC303()
                                                          "Seq Play State",
                                                          false),
              std::make_unique<juce::AudioParameterBool> ("seqGenerate",
-                                                          "Seq Generate",
-                                                          false)
+                                                           "Seq Generate",
+                                                           false),
+             std::make_unique<juce::AudioParameterBool> ("seqClear",
+                                                           "Seq Clear",
+                                                           false)
         })
 {
     // assign a pointer to use it around for each parameter
@@ -225,6 +228,7 @@ JC303::JC303()
     seqShift = parameters.getRawParameterValue("seqShift");
     seqPlayState = parameters.getRawParameterValue("seqPlayState");
     seqGenerate = parameters.getRawParameterValue("seqGenerate");
+    seqClear = parameters.getRawParameterValue("seqClear");
 
     // force initial user values(some hosts migth not do it using value tree state)
     setParameter(WAVEFORM, *waveForm);
@@ -286,6 +290,7 @@ JC303::JC303()
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
+    parameters.addParameterListener("seqClear", this);
     parameters.addParameterListener("seqHarmonizer", this);
     parameters.addParameterListener("seqLength", this);
     parameters.addParameterListener("seqShift", this);
@@ -337,6 +342,7 @@ JC303::~JC303()
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
+    parameters.removeParameterListener("seqClear", this);
     parameters.removeParameterListener("seqHarmonizer", this);
     parameters.removeParameterListener("seqLength", this);
     parameters.removeParameterListener("seqShift", this);
@@ -441,6 +447,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
         );
 
         _sequencerMuted.store(false, std::memory_order_release);
+    }
+    else if (parameterID == "seqClear") {
+        _sequencer.clearTrack();
     }
     else if (parameterID == "seqHarmonizer") {
         uint8_t seqHarmony = static_cast<uint8_t>(*seqHarmonizer);

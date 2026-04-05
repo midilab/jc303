@@ -202,6 +202,7 @@ private:
     std::atomic<float>* rangeNote = nullptr;
     std::atomic<float>* seqPlayState = nullptr;
     std::atomic<float>* seqGenerate = nullptr;
+    std::atomic<float>* seqClear = nullptr;
     std::atomic<float>* seqHarmonizer = nullptr;
     std::atomic<float>* seqLength = nullptr;
     std::atomic<float>* seqShift = nullptr;

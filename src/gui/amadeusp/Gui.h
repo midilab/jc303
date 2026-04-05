@@ -72,6 +72,7 @@ private:
     juce::Slider* rangeNoteSlider;
     SwitchStepSeqButton* seqPlayButton;
     SwitchStepSeqButton* seqGenerateButton;
+    SwitchStepSeqButton* seqClearButton;
     // generative sequencer new controls
     juce::Slider* seqHarmonizerSlider;
     juce::Slider* seqLengthSlider;
@@ -108,6 +109,7 @@ private:
     std::unique_ptr<SliderAttachment> rangeNoteAttachment;
     std::unique_ptr<ButtonAttachment> seqPlayButtonAttachment;
     std::unique_ptr<ButtonAttachment> seqGenerateButtonAttachment;
+    std::unique_ptr<ButtonAttachment> seqClearButtonAttachment;
     std::unique_ptr<SliderAttachment> seqHarmonizerAttachment;
     std::unique_ptr<SliderAttachment> seqLengthAttachment;
     std::unique_ptr<SliderAttachment> seqShiftAttachment;
