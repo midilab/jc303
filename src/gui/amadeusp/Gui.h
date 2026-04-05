@@ -77,6 +77,11 @@ private:
     juce::Slider* seqHarmonizerSlider;
     juce::Slider* seqLengthSlider;
     juce::Slider* seqShiftSlider;
+    // LFO controls
+    juce::Slider* lfoWaveformSlider;
+    juce::Slider* lfoRateSlider;
+    juce::Slider* lfoDepthSlider;
+    juce::Slider* lfoDestinationSlider;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -113,6 +118,10 @@ private:
     std::unique_ptr<SliderAttachment> seqHarmonizerAttachment;
     std::unique_ptr<SliderAttachment> seqLengthAttachment;
     std::unique_ptr<SliderAttachment> seqShiftAttachment;
+    std::unique_ptr<SliderAttachment> lfoWaveformAttachment;
+    std::unique_ptr<SliderAttachment> lfoRateAttachment;
+    std::unique_ptr<SliderAttachment> lfoDepthAttachment;
+    std::unique_ptr<SliderAttachment> lfoDestinationAttachment;
     // previous, next buttons and model name display component
     OverdriveModelSelect* overdriveModelSelect;
 

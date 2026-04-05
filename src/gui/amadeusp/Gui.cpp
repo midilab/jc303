@@ -43,10 +43,15 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(rangeNoteSlider = createModKnob("RANGE"));
     addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, "GEN"));
     addAndMakeVisible(seqClearButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, "CLEAR"));
-    // generative sequencer new controls
     addAndMakeVisible(seqHarmonizerSlider = createModKnob("HARM"));
+    // sequencer controls
     addAndMakeVisible(seqLengthSlider = createModKnob("LEN"));
     addAndMakeVisible(seqShiftSlider = createModKnob("SHIFT"));
+    // LFO controls
+    addAndMakeVisible(lfoRateSlider = createModKnob("RATE"));
+    addAndMakeVisible(lfoDepthSlider = createModKnob("DEPTH"));
+    addAndMakeVisible(lfoDestinationSlider = createModKnob("DEST"));
+    addAndMakeVisible(lfoWaveformSlider = createModKnob("WAVE"));
 
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);
@@ -87,12 +92,17 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     seqHarmonizerAttachment.reset(new SliderAttachment(valueTreeState, "seqHarmonizer", *seqHarmonizerSlider));
     seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
     seqShiftAttachment.reset(new SliderAttachment(valueTreeState, "seqShift", *seqShiftSlider));
+    lfoWaveformAttachment.reset(new SliderAttachment(valueTreeState, "lfoWaveform", *lfoWaveformSlider));
+    lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));
+    lfoDepthAttachment.reset(new SliderAttachment(valueTreeState, "lfoDepth", *lfoDepthSlider));
+    lfoDestinationAttachment.reset(new SliderAttachment(valueTreeState, "lfoDestination", *lfoDestinationSlider));
 
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
-    setSize (930, 363);
+    //setSize (930, 363);
+    setSize (930, 557);
 }
 
 JC303Editor::~JC303Editor()
@@ -239,19 +249,24 @@ void JC303Editor::setControlsLayout()
     pair<int, int> acidSmileLocation = {484, 16};
 
     // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {110, 13};
-    pair<int, int> seqGenerateButtonLocation = {110, 51};
-    pair<int, int> seqClearButtonLocation = {110, 70};
-    pair<int, int> seqGenerativeFillLocation = {170, 20};
-    pair<int, int> seqGenerativeAccentProbabilityLocation = {210, 20};
-    pair<int, int> seqGenerativeSlideProbabilityLocation = {250, 20};
-    pair<int, int> seqGenerativeTieProbabilityLocation = {290, 20};
-    pair<int, int> seqLengthLocation = {330, 20};
-    pair<int, int> numberOfTonesLocation = {170, 60};
-    pair<int, int> lowerNoteLocation = {210, 60};
-    pair<int, int> rangeNoteLocation = {250, 60};
-    pair<int, int> seqHarmonizerLocation = {290, 60};
-    pair<int, int> seqShiftLocation = {330, 60};
+    pair<int, int> seqPlayButtonLocation = {105, 13};
+    pair<int, int> seqGenerateButtonLocation = {105, 51};
+    pair<int, int> seqClearButtonLocation = {105, 70};
+    pair<int, int> seqGenerativeFillLocation = {165, 20};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {205, 20};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {245, 20};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {285, 20};
+    pair<int, int> seqLengthLocation = {325, 20};
+    pair<int, int> numberOfTonesLocation = {165, 60};
+    pair<int, int> lowerNoteLocation = {205, 60};
+    pair<int, int> rangeNoteLocation = {245, 60};
+    pair<int, int> seqHarmonizerLocation = {285, 60};
+    pair<int, int> seqShiftLocation = {325, 60};
+    // LFO controls
+    pair<int, int> lfoDepthLocation = {680, 20};
+    pair<int, int> lfoRateLocation = {720, 20};
+    pair<int, int> lfoDestinationLocation = {680, 60};
+    pair<int, int> lfoWaveformLocation = {720, 60};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -297,4 +312,9 @@ void JC303Editor::setControlsLayout()
     seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
     seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
     seqShiftSlider->setBounds(seqShiftLocation.first, seqShiftLocation.second, sliderSmallSize, sliderSmallSize);
+    // LFO controls
+    lfoWaveformSlider->setBounds(lfoWaveformLocation.first, lfoWaveformLocation.second, sliderSmallSize, sliderSmallSize);
+    lfoRateSlider->setBounds(lfoRateLocation.first, lfoRateLocation.second, sliderSmallSize, sliderSmallSize);
+    lfoDepthSlider->setBounds(lfoDepthLocation.first, lfoDepthLocation.second, sliderSmallSize, sliderSmallSize);
+    lfoDestinationSlider->setBounds(lfoDestinationLocation.first, lfoDestinationLocation.second, sliderSmallSize, sliderSmallSize);
 }
