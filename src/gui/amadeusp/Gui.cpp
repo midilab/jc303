@@ -42,6 +42,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(lowerNoteSlider = createModKnob("LOW"));
     addAndMakeVisible(rangeNoteSlider = createModKnob("RANGE"));
     addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, "GEN"));
+    // generative sequencer new controls
+    addAndMakeVisible(seqHarmonizerSlider = createModKnob("HARM"));
+    addAndMakeVisible(seqLengthSlider = createModKnob("LEN"));
+    addAndMakeVisible(seqShiftSlider = createModKnob("SHIFT"));
 
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);
@@ -78,6 +82,9 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     rangeNoteAttachment.reset(new SliderAttachment(valueTreeState, "rangeNote", *rangeNoteSlider));
     seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
     seqGenerateButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqGenerate", *seqGenerateButton));
+    seqHarmonizerAttachment.reset(new SliderAttachment(valueTreeState, "seqHarmonizer", *seqHarmonizerSlider));
+    seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
+    seqShiftAttachment.reset(new SliderAttachment(valueTreeState, "seqShift", *seqShiftSlider));
 
     setControlsLayout();
 
@@ -235,9 +242,12 @@ void JC303Editor::setControlsLayout()
     pair<int, int> seqGenerativeAccentProbabilityLocation = {210, 20};
     pair<int, int> seqGenerativeSlideProbabilityLocation = {250, 20};
     pair<int, int> seqGenerativeTieProbabilityLocation = {290, 20};
+    pair<int, int> seqLengthLocation = {330, 20};
     pair<int, int> numberOfTonesLocation = {170, 60};
     pair<int, int> lowerNoteLocation = {210, 60};
     pair<int, int> rangeNoteLocation = {250, 60};
+    pair<int, int> seqHarmonizerLocation = {290, 60};
+    pair<int, int> seqShiftLocation = {330, 60};
     pair<int, int> seqGenerateButtonLocation = {110, 65};
 
     // large knobs
@@ -279,4 +289,8 @@ void JC303Editor::setControlsLayout()
     lowerNoteSlider->setBounds(lowerNoteLocation.first, lowerNoteLocation.second, sliderSmallSize, sliderSmallSize);
     rangeNoteSlider->setBounds(rangeNoteLocation.first, rangeNoteLocation.second, sliderSmallSize, sliderSmallSize);
     seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second, seqGenerateButtonWidth, seqGenerateButtonHeight);
+    // generative sequencer new controls
+    seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
+    seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
+    seqShiftSlider->setBounds(seqShiftLocation.first, seqShiftLocation.second, sliderSmallSize, sliderSmallSize);
 }

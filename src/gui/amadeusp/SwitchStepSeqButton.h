@@ -52,6 +52,7 @@ public:
         if (!buttonLabelText.isEmpty())
         {
             g.setColour(juce::Colour(28, 28, 28));
+            //g.setColour(juce::Colours::black);
             g.setFont(juce::Font(10.0f));
             g.drawText(buttonLabelText, getLocalBounds(), juce::Justification::centred, false);
         }

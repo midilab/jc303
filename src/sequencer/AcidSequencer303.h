@@ -63,7 +63,7 @@ static constexpr double SEQ303_SLIDE_EXTRA_RATIO = 20.0 / 24.0;  // slide overha
 struct StepData303
 {
     uint8_t note   { SEQ303_DEFAULT_NOTE };
-    bool    rest   { true  };
+    bool    rest   { false  };
     bool    accent { false };
     bool    slide  { false };
     bool    tie    { false };

@@ -202,6 +202,9 @@ private:
     std::atomic<float>* rangeNote = nullptr;
     std::atomic<float>* seqPlayState = nullptr;
     std::atomic<float>* seqGenerate = nullptr;
+    std::atomic<float>* seqHarmonizer = nullptr;
+    std::atomic<float>* seqLength = nullptr;
+    std::atomic<float>* seqShift = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;

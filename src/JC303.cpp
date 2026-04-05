@@ -162,12 +162,27 @@ JC303::JC303()
                                                         0.0f,
                                                         127.0f,
                                                         48.0f),
+           std::make_unique<juce::AudioParameterFloat> ("seqHarmonizer",
+                                                        "Seq Harmonizer",
+                                                        0.0f,
+                                                        13.0f,
+                                                        0.0f),
+           std::make_unique<juce::AudioParameterFloat> ("seqLength",
+                                                        "Seq Length",
+                                                        0.0f,
+                                                        16.0f,
+                                                        16.0f),
+           std::make_unique<juce::AudioParameterFloat> ("seqShift",
+                                                        "Seq Shift",
+                                                        0.0f,
+                                                        16.0f,
+                                                        0.0f),
              std::make_unique<juce::AudioParameterBool> ("seqPlayState",
                                                          "Seq Play State",
                                                          false),
              std::make_unique<juce::AudioParameterBool> ("seqGenerate",
-                                                         "Seq Generate",
-                                                         false)
+                                                          "Seq Generate",
+                                                          false)
         })
 {
     // assign a pointer to use it around for each parameter
@@ -205,6 +220,9 @@ JC303::JC303()
     numberOfTones = parameters.getRawParameterValue("numberOfTones");
     lowerNote = parameters.getRawParameterValue("lowerNote");
     rangeNote = parameters.getRawParameterValue("rangeNote");
+    seqHarmonizer = parameters.getRawParameterValue("seqHarmonizer");
+    seqLength = parameters.getRawParameterValue("seqLength");
+    seqShift = parameters.getRawParameterValue("seqShift");
     seqPlayState = parameters.getRawParameterValue("seqPlayState");
     seqGenerate = parameters.getRawParameterValue("seqGenerate");
 
@@ -268,6 +286,9 @@ JC303::JC303()
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
+    parameters.addParameterListener("seqHarmonizer", this);
+    parameters.addParameterListener("seqLength", this);
+    parameters.addParameterListener("seqShift", this);
 
     // ── Sequencer callback ────────────────────────────────────────────────────
     // Runs on the audio thread. Stores each event into _pendingNotes[] so
@@ -316,6 +337,9 @@ JC303::~JC303()
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
+    parameters.removeParameterListener("seqHarmonizer", this);
+    parameters.removeParameterListener("seqLength", this);
+    parameters.removeParameterListener("seqShift", this);
 }
 
 // Parameter change callback
@@ -417,6 +441,21 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
         );
 
         _sequencerMuted.store(false, std::memory_order_release);
+    }
+    else if (parameterID == "seqHarmonizer") {
+        uint8_t seqHarmony = static_cast<uint8_t>(*seqHarmonizer);
+        if (seqHarmony == 0) {
+            _sequencer.setTune(0);
+        } else {
+            _sequencer.setTemperament(seqHarmony - 1);
+            _sequencer.setTune(1);
+        }
+    }
+    else if (parameterID == "seqLength") {
+        _sequencer.setTrackLength(static_cast<uint8_t>(*seqLength));
+    }
+    else if (parameterID == "seqShift") {
+        _sequencer.setShiftPos(static_cast<int8_t>(*seqShift));
     }
 }
 

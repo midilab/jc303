@@ -72,6 +72,10 @@ private:
     juce::Slider* rangeNoteSlider;
     SwitchStepSeqButton* seqPlayButton;
     SwitchStepSeqButton* seqGenerateButton;
+    // generative sequencer new controls
+    juce::Slider* seqHarmonizerSlider;
+    juce::Slider* seqLengthSlider;
+    juce::Slider* seqShiftSlider;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -104,6 +108,9 @@ private:
     std::unique_ptr<SliderAttachment> rangeNoteAttachment;
     std::unique_ptr<ButtonAttachment> seqPlayButtonAttachment;
     std::unique_ptr<ButtonAttachment> seqGenerateButtonAttachment;
+    std::unique_ptr<SliderAttachment> seqHarmonizerAttachment;
+    std::unique_ptr<SliderAttachment> seqLengthAttachment;
+    std::unique_ptr<SliderAttachment> seqShiftAttachment;
     // previous, next buttons and model name display component
     OverdriveModelSelect* overdriveModelSelect;
 
