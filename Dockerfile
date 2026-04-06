@@ -39,149 +39,123 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN echo ">>> TARGETPLATFORM = $TARGETPLATFORM | RELEASE_ARCH = $RELEASE_ARCH" && \
     case "$TARGETPLATFORM:$RELEASE_ARCH" in \
         "linux/amd64:X86_64") \
-            echo ">>> X86_64 HOST + RELEASE_ARCH=X86_64 → Native x86_64 build"; \
+            echo ">>> Native x86_64 build"; \
             echo "BUILD_NATIVE=1" >> /etc/environment; \
             echo "TARGET_ARCH=x86_64" >> /etc/environment; \
             echo "CROSS_COMPILE=0" >> /etc/environment;; \
         "linux/amd64:ARM64") \
-            echo ">>> X86_64 HOST + RELEASE_ARCH=ARM64 → Cross-compiling to ARM64"; \
+            echo ">>> Cross-compiling to ARM64 from x86_64"; \
             echo "BUILD_NATIVE=0" >> /etc/environment; \
             echo "TARGET_ARCH=arm64" >> /etc/environment; \
             echo "CROSS_COMPILE=1" >> /etc/environment;; \
         "linux/arm64:X86_64") \
-            echo ">>> ARM64 HOST + RELEASE_ARCH=X86_64 → Cross-compiling to X86_64"; \
+            echo ">>> Cross-compiling to X86_64 from arm64"; \
             echo "BUILD_NATIVE=0" >> /etc/environment; \
             echo "TARGET_ARCH=x86_64" >> /etc/environment; \
             echo "CROSS_COMPILE=1" >> /etc/environment;; \
         "linux/arm64:ARM64") \
-            echo ">>> ARM64 HOST + RELEASE_ARCH=ARM64 → Native arm64 build"; \
+            echo ">>> Native arm64 build"; \
             echo "BUILD_NATIVE=1" >> /etc/environment; \
             echo "TARGET_ARCH=arm64" >> /etc/environment; \
             echo "CROSS_COMPILE=0" >> /etc/environment;; \
         *) \
-            echo "ERROR: Unsupported combination TARGETPLATFORM=$TARGETPLATFORM RELEASE_ARCH=$RELEASE_ARCH" && exit 1;; \
+            echo "ERROR: Unsupported combination" && exit 1;; \
     esac
 
 # ------------------------------------------------------------
-# 0. Install Kitware CMake (same for both architectures)
+# 0. Install Kitware CMake
 # ------------------------------------------------------------
 RUN apt-get update && \
     apt-get install -y ca-certificates gpg wget && \
     wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
     | gpg --dearmor - > /usr/share/keyrings/kitware-archive-keyring.gpg && \
-    echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] \
-    https://apt.kitware.com/ubuntu/ focal main' \
+    echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ focal main' \
     > /etc/apt/sources.list.d/kitware.list && \
     apt-get update && \
-    apt-get install -y cmake && \
+    apt-get install -y cmake ninja-build && \
     cmake --version
 
 # ------------------------------------------------------------
-# 1. Universal native tools (always installed)
+# 1. Universal native tools
 # ------------------------------------------------------------
-RUN apt-get update && \
-    apt-get install -y \
-    build-essential \
-    git \
-    wget \
-    curl \
-    pkg-config \
-    ninja-build \
+RUN apt-get update && apt-get install -y \
+    build-essential git wget curl pkg-config \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ------------------------------------------------------------
-# 2. Conditional: If ARM host → install amd64 cross-toolchain
+# 2. Install dev libraries (native or cross)
 # ------------------------------------------------------------
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$RELEASE_ARCH" = "X86_64" ]; then \
-    echo ">>> ARM64 HOST + X86_64 RELEASE — Installing cross environment"; \
-    dpkg --add-architecture amd64 && apt-get update && \
-    apt-get install -y \
-    gcc-x86-64-linux-gnu \
-    g++-x86-64-linux-gnu \
-    # Graphics
-    libx11-dev:amd64 \
-    libxext-dev:amd64 \
-    libxrandr-dev:amd64 \
-    libxinerama-dev:amd64 \
-    libxcursor-dev:amd64 \
-    libxi-dev:amd64 \
-    libgl1-mesa-dev:amd64 \
-    libglu1-mesa-dev:amd64 \
-    libfreetype6-dev:amd64 \
-    # Audio
-    libasound2-dev:amd64 \
-    libjack-jackd2-dev:amd64 \
-    libsamplerate0-dev:amd64 \
-    libsndfile1-dev:amd64 \
-    # Network / utils
-    libcurl4-openssl-dev:amd64 \
-    libavahi-client-dev:amd64 \
-    # JUCE extras
-    libgtk-3-dev:amd64 \
-    libwebkit2gtk-4.0-dev:amd64 \
-    libxml2-dev:amd64 \
-    libzip-dev:amd64 \
-    libfftw3-dev:amd64 \
-    libjpeg-dev:amd64 \
-    libpng-dev:amd64 \
-    libgif-dev:amd64 \
-    librsvg2-dev:amd64 \
-    libbz2-dev:amd64 ; \
+        # ARM64 host → cross to x86_64
+        dpkg --add-architecture amd64 && apt-get update && \
+        apt-get install -y \
+        # X86_64 dependencies
+        gcc-x86-64-linux-gnu g++-x86-64-linux-gnu \
+        libfontconfig1-dev:amd64 libx11-dev:amd64 libxrender-dev:amd64 \
+        libxext-dev:amd64 libxcursor-dev:amd64 libxi-dev:amd64 \
+        libxinerama-dev:amd64 libxrandr-dev:amd64 libgl1-mesa-dev:amd64 \
+        libasound2-dev:amd64 libjack-jackd2-dev:amd64 libgtk-3-dev:amd64 \
+        libwebkit2gtk-4.0-dev \
+        # ARM64 dependencies
+        libfontconfig1-dev \
+        libx11-dev \
+        libxrender-dev \
+        libxext-dev \
+        libfreetype6-dev \
+        libglib2.0-dev \
+        libgtk-3-dev \
+        libwebkit2gtk-4.0-dev \
+        && apt-get clean; \
+    elif [ "$TARGETPLATFORM" = "linux/amd64" ] && [ "$RELEASE_ARCH" = "ARM64" ]; then \
+        # X86_64 host → cross to ARM64
+        dpkg --add-architecture arm64 && apt-get update && \
+        apt-get install -y \
+        # ARM64 dependencies
+        gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config-aarch64-linux-gnu \
+        libfontconfig1-dev:arm64 libx11-dev:arm64 libxrender-dev:arm64 \
+        libxext-dev:arm64 libx11-xcb-dev:arm64 libxcursor-dev:arm64 \
+        libxi-dev:arm64 libxinerama-dev:arm64 libxrandr-dev:arm64 \
+        libgl1-mesa-dev:arm64 libfreetype6-dev:arm64 \
+        libasound2-dev:arm64 libjack-jackd2-dev:arm64 \
+        libgtk-3-dev:arm64 libwebkit2gtk-4.0-dev:arm64 \
+        libxml2-dev:arm64 libzip-dev:arm64 \
+        # X86_64 dependencies
+        libfontconfig1-dev \
+        libx11-dev \
+        libxrender-dev \
+        libxext-dev \
+        libfreetype6-dev \
+        libglib2.0-dev \
+        libgtk-3-dev \
+        libwebkit2gtk-4.0-dev \
+        && apt-get clean; \
     else \
-    echo ">>> Installing native libs"; \
-    apt-get update && \
-    apt-get install -y \
-    libx11-dev \
-    libxext-dev \
-    libxrandr-dev \
-    libxinerama-dev \
-    libxcursor-dev \
-    libxi-dev \
-    libgl1-mesa-dev \
-    libglu1-mesa-dev \
-    libfreetype6-dev \
-    # Audio
-    libasound2-dev \
-    libjack-jackd2-dev \
-    libsamplerate0-dev \
-    libsndfile1-dev \
-    # Network / utils
-    libcurl4-openssl-dev \
-    libavahi-client-dev \
-    # JUCE extras
-    libgtk-3-dev \
-    libwebkit2gtk-4.0-dev \
-    libxml2-dev \
-    libzip-dev \
-    libfftw3-dev \
-    libjpeg-dev \
-    libpng-dev \
-    libgif-dev \
-    librsvg2-dev \
-    libbz2-dev ; \
-    fi \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+        # Native build
+        apt-get update && \
+        apt-get install -y \
+        libfontconfig1-dev libx11-dev libxrender-dev libxext-dev \
+        libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev \
+        libgl1-mesa-dev libfreetype6-dev \
+        libasound2-dev libjack-jackd2-dev \
+        libgtk-3-dev libwebkit2gtk-4.0-dev \
+        libxml2-dev libzip-dev \
+        && apt-get clean; \
+    fi && rm -rf /var/lib/apt/lists/*
 
 # ------------------------------------------------------------
-# 3. If ARM host → set default cross toolchain environment
+# 4. Environment variables
 # ------------------------------------------------------------
-ENV CC_x86_64="x86_64-linux-gnu-gcc"
-ENV CXX_x86_64="x86_64-linux-gnu-g++"
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$RELEASE_ARCH" = "X86_64" ]; then \
-    echo "export CC=\"$CC_x86_64\"" >> /etc/bash.bashrc; \
-    echo "export CXX=\"$CXX_x86_64\"" >> /etc/bash.bashrc; \
-    echo "export CROSS_AMD64=1" >> /etc/bash.bashrc; \
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ] && [ "$RELEASE_ARCH" = "ARM64" ]; then \
+    echo "export CC=aarch64-linux-gnu-gcc" >> /etc/bash.bashrc; \
+    echo "export CXX=aarch64-linux-gnu-g++" >> /etc/bash.bashrc; \
+    echo "export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> /etc/bash.bashrc; \
+    echo "export CMAKE_TOOLCHAIN_FILE=/toolchain-aarch64.cmake" >> /etc/bash.bashrc; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$RELEASE_ARCH" = "X86_64" ]; then \
+    echo "export CC=x86_64-linux-gnu-gcc" >> /etc/bash.bashrc; \
+    echo "export CXX=x86_64-linux-gnu-g++" >> /etc/bash.bashrc; \
     echo "export PKG_CONFIG_LIBDIR=/usr/lib/x86_64-linux-gnu/pkgconfig" >> /etc/bash.bashrc; \
-    else \
-    echo "export CROSS_AMD64=0" >> /etc/bash.bashrc; \
     fi
 
-# ------------------------------------------------------------
-# 4. Workdir
-# ------------------------------------------------------------
 WORKDIR /jc303
 
-# ------------------------------------------------------------
-# 5. Default shell
-# ------------------------------------------------------------
 CMD ["/bin/bash"]

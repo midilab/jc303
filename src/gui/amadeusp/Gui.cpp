@@ -265,8 +265,8 @@ void JC303Editor::setControlsLayout()
     // LFO controls
     pair<int, int> lfoDepthLocation = {680, 20};
     pair<int, int> lfoRateLocation = {720, 20};
-    pair<int, int> lfoDestinationLocation = {680, 60};
-    pair<int, int> lfoWaveformLocation = {720, 60};
+    pair<int, int> lfoWaveformLocation = {680, 60};
+    pair<int, int> lfoDestinationLocation = {720, 60};
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
