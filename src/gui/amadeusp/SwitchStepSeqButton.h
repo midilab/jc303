@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <cstdint>
 
 class SwitchStepSeqButton : public juce::Button
 {
@@ -11,51 +12,74 @@ public:
         Press
     };
 
-    explicit SwitchStepSeqButton(Mode mode = Mode::Toggle, const juce::String& labelText = "")
+    enum class Size
+    {
+        Large,
+        Medium,
+        Small
+    };
+
+    explicit SwitchStepSeqButton(Mode mode = Mode::Toggle, Size size = Size::Large, bool useLedIndicator = false, int8_t ledOffset = 0)
         : juce::Button(""),
           buttonMode(mode),
-          buttonLabelText(labelText)
+          buttonSize(size),
+          useLed(useLedIndicator),
+          ledShift(ledOffset)
     {
-    }
-
-    void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
-    {
-        juce::Image imageButton;
-
-        if (buttonMode == Mode::Toggle)
+        if (buttonSize == Size::Large)
         {
             imageButton = juce::ImageCache::getFromMemory(BinaryData::largebuttonstepsequencer_png, BinaryData::largebuttonstepsequencer_pngSize);
+        }
+        else if (buttonSize == Size::Medium)
+        {
+            imageButton = juce::ImageCache::getFromMemory(BinaryData::mediumbuttonstepsequencer_png, BinaryData::mediumbuttonstepsequencer_pngSize);
         }
         else
         {
             imageButton = juce::ImageCache::getFromMemory(BinaryData::smallbuttonstepsequencer_png, BinaryData::smallbuttonstepsequencer_pngSize);
         }
 
-        int frameHeight = imageButton.getHeight() / 2;
+        if (useLed)
+        {
+            ledImage = juce::ImageCache::getFromMemory(BinaryData::darkledstepsequencer_png, BinaryData::darkledstepsequencer_pngSize);
+        }
+    }
+
+    void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
+    {
+        float scale = (float) getWidth() / imageButton.getWidth();
+        int buttonFrameHeight = (int) (imageButton.getHeight() / 2.0f * scale);
         int sourceY;
 
         if (buttonMode == Mode::Toggle)
         {
-            sourceY = getToggleState() ? frameHeight : 0;
+            sourceY = getToggleState() ? (int)(imageButton.getHeight() / 2.0f) : 0;
         }
         else
         {
-            sourceY = isButtonDown ? frameHeight : 0;
+            sourceY = isButtonDown ? (int)(imageButton.getHeight() / 2.0f) : 0;
         }
 
-        juce::Rectangle<int> sourceRect(0, sourceY, imageButton.getWidth(), frameHeight);
+        int buttonY = 0;
 
-        g.drawImage(imageButton, 0, 0, getWidth(), getHeight(),
-                    sourceRect.getX(), sourceRect.getY(), sourceRect.getWidth(), sourceRect.getHeight(),
-                    false);
-
-        if (!buttonLabelText.isEmpty())
+        if (useLed && ledImage.isValid())
         {
-            g.setColour(juce::Colour(28, 28, 28));
-            //g.setColour(juce::Colours::black);
-            g.setFont(juce::Font(10.0f));
-            g.drawText(buttonLabelText, getLocalBounds(), juce::Justification::centred, false);
+            int ledFrameHeight = (int) (ledImage.getHeight() / 2.0f * scale);
+            int ledWidth = (int) (ledImage.getWidth() * scale);
+            int ledSourceY = ((buttonMode == Mode::Toggle) ? getToggleState() : isButtonDown) ? (int)(ledImage.getHeight() / 2.0f) : 0;
+            int scaledGap = (int) (4.0f * scale);
+
+            buttonY = ledFrameHeight + scaledGap;
+
+            int ledX = (getWidth() - ledWidth) / 2 + (int)(ledShift * scale);
+            g.drawImage(ledImage, ledX, 0, ledWidth, ledFrameHeight,
+                        0, ledSourceY, ledImage.getWidth(), ledImage.getHeight() / 2,
+                        false);
         }
+
+        g.drawImage(imageButton, 0, buttonY, getWidth(), buttonFrameHeight,
+                    0, sourceY, imageButton.getWidth(), imageButton.getHeight() / 2,
+                    false);
     }
 
     void mouseDown(const juce::MouseEvent& event) override
@@ -79,6 +103,10 @@ public:
     }
 
 private:
+    juce::Image imageButton;
+    juce::Image ledImage;
     Mode buttonMode;
-    juce::String buttonLabelText;
+    Size buttonSize;
+    bool useLed;
+    int8_t ledShift;
 };

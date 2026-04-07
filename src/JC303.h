@@ -9,7 +9,7 @@ using namespace rosic;
 // GuitarML BYOD implementation
 #include "dsp/guitarml-byod/processors/drive/GuitarMLAmp.h"
 
-// Acid Sequencer
+// Aciduino Sequencer
 #include "sequencer/AcidSequencer303.h"
 
 enum Open303Parameters

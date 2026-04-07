@@ -30,7 +30,7 @@ private:
     juce::Slider* createKnob(const juce::String& knobType, bool useModLookAndFeel = false);
     juce::Slider* createModKnob(const juce::String& label);
     SwitchButton* createSwitch();
-    SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle, const juce::String& labelText = "");
+    SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size size = SwitchStepSeqButton::Size::Large, bool useLedIndicator = false, int8_t ledOffsetX = 0);
     SwitchLed* createLed(const juce::String& paramID);
     juce::Label* createLabel(const juce::String& text);
     void setControlsLayout();
