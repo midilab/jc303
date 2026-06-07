@@ -15,7 +15,7 @@
 # docker build --build-arg RELEASE_ARCH=ARM64 -t jc303-linux-builder-arm64 .
 #
 # Run – mounts current directory → /jc303
-# docker run -it --rm -v "$(pwd):/jc303" jc303-linux-builder
+# docker run -it --rm -v "$(pwd):/jc303" jc303-linux-builder-{arch}
 # --------------------------------------------------------------
 FROM debian:11
 

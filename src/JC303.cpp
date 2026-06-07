@@ -306,10 +306,11 @@ JC303::JC303()
     };
 
     // Just for tests... remove it later
-    _sequencer.setSyncMode  (AcidSequencer303::SyncMode::Internal);
+    _sequencer.setSyncMode  (AcidSequencer303::SyncMode::Host);
     _sequencer.setStartMode (AcidSequencer303::StartMode::TransportStart);
-    _sequencer.setTempo     (120.0f);
+    //_sequencer.setTempo     (120.0f);
     _sequencer.setTrackLength (16);
+    //_sequencer.stop ();
 }
 
 JC303::~JC303()
