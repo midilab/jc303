@@ -10,6 +10,15 @@ Open303::Open303()
   ampScaler        =     1.0;
   oscFreq          =   440.0;
   sampleRate       = 44100.0;
+
+  // Single pitch path: always resolve notes via the installed frequency bank.
+  {
+    std::array<double, TuningTable::kNumNotes> et {};
+    TuningTable::fillEqualTemperament(et, tuning);
+    pitchBanks[0] = et;
+    pitchBanks[1] = et;
+    pitchBank.store(0, std::memory_order_relaxed);
+  }
   level            =   -12.0;
   levelByVel       =    12.0;
   accent           =     0.0;
@@ -138,6 +147,40 @@ void Open303::setPitchBend(double newPitchBend)
   pitchWheelFactor = pitchOffsetToFreqFactor(newPitchBend);
 }
 
+void Open303::setMasterA4(double newTuning)
+{
+  if( !(newTuning > 0.0) || ! std::isfinite(newTuning) )
+    return;
+  tuning = newTuning;
+}
+
+bool Open303::installPitchMap(const std::array<double, TuningTable::kNumNotes>& frequencies)
+{
+  if( ! TuningTable::validateFrequencies(frequencies) )
+    return false;
+
+  // Write inactive bank, then publish index (audio only reads active bank).
+  const int write = 1 - pitchBank.load(std::memory_order_relaxed);
+  pitchBanks[write] = frequencies;
+  pitchBank.store(write, std::memory_order_release);
+  return true;
+}
+
+void Open303::installEqualTemperament()
+{
+  std::array<double, TuningTable::kNumNotes> et {};
+  TuningTable::fillEqualTemperament(et, tuning);
+  installPitchMap(et);
+}
+
+double Open303::noteToHz(int noteNumber) const
+{
+  if( noteNumber < 0 )   noteNumber = 0;
+  if( noteNumber > 127 ) noteNumber = 127;
+  const int bank = pitchBank.load(std::memory_order_acquire);
+  return pitchBanks[bank][(size_t) noteNumber];
+}
+
 //------------------------------------------------------------------------------------------------------------
 // others:
 
@@ -238,7 +281,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
     ampEnv.setRelease(normalAmpRelease);
   }
 
-  oscFreq = pitchToFreq(noteNumber, tuning);
+  oscFreq = noteToHz(noteNumber);
   pitchSlewLimiter.setState(oscFreq);
   mainEnv.trigger();
   ampEnv.noteOn(true, noteNumber, 64);
@@ -247,7 +290,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
 
 void Open303::slideToNote(int noteNumber, bool hasAccent)
 {
-  oscFreq = pitchToFreq(noteNumber, tuning);
+  oscFreq = noteToHz(noteNumber);
 
   if( hasAccent )
   {
@@ -277,7 +320,7 @@ void Open303::releaseNote(int noteNumber)
   else
   {
     // initiate slide back:
-    oscFreq     = pitchToFreq(currentNote);
+    oscFreq = noteToHz(currentNote);
   }
 }
 

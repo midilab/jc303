@@ -6,6 +6,7 @@
 #include "SwitchButton.h"
 #include "SwitchLed.h"
 #include "OverdriveModelSelect.h"
+#include "TuningFileControl.h"
 #include "AcidSmile.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
@@ -16,7 +17,7 @@ class JC303Editor  : public juce::AudioProcessorEditor
 {
 public:
     explicit JC303Editor (JC303&, juce::AudioProcessorValueTreeState&);
-    ~JC303Editor() override;
+    ~JC303Editor() override = default;
 
     //==============================================================================
     void paint (juce::Graphics&) override;
@@ -27,6 +28,10 @@ private:
     SwitchButton* createSwitch();
     SwitchLed* createLed(const juce::String& paramID);
     void setControlsLayout();
+
+    // Original amadeusp skin size (Load/Reset live under the Tuning knob).
+    static constexpr int kSkinWidth = 930;
+    static constexpr int kSkinHeight = 363;
 
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
@@ -79,6 +84,9 @@ private:
     std::unique_ptr<ButtonAttachment> switchOverdriveButtonAttachment;
     // previous, next buttons and model name display component
     OverdriveModelSelect* overdriveModelSelect;
+
+    // custom scale / microtuning load + reset
+    std::unique_ptr<TuningFileControl> tuningFileControl;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;

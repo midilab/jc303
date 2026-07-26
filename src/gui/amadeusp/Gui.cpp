@@ -32,6 +32,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // overdrive model select component
     addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, processorRef.getModelListNames()));
 
+    // custom scale / microtuning (owns Load/Reset/name + Tuning knob dim/disable)
+    tuningFileControl = std::make_unique<TuningFileControl> (processorRef, *tuningSlider);
+    addAndMakeVisible (*tuningFileControl);
+
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);
 
@@ -56,32 +60,17 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     switchOverdriveButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchOverdriveState", *switchOverdriveButton));
-    
+
     setControlsLayout();
 
-    // Make sure that before the constructor has finished, you've set the
-    // editor's size to whatever you need it to be.
-    setSize (930, 363);
-}
-
-JC303Editor::~JC303Editor()
-{
+    // Keep original skin size; Load/Reset/name sit under the Tuning knob (see setControlsLayout).
+    setSize (kSkinWidth, kSkinHeight);
 }
 
 //==============================================================================
 void JC303Editor::paint (juce::Graphics& g)
 {
-    // Fill the background with a solid colour
-    g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
-
-    // Set the drawing colour and font
-    g.setColour (juce::Colours::white);
-    g.setFont (15.0f);
-
-    // Get the background image from memory
     juce::Image background = ImageCache::getFromMemory (BinaryData::jc303gui_png, BinaryData::jc303gui_pngSize);
-
-    // Draw the image to fill the entire component area
     g.drawImage (background, getLocalBounds().toFloat());
 }
 
@@ -172,6 +161,16 @@ void JC303Editor::setControlsLayout()
     pair<int, int> overdriveLedLocation = {856, 243};
     pair<int, int> overdriveModelSelectLocation = {610, 265};
 
+    // [Reset] [Load] [scale name] under the Tuning knob, between knob and bottom MOD strip.
+    // Tweak these four numbers if you want to nudge position/size yourself.
+    // Tuning knob: (188, 139) size 60 → center X = 218, bottom = 199.
+    // Control is centered under the knob so Load (always centered in this rect) sits under it.
+    const int tuningFileControlWidth  = 250; // room for Reset left of Load + name to the right
+    const int tuningFileControlHeight = 18;
+    const int tuningFileControlX = 188 + (sliderMediumSize / 2) - (tuningFileControlWidth / 2); // ~93
+    const int tuningFileControlY = 216; // just below Tuning knob (~199), above MOD LEDs (~243)
+
+
     // Easter egg mr. smile
     pair<int, int> acidSmileLocation = {484, 16}; 
 
@@ -200,6 +199,9 @@ void JC303Editor::setControlsLayout()
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
     ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
     overdriveModelSelect->setBounds(overdriveModelSelectLocation.first, overdriveModelSelectLocation.second, selectModellWidth, selectModelHeight);
+
+    tuningFileControl->setBounds (tuningFileControlX, tuningFileControlY,
+                                  tuningFileControlWidth, tuningFileControlHeight);
 
     // Easter egg mr. smile
     acidSmile.setBounds(acidSmileLocation.first, acidSmileLocation.second, acidSmileWidth, acidSmileHeight);

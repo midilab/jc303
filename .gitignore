@@ -2,24 +2,59 @@
 build*/
 Build*/
 Builds*/
+cmake-build-*/
+out/
 lib*/
 bin/
 *_Packaged
 *.exe
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.pdb
+*.ilk
+*.exp
 *.dmg
 vstsdk2.4/
+vstsdk2.4
 src/JuceLibraryCode/JuceHeader.h
 src/JuceLibraryCode/ReadMe.txt
 
-# ide settings
+# CMake / local presets (machine-specific)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CMakeUserPresets.json
+compile_commands.json
+.cache/
+
+# IDE / editor settings
 .vscode/
 .idea/
+.vs/
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.sln.docstates
 
 # Mac extras
 .DS_Store
+
+# Windows extras
+Thumbs.db
+Desktop.ini
 
 # tex artifacts
 *.log
 *.aux
 *.out
 *.synctex*
+
+# Local smoke-test binary (source is tracked)
+src/dsp/tuning/tuning_smoke_test
+src/dsp/tuning/tuning_smoke_test.exe
