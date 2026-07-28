@@ -124,10 +124,63 @@ int main (int argc, char** argv)
             expectNear ("exact note 69 = 440", r.table.noteToHz (69), 440.0, 0.05);
     }
 
-    // --- Exact: incomplete rejected ---
+    // --- Exact: incomplete rejected with count in error ---
     {
         auto r = TuningFileLoader::parseTun ("[Exact Tuning]\nBaseFreq = 8.1758\nNote0 = 0\n");
         expectTrue ("reject incomplete exact", ! r.ok);
+        expectTrue ("incomplete exact mentions count",
+                    r.error.find ("1/128") != std::string::npos
+                    || r.error.find ("incomplete") != std::string::npos);
+    }
+
+    // --- Exact: non-numeric Note value ---
+    {
+        std::string s = "[Exact Tuning]\nBaseFreq = 8.1758\n";
+        for (int n = 0; n < TuningTable::kNumNotes; ++n)
+        {
+            if (n == 3)
+                s += "Note3 = abc\n";
+            else
+                s += "Note" + std::to_string (n) + " = 0\n";
+        }
+        auto r = TuningFileLoader::parseTun (s);
+        expectTrue ("reject exact non-numeric note", ! r.ok);
+        expectTrue ("exact letter error mentions Note",
+                    r.error.find ("Note") != std::string::npos);
+        expectTrue ("exact letter error mentions not a number",
+                    r.error.find ("not a number") != std::string::npos);
+        expectTrue ("exact letter error has line number",
+                    r.error.find ("Line ") != std::string::npos);
+    }
+
+    // --- Exact: bad BaseFreq ---
+    {
+        auto r = TuningFileLoader::parseTun ("[Exact Tuning]\nBaseFreq = xyz\nNote0 = 0\n");
+        expectTrue ("reject exact bad BaseFreq", ! r.ok);
+        expectTrue ("BaseFreq error text",
+                    r.error.find ("BaseFreq") != std::string::npos
+                    && r.error.find ("not a number") != std::string::npos);
+    }
+
+    // --- Exact broken + Functional OK → still fail (no silent fallback) ---
+    {
+        std::string s = R"TUN(
+[Functional Tuning]
+InitEqual = (69, 440)
+Note 76 = "#=69 %701.955"
+
+[Exact Tuning]
+BaseFreq = 8.1758
+Note0 = 0
+Note1 = abc
+)TUN";
+        auto r = TuningFileLoader::parseTun (s);
+        expectTrue ("no fallback when Exact present but broken", ! r.ok);
+        expectTrue ("fallback-block error is Exact-related",
+                    r.error.find ("Note") != std::string::npos
+                    || r.error.find ("incomplete") != std::string::npos
+                    || r.error.find ("BaseFreq") != std::string::npos
+                    || r.error.find ("not a number") != std::string::npos);
     }
 
     // --- Functional: InitEqual alone fills full ET grid ---
@@ -171,6 +224,40 @@ int main (int argc, char** argv)
         auto r = TuningFileLoader::parseTun (
             "[Functional Tuning]\nNote 69 = \"#=69 %0\"\n");
         expectTrue ("reject functional without InitEqual", ! r.ok);
+        expectTrue ("missing InitEqual error text",
+                    r.error.find ("InitEqual") != std::string::npos);
+    }
+
+    // --- Functional: garbage cents rejected (not silently skipped) ---
+    {
+        auto r = TuningFileLoader::parseTun (
+            "[Functional Tuning]\nInitEqual = (69, 440)\n"
+            "Note 5 = \"#=69 %oops\"\n");
+        expectTrue ("reject functional non-numeric cents", ! r.ok);
+        expectTrue ("func cents error mentions number",
+                    r.error.find ("not a number") != std::string::npos
+                    || r.error.find ("cents") != std::string::npos);
+        expectTrue ("func cents error has line",
+                    r.error.find ("Line ") != std::string::npos);
+    }
+
+    // --- Functional: bad InitEqual frequency ---
+    {
+        auto r = TuningFileLoader::parseTun (
+            "[Functional Tuning]\nInitEqual = (69, nope)\n");
+        expectTrue ("reject functional bad InitEqual hz", ! r.ok);
+        expectTrue ("InitEqual hz error text",
+                    r.error.find ("InitEqual") != std::string::npos);
+    }
+
+    // --- No section at all ---
+    {
+        auto r = TuningFileLoader::parseTun ("; just a comment\n[Info]\nName = \"x\"\n");
+        expectTrue ("reject no tuning section", ! r.ok);
+        expectTrue ("no-section error text",
+                    r.error.find ("no [Exact") != std::string::npos
+                    || r.error.find ("no usable") != std::string::npos
+                    || r.error.find ("section") != std::string::npos);
     }
 
     // --- Extension / format reject ---

@@ -140,10 +140,16 @@ private:
         juce::String error;
         if (! processorRef.loadTuningFile (file, &error))
         {
+            juce::String body = "Could not load \"" + file.getFileName() + "\".";
+            if (error.isNotEmpty())
+                body += "\n\n" + error;
+            else
+                body += "\n\nUnknown error.";
+
             juce::AlertWindow::showMessageBoxAsync (
                 juce::AlertWindow::WarningIcon,
                 "Tuning load failed",
-                error.isNotEmpty() ? error : "Unknown error");
+                body);
         }
         // Success: ChangeListener refresh is enough
     }

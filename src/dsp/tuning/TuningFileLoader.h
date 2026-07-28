@@ -8,9 +8,14 @@
  * Loads AnaMark .tun files into a TuningTable.
  * Pure C++ (no JUCE). Implementation lives in TuningFileLoader.cpp.
  *
- * Exact: BaseFreq + all 128 note cents (fail closed if incomplete).
- * Functional: InitEqual seeds 12-TET; Note T = "#=B %C" sets
- * freq[T] = freq[B] * 2^(C/1200) in file order (chaining allowed).
+ * Exact (preferred when [Exact Tuning] is present):
+ *   BaseFreq + all 128 note cents. Fail closed with a specific error if the
+ *   section is incomplete or contains non-numeric values. No fallback to
+ *   Functional when Exact is present but invalid.
+ *
+ * Functional (used only when Exact section is absent):
+ *   InitEqual seeds 12-TET; Note T = "#=B %C" overrides in file order.
+ *   Malformed Note / InitEqual lines are errors (not silently skipped).
  */
 class TuningFileLoader
 {
