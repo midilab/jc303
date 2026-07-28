@@ -2,11 +2,34 @@
 
 This is a Free Roland TB-303 clone plugin. A Cmake JUCE port of [Robin Schmidt`s Open303](https://github.com/RobinSchmidt/Open303) with added features.
 
-![JC-303 Screenshot](https://raw.githubusercontent.com/midilab/jc303/main/img/jc303.png)
+![JC-303 with AnaMark TUN support](img/jc303-AnaMark-TUN.png)
 
 This software is licensed under the GNU General Public License version 3 (GPLv3).
 
 The Open303 engine part of this software is also licensed under the MIT License.
+
+## AnaMark `.tun` microtuning
+
+Load AnaMark TUN files so every MIDI note can use a custom frequency map (just intonation, non-12-TET scales, etc.).
+
+| Control | Action |
+|---------|--------|
+| **LOAD** | Open a file chooser for AnaMark `.tun` files |
+| **RESET** | Return to 12-tone equal temperament |
+| **Scale name** | Shows the active tuning name (or `12-TET` when reset) |
+
+Details:
+
+- 128-note absolute frequency table (Hz) shared by note-on, slide, and release paths in Open303.
+- Pitch always resolves through a double-buffered frequency map (installed from the UI/state path; audio only reads).
+- Open303 owns the live pitch bank only; custom vs 12-TET policy lives in the plugin layer.
+- The existing **TUNING** knob remains master A4 fine-tune for **12-TET only**. While a custom map is active, note pitches come from the file.
+- Custom tuning is saved/restored with host/plugin state as absolute frequencies (project does not need the original `.tun` file).
+- **Exact Tuning**: requires `BaseFreq` and all 128 note entries (fail closed).
+- **Functional Tuning**: requires `InitEqual` (seeds full 12-TET); `Note` lines apply as `freq[T] = freq[B] * 2^(cents/1200)` in file order (chained `#=` bases supported).
+- UI lives in the bottom strip of the **amadeusp** skin without changing the editor size (930×363).
+
+Parser smoke test (no JUCE): from `src/dsp/tuning/`, build and run `tuning_smoke_test.cpp` with `TuningFileLoader.cpp`.
 
 ## Download
 
@@ -19,6 +42,8 @@ Windows Intel x64: [jc303-windows_x64-plugins.zip](https://github.com/midilab/jc
 Linux Intel x64: [jc303-linux_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.12.3/jc303-0.12.3-linux_x64-plugins.zip)  
 
 Linux ARM64: Soon...  
+
+> Note: the official download packs above are midilab stock releases and may not include this TUN feature until it is merged upstream. Build from this branch to get AnaMark support.
 
 ## Installation
 
@@ -101,3 +126,4 @@ No distribution of VST2 plugin binaries is allowed without a license, but if you
 4. ~~Overdrive~~
 5. Preset Support
 6. Step Sequencer
+7. ~~AnaMark `.tun` microtuning (Load / Reset / state)~~

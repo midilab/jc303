@@ -1,4 +1,5 @@
 #include "JC303.h"
+#include "dsp/tuning/TuningFileLoader.h"
 #include GUI_THEME_HEADER
 
 //==============================================================================
@@ -336,10 +337,19 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case TUNING:
-        open303Core.setTuning(
-            linToLin(value, 0.0, 1.0,  400.0,    480.0)
-        );
+    {
+        // Knob only moves master A4 + live ET map when no custom scale is loaded.
+        // Do not touch tuningState here (may run off the message thread; state is for UI/XML).
+        const double a4Hz = linToLin (value, 0.0, 1.0, 400.0, 480.0);
+        open303Core.setMasterA4 (a4Hz);
+        if (! customTuningActive.load (std::memory_order_acquire))
+        {
+            std::array<double, TuningTable::kNumNotes> et {};
+            TuningTable::fillEqualTemperament (et, a4Hz);
+            open303Core.installPitchMap (et);
+        }
         break;
+    }
     case CUTOFF:
         open303Core.setCutoff(
             linToExp(value, 0.0, 1.0, 314.0,    2394.0)
@@ -791,21 +801,141 @@ juce::AudioProcessorEditor* JC303::createEditor()
 }
 
 //==============================================================================
+double JC303::a4FromTuningParameter() const
+{
+    return (tuning != nullptr)
+        ? linToLin ((double) *tuning, 0.0, 1.0, 400.0, 480.0)
+        : 440.0;
+}
+
+void JC303::installActiveTuning()
+{
+    open303Core.installPitchMap (tuningState.getFrequencies());
+}
+
+void JC303::applyEqualTemperamentFromParameter()
+{
+    const double a4Hz = a4FromTuningParameter();
+    open303Core.setMasterA4 (a4Hz);
+    tuningState.setEqualTemperament (a4Hz);
+    customTuningActive.store (false, std::memory_order_release);
+    installActiveTuning();
+}
+
+bool JC303::loadTuningFile (const juce::File& file, juce::String* errorMessage)
+{
+    if (! file.existsAsFile())
+    {
+        if (errorMessage != nullptr)
+            *errorMessage = "File does not exist.";
+        return false;
+    }
+
+    auto result = TuningFileLoader::loadFromPath (file.getFullPathName().toStdString());
+    if (! result.ok)
+    {
+        if (errorMessage != nullptr)
+            *errorMessage = juce::String (result.error);
+        return false;
+    }
+
+    tuningState = std::move (result.table);
+    customTuningActive.store (tuningState.isCustom(), std::memory_order_release);
+    installActiveTuning();
+    tuningChangeBroadcaster.sendChangeMessage();
+    updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+    return true;
+}
+
+void JC303::resetTuningToDefault()
+{
+    applyEqualTemperamentFromParameter();
+    tuningChangeBroadcaster.sendChangeMessage();
+    updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+}
+
+juce::String JC303::getActiveTuningName() const
+{
+    return juce::String (tuningState.getName());
+}
+
+bool JC303::isCustomTuningActive() const
+{
+    return tuningState.isCustom();
+}
+
+void JC303::addTuningChangeListener (juce::ChangeListener* listener)
+{
+    tuningChangeBroadcaster.addChangeListener (listener);
+}
+
+void JC303::removeTuningChangeListener (juce::ChangeListener* listener)
+{
+    tuningChangeBroadcaster.removeChangeListener (listener);
+}
+
+//==============================================================================
 void JC303::getStateInformation (juce::MemoryBlock& destData)
 {
-    // for host save functionality
     auto state = parameters.copyState();
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
+
+    // Persist absolute frequencies so projects reopen without the original file
+    auto* tuningXml = xml->createNewChildElement ("CustomTuning");
+    tuningXml->setAttribute ("active", tuningState.isCustom() ? 1 : 0);
+    tuningXml->setAttribute ("name", juce::String (tuningState.getName()));
+    if (tuningState.isCustom())
+    {
+        tuningXml->setAttribute ("freqs", juce::String (tuningState.frequenciesToString()));
+        if (! tuningState.getSourcePath().empty())
+            tuningXml->setAttribute ("path", juce::String (tuningState.getSourcePath()));
+    }
+
     copyXmlToBinary (*xml, destData);
 }
 
 void JC303::setStateInformation (const void* data, int sizeInBytes)
 {
-    // for host load functionality
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
-    if (xmlState.get() != nullptr)
-        if (xmlState->hasTagName (parameters.state.getType()))
-            parameters.replaceState (juce::ValueTree::fromXml (*xmlState));
+    if (xmlState.get() == nullptr)
+        return;
+
+    if (! xmlState->hasTagName (parameters.state.getType()))
+        return;
+
+    auto* tuningXml = xmlState->getChildByName ("CustomTuning");
+    const bool customActive = tuningXml != nullptr && tuningXml->getIntAttribute ("active", 0) != 0;
+    const juce::String tuningName = tuningXml != nullptr
+        ? tuningXml->getStringAttribute ("name", "Custom")
+        : "12-TET";
+    const juce::String freqsCsv = tuningXml != nullptr
+        ? tuningXml->getStringAttribute ("freqs")
+        : juce::String();
+    const juce::String path = tuningXml != nullptr
+        ? tuningXml->getStringAttribute ("path")
+        : juce::String();
+
+    if (tuningXml != nullptr)
+        xmlState->removeChildElement (tuningXml, true);
+
+    parameters.replaceState (juce::ValueTree::fromXml (*xmlState));
+
+    // One-shot restore: full custom map, else clean ET from the restored TUNING knob.
+    // Malformed custom payloads fall back to ET (no leftover custom name).
+    if (customActive && freqsCsv.isNotEmpty()
+        && tuningState.loadFromCsv (freqsCsv.toStdString(),
+                                    tuningName.toStdString(),
+                                    path.toStdString()))
+    {
+        customTuningActive.store (true, std::memory_order_release);
+        installActiveTuning();
+    }
+    else
+    {
+        applyEqualTemperamentFromParameter();
+    }
+
+    tuningChangeBroadcaster.sendChangeMessage();
 }
 
 //==============================================================================

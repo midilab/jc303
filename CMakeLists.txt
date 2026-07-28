@@ -77,12 +77,28 @@ add_subdirectory(src/gui/${GUI})
 # If you are building a VST2 or AAX plugin, CMake needs to be told where to find these SDKs.
 # This setup should be done before calling `juce_add_plugin`.
 
-# do we have vst2 sdk to build it?
-if(EXISTS "${PROJECT_SOURCE_DIR}/vstsdk2.4")
+# Optional identity / format overrides (defaults match stock JC303).
+# Private/local build example: -DJC303_PRODUCT_NAME=JC303_Tunable -DJC303_PLUGIN_CODE=J3t0
+# Upstream/default builds keep PRODUCT_NAME=JC303 and PLUGIN_CODE=J303.
+if(NOT DEFINED JC303_PRODUCT_NAME)
+    set(JC303_PRODUCT_NAME "JC303")
+endif()
+if(NOT DEFINED JC303_PLUGIN_CODE)
+    set(JC303_PLUGIN_CODE "J303")
+endif()
+
+# Formats: can be overridden before configure, e.g. -DPLUGIN_FORMATS=VST3
+# or -DPLUGIN_FORMATS="VST3;Standalone"
+if(NOT DEFINED PLUGIN_FORMATS)
+    # do we have vst2 sdk to build it?
+    if(EXISTS "${PROJECT_SOURCE_DIR}/vstsdk2.4")
+        juce_set_vst2_sdk_path("${PROJECT_SOURCE_DIR}/vstsdk2.4")
+        set(PLUGIN_FORMATS AU VST VST3 LV2)
+    else()
+        set(PLUGIN_FORMATS AU VST3 LV2)
+    endif()
+elseif(EXISTS "${PROJECT_SOURCE_DIR}/vstsdk2.4")
     juce_set_vst2_sdk_path("${PROJECT_SOURCE_DIR}/vstsdk2.4")
-    set(PLUGIN_FORMATS AU VST VST3 LV2)
-else()
-    set(PLUGIN_FORMATS AU VST3 LV2)
 endif()
 
 # `juce_add_plugin` adds a static library target with the name passed as the first argument.
@@ -94,8 +110,8 @@ endif()
 juce_add_plugin("${PROJECT_NAME}"
     FORMATS ${PLUGIN_FORMATS}                   # The formats to build. Valid formats: Standalone Unity VST3 AU AUv3 AAX VST LV2.
                                                 # AU and AUv3 plugins will only be enabled when building on macOS.
-    PRODUCT_NAME "JC303"                        # The name of the final executable, which can differ from the target name.
-    PLUGIN_NAME "JC303"                         # Name of the plugin that will be displayed in the DAW. Can differ from PRODUCT_NAME.
+    PRODUCT_NAME "${JC303_PRODUCT_NAME}"        # The name of the final executable, which can differ from the target name.
+    PLUGIN_NAME  "${JC303_PRODUCT_NAME}"        # Name of the plugin that will be displayed in the DAW. Can differ from PRODUCT_NAME.
 
     # ICON_BIG                                  # ICON_* arguments specify a path to an image file to use as an icon for the Standalone.
     # ICON_SMALL
@@ -105,7 +121,7 @@ juce_add_plugin("${PROJECT_NAME}"
     COMPANY_EMAIL "contact@midilab.co"          # An email address for this target's author. The value is inherited from JUCE_COMPANY_EMAIL.
     PLUGIN_MANUFACTURER_CODE Mlab               # A four-character manufacturer id with at least one upper-case character.
                                                 # GarageBand 10.3 requires the first letter to be upper-case, and the remaining letters to be lower-case.
-    PLUGIN_CODE J303                            # A unique four-character plugin id with exactly one upper-case character.
+    PLUGIN_CODE "${JC303_PLUGIN_CODE}"          # A unique four-character plugin id with exactly one upper-case character.
                                                 # GarageBand 10.3 requires the first letter to be upper-case, and the remaining letters to be lower-case.
 
     IS_SYNTH TRUE                               # Is this a synth or an effect?
@@ -114,7 +130,7 @@ juce_add_plugin("${PROJECT_NAME}"
     IS_MIDI_EFFECT FALSE                        # Is this plugin a MIDI effect?
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE           # Does the editor need keyboard focus?
 
-    LV2URI http://github.com/midilab/JC303
+    LV2URI "http://github.com/midilab/${JC303_PRODUCT_NAME}"
 
     VST3_CATEGORIES "Generator Instrument"      # Should be one or more, separated by spaces, of the following:
                                                 # Fx, Instrument, Analyzer, Delay, Distortion, Drum, Dynamics, EQ, External,
@@ -132,7 +148,7 @@ juce_add_plugin("${PROJECT_NAME}"
 
 clap_juce_extensions_plugin(
     TARGET "${PROJECT_NAME}"
-    CLAP_ID "co.midilab.${PROJECT_NAME}"
+    CLAP_ID "co.midilab.${JC303_PRODUCT_NAME}"
     CLAP_FEATURES "instrument" "synthesizer")
 
 # Set the C++ language standard requirenment for the "shared code" library target.

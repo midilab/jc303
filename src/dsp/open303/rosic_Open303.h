@@ -12,7 +12,10 @@
 #include "rosic_EllipticQuarterBandFilter.h"
 #include "rosic_AcidSequencer.h"
 #include "dfl_LFO.h"
+#include "../tuning/TuningTable.h"
 
+#include <array>
+#include <atomic>
 #include <list>
 
 using namespace std; // for the noteList
@@ -51,8 +54,22 @@ namespace rosic
     0...1 where 0 means pure saw and 1 means pure square. */
     void setWaveform(double newWaveform) { oscillator.setBlendFactor(newWaveform); }
 
-    /** Sets the master tuning frequency for note A4 (usually 440 Hz). */
-    void setTuning(double newTuning) { tuning = newTuning; }
+    /** Stores master A4 (Hz) for later 12-TET rebuilds. Does not touch the live map.
+        Policy for when to rebuild lives in JC303. */
+    void setMasterA4(double newTuning);
+
+    /** Install a validated 128-note frequency map (message thread / param path).
+        Rejects invalid maps (table unchanged). Single pitch path: always table lookup. */
+    bool installPitchMap(const std::array<double, TuningTable::kNumNotes>& frequencies);
+
+    /** Build and install 12-TET from the current master A4. */
+    void installEqualTemperament();
+
+    /** MIDI note number → oscillator frequency in Hz (always via pitch table). */
+    double noteToHz(int noteNumber) const;
+
+    /** Current master A4 reference in Hz. */
+    double getMasterA4() const { return tuning; }
 
     /** Sets the filter's nominal cutoff frequency (in Hz). */
     void setCutoff(double newCutoff);
@@ -297,7 +314,14 @@ namespace rosic
 
     static const int oversampling = 4;
 
-    double tuning;           // master tunung for A4 in Hz
+    double tuning;           // master A4 reference in Hz (scalar only; live pitch is pitchBanks)
+
+    // Real-time-safe pitch: double-buffered 128-note maps (always used by noteToHz).
+    // Writers install on the message/param path; audio only loads the active bank.
+    // Open303 does not track "custom vs ET" — that policy lives in JC303.
+    std::array<double, TuningTable::kNumNotes> pitchBanks[2];
+    std::atomic<int> pitchBank { 0 };
+
     double ampScaler;        // final volume as raw factor
     double oscFreq;          // frequecy of the oscillator (without pitchbend)
     double sampleRate;       // the (non-oversampled) sample rate
