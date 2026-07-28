@@ -30,6 +30,11 @@ enum Open303Parameters
   SOFT_ATTACK,
   SLIDE_TIME,
   TANH_SHAPER_DRIVE,
+  // LFO
+  LFO_WAVEFORM,
+  LFO_RATE,
+  LFO_DEPTH,
+  LFO_DESTINATION,
   // Overdrive
   OVERDRIVE_SWITCH,
   OVERDRIVE_LEVEL,
@@ -140,6 +145,11 @@ private:
     std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* slideTime = nullptr;
     std::atomic<float>* sqrDriver = nullptr;
+    // LFO
+    std::atomic<float>* lfoWaveform = nullptr;
+    std::atomic<float>* lfoRate = nullptr;
+    std::atomic<float>* lfoDepth = nullptr;
+    std::atomic<float>* lfoDestination = nullptr;
     // overdrive
     std::atomic<float>* overdriveModelIndex = nullptr;
     std::atomic<float>* switchOverdriveState = nullptr;

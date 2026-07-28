@@ -87,6 +87,27 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("switchModState",
                                                         "Switch Mod",
                                                         false),
+            // LFO parameters
+            std::make_unique<juce::AudioParameterInt> ("lfoWaveform",
+                                                        "LFO Wave",
+                                                        0,
+                                                        5,
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("lfoRate",
+                                                        "LFO Rate",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.25f),
+            std::make_unique<juce::AudioParameterFloat> ("lfoDepth",
+                                                        "LFO Depth",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),
+            std::make_unique<juce::AudioParameterInt> ("lfoDestination",
+                                                        "LFO Destination",
+                                                        0,
+                                                        2,
+                                                        0),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
@@ -125,6 +146,11 @@ JC303::JC303()
     softAttack = parameters.getRawParameterValue("softAttack");
     slideTime = parameters.getRawParameterValue("slideTime");
     sqrDriver = parameters.getRawParameterValue("sqrDriver");
+    // LFO parameters
+    lfoWaveform = parameters.getRawParameterValue("lfoWaveform");
+    lfoRate = parameters.getRawParameterValue("lfoRate");
+    lfoDepth = parameters.getRawParameterValue("lfoDepth");
+    lfoDestination = parameters.getRawParameterValue("lfoDestination");
     // overdrive parameters
     overdriveModelIndex = parameters.getRawParameterValue("overdriveModelIndex");
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
@@ -147,6 +173,12 @@ JC303::JC303()
     setParameter(SOFT_ATTACK, *softAttack);
     setParameter(SLIDE_TIME, *slideTime);
     setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
+    // LFO parameters
+    setParameter(LFO_WAVEFORM, *lfoWaveform);
+    setParameter(LFO_RATE, *lfoRate);
+    setParameter(LFO_DEPTH, *lfoDepth);
+    setParameter(LFO_DESTINATION, *lfoDestination);
+    // overdrive parameters
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
     setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
@@ -177,6 +209,12 @@ JC303::JC303()
     parameters.addParameterListener("slideTime", this);
     parameters.addParameterListener("sqrDriver", this);
     parameters.addParameterListener("switchModState", this);
+    // LFO parameter listeners
+    parameters.addParameterListener("lfoWaveform", this);
+    parameters.addParameterListener("lfoRate", this);
+    parameters.addParameterListener("lfoDepth", this);
+    parameters.addParameterListener("lfoDestination", this);
+    // overdrive parameter listeners
     parameters.addParameterListener("overdriveLevel", this);
     parameters.addParameterListener("overdriveDryWet", this);
     parameters.addParameterListener("overdriveModelIndex", this);
@@ -200,6 +238,12 @@ JC303::~JC303()
     parameters.removeParameterListener("slideTime", this);
     parameters.removeParameterListener("sqrDriver", this);
     parameters.removeParameterListener("switchModState", this);
+    // LFO parameter listeners
+    parameters.removeParameterListener("lfoWaveform", this);
+    parameters.removeParameterListener("lfoRate", this);
+    parameters.removeParameterListener("lfoDepth", this);
+    parameters.removeParameterListener("lfoDestination", this);
+    // overdrive parameter listeners
     parameters.removeParameterListener("overdriveLevel", this);
     parameters.removeParameterListener("overdriveDryWet", this);
     parameters.removeParameterListener("overdriveModelIndex", this);
@@ -255,6 +299,20 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "sqrDriver" && *switchModState) {
         setParameter(TANH_SHAPER_DRIVE, newValue);
     }
+    // LFO parameters
+    else if (parameterID == "lfoWaveform") {
+        setParameter(LFO_WAVEFORM, newValue);
+    }
+    else if (parameterID == "lfoRate") {
+        setParameter(LFO_RATE, newValue);
+    }
+    else if (parameterID == "lfoDepth") {
+        setParameter(LFO_DEPTH, newValue);
+    }
+    else if (parameterID == "lfoDestination") {
+        setParameter(LFO_DESTINATION, newValue);
+    }
+    // overdrive parameter
     else if (parameterID == "overdriveLevel") {
         setParameter(OVERDRIVE_LEVEL, newValue);
     }
@@ -392,6 +450,25 @@ void JC303::setParameter (Open303Parameters index, float value)
             linToLin(value, 0.0, 1.0,   25.0,     80.0)
             //linToLin(value, 0.0, 1.0,   36.9,     90.0)
         );
+        break;
+
+    // LFO parameters
+    case LFO_WAVEFORM:
+        open303Core.setLfoWaveform(static_cast<int>(value));
+        break;
+    case LFO_RATE:
+        // Map 0.0-1.0 to 0.1-20.0 Hz (logarithmic)
+        open303Core.setLfoRate(
+            linToExp(value, 0.0, 1.0, 0.1, 20.0)
+        );
+        break;
+    case LFO_DEPTH:
+        // 0.0-1.0
+        open303Core.setLfoDepth(value);
+        break;
+    case LFO_DESTINATION:
+        // 0 - filter cutoff, 1 - volume(tremolo style), 2 - pitch
+        open303Core.setLfoDestination(static_cast<int>(value));
         break;
 	}
 }
@@ -558,7 +635,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     auto currentSample = 0;
     const auto numSamples = buffer.getNumSamples();
-    
+
     // clear buffer
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -570,7 +647,7 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     {
         const auto message = midiMetadata.getMessage();
         const auto samplePosition = midiMetadata.samplePosition;
-        
+
         // validate sample position
         if (samplePosition < currentSample || samplePosition >= numSamples)
             continue;

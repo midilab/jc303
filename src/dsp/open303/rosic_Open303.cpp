@@ -39,6 +39,10 @@ Open303::Open303()
   slideToNextNote  = false;
   idle             = true;
 
+  // LFO defaults
+  lfoDepth         =    0.0;
+  lfoDestination   =    0;
+
   setEnvMod(25.0);
 
   oscillator.setWaveTable1(&waveTable1);
@@ -99,6 +103,7 @@ void Open303::setSampleRate(double newSampleRate)
   rc1.setSampleRate(             (float)newSampleRate);
   rc2.setSampleRate(             (float)newSampleRate);
   sequencer.setSampleRate(              newSampleRate);
+  lfo.setSampleRate(                    newSampleRate);
 
   highpass2.setSampleRate     (         newSampleRate);
   allpass.setSampleRate       (         newSampleRate);
@@ -108,6 +113,7 @@ void Open303::setSampleRate(double newSampleRate)
 
   oscillator.setSampleRate    (  oversampling*newSampleRate);
   filter.setSampleRate        (  oversampling*newSampleRate);
+  sampleRate = newSampleRate;
 }
 
 void Open303::setCutoff(double newCutoff)
