@@ -86,6 +86,8 @@ public:
                 break;
             }
 
+        popupLookAndFeel.setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff333f26));
+
         selectPage(0);
     }
 
@@ -408,16 +410,15 @@ private:
                 return;
 
             juce::PopupMenu menu;
-            menu.setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff333f26));
             for (int i = 0; i < item.options.size(); ++i)
                 menu.addItem(1 + i, item.options[i], true, i == p->get());
+            menu.setLookAndFeel(&popupLookAndFeel);
             menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
                                juce::ModalCallbackFunction::create(onChoice));
             return;
         }
 
         juce::PopupMenu menu;
-        menu.setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff333f26));
         auto& page = pageList.getReference(currentPage);
         for (int i = 0; i < page.items.size(); ++i)
         {
@@ -425,6 +426,7 @@ private:
             juce::String text = it.type == Type::placeholder ? "Soon to be implemented" : it.label;
             menu.addItem(1 + i, text, true, i == cursor);
         }
+        menu.setLookAndFeel(&popupLookAndFeel);
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
                            juce::ModalCallbackFunction::create(onChoice));
     }
@@ -512,6 +514,7 @@ private:
     int modPageIndex = -1;
 
     juce::Font customFont;
+    juce::LookAndFeel_V4 popupLookAndFeel;
 
     juce::Label titleLabel;
     juce::Label itemLabel;
