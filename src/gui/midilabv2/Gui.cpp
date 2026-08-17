@@ -76,7 +76,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuPage->setAssignableParam(0, "lfoRate");
     menuPage->setAssignableParam(1, "lfoDepth");
 
-    menuPresetButton->setToggleState(true, juce::dontSendNotification);
+    selectMenu(1);   // default menu page = OVD (Overdrive)
     menuPresetButton->onClick = [this] { selectMenu(0); };
     menuOverdriveButton->onClick = [this] { selectMenu(1); };
     menuModButton->onClick = [this] { selectMenu(2); };
