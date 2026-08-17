@@ -2,6 +2,25 @@
 
 #include <JuceHeader.h>
 
+// Rotary slider that exposes its double-click to MenuPage so a theme knob can
+// be repurposed for "assign this knob to the current menu item". Overriding
+// mouseDoubleClick without calling the base also blocks the attachment's
+// reset-to-default behaviour.
+class AssignableSlider : public juce::Slider
+{
+public:
+    using juce::Slider::Slider;
+
+    std::function<void()> onDoubleClick;
+
+private:
+    void mouseDoubleClick(const juce::MouseEvent&) override
+    {
+        if (onDoubleClick)
+            onDoubleClick();
+    }
+};
+
 // Generic LCD-style menu page component, shared across GUI themes.
 // Pure view/controller: reads and writes parameters through the value tree state.
 // Item types:
@@ -58,6 +77,13 @@ public:
                     continue;
                 paramIDs.add(id);
                 valueTreeState.addParameterListener(id, this);
+            }
+
+        for (int i = 0; i < pageList.size(); ++i)
+            if (pageList.getReference(i).title == "Modifications")
+            {
+                modPageIndex = i;
+                break;
             }
 
         selectPage(0);
@@ -127,6 +153,77 @@ public:
     // knob's 0..100 scale, or -1 when the knob has nothing to edit (select/placeholder).
     std::function<void(float)> onCurrentItemChanged;
 
+    // ---- assignable macro knobs ----
+    // A slot binds a theme-owned rotary slider to a value item (by param id), so
+    // themes can expose quick-access knobs for MOD parameters. Double-clicking the
+    // slider assigns the currently selected menu item to it. Both directions of the
+    // value stay in sync through a per-slot SliderAttachment.
+    static constexpr int numAssignableSlots = 2;
+
+    void bindAssignableSlider(int slot, AssignableSlider* slider, juce::Label* label)
+    {
+        if (slot < 0 || slot >= numAssignableSlots || slider == nullptr)
+            return;
+        assignableSlots[slot].slider = slider;
+        assignableSlots[slot].label = label;
+        slider->onDoubleClick = [this, slot] { assignCurrentItemToSlot(slot); };
+        rebindAssignable(slot);
+    }
+
+    void setAssignableParam(int slot, const juce::String& paramID)
+    {
+        if (slot < 0 || slot >= numAssignableSlots)
+            return;
+        if (assignableSlots[slot].id == paramID)
+            return;
+        assignableSlots[slot].id = paramID;
+        rebindAssignable(slot);
+    }
+
+    void assignCurrentItemToSlot(int slot)
+    {
+        if (slot < 0 || slot >= numAssignableSlots)
+            return;
+        if (currentPage != modPageIndex || currentItem().type != Type::value)
+            return;
+        for (int i = 0; i < numAssignableSlots; ++i)
+            if (i != slot && assignableSlots[i].id == currentItem().id)
+                return;   // other knob already has this control -> no-op
+        setAssignableParam(slot, currentItem().id);
+    }
+
+    juce::String assignableParam(int slot) const
+    {
+        if (slot < 0 || slot >= numAssignableSlots)
+            return {};
+        return assignableSlots[slot].id;
+    }
+
+    float assignableValue(int slot) const
+    {
+        if (slot < 0 || slot >= numAssignableSlots)
+            return -1.0f;
+        auto* param = valueTreeState.getParameter(assignableSlots[slot].id);
+        return param == nullptr ? -1.0f : param->getValue() * 100.0f;
+    }
+
+    juce::String assignableLabel(int slot) const
+    {
+        if (slot < 0 || slot >= numAssignableSlots)
+            return {};
+        const juce::String id = assignableSlots[slot].id;
+        if (id.isEmpty())
+            return {};
+        for (auto& pg : pageList)
+            for (auto& it : pg.items)
+                if (it.id == id)
+                    return it.label;
+        return {};
+    }
+
+    // Fired when a slot is (re)bound so a theme can refresh anything extra.
+    std::function<void(int)> onAssignableChanged;
+
     void parameterChanged(const juce::String& parameterID, float newValue) override
     {
         ignoreUnused(parameterID, newValue);
@@ -158,6 +255,33 @@ private:
             if (auto* param = valueTreeState.getParameter(currentItem().id))
                 v = param->getValue() * 100.0f;
         onCurrentItemChanged(v);
+    }
+
+    struct AssignableSlot
+    {
+        juce::String id;
+        juce::Slider* slider = nullptr;
+        juce::Label* label = nullptr;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
+    };
+
+    void rebindAssignable(int slot)
+    {
+        auto& s = assignableSlots[slot];
+        s.attachment.reset();
+
+        const bool bound = !s.id.isEmpty()
+                           && s.slider != nullptr
+                           && valueTreeState.getParameter(s.id) != nullptr;
+        if (bound)
+            s.attachment.reset(new juce::AudioProcessorValueTreeState::SliderAttachment(valueTreeState, s.id, *s.slider));
+
+        if (s.slider != nullptr)
+            s.slider->setEnabled(bound);
+        if (s.label != nullptr)
+            s.label->setText(bound ? assignableLabel(slot) : juce::String(), juce::dontSendNotification);
+        if (onAssignableChanged)
+            onAssignableChanged(slot);
     }
 
     juce::AudioParameterInt* intParam(const juce::String& id)
@@ -284,6 +408,7 @@ private:
                 return;
 
             juce::PopupMenu menu;
+            menu.setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff333f26));
             for (int i = 0; i < item.options.size(); ++i)
                 menu.addItem(1 + i, item.options[i], true, i == p->get());
             menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
@@ -292,6 +417,7 @@ private:
         }
 
         juce::PopupMenu menu;
+        menu.setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff333f26));
         auto& page = pageList.getReference(currentPage);
         for (int i = 0; i < page.items.size(); ++i)
         {
@@ -380,8 +506,10 @@ private:
     juce::AudioProcessorValueTreeState& valueTreeState;
     juce::Array<Page> pageList;
     juce::StringArray paramIDs;
+    AssignableSlot assignableSlots[numAssignableSlots];
     int currentPage = 0;
     int cursor = 0;
+    int modPageIndex = -1;
 
     juce::Font customFont;
 

@@ -599,7 +599,9 @@ void JC303::setDevilMod(bool mode)
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(SLIDE_TIME, *slideTime);
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
+        open303Core.setLfoOn(true);
     } else if (mode == false) {
+        open303Core.setLfoOn(false);
         decayMin = 200.0;
         decayMax = 2000.0;
         open303Core.setAmpDecay(1230.0);

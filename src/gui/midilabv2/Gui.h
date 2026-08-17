@@ -29,6 +29,7 @@ public:
 private:
     juce::Slider* createKnob(const juce::String& knobType, bool useModLookAndFeel = false);
     juce::Slider* createModKnob(const juce::String& label);
+    AssignableSlider* createAssignableSlider(const juce::String& label, juce::Label*& labelOut);
     SwitchButton* createSwitch();
     MenuSwitchButton* createMenuSwitch(MenuSwitchButton::Mode mode);
     SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size size = SwitchStepSeqButton::Size::Large);
@@ -91,6 +92,10 @@ private:
     MenuSwitchButton* menuDecButton;
     MenuSwitchButton* menuIncButton;
     juce::Slider* menuKnob;
+    AssignableSlider* modAssign1;
+    AssignableSlider* modAssign2;
+    juce::Label* modAssign1Label;
+    juce::Label* modAssign2Label;
     int menuMode = 0;
     // sequencer step toggles
     SwitchButton* seqStep1Button;

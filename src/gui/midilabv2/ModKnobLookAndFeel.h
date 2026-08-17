@@ -42,7 +42,8 @@ void drawRotarySlider(Graphics& g,
 
 class AttachedLabel : public Label {
 public:
-    AttachedLabel(Justification justification = Justification::centredTop) :m_justification(justification) {
+    AttachedLabel(Justification justification = Justification::centredTop, bool placeBelow = false)
+        : m_justification(justification), m_below(placeBelow) {
         setColour(juce::Label::textColourId, juce::Colour(28, 28, 28));
         setFont(juce::Font(12.0f));
         setMinimumHorizontalScale(1.0f);
@@ -57,8 +58,9 @@ public:
         setSize (textWidth+20, f.getHeight());
 
         setTopLeftPosition (component.getX() + (component.getWidth() - textWidth-20) / 2,
-                        component.getY() - getHeight() + 2);
+                            m_below ? component.getY() + component.getHeight() + 6 : component.getY() - getHeight() + 2);
     }
 private:
     Justification m_justification;
+    bool m_below;
 };

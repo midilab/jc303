@@ -156,6 +156,10 @@ namespace rosic
     /** Sets the LFO destination (volume, cutoff). */
     void setLfoDestination(double dest) { lfoDestination = dest; }
 
+    /** Enables/disables LFO processing (master on/off). */
+    void setLfoOn(bool on) { lfoEnabled = on; }
+    bool getLfoOn() const { return lfoEnabled; }
+
     //-----------------------------------------------------------------------------------------------
     // inquiry:
 
@@ -328,6 +332,7 @@ namespace rosic
     // LFO modulation depth
     double lfoDepth;    // LFO depth (-1.0 to +1.0)
     int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch)
+    bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;
 
@@ -383,7 +388,7 @@ namespace rosic
     double volumeModFactor = 1.0;
     double pitchModFactor = 1.0;
 
-    if (lfoDepth > 0.0)
+    if (lfoEnabled && lfoDepth > 0.0)
     {
       // Get LFO output (0.0 to +1.0 unipolar, convert to bipolar for modulation)
       double lfoValue = lfo.getSample() * 2.0 - 1.0;  // Convert unipolar to bipolar

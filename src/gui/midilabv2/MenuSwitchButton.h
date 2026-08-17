@@ -24,9 +24,11 @@ public:
 
         juce::Rectangle<int> sourceRect(0, sourceY, imageSwitch.getWidth(), frameHeight);
 
+        g.setOpacity(isEnabled() ? 1.0f : 0.35f);
         g.drawImage(imageSwitch, 0, 0, getWidth(), getHeight(),
                     sourceRect.getX(), sourceRect.getY(), sourceRect.getWidth(), sourceRect.getHeight(),
                     false);
+        g.setOpacity(1.0f);
     }
 
     void mouseDown(const juce::MouseEvent&) override

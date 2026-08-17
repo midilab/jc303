@@ -68,6 +68,14 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(menuKnob = createKnob("medium"));
     menuKnob->setRange(0.0, 100.0);
 
+    // assignable macro knobs (double-click -> assign current MOD item)
+    addAndMakeVisible(modAssign1 = createAssignableSlider("LFO rate", modAssign1Label));
+    addAndMakeVisible(modAssign2 = createAssignableSlider("LFO depth", modAssign2Label));
+    menuPage->bindAssignableSlider(0, modAssign1, modAssign1Label);
+    menuPage->bindAssignableSlider(1, modAssign2, modAssign2Label);
+    menuPage->setAssignableParam(0, "lfoRate");
+    menuPage->setAssignableParam(1, "lfoDepth");
+
     menuPresetButton->setToggleState(true, juce::dontSendNotification);
     menuPresetButton->onClick = [this] { selectMenu(0); };
     menuOverdriveButton->onClick = [this] { selectMenu(1); };
@@ -80,8 +88,11 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuKnob->onValueChange = [this] { menuPage->setValue((float) menuKnob->getValue()); };
     menuPage->onCurrentItemChanged = [this] (float v)
     {
-        menuKnob->setEnabled(v >= 0.0f);
-        if (v >= 0.0f)
+        const bool editable = (v >= 0.0f);
+        menuKnob->setEnabled(editable);
+        menuDecButton->setEnabled(editable);
+        menuIncButton->setEnabled(editable);
+        if (editable)
             menuKnob->setValue(v, juce::dontSendNotification);
     };
 
@@ -248,6 +259,25 @@ juce::Slider* JC303Editor::createModKnob(const juce::String& label)
     return slider;
 }
 
+AssignableSlider* JC303Editor::createAssignableSlider(const juce::String& label, juce::Label*& labelOut)
+{
+    auto* slider = new AssignableSlider();
+    slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    slider->setLookAndFeel(&knobLookAndFeel);
+    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+    slider->setRotaryParameters(0, 5.3, true);
+
+    auto* labelComponent = new AttachedLabel(juce::Justification::centredTop, true);
+    labelComponent->setText(label, juce::dontSendNotification);
+    labelComponent->setJustificationType(juce::Justification::centredTop);
+    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
+    labelComponent->attachToComponent(slider, true);
+    labelOut = labelComponent;
+    labelComponent->setFont(juce::Font(16.0f));
+
+    return slider;
+}
+
 void JC303Editor::setControlsLayout()
 {
     // Set the bounds and other properties for each gui component
@@ -298,7 +328,7 @@ void JC303Editor::setControlsLayout()
     pair<int, int> displayMenuLocation = {60, 238};
 
     // Easter egg mr. smile
-    pair<int, int> acidSmileLocation = {484, 16};
+    pair<int, int> acidSmileLocation = {840, 18};
 
     // generative sequencer controls (top row, left to right)
     pair<int, int> seqPlayButtonLocation = {50, 375};
@@ -361,6 +391,9 @@ void JC303Editor::setControlsLayout()
 
     pair<int, int> menuKnobLocation = {375, 240};
 
+    pair<int, int> modKnob1Location = {487, 240};
+    pair<int, int> modKnob2Location = {608, 240};
+
     // menu navigation controls (top row)
     menuPresetButton->setBounds(menuPresetButtonLocation.first, menuPresetButtonLocation.second, menuButtonWidth, menuButtonHeight);
     menuOverdriveButton->setBounds(menuOverdriveButtonLocation.first, menuOverdriveButtonLocation.second, menuButtonWidth, menuButtonHeight);
@@ -371,6 +404,8 @@ void JC303Editor::setControlsLayout()
     menuDecButton->setBounds(menuDecButtonLocation.first, menuDecButtonLocation.second, menuButtonWidth, menuButtonHeight);
     menuIncButton->setBounds(menuIncButtonLocation.first, menuIncButtonLocation.second, menuButtonWidth, menuButtonHeight);
     menuKnob->setBounds(menuKnobLocation.first, menuKnobLocation.second, sliderMediumSize, sliderMediumSize);
+    modAssign1->setBounds(modKnob1Location.first, modKnob1Location.second, sliderMediumSize, sliderMediumSize);
+    modAssign2->setBounds(modKnob2Location.first, modKnob2Location.second, sliderMediumSize, sliderMediumSize);
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderMediumSize, sliderMediumSize);

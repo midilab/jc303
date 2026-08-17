@@ -17,24 +17,12 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        // should we show up with acid smile?
-        if (isImageVisible)
-        {
-            g.drawImage(image,
-                0, 0, getWidth(), getHeight(),  
-                0, 0, image.getWidth(), image.getHeight(),
-                false);
-        }
-    }
-
-    void mouseDown(const juce::MouseEvent& event) override
-    {
-        // Toggle the image visibility on mouse click
-        isImageVisible = !isImageVisible;
-        repaint();  
+        g.drawImage(image,
+            0, 0, getWidth(), getHeight(),  
+            0, 0, image.getWidth(), image.getHeight(),
+            false);
     }
 
 private:
     juce::Image image;
-    bool isImageVisible = false;
 };
