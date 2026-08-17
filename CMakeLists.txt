@@ -18,7 +18,7 @@ set(LIB_CHOWDSP_UTILS_TAG "ffc70ba399f9afaeefb996eb14e55a1d487270b8")
 # check if the GUI variable is set
 if(NOT DEFINED GUI)
     # no GUI set defaults to amadeusp
-    set(GUI "amadeusp")
+    set(GUI "midilabv2")
 endif()
 set(GUI_THEME_HEADER "gui/${GUI}/Gui.h")
 set(GUI_THEME ${GUI})
