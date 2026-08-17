@@ -328,7 +328,7 @@ void JC303Editor::setControlsLayout()
     pair<int, int> displayMenuLocation = {60, 238};
 
     // Easter egg mr. smile
-    pair<int, int> acidSmileLocation = {840, 18};
+    pair<int, int> acidSmileLocation = {840, 15};
 
     // generative sequencer controls (top row, left to right)
     pair<int, int> seqPlayButtonLocation = {50, 375};
