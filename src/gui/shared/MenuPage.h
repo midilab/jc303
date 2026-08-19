@@ -40,6 +40,7 @@ public:
         Type type = Type::placeholder;
         juce::StringArray options;  // select type only
         float step = 0.0f;          // value type only; 0 = auto (0.01 for 0..1 floats, 1 for ints/bools)
+        juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
     };
 
     struct Page
@@ -56,6 +57,7 @@ public:
 
         addAndMakeVisible(titleLabel);
         addAndMakeVisible(itemLabel);
+        addAndMakeVisible(valueLabel);
 
         titleLabel.setFont(customFont);
         titleLabel.setJustificationType(juce::Justification::centredLeft);
@@ -68,6 +70,12 @@ public:
         itemLabel.setColour(juce::Label::textColourId, juce::Colours::white);
         itemLabel.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
         itemLabel.setInterceptsMouseClicks(false, false);
+
+        valueLabel.setFont(customFont);
+        valueLabel.setJustificationType(juce::Justification::centredRight);
+        valueLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        valueLabel.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+        valueLabel.setInterceptsMouseClicks(false, false);
 
         for (auto& pg : pageList)
             for (auto& it : pg.items)
@@ -230,6 +238,7 @@ public:
     {
         ignoreUnused(parameterID, newValue);
         updateDisplay();
+        notifyCurrentItemChanged();
     }
 
     void mouseDown(const juce::MouseEvent& e) override
@@ -323,6 +332,7 @@ private:
         param->setValueNotifyingHost(newValue);
         param->endChangeGesture();
         updateDisplay();
+        notifyCurrentItemChanged();
     }
 
     static juce::String valueString(juce::RangedAudioParameter* param)
@@ -332,6 +342,14 @@ private:
         if (auto* p = dynamic_cast<juce::AudioParameterBool*>(param))
             return p->get() ? juce::String("1") : juce::String("0");
         return juce::String((int) juce::roundToInt(param->getValue() * 100.0f));
+    }
+
+    juce::String displayValue(const Item& item)
+    {
+        if (! item.valueNames.isEmpty())
+            if (auto* p = intParam(item.id))
+                return item.valueNames[juce::jlimit(0, item.valueNames.size() - 1, p->get())];
+        return valueString(valueTreeState.getParameter(item.id));
     }
 
     juce::String itemText(const Item& item)
@@ -347,9 +365,7 @@ private:
             return item.options[juce::jlimit(0, item.options.size() - 1, p->get())];
         }
 
-        juce::String value = valueString(valueTreeState.getParameter(item.id));
-        int pad = juce::jmax(1, 18 - item.label.length() - value.length());
-        return item.label + juce::String::repeatedString(" ", pad) + value;
+        return item.label;
     }
 
     void updateDisplay()
@@ -357,17 +373,28 @@ private:
         auto& page = pageList.getReference(currentPage);
         titleLabel.setText(page.title, juce::dontSendNotification);
 
-        juce::String text = itemText(currentItem());
-        itemLabel.setText(text, juce::dontSendNotification);
-        itemLabel.setFont(fontToFit(text));
+        auto& item = currentItem();
+        if (item.type == Type::value)
+        {
+            itemLabel.setText(item.label, juce::dontSendNotification);
+            valueLabel.setText(displayValue(item), juce::dontSendNotification);
+        }
+        else
+        {
+            itemLabel.setText(itemText(item), juce::dontSendNotification);
+            valueLabel.setText({}, juce::dontSendNotification);
+        }
+
+        resized();
+        itemLabel.setFont(fontToFit(itemLabel.getText(), itemLabel.getWidth()));
+        valueLabel.setFont(fontToFit(valueLabel.getText(), valueLabel.getWidth()));
         repaint();
     }
 
 // Picks the largest item font so the text never wraps beyond one line.
-    juce::Font fontToFit(const juce::String& text)
+    juce::Font fontToFit(const juce::String& text, int width)
     {
         juce::Font f = customFont;
-        const int width = itemLabel.getWidth();
         if (width > 0)
         {
             float size = customFont.getHeight();
@@ -462,7 +489,14 @@ private:
         b.removeFromTop(rowGap);
 
         titleLabel.setBounds(titleArea);
-        itemLabel.setBounds(b.removeFromTop(lineHeight));
+        auto itemRow = b.removeFromTop(lineHeight);
+
+        const int textWidth = juce::roundToInt(customFont.getStringWidth(valueLabel.getText()));
+        const auto border = valueLabel.getBorderSize();
+        const int valueWidth = juce::jmin(textWidth + border.getLeftAndRight() + 2, itemRow.getWidth());
+        const int rowGap2 = 6;
+        itemLabel.setBounds(itemRow.withTrimmedRight(juce::jmin(valueWidth + rowGap2, itemRow.getWidth())));
+        valueLabel.setBounds(itemRow.withTrimmedLeft(itemRow.getWidth() - valueWidth));
     }
 
     // ---- pages for this plugin (the per-page code lives here, isolated from the engine) ----
@@ -484,17 +518,25 @@ public:
         {
             "normalDecay", "accentDecay", "feedbackFilter",
             "softAttack", "slideTime", "sqrDriver",
-            "lfoWaveform", "lfoRate", "lfoDepth", "lfoDestination"
+            "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination"
         };
         static const juce::String modItemLabels[] =
         {
-            "Norm decay", "Ace decay", "Feed back",
-            "Soft attk", "Slide time", "Sq driver",
-            "LFO wave", "LFO rate", "LFO depth", "LFO dest"
+            "Normal decay", "Accent decay", "Filter Feedback",
+            "Soft attack", "Slide time", "Square driver",
+            "LFO rate", "LFO depth", "LFO wave", "LFO dest"
         };
         static constexpr uint8_t numModItems = 10;
         for (uint8_t i = 0; i < numModItems; ++i)
             mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
+
+        for (auto& it : mod.items)
+        {
+            if (it.id == "lfoWaveform")
+                it.valueNames = juce::StringArray { "Triangle", "Saw Up", "Saw Down", "Square", "Random", "Pink Noise" };
+            else if (it.id == "lfoDestination")
+                it.valueNames = juce::StringArray { "Cutoff", "Volume", "Pitch" };
+        }
         pages.add(mod);
 
         Page seq; seq.title = "Sequencer";
@@ -518,6 +560,7 @@ private:
 
     juce::Label titleLabel;
     juce::Label itemLabel;
+    juce::Label valueLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MenuPage)
 };
