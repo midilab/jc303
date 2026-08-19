@@ -456,7 +456,7 @@ private:
     {
         auto b = getLocalBounds().reduced(4);
         const int lineHeight = juce::roundToInt(customFont.getHeight() * 1.4f);
-        const int rowGap = 12;
+        const int rowGap = 10;
 
         auto titleArea = b.removeFromTop(lineHeight);
         b.removeFromTop(rowGap);

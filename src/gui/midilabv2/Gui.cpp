@@ -53,9 +53,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(lfoDestinationSlider = createModKnob("DEST"));
     addAndMakeVisible(lfoWaveformSlider = createModKnob("WAVE"));
 
-    // Easter egg mr. smile
-    addAndMakeVisible(acidSmile);
-
     // menu navigation controls
     addAndMakeVisible(menuPresetButton = createMenuSwitch(MenuSwitchButton::Mode::Toggle));
     addAndMakeVisible(menuOverdriveButton = createMenuSwitch(MenuSwitchButton::Mode::Toggle));
@@ -76,7 +73,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuPage->setAssignableParam(0, "lfoRate");
     menuPage->setAssignableParam(1, "lfoDepth");
 
-    selectMenu(1);   // default menu page = OVD (Overdrive)
+    selectMenu(2);   // default menu page = OVD (Overdrive)
     menuPresetButton->onClick = [this] { selectMenu(0); };
     menuOverdriveButton->onClick = [this] { selectMenu(1); };
     menuModButton->onClick = [this] { selectMenu(2); };
@@ -290,8 +287,6 @@ void JC303Editor::setControlsLayout()
     //const int ledHeight = 15;
     const int displayMenuWidth = 260;
     const int selectModelHeight = 130;
-    const float acidSmileWidth = 56.25; //225/4;
-    const float acidSmileHeight = 77.5; //310/4;
     const float seqPlayButtonWidth = 100 / 2;
     const float seqPlayButtonHeight = (70 / 2) + 15;
     const float seqSmallButtonWidth = 60 / 2;
@@ -326,9 +321,6 @@ void JC303Editor::setControlsLayout()
     pair<int, int> overdriveSwitchLocation = {794, 255};
     //pair<int, int> overdriveLedLocation = {856, 243};
     pair<int, int> displayMenuLocation = {60, 238};
-
-    // Easter egg mr. smile
-    pair<int, int> acidSmileLocation = {840, 15};
 
     // generative sequencer controls (top row, left to right)
     pair<int, int> seqPlayButtonLocation = {50, 375};
@@ -432,9 +424,6 @@ void JC303Editor::setControlsLayout()
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
     //ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
     menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
-
-    // Easter egg mr. smile
-    acidSmile.setBounds(acidSmileLocation.first, acidSmileLocation.second, acidSmileWidth, acidSmileHeight);
 
     // generative sequencer controls
     seqPlayButton->setBounds(seqPlayButtonLocation.first, seqPlayButtonLocation.second,

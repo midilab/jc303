@@ -6,7 +6,6 @@ juce_add_binary_data(BinaryData SOURCES
     resources/switch_2.png
     resources/left-arrow-presets.png
     resources/right-arrow-presets.png
-    resources/acid-smile.png
     resources/small-button-step-sequencer.png
     resources/medium-button-step-sequencer.png
     resources/large-button-step-sequencer.png

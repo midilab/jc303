@@ -7,7 +7,6 @@
 #include "SwitchButton.h"
 #include "MenuSwitchButton.h"
 #include "SwitchStepSeqButton.h"
-#include "AcidSmile.h"
 #include "../shared/MenuPage.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
@@ -162,9 +161,6 @@ private:
 
     KnobLookAndFeel knobLookAndFeel;
     ModKnobLookAndFeel modKnobLookAndFeel;
-
-    // Easter egg mr. acid smile.
-    AcidSmile acidSmile;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303Editor)
 };
