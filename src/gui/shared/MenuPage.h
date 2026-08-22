@@ -52,8 +52,8 @@ public:
     MenuPage(juce::AudioProcessorValueTreeState& vts, const juce::Array<Page>& pages)
         : valueTreeState(vts), pageList(pages)
     {
-        customFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttf, BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttfSize));
-        customFont.setHeight(14.0f);
+        customFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::PressStart2PRegular_ttf, BinaryData::PressStart2PRegular_ttfSize));
+        customFont.setHeight(12.0f);
 
         addAndMakeVisible(titleLabel);
         addAndMakeVisible(itemLabel);

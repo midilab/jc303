@@ -31,6 +31,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
     addAndMakeVisible(menuPage = new MenuPage(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames())));
+    addAndMakeVisible(seqKeyboard = new SeqKeyboard());
 
     // generative sequencer controls
     addAndMakeVisible(seqPlayButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
@@ -296,14 +297,14 @@ void JC303Editor::setControlsLayout()
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {45, 122};
-    pair<int, int> cutoffFreqLocation = {156, 122};
-    pair<int, int> resonanceLocation = {267, 122};
-    pair<int, int> envelopeLocation = {378, 122};
-    pair<int, int> decayLocation = {489, 122};
-    pair<int, int> accentLocation = {600, 122};
-    pair<int, int> tuningLocation = {722, 122};
-    pair<int, int> volumeLocation = {840, 122};
+    pair<int, int> waveFormLocation = {45, 112};
+    pair<int, int> cutoffFreqLocation = {156, 112};
+    pair<int, int> resonanceLocation = {267, 112};
+    pair<int, int> envelopeLocation = {378, 112};
+    pair<int, int> decayLocation = {489, 112};
+    pair<int, int> accentLocation = {600, 112};
+    pair<int, int> tuningLocation = {722, 112};
+    pair<int, int> volumeLocation = {840, 112};
     // MODs knobs row
     //pair<int, int> normalDecayLocation = {147, 380};
     //pair<int, int> accentDecayLocation = {208, 380};
@@ -320,24 +321,26 @@ void JC303Editor::setControlsLayout()
     // overdrive switch
     pair<int, int> overdriveSwitchLocation = {794, 255};
     //pair<int, int> overdriveLedLocation = {856, 243};
-    pair<int, int> displayMenuLocation = {60, 238};
+    pair<int, int> displayMenuLocation = {60, 245};
 
     // generative sequencer controls (top row, left to right)
     pair<int, int> seqPlayButtonLocation = {50, 375};
-    pair<int, int> seqClearButtonLocation = {500, 370};
-    pair<int, int> seqGenerateButtonLocation = {720, 340};
+    pair<int, int> seqClearButtonLocation = {130, 375};
 
-    pair<int, int> seqGenerativeFillLocation = {760, 340};
-    pair<int, int> seqGenerativeAccentProbabilityLocation = {800, 340};
-    pair<int, int> seqGenerativeSlideProbabilityLocation = {840, 340};
-    pair<int, int> seqGenerativeTieProbabilityLocation = {880, 340};
-    pair<int, int> numberOfTonesLocation = {760, 380};
-    pair<int, int> lowerNoteLocation = {800, 380};
-    pair<int, int> rangeNoteLocation = {840, 380};
-    pair<int, int> seqHarmonizerLocation = {880, 380};
+    pair<int, int> seqGenerateButtonLocation = {700, 347};
+    pair<int, int> seqGenerativeFillLocation = {730, 347};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {770, 347};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {810, 347};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {850, 347};
+    pair<int, int> numberOfTonesLocation = {730, 387};
+    pair<int, int> lowerNoteLocation = {770, 387};
+    pair<int, int> rangeNoteLocation = {810, 387};
+    pair<int, int> seqHarmonizerLocation = {850, 387};
 
-    pair<int, int> seqLengthLocation = {480, 340};
-    pair<int, int> seqShiftLocation = {520, 340};
+    pair<int, int> seqLengthLocation = {200, 390};
+    pair<int, int> seqShiftLocation = {240, 390};
+
+    pair<int, int> keyboardLocation = {470, 347};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -424,6 +427,9 @@ void JC303Editor::setControlsLayout()
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
     //ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
     menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
+
+    // shared single-octave keyboard
+    seqKeyboard->setBounds(keyboardLocation.first, keyboardLocation.second, 210, 70);
 
     // generative sequencer controls
     seqPlayButton->setBounds(seqPlayButtonLocation.first, seqPlayButtonLocation.second,

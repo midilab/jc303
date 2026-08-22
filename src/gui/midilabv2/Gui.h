@@ -8,6 +8,7 @@
 #include "MenuSwitchButton.h"
 #include "SwitchStepSeqButton.h"
 #include "../shared/MenuPage.h"
+#include "../shared/SeqKeyboard.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 typedef juce::AudioProcessorValueTreeState::ButtonAttachment ButtonAttachment;
@@ -155,6 +156,8 @@ private:
     std::unique_ptr<SliderAttachment> lfoDestinationAttachment;
     // shared LCD menu page component (pages: PST, OVD, MOD, SEQ)
     MenuPage* menuPage;
+    // shared single-octave keyboard (API-ready for sequencer wiring)
+    SeqKeyboard* seqKeyboard;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;
