@@ -61,19 +61,19 @@ public:
 
         titleLabel.setFont(customFont);
         titleLabel.setJustificationType(juce::Justification::centredLeft);
-        titleLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        titleLabel.setColour(juce::Label::textColourId, juce::Colour(0xff9bea81));
         titleLabel.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
         titleLabel.setInterceptsMouseClicks(false, false);
 
         itemLabel.setFont(customFont);
         itemLabel.setJustificationType(juce::Justification::topLeft);
-        itemLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        itemLabel.setColour(juce::Label::textColourId, juce::Colour(0xff9bea81));
         itemLabel.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
         itemLabel.setInterceptsMouseClicks(false, false);
 
         valueLabel.setFont(customFont);
         valueLabel.setJustificationType(juce::Justification::centredRight);
-        valueLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        valueLabel.setColour(juce::Label::textColourId, juce::Colour(0xff9bea81));
         valueLabel.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
         valueLabel.setInterceptsMouseClicks(false, false);
 
@@ -540,7 +540,19 @@ public:
         pages.add(mod);
 
         Page seq; seq.title = "Sequencer";
-        seq.items.add(Item { {}, {}, Type::placeholder, {}, 0.0f });
+        seq.items.add(Item { "seqLength",    "Length",     Type::value, {}, 0.0f });
+        seq.items.add(Item { "seqShift",     "Shift",      Type::value, {}, 0.0f });
+        seq.items.add(Item { "seqTempo",     "Tempo",      Type::value, {}, 0.0f });
+        seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 0.0f });
+        seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 0.0f });
+
+        for (auto& it : seq.items)
+        {
+            if (it.id == "seqSyncMode")
+                it.valueNames = juce::StringArray { "Internal", "Host", "Midi Clock" };
+            else if (it.id == "seqStartMode")
+                it.valueNames = juce::StringArray { "Transport", "Note Trigger" };
+        }
         pages.add(seq);
 
         return pages;
