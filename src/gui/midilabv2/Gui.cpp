@@ -337,8 +337,8 @@ void JC303Editor::setControlsLayout()
     pair<int, int> rangeNoteLocation = {810, 387};
     pair<int, int> seqHarmonizerLocation = {850, 387};
 
-    pair<int, int> seqLengthLocation = {200, 390};
-    pair<int, int> seqShiftLocation = {240, 390};
+    //pair<int, int> seqLengthLocation = {200, 390};
+    //pair<int, int> seqShiftLocation = {240, 390};
 
     pair<int, int> keyboardLocation = {470, 347};
 
@@ -447,8 +447,8 @@ void JC303Editor::setControlsLayout()
                               seqSmallButtonWidth, seqSmallButtonHeight);
     // generative sequencer new controls
     seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
-    seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
-    seqShiftSlider->setBounds(seqShiftLocation.first, seqShiftLocation.second, sliderSmallSize, sliderSmallSize);
+    //seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
+    //seqShiftSlider->setBounds(seqShiftLocation.first, seqShiftLocation.second, sliderSmallSize, sliderSmallSize);
     // LFO controls
     //lfoWaveformSlider->setBounds(lfoWaveformLocation.first, lfoWaveformLocation.second, sliderSmallSize, sliderSmallSize);
     //lfoRateSlider->setBounds(lfoRateLocation.first, lfoRateLocation.second, sliderSmallSize, sliderSmallSize);
