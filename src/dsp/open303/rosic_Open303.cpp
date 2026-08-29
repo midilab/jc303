@@ -18,6 +18,7 @@ Open303::Open303()
   envUpFraction    =     2.0/3.0;
   normalAttack     =     3.0;
   accentAttack     =     3.0;
+  resonanceSkewed  =     0.0;
   normalDecay      =  1000.0;
   accentDecay      =   200.0;
   normalAmpRelease =     1.0;
