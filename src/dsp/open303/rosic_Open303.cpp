@@ -333,7 +333,13 @@ void Open303::updateNormalizer1()
 
 void Open303::updateNormalizer2()
 {
+  // Intentionally leave the accent capacitor (rc2) un-normalized. getNormalizer
+  // would rescale rc2's output to hold the accent's peak level constant as its
+  // time constant changes, decoupling level from timing. We keep n2 = 1.0 so a
+  // slower discharge (higher Accent Soft Attack / resonance) also lowers the
+  // per-note accent level - modelling a real analog cap that reaches a lower
+  // voltage when it charges more slowly.
   n2 = LeakyIntegrator::getNormalizer(mainEnv.getDecayTimeConstant(), rc2.getTimeConstant(),
     sampleRate);
-  n2 = 1.0; // test
+  n2 = 1.0;
 }
