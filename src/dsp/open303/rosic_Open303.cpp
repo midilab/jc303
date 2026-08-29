@@ -17,7 +17,8 @@ Open303::Open303()
   cutoff           =  1000.0;
   envUpFraction    =     2.0/3.0;
   normalAttack     =     3.0;
-  accentAttack     =     3.0;
+  accentAttack     =    15.0;
+  resonanceSkewed  =     0.0;
   normalDecay      =  1000.0;
   accentDecay      =   200.0;
   normalAmpRelease =     1.0;
@@ -144,6 +145,12 @@ void Open303::setResonance(double newResonance)
 
   filter.setResonance(newResonance);
   diodeFilter.setResonance(skewedResonance);
+
+  // TB-303 accent capacitor: the resonance pot controls the accent-sweep
+  // circuit's discharge rate. Higher resonance = slower discharge = the accent
+  // sweeps up more smoothly and stacks higher on rapid successive accents.
+  resonanceSkewed = skewedResonance;
+  setAccentAttack(accentAttack);
 }
 
 void Open303::setFilterType(FilterType newType)
@@ -407,7 +414,9 @@ void Open303::updateNormalizer1()
 void Open303::updateAccentSweepGain()
 {
   const double stock = 15.0;
-  const double sweep = rc2.getTimeConstant();
+  // Makeup tracks the sweep knob only; the resonance stretch is left
+  // un-normalized so it also lowers the accent peak, like a real analog cap.
+  const double sweep = accentAttack;
   if( sweep == stock )
     accentSweepGain = 1.0;
   else
