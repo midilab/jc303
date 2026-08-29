@@ -56,7 +56,16 @@ namespace rosic
     void setCutoff(double newCutoff); 
 
     /** Sets the resonance amount for the filter. */
-    void setResonance(double newResonance) { filter.setResonance(newResonance); }
+    void setResonance(double newResonance)
+    {
+      filter.setResonance(newResonance);
+
+      // TB-303 accent capacitor: the resonance pot controls the accent-sweep
+      // circuit's discharge rate. Higher resonance = slower discharge = the accent
+      // sweeps up more smoothly and stacks higher on rapid successive accents.
+      resonanceSkewed = (1.0 - exp(-3.0 * 0.01 * newResonance)) / (1.0 - exp(-3.0));
+      rc2.setTimeConstant(accentAttack * (1.0 + resonanceSkewed * 2.0));
+    }
 
     /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator 
     (in percent). */
@@ -116,10 +125,12 @@ namespace rosic
 
     /** Sets the filter envelope's attack time for accented notes (in milliseconds). In the 
     Devil Fish, accented notes have a fixed attack time of 3 ms.  */
-    void setAccentAttack(double newAccentAttack) 
-    { 
-      accentAttack = newAccentAttack; 
-      rc2.setTimeConstant(accentAttack);
+    void setAccentAttack(double newAccentAttack)
+    {
+      accentAttack = newAccentAttack;
+      // The resonance pot scales the accent capacitor's discharge lag (see
+      // setResonance): tau = accentAttack * (1 + 2*resonance), so 1x..3x.
+      rc2.setTimeConstant(accentAttack * (1.0 + resonanceSkewed * 2.0));
     }
 
     /** Sets the filter envelope's decay time for accented notes (in milliseconds). 
@@ -295,6 +306,7 @@ namespace rosic
     double envScaler;        // scale-factor for the normalized envelope (derived from envMod)
     double normalAttack;     // attack time for the filter envelope on non-accented notes
     double accentAttack;     // attack time for the filter envelope on accented notes
+    double resonanceSkewed;  // skewed resonance (0-1), scales the accent capacitor lag
     double normalDecay;      // decay time for the filter envelope on non-accented notes
     double accentDecay;      // decay time for the filter envelope on accented notes
     double normalAmpRelease; // amp-env release time for non-accented notes
