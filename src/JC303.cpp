@@ -125,7 +125,22 @@ JC303::JC303()
                                                         0.25f),
             std::make_unique<juce::AudioParameterBool> ("switchOverdriveState",
                                                         "Switch Overdrive Mod",
-                                                        false)
+                                                        false),
+            // filter model selection
+            std::make_unique<juce::AudioParameterChoice> ("filterType",
+                                                        "Filter Model",
+                                                        juce::StringArray{ "TeeBee", "Diode Octave", "Diode", "Diode BP", "Diode HP" },
+                                                        FILTER_TEEBEE),
+            std::make_unique<juce::AudioParameterFloat> ("filterDrive",
+                                                        "Filter Drive",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f),   // ~4.5 dB into the diode saturator by default
+            std::make_unique<juce::AudioParameterFloat> ("bassComp",
+                                                        "Bass Comp",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.1f)   // light passband/bass makeup by default
        })
 {
     // assign a pointer to use it around for each parameter
@@ -155,6 +170,10 @@ JC303::JC303()
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
     overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
     overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
+    // filter model
+    filterType = parameters.getRawParameterValue("filterType");
+    filterDrive = parameters.getRawParameterValue("filterDrive");
+    bassComp = parameters.getRawParameterValue("bassComp");
 
     // force initial user values(some hosts migth not do it using value tree state)
     setParameter(WAVEFORM, *waveForm);
@@ -181,6 +200,9 @@ JC303::JC303()
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
     setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
+    open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
+    setParameter(FILTER_DRIVE, *filterDrive);
+    setParameter(BASS_COMP, *bassComp);
 
     // presets and overdrive models
     setupDataDirectories();
@@ -218,6 +240,9 @@ JC303::JC303()
     parameters.addParameterListener("overdriveDryWet", this);
     parameters.addParameterListener("overdriveModelIndex", this);
     parameters.addParameterListener("switchOverdriveState", this);
+    parameters.addParameterListener("filterType", this);
+    parameters.addParameterListener("filterDrive", this);
+    parameters.addParameterListener("bassComp", this);
 }
 
 JC303::~JC303()
@@ -247,6 +272,9 @@ JC303::~JC303()
     parameters.removeParameterListener("overdriveDryWet", this);
     parameters.removeParameterListener("overdriveModelIndex", this);
     parameters.removeParameterListener("switchOverdriveState", this);
+    parameters.removeParameterListener("filterType", this);
+    parameters.removeParameterListener("filterDrive", this);
+    parameters.removeParameterListener("bassComp", this);
 }
 
 // Parameter change callback
@@ -320,6 +348,15 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "overdriveModelIndex") {
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
+    }
+    else if (parameterID == "filterType") {
+        open303Core.setFilterType(static_cast<FilterType>((int) newValue));
+    }
+    else if (parameterID == "filterDrive") {
+        setParameter(FILTER_DRIVE, newValue);
+    }
+    else if (parameterID == "bassComp") {
+        setParameter(BASS_COMP, newValue);
     }
 }
 
@@ -440,6 +477,18 @@ void JC303::setParameter (Open303Parameters index, float value)
             linToLin(value, 0.0, 1.0,   25.0,     80.0)
             //linToLin(value, 0.0, 1.0,   36.9,     90.0)
         );
+        break;
+    case FILTER_DRIVE:
+        // 0..1 -> 0..9 dB into the diode ladder's saturating input stage
+        // (matches the DB303 plugin's tuned range; the unity-makeup shaper
+        // here has no headroom scaling, so it already runs hot per-dB)
+        open303Core.setFilterDrive(
+            linToLin(value, 0.0, 1.0,   0.0,     9.0)
+        );
+        break;
+    case BASS_COMP:
+        // 0..1 diode-ladder passband (bass) compensation, applied directly
+        open303Core.setPassbandCompensation(value);
         break;
 
     // LFO parameters

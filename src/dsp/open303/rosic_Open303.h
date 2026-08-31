@@ -6,6 +6,7 @@
 #include "rosic_BlendOscillator.h"
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
+#include "dfl_DiodeLadderFilter.h"
 #include "rosic_AnalogEnvelope.h"
 #include "rosic_DecayEnvelope.h"
 #include "rosic_LeakyIntegrator.h"
@@ -19,6 +20,19 @@ using namespace std; // for the noteList
 
 namespace rosic
 {
+  // Import dfl classes
+  using dfl::DiodeLadderFilter;
+
+  /** Filter types available for selection. */
+  enum FilterType
+  {
+    FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
+    FILTER_DIODE_OCTAVE,    // Diode ladder with 1st pole one octave above (~18dB/oct)
+    FILTER_DIODE,           // Diode ladder (4-pole, 24dB/oct)
+    FILTER_DIODE_BP,        // Diode ladder, bandpass response (12/12 dB/oct)
+    FILTER_DIODE_HP,        // Diode ladder, highpass response (24 dB/oct)
+    NUM_FILTER_TYPES
+  };
 
   /**
 
@@ -58,7 +72,23 @@ namespace rosic
     void setCutoff(double newCutoff);
 
     /** Sets the resonance amount for the filter. */
-    void setResonance(double newResonance) { filter.setResonance(newResonance); }
+    void setResonance(double newResonance);
+
+    /** Sets the filter type. */
+    void setFilterType(FilterType newType);
+
+    /** Sets the filter input drive in decibels. Pushes the signal into the
+    diode ladder's saturating nonlinearity for overdrive character. The TeeBee
+    filter is linear in TB_303 mode, so this only affects the diode models. */
+    void setFilterDrive(double newDriveDb);
+
+    /** Returns the current filter type. */
+    FilterType getFilterType() const { return currentFilterType; }
+
+    /** Sets the diode filter's passband (bass) compensation, 0..1. Boosts the
+    low end to offset the thinning that the diode ladder exhibits at high
+    resonance. Only affects the diode filter models. */
+    void setPassbandCompensation(double newCompensation);
 
     /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator
     (in percent). */
@@ -256,6 +286,7 @@ namespace rosic
     MipMappedWaveTable        waveTable1, waveTable2;
     BlendOscillator           oscillator;
     TeeBeeFilter              filter;
+    DiodeLadderFilter         diodeFilter;
     AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
     LeakyIntegrator           pitchSlewLimiter;
@@ -324,6 +355,7 @@ namespace rosic
     int    noteOffCountDown; // a countdown variable till next note-off in sequencer mode
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
+    FilterType currentFilterType;  // currently selected filter type
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (-1.0 to +1.0)
@@ -425,6 +457,7 @@ namespace rosic
     tmp2 = accentGain*tmp2;
     double instCutoff = cutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);
     filter.setCutoff(instCutoff);
+    diodeFilter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
@@ -438,7 +471,11 @@ namespace rosic
     {
       tmp  = -oscillator.getSample();         // the raw oscillator signal
       tmp  = highpass1.getSample(tmp);        // pre-filter highpass
-      tmp  = filter.getSample(tmp);           // now it's filtered
+      // Apply selected filter
+      if(currentFilterType == FILTER_TEEBEE)
+        tmp = filter.getSample(tmp);
+      else
+        tmp = diodeFilter.getSample(tmp);
       tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
 
     }

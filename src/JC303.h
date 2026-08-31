@@ -27,6 +27,8 @@ enum Open303Parameters
   SOFT_ATTACK,
   SLIDE_TIME,
   TANH_SHAPER_DRIVE,
+  FILTER_DRIVE,
+  BASS_COMP,
   // LFO
   LFO_WAVEFORM,
   LFO_RATE,
@@ -137,6 +139,9 @@ private:
     std::atomic<float>* switchOverdriveState = nullptr;
     std::atomic<float>* overdriveLevel = nullptr;
     std::atomic<float>* overdriveDryWet = nullptr;
+    std::atomic<float>* filterType = nullptr;
+    std::atomic<float>* filterDrive = nullptr;
+    std::atomic<float>* bassComp = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;
