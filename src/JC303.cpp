@@ -129,7 +129,7 @@ JC303::JC303()
             // filter model selection
             std::make_unique<juce::AudioParameterChoice> ("filterType",
                                                         "Filter Model",
-                                                        juce::StringArray{ "TeeBee", "Diode Octave", "Diode" },
+                                                        juce::StringArray{ "TeeBee", "Diode Octave", "Diode", "Diode BP", "Diode HP" },
                                                         FILTER_TEEBEE),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
                                                         "Filter Drive",

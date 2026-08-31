@@ -30,6 +30,16 @@ namespace dfl
 
   public:
 
+    /** Filter response mode. The ladder's per-stage lowpass taps are mixed
+        (Oberheim style) to synthesise band- and high-pass responses from the
+        same 4-pole core - identical coefficients to rosic::TeeBeeFilter. */
+    enum ResponseMode
+    {
+      RESPONSE_LP = 0,  // 4-pole lowpass (24 dB/oct) - the plain diode output
+      RESPONSE_BP,      // bandpass (12/12 dB/oct)
+      RESPONSE_HP       // 4-pole highpass (24 dB/oct)
+    };
+
     //---------------------------------------------------------------------------------------------
     // construction/destruction:
 
@@ -67,6 +77,10 @@ namespace dfl
       }
     }
 
+    /** Sets the response mode (LP/BP/HP). This only re-mixes the ladder's stage
+        outputs, so it needs no coefficient recalculation. @see ResponseMode */
+    INLINE void setResponseMode(int newMode) { responseMode = newMode; }
+
     //---------------------------------------------------------------------------------------------
     // inquiry:
 
@@ -81,6 +95,9 @@ namespace dfl
 
     /** Returns the passband gain compensation amount (0.0 = none, 1.0 = full compensation). */
     double getPassbandCompensation() const { return passbandCompensation; }
+
+    /** Returns the current response mode (LP/BP/HP). @see ResponseMode */
+    int getResponseMode() const { return responseMode; }
 
     //---------------------------------------------------------------------------------------------
     // audio processing:
@@ -171,6 +188,15 @@ namespace dfl
     static constexpr double CUTOFF_TUNING        = 1.41;  // 4-pole (~1/0.71)
     static constexpr double CUTOFF_TUNING_OCTAVE = 1.33;  // octave (peak aligned to TeeBee)
 
+    // Highpass DC-null factor (see RESPONSE_HP in getSample). The textbook binomial
+    // highpass mix un-4lp1+6lp2-4lp3+lp4 assumes each tap is a unity-gain cascade
+    // power (lp_i = un*G^i); this Pirkle diode ladder's a2..a4 = 0.5 stage scaling
+    // breaks that, so the low end fails to cancel and leaks a large (~+11 dB) boost.
+    // Scaling the lowpass-reconstruction term by this factor nulls the DC exactly.
+    // Measured to be 1/5 and independent of cutoff AND resonance (it is fixed by the
+    // a-coefficients), so it is a constant, not a runtime-derived value.
+    static constexpr double HP_LP_SUBTRACT = 0.2;  // = 1/5, DC-null for the HP mix
+
     // Filter parameters
     double cutoff;
     double drive;
@@ -180,6 +206,7 @@ namespace dfl
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
     bool   octaveMode;            // true = 1st pole one octave above (TB-303 style)
+    int    responseMode;          // LP/BP/HP output mixing (@see ResponseMode)
   };
 
   //-----------------------------------------------------------------------------------------------
@@ -346,31 +373,67 @@ namespace dfl
     // 1st stage (optionally one octave above for TB-303 style slope)
     double xin = un * gamma1 + S2 + epsilon1 * S1;
     double v = (a1 * xin - z1) * (octaveMode ? alpha2 : alpha);
-    double lp = v + z1;
-    z1 = lp + v;
+    double lp1 = v + z1;
+    z1 = lp1 + v;
 
     // 2nd stage
-    xin = lp * gamma2 + S3 + epsilon2 * S2;
+    xin = lp1 * gamma2 + S3 + epsilon2 * S2;
     v = (a2 * xin - z2) * alpha;
-    lp = v + z2;
-    z2 = lp + v;
+    double lp2 = v + z2;
+    z2 = lp2 + v;
 
     // 3rd stage
-    xin = lp * gamma3 + S4 + epsilon3 * S3;
+    xin = lp2 * gamma3 + S4 + epsilon3 * S3;
     v = (a3 * xin - z3) * alpha;
-    lp = v + z3;
-    z3 = lp + v;
+    double lp3 = v + z3;
+    z3 = lp3 + v;
 
     // 4th stage
-    v = (a4 * lp - z4) * alpha;
-    lp = v + z4;
-    z4 = lp + v;
+    v = (a4 * lp3 - z4) * alpha;
+    double lp4 = v + z4;
+    z4 = lp4 + v;
 
-    // Oberheim variations
-    // return c.mA * dU + c.mB * dLP1 + c.mC * dLP2 + c.mD * dLP3 +  c.mE * dLP4;
+    // Oberheim multi-mode output: mix the ladder's per-stage lowpass taps to
+    // synthesise band- and high-pass responses from the same 4-pole core.
+    //   LP (24 dB/oct):  lp4
+    //   BP (12/12):      lp2 - 2*lp3 + lp4      (0.25 scale)
+    //   HP (24 dB/oct):  un - 0.2*(4*lp1 - 6*lp2 + 4*lp3 - lp4)
+    // where `un` is the (shaped) signal entering the ladder - the y0 term. The HP
+    // uses the DC-null factor HP_LP_SUBTRACT (see there): the plain binomial mix
+    // leaks the low end in this diode topology, so the lowpass-reconstruction term
+    // is scaled to cancel DC, giving a real highpass whose passband gain matches LP
+    // (measured within ~2%). Works in plain and octave mode; the steeper octave 1st
+    // pole just shifts the corner, as it does for LP.
+    double out;
+    switch (responseMode)
+    {
+      case RESPONSE_BP:
+        out = 0.25 * (lp2 - 2.0 * lp3 + lp4);
+        break;
+      case RESPONSE_HP:
+      {
+        // HP mode repurposes the (bass-comp-inert) passbandCompensation knob as a
+        // HP->LP morph: 0 = pure highpass, 1 = pure lowpass, crossfading linearly.
+        // The midpoint is a notch (highs from HP + lows from LP). Both endpoints
+        // share ~the same passband gain, so the sweep stays even in level.
+        double hp = un - HP_LP_SUBTRACT * (4.0 * lp1 - 6.0 * lp2 + 4.0 * lp3 - lp4);
+        double t  = std::clamp(passbandCompensation, 0.0, 1.0);
+        out = (1.0 - t) * hp + t * lp4;
+        break;
+      }
+      case RESPONSE_LP:
+      default:
+        out = lp4;
+        break;
+    }
 
-    // Apply passband gain compensation at output (keeps saturation independent of compensation)
-    return lp * (1.0 + passbandCompensation * K);
+    // Apply passband (bass) gain compensation at output (keeps saturation
+    // independent of it). This restores the LP bass droop that resonance causes.
+    // In HP mode the same knob is repurposed as the HP->LP morph (above), so the
+    // bass-comp boost is not applied there (would double-use the control + run hot).
+    double comp = (responseMode == RESPONSE_HP) ? 1.0
+                                                : (1.0 + passbandCompensation * K);
+    return out * comp;
   }
 
 } // end namespace dfl

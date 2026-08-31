@@ -14,6 +14,7 @@ DiodeLadderFilter::DiodeLadderFilter()
   resonance           =     0.0;
   sampleRate          = 44100.0;
   octaveMode          =    true;  // default to TB-303 style
+  responseMode        = RESPONSE_LP;
   K                   =     0.0;
 
   // Initialize coefficients
