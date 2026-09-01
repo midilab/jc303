@@ -12,6 +12,7 @@
 #include "rosic_EllipticQuarterBandFilter.h"
 #include "rosic_AcidSequencer.h"
 #include "dfl_LFO.h"
+#include "dfl_DynamicSmoothingFilter.h"
 
 #include <list>
 
@@ -259,6 +260,7 @@ namespace rosic
     AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
     LeakyIntegrator           pitchSlewLimiter;
+    DynamicSmoothingFilter    cutoffSmoother;   // anti-zipper smoothing of the cutoff parameter
     //LeakyIntegrator           ampDeClicker;
     BiquadFilter              ampDeClicker;
     LeakyIntegrator           rc1, rc2;
@@ -423,7 +425,9 @@ namespace rosic
     tmp2 = n2 * rc2.getSample(tmp2);
     tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
     tmp2 = accentGain*tmp2;
-    double instCutoff = cutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);
+    // Anti-zipper: dynamically smooth the (block-rate) cutoff parameter before it drives the filter
+    double smoothedCutoff = cutoffSmoother.getSample(cutoff);
+    double instCutoff = smoothedCutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);
     filter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
