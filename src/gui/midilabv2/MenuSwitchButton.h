@@ -14,7 +14,7 @@ public:
     explicit MenuSwitchButton(Mode mode = Mode::Toggle)
         : juce::Button(""), buttonMode(mode)
     {
-        imageSwitch = juce::ImageCache::getFromMemory(BinaryData::switch_2_png, BinaryData::switch_2_pngSize);
+        imageSwitch = juce::ImageCache::getFromMemory(BinaryData::switch2_png, BinaryData::switch2_pngSize);
     }
 
     void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override

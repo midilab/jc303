@@ -26,15 +26,11 @@ public:
     {
         if (buttonSize == Size::Large)
         {
-            imageButton = juce::ImageCache::getFromMemory(BinaryData::largebuttonstepsequencer_png, BinaryData::largebuttonstepsequencer_pngSize);
-        }
-        else if (buttonSize == Size::Medium)
-        {
-            imageButton = juce::ImageCache::getFromMemory(BinaryData::mediumbuttonstepsequencer_png, BinaryData::mediumbuttonstepsequencer_pngSize);
+            imageButton = juce::ImageCache::getFromMemory(BinaryData::sequencerbutton1_png, BinaryData::sequencerbutton1_pngSize);
         }
         else
         {
-            imageButton = juce::ImageCache::getFromMemory(BinaryData::smallbuttonstepsequencer_png, BinaryData::smallbuttonstepsequencer_pngSize);
+            imageButton = juce::ImageCache::getFromMemory(BinaryData::sequencerbutton2_png, BinaryData::sequencerbutton2_pngSize);
         }
     }
 
