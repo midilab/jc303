@@ -3,7 +3,7 @@
 
 #include <climits>
 #include "rosic_MidiNoteEvent.h"
-#include "rosic_BlendOscillator.h"
+#include "dfl_BlendOscillator.h"
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
 #include "rosic_AnalogEnvelope.h"
@@ -82,15 +82,14 @@ namespace rosic
     and 100% of the full volume. In the normal 303, this parameter was fixed to zero. */
     void setAmpSustain(double newAmpSustain) { ampEnv.setSustainInDecibels(newAmpSustain); }
 
-    /** Sets the drive (in dB) for the tanh-shaper for 303-square waveform - internal parameter, to
-    be scrapped eventually. */
+    /** Sets the drive (in dB) for the tanh-shaper that forms the 303-square waveform. Routed to the
+    oscillator's audio-rate pulse shaper (the square is now synthesised, not read from a table). */
     void setTanhShaperDrive(double newDrive)
-    { waveTable2.setTanhShaperDriveFor303Square(newDrive); }
+    { oscillator.setTanhShaperDrive(newDrive); }
 
-    /** Sets the offset (as raw value for the tanh-shaper for 303-square waveform - internal
-    parameter, to be scrapped eventually. */
+    /** Sets the offset (raw value) for the tanh-shaper that forms the 303-square waveform. */
     void setTanhShaperOffset(double newOffset)
-    { waveTable2.setTanhShaperOffsetFor303Square(newOffset); }
+    { oscillator.setTanhShaperOffset(newOffset); }
 
     /** Sets the cutoff frequency for the highpass before the main filter. */
     void setPreFilterHighpass(double newCutoff) { highpass1.setCutoff(newCutoff); }
@@ -103,7 +102,7 @@ namespace rosic
 
     /** Sets the phase shift of tanh-shaped square wave with respect to the saw-wave (in degrees)
     - this is important when the two are mixed. */
-    void setSquarePhaseShift(double newShift) { waveTable2.set303SquarePhaseShift(newShift); }
+    void setSquarePhaseShift(double newShift) { oscillator.setSquarePhaseShift(newShift); }
 
     /** Sets the slide-time (in ms). The TB-303 had a slide time of 60 ms. */
     void setSlideTime(double newSlideTime);
@@ -193,12 +192,12 @@ namespace rosic
     /** Returns the drive (in dB) for the tanh-shaper for 303-square waveform - internal parameter,
     to be scrapped eventually. */
     double getTanhShaperDrive() const
-    { return waveTable2.getTanhShaperDriveFor303Square(); }
+    { return oscillator.getTanhShaperDrive(); }
 
     /** Returns the offset (as raw value for the tanh-shaper for 303-square waveform - internal
     parameter, to be scrapped eventually. */
     double getTanhShaperOffset() const
-    { return waveTable2.getTanhShaperOffsetFor303Square(); }
+    { return oscillator.getTanhShaperOffset(); }
 
     /** Returns the cutoff frequency for the highpass before the main filter. */
     double getPreFilterHighpass() const { return highpass1.getCutoff(); }
@@ -212,7 +211,7 @@ namespace rosic
 
     /** Returns the phase shift of tanh-shaped square wave with respect to the saw-wave (in degrees)
     - this is important when the two are mixed. */
-    double getSquarePhaseShift() const { return waveTable2.get303SquarePhaseShift(); }
+    double getSquarePhaseShift() const { return oscillator.getSquarePhaseShift(); }
 
     /** Returns the slide-time (in ms). */
     double getSlideTime() const { return slideTime; }
@@ -253,8 +252,8 @@ namespace rosic
     //-----------------------------------------------------------------------------------------------
     // embedded objects:
 
-    MipMappedWaveTable        waveTable1, waveTable2;
-    BlendOscillator           oscillator;
+    MipMappedWaveTable        waveTable1;
+    dfl::BlendOscillator      oscillator;
     TeeBeeFilter              filter;
     AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
@@ -412,6 +411,21 @@ namespace rosic
     double instFreq = pitchSlewLimiter.getSample(oscFreq) * pitchModFactor;
     oscillator.setFrequency(instFreq*pitchWheelFactor);
     oscillator.calculateIncrement();
+
+    // TB-303 pulse width tracks pitch: the pitch CV feeding the analog PWM input gives a wider
+    // pulse at low notes (~71% duty) and a narrower one up high (~45%). We reproduce that here,
+    // now that the oscillator synthesises the pulse at audio rate. The curve is linear in
+    // log-frequency and is deliberately NOT clamped to the keyboard range - it continues past the
+    // C1..C4 endpoints just as the continuous CV relationship would; only the resulting pulse
+    // width is clamped, so extreme octaves stay musical rather than degenerating to a sliver.
+    {
+      const double lowFreq  =  32.703; // C1
+      const double highFreq = 261.626; // C4
+      double norm = log(instFreq/lowFreq) / log(highFreq/lowFreq); // 0 at C1, 1 at C4, extends beyond
+      double pw   = 71.0 - norm*26.0;                              // 71% at C1 -> 45% at C4
+      pw = clip(pw, 25.0, 75.0);                                  // keep the pulse musical at extremes
+      oscillator.setPulseWidth(pw);
+    }
 
     // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
     // set up the filter:
