@@ -418,9 +418,9 @@ void JC303Editor::setControlsLayout()
     const int switchStepGap =  8;
     const int switchStepX0 =  44;   // x of the first step toggle
     const int stepToggleY =  425;
-    const int ledWidth =  20;
-    const int ledHeight =  20;
-    const int ledY =  470;   // just below the step toggles
+    const int ledWidth =  15;
+    const int ledHeight =  15;
+    const int ledY =  475;   // just below the step toggles
     const int navButtonWidth =  30;
     const int navButtonHeight =  18;
     const int navButtonY =  470 + (ledHeight - navButtonHeight) / 2;
@@ -510,7 +510,7 @@ void JC303Editor::setControlsLayout()
     //lfoDepthSlider->setBounds(lfoDepthLocation.first, lfoDepthLocation.second, sliderSmallSize, sliderSmallSize);
     //lfoDestinationSlider->setBounds(lfoDestinationLocation.first, lfoDestinationLocation.second, sliderSmallSize, sliderSmallSize);
 
-// step toggles, display LEDs (just below each toggle)and selected-step prev/next buttons
+    // step toggles, display LEDs (just below each toggle)and selected-step prev/next buttons
     for (int i =  0; i < 16; ++i)
     {
         const int stepX = switchStepX0 + i * (switchStepWidth + switchStepGap);
