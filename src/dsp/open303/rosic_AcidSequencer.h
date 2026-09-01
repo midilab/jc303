@@ -59,6 +59,12 @@ namespace rosic
     /** Sets the gate flag for one of the steps. */
     void setGate(int pattern, int step, bool shouldBeOpen);
 
+    /** Sets the mute flag for one of the steps (TT-303 extension). */
+    void setMute(int pattern, int step, bool shouldBeMuted);
+
+    /** Sets the hammer flag for one of the steps (TT-303 extension). */
+    void setHammer(int pattern, int step, bool shouldHaveHammer);
+
     /** Selects one of the modes for the sequencer @see sequencerModes. */
     void setMode(int newMode);
 
