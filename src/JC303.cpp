@@ -351,6 +351,14 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "filterType") {
         open303Core.setFilterType(static_cast<FilterType>((int) newValue));
+        // The "Bass" knob (bassComp) targets a different stage per filter: the pre-filter
+        // highpass on the TeeBee, passband compensation on the diode ladders. Re-dispatch it
+        // to the now-active target. The pre-filter highpass is shared by both filter paths, so
+        // restore it to stock when leaving the TeeBee - otherwise the diode models would inherit
+        // a lowered highpass.
+        if (open303Core.getFilterType() != FILTER_TEEBEE)
+            open303Core.setPreFilterHighpass(44.486);
+        setParameter(BASS_COMP, *bassComp);
     }
     else if (parameterID == "filterDrive") {
         setParameter(FILTER_DRIVE, newValue);
@@ -487,8 +495,16 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case BASS_COMP:
-        // 0..1 diode-ladder passband (bass) compensation, applied directly
-        open303Core.setPassbandCompensation(value);
+        // "Bass" macro. On the diode ladders this is passband/bass makeup compensation.
+        // The TeeBee has no passband compensation, so there the same knob is repurposed to
+        // lower the pre-filter highpass instead - turning it up lets more low end into the
+        // filter (inverse-log: knob up => lower cutoff => fatter bass). The mapping is set so
+        // the default value (~0.1) lands on the stock 44.5 Hz, leaving the out-of-box TeeBee
+        // sound unchanged, and sweeps down to 16 Hz for full sub weight.
+        if (open303Core.getFilterType() == FILTER_TEEBEE)
+            open303Core.setPreFilterHighpass(linToExp(value, 0.0, 1.0, 50.0, 16.0));
+        else
+            open303Core.setPassbandCompensation(value);
         break;
 
     // LFO parameters
