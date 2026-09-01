@@ -10,7 +10,7 @@ target_sources("${PROJECT_NAME}"
         dsp/open303/rosic_AcidSequencer.cpp
         dsp/open303/rosic_AnalogEnvelope.cpp
         dsp/open303/rosic_BiquadFilter.cpp
-        dsp/open303/rosic_BlendOscillator.cpp
+        dsp/open303/dfl_BlendOscillator.cpp
         dsp/open303/rosic_Complex.cpp
         dsp/open303/rosic_DecayEnvelope.cpp
         dsp/open303/rosic_EllipticQuarterBandFilter.cpp

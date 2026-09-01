@@ -38,8 +38,6 @@ Open303::Open303()
 
   oscillator.setWaveTable1(&waveTable1);
   oscillator.setWaveForm1(MipMappedWaveTable::SAW303);
-  oscillator.setWaveTable2(&waveTable2);
-  oscillator.setWaveForm2(MipMappedWaveTable::SQUARE303);
 
   //mainEnv.setNormalizeSum(true);
   mainEnv.setNormalizeSum(false);
