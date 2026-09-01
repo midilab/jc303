@@ -261,7 +261,11 @@ namespace rosic
     used). */
     void slideToNote(int noteNumber, bool hasAccent);
 
-    /** Releases a note (called either directly in noteOn or in getSample when the sequencer is 
+    /** Hammers to a note - legato with instant pitch change, no envelope retrigger
+    (TT-303 extension, called in getSample when the sequencer is used). */
+    void hammerToNote(int noteNumber, bool hasAccent);
+
+    /** Releases a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
     void releaseNote(int noteNumber);
 
@@ -306,7 +310,15 @@ namespace rosic
     int    currentVel;       // velocity of currently played note
     int    noteOffCountDown; // a countdown variable till next note-off in sequencer mode
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
+    bool   hammerToNextNote; // indicate that we need to hammer (legato w/ instant pitch) to the next note
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
+    bool   currentNoteMuted; // flag indicating the current note is muted (shorter gate, darker, quieter)
+
+    // TT-303 mute parameters
+    double muteGateFactor;   // gate length multiplier for muted notes (0.4-0.6)
+    double muteLevelFactor;  // VCA level factor for muted notes (0.4-0.7)
+    double muteCutoffFactor; // filter cutoff factor for muted notes (0.6-0.9)
+    double muteEnvFactor;    // envelope mod factor for muted notes (0.6-0.9)
 
     list<MidiNoteEvent> noteList;
 
@@ -337,21 +349,41 @@ namespace rosic
           int key = note->key + 12*note->octave + currentNote;
           key = clip(key, 0, 127);
 
-          if( !slideToNextNote )
-            triggerNote(key, note->accent);
-          else
-            slideToNote(key, note->accent);
+          // Determine accent: mute overrides accent (muted notes are never accented)
+          bool hasAccent = note->accent && !note->mute;
 
+          // Handle note triggering based on previous step's legato state
+          if( !slideToNextNote && !hammerToNextNote )
+            triggerNote(key, hasAccent);
+          else if( hammerToNextNote )
+            hammerToNote(key, hasAccent);  // Instant pitch, no envelope retrigger
+          else
+            slideToNote(key, hasAccent);   // Glide pitch, no envelope retrigger
+
+          // Track if this note is muted (for cutoff/level reduction in audio processing)
+          currentNoteMuted = note->mute;
+
+          // Determine legato behavior for next step transition
           AcidNote* nextNote = sequencer.getNextScheduledNote();
-          if( note->slide && nextNote->gate == true )
+          bool nextHasGate = nextNote->gate == true;
+
+          // slide and hammer both create legato (continuous gate, no env retrigger)
+          // slide = smooth pitch glide, hammer = instant pitch change
+          if( (note->slide || note->hammer) && nextHasGate )
           {
-            noteOffCountDown = INT_MAX;
-            slideToNextNote  = true;
+            noteOffCountDown = INT_MAX;  // Keep gate open
+            slideToNextNote  = note->slide && !note->hammer;  // slide takes precedence only if no hammer
+            hammerToNextNote = note->hammer;
           }
           else
           {
-            noteOffCountDown = sequencer.getStepLengthInSamples();
+            // Calculate gate length - muted notes have shorter gate
+            int gateLength = sequencer.getStepLengthInSamples();
+            if( note->mute )
+              gateLength = (int)(gateLength * muteGateFactor);
+            noteOffCountDown = gateLength;
             slideToNextNote  = false;
+            hammerToNextNote = false;
           }
         }
       }
@@ -372,7 +404,16 @@ namespace rosic
     tmp2 = n2 * rc2.getSample(tmp2);  
     tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
     tmp2 = accentGain*tmp2;
-    double instCutoff = cutoff * pow(2.0, tmp1+tmp2);
+
+    // Apply mute envelope reduction if note is muted
+    if( currentNoteMuted )
+      tmp1 *= muteEnvFactor;
+
+    // Apply mute cutoff reduction if note is muted (darker tone)
+    double instCutoff = cutoff;
+    if( currentNoteMuted )
+      instCutoff *= muteCutoffFactor;
+    instCutoff *= pow(2.0, tmp1+tmp2);
     filter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
@@ -399,6 +440,10 @@ namespace rosic
     tmp  = notch.getSample(tmp);
     tmp *= ampEnvOut;                       // amplified
     tmp *= ampScaler;
+
+    // Apply mute level reduction if note is muted (quieter tone)
+    if( currentNoteMuted )
+      tmp *= muteLevelFactor;
 
     // find out whether we may switch ourselves off for the next call:
     idle = false;

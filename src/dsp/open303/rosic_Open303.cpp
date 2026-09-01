@@ -28,7 +28,15 @@ Open303::Open303()
   currentVel       =     0;
   noteOffCountDown =     0;
   slideToNextNote  = false;
+  hammerToNextNote = false;
   idle             = true;
+  currentNoteMuted = false;
+
+  // TT-303 mute parameters (conservative defaults)
+  muteGateFactor   =     0.5;   // 50% gate length
+  muteLevelFactor  =     0.6;   // 60% volume
+  muteCutoffFactor =     0.7;   // 70% cutoff
+  muteEnvFactor    =     0.7;   // 70% envelope mod
 
   setEnvMod(25.0);
 
@@ -249,6 +257,29 @@ void Open303::slideToNote(int noteNumber, bool hasAccent)
 {
   oscFreq = pitchToFreq(noteNumber, tuning);
 
+  if( hasAccent )
+  {
+    accentGain = accent;
+    setMainEnvDecay(accentDecay);
+    ampEnv.setRelease(accentAmpRelease);
+  }
+  else
+  {
+    accentGain = 0.0;
+    setMainEnvDecay(normalDecay);
+    ampEnv.setRelease(normalAmpRelease);
+  }
+  idle = false;
+}
+
+void Open303::hammerToNote(int noteNumber, bool hasAccent)
+{
+  // Hammer is like slide but with instant pitch change (no portamento)
+  // Set frequency AND immediately set slew limiter state to avoid any glide
+  oscFreq = pitchToFreq(noteNumber, tuning);
+  pitchSlewLimiter.setState(oscFreq);  // Instant pitch change, no slew
+
+  // Handle accent (same as slideToNote)
   if( hasAccent )
   {
     accentGain = accent;

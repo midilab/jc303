@@ -23,6 +23,8 @@ namespace rosic
     bool accent;
     bool slide;
     bool gate;
+    bool mute;    // TT-303 extension: choked note (shorter gate, darker, quieter)
+    bool hammer;  // TT-303 extension: legato with instant pitch change (no glide)
 
     AcidNote()
     {
@@ -31,10 +33,12 @@ namespace rosic
       accent = false;
       slide  = false;
       gate   = false;
+      mute   = false;
+      hammer = false;
     }
 
     bool isInDefaultState()
-    { return key == 0 && octave == 0 && accent == false && slide == false && gate == false; }
+    { return key == 0 && octave == 0 && accent == false && slide == false && gate == false && mute == false && hammer == false; }
 
   };
 
@@ -77,6 +81,12 @@ namespace rosic
     /** Sets the gate flag for one of the steps. */
     void setGate(int step, bool shouldBeOpen) { notes[step].gate = shouldBeOpen; }
 
+    /** Sets the mute flag for one of the steps (TT-303 extension). */
+    void setMute(int step, bool shouldBeMuted) { notes[step].mute = shouldBeMuted; }
+
+    /** Sets the hammer flag for one of the steps (TT-303 extension). */
+    void setHammer(int step, bool shouldHaveHammer) { notes[step].hammer = shouldHaveHammer; }
+
     /** Clears all notes in the pattern. */
     void clear();
 
@@ -117,6 +127,12 @@ namespace rosic
 
     /** Returns the gate flag for one of the steps. */
     bool getGate(int step) const { return notes[step].gate; }
+
+    /** Returns the mute flag for one of the steps (TT-303 extension). */
+    bool getMute(int step) const { return notes[step].mute; }
+
+    /** Returns the hammer flag for one of the steps (TT-303 extension). */
+    bool getHammer(int step) const { return notes[step].hammer; }
 
     /** Returns the maximum number of steps. */
     static int getMaxNumSteps() { return maxNumSteps; }

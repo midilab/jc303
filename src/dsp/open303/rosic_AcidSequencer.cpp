@@ -50,6 +50,18 @@ void AcidSequencer::toggleKeyPermissibility(int key)
     keyPermissible[key] = !keyPermissible[key];
 }
 
+void AcidSequencer::setMute(int pattern, int step, bool shouldBeMuted)
+{
+  if( pattern >= 0 && pattern < numPatterns )
+    patterns[pattern].setMute(step, shouldBeMuted);
+}
+
+void AcidSequencer::setHammer(int pattern, int step, bool shouldHaveHammer)
+{
+  if( pattern >= 0 && pattern < numPatterns )
+    patterns[pattern].setHammer(step, shouldHaveHammer);
+}
+
 //-------------------------------------------------------------------------------------------------
 // inquiry:
 
