@@ -39,18 +39,42 @@ public:
     juce::MidiKeyboardState&     getKeyboardState()       { return keyboardState; }
     juce::MidiKeyboardComponent& getKeyboardComponent()   { return keyboard; }
 
+    // Show (and hold) a single key, e.g. the note of the selected sequencer step.
+    // Only one key is held at a time; programmatic highlights do not re-fire the
+    // onNote callbacks, so they never write back into the sequencer.
+
+    void showNote(int midiNote)
+    {
+        _suppressCallbacks = true;
+        if (midiNote == shownNote)
+        {
+            // Re-assertsthe selected key after a physical release.
+            keyboardState.noteOn (1, midiNote, 0.75f);
+        }
+        else
+        {
+            if (shownNote >= 0)
+                keyboardState.noteOff(1, shownNote, 0.0f);
+            keyboardState.noteOn (1, midiNote, 0.75f);
+        }
+        _suppressCallbacks = false;
+        shownNote = midiNote;
+
+        keyboard.repaint();
+    }
+
 private:
     void handleNoteOn (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override
     {
         juce::ignoreUnused (midiChannel);
-        if (onNoteOn)
+        if (! _suppressCallbacks && onNoteOn)
             onNoteOn (midiNote, velocity);
     }
 
     void handleNoteOff (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override
     {
         juce::ignoreUnused (midiChannel);
-        if (onNoteOff)
+        if (! _suppressCallbacks && onNoteOff)
             onNoteOff (midiNote, velocity);
     }
 
@@ -62,6 +86,9 @@ private:
 
     juce::MidiKeyboardState keyboardState;
     juce::MidiKeyboardComponent keyboard;
+
+    int shownNote = -1;
+    bool _suppressCallbacks = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SeqKeyboard)
 };

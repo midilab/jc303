@@ -61,6 +61,8 @@ public:
         if (buttonMode == Mode::Press)
         {
             setToggleState(true, juce::sendNotification);
+            if (onPress != nullptr)
+                onPress();
         }
     }
 
@@ -75,6 +77,8 @@ public:
             setToggleState(false, juce::sendNotification);
         }
     }
+
+std::function<void()> onPress;
 
 private:
     juce::Image imageButton;

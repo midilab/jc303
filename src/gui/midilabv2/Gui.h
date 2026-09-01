@@ -7,6 +7,7 @@
 #include "SwitchButton.h"
 #include "MenuSwitchButton.h"
 #include "SwitchStepSeqButton.h"
+#include "StepLed.h"
 #include "../shared/MenuPage.h"
 #include "../shared/SeqKeyboard.h"
 
@@ -14,7 +15,8 @@ typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
 typedef juce::AudioProcessorValueTreeState::ButtonAttachment ButtonAttachment;
 
 //==============================================================================
-class JC303Editor  : public juce::AudioProcessorEditor
+class JC303Editor  : public juce::AudioProcessorEditor,
+                         public juce::Timer
 {
 public:
     explicit JC303Editor (JC303&, juce::AudioProcessorValueTreeState&);
@@ -23,6 +25,8 @@ public:
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
+    void timerCallback() override;
+    void updateKeyboardForSelectedStep();
 
     void setScaleFactor(float scale) override { juce::AudioProcessorEditor::setScaleFactor(1.0f); }
 
@@ -97,23 +101,12 @@ private:
     juce::Label* modAssign1Label;
     juce::Label* modAssign2Label;
     int menuMode = 0;
-    // sequencer step toggles
-    SwitchButton* seqStep1Button;
-    SwitchButton* seqStep2Button;
-    SwitchButton* seqStep3Button;
-    SwitchButton* seqStep4Button;
-    SwitchButton* seqStep5Button;
-    SwitchButton* seqStep6Button;
-    SwitchButton* seqStep7Button;
-    SwitchButton* seqStep8Button;
-    SwitchButton* seqStep9Button;
-    SwitchButton* seqStep10Button;
-    SwitchButton* seqStep11Button;
-    SwitchButton* seqStep12Button;
-    SwitchButton* seqStep13Button;
-    SwitchButton* seqStep14Button;
-    SwitchButton* seqStep15Button;
-    SwitchButton* seqStep16Button;
+    // sequencer step toggles (rest editing) and display LEDs
+    SwitchButton* seqStepButtons[16];
+    StepLed* stepLeds[16];
+    SwitchStepSeqButton* seqStepPrevButton;
+    SwitchStepSeqButton* seqStepNextButton;
+    int selectedStep = 0;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;

@@ -31,7 +31,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
     addAndMakeVisible(menuPage = new MenuPage(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames())));
-    addAndMakeVisible(seqKeyboard = new SeqKeyboard());
+    addAndMakeVisible(seqKeyboard = new SeqKeyboard(48));
 
     // generative sequencer controls
     addAndMakeVisible(seqPlayButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
@@ -94,23 +94,47 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             menuKnob->setValue(v, juce::dontSendNotification);
     };
 
-    // sequencer step toggles
-    addAndMakeVisible(seqStep1Button = createSwitch());
-    addAndMakeVisible(seqStep2Button = createSwitch());
-    addAndMakeVisible(seqStep3Button = createSwitch());
-    addAndMakeVisible(seqStep4Button = createSwitch());
-    addAndMakeVisible(seqStep5Button = createSwitch());
-    addAndMakeVisible(seqStep6Button = createSwitch());
-    addAndMakeVisible(seqStep7Button = createSwitch());
-    addAndMakeVisible(seqStep8Button = createSwitch());
-    addAndMakeVisible(seqStep9Button = createSwitch());
-    addAndMakeVisible(seqStep10Button = createSwitch());
-    addAndMakeVisible(seqStep11Button = createSwitch());
-    addAndMakeVisible(seqStep12Button = createSwitch());
-    addAndMakeVisible(seqStep13Button = createSwitch());
-    addAndMakeVisible(seqStep14Button = createSwitch());
-    addAndMakeVisible(seqStep15Button = createSwitch());
-    addAndMakeVisible(seqStep16Button = createSwitch());
+    // sequencer step toggles (rest editing), display LEDs and selected-step navigation
+    for (int i = 0; i < 16; ++i)
+    {
+        addAndMakeVisible(seqStepButtons[i] = createSwitch());
+        addAndMakeVisible(stepLeds[i] = new StepLed());
+    }
+    addAndMakeVisible(seqStepPrevButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqStepNextButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+
+    // wire step toggles to sequencer rest state (write-through on user toggle)
+    for (int i = 0; i < 16; ++i)
+    {
+        const int step = i;
+        seqStepButtons[i]->onClick = [this, step]
+        {
+            processorRef.getSequencer().setRest(step, !seqStepButtons[step]->getToggleState());
+        };
+    }
+
+    // selected-step navigation (wrap around the active pattern length)
+    seqStepPrevButton->onPress = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        const int length = seq.getTrackLength();
+        selectedStep = (selectedStep -  1 + length) % length;
+        updateKeyboardForSelectedStep();
+    };
+    seqStepNextButton->onPress = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        const int length = seq.getTrackLength();
+        selectedStep = (selectedStep +  1) % length;
+        updateKeyboardForSelectedStep();
+    };
+
+    // keyboard edits the note of the selected step (monophonic)
+    seqKeyboard->onNoteOn = [this] (int midiNote, float velocity)
+    {
+        juce::ignoreUnused (velocity);
+        processorRef.getSequencer().setStepData(selectedStep, static_cast<uint8_t>(midiNote));
+    };
 
     // attach controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
@@ -158,10 +182,12 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
     setSize (930, 523);
+    startTimer(30);
 }
 
 JC303Editor::~JC303Editor()
 {
+    stopTimer();
 }
 
 //==============================================================================
@@ -181,6 +207,44 @@ void JC303Editor::resized()
     setControlsLayout();
 }
 
+void JC303Editor::timerCallback()
+{
+    auto& seq = processorRef.getSequencer();
+
+    const int length = seq.getTrackLength();
+    const bool playing = seq.isRunning();
+    const int currentStep = static_cast<int>(seq.getCurrentStep());
+
+    // keep the selected step inside the active pattern length
+    if (length > 0)
+        selectedStep = ((selectedStep % length) + length) % length;
+
+    const bool blinkOn = ((juce::Time::getMillisecondCounter() / 250) & 1) != 0;
+
+    for (int i = 0; i < 16; ++i)
+    {
+        const bool stepOn = i < length && seq.stepOn(i);
+        const bool isCurrent = playing && i == currentStep;
+        const bool isSelected = i == selectedStep;
+
+        // LED only indicates the active pattern length + the selected step (blinking):
+        // rest state is NOT shown (the step toggle button already does that). The playing
+        // current step is forced off for the progress sweep (overrides the blink).
+        const bool ledOn = !isCurrent && ((isSelected && blinkOn) || (!isSelected && i < length));
+        stepLeds[i]->setOn(ledOn);
+
+        if (seqStepButtons[i]->getToggleState() != stepOn)
+            seqStepButtons[i]->setToggleState(stepOn, juce::dontSendNotification);
+    }
+
+    updateKeyboardForSelectedStep();
+}
+
+void JC303Editor::updateKeyboardForSelectedStep()
+{
+    const uint8_t rawNote = processorRef.getSequencer().getRawNote(selectedStep);
+    seqKeyboard->showNote(48 + (rawNote % 12));
+}
 juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModLookAndFeel)
 {
     auto* slider = new juce::Slider();
@@ -348,27 +412,18 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> lfoWaveformLocation = {680, 60};
     //pair<int, int> lfoDestinationLocation = {720, 60};
 
-    // sequencer step toggles
-    const int switchStepWidth = 45;
-    const int switchStepHeight = 45;
-    const int switchStepGap = 8;
-    pair<int, int> seqStep1ButtonLocation = {44, 425};
-    pair<int, int> seqStep2ButtonLocation = {97, 425};
-    pair<int, int> seqStep3ButtonLocation = {150, 425};
-    pair<int, int> seqStep4ButtonLocation = {203, 425};
-    pair<int, int> seqStep5ButtonLocation = {256, 425};
-    pair<int, int> seqStep6ButtonLocation = {309, 425};
-    pair<int, int> seqStep7ButtonLocation = {362, 425};
-    pair<int, int> seqStep8ButtonLocation = {415, 425};
-    pair<int, int> seqStep9ButtonLocation = {468, 425};
-    pair<int, int> seqStep10ButtonLocation = {521, 425};
-    pair<int, int> seqStep11ButtonLocation = {574, 425};
-    pair<int, int> seqStep12ButtonLocation = {627, 425};
-    pair<int, int> seqStep13ButtonLocation = {680, 425};
-    pair<int, int> seqStep14ButtonLocation = {733, 425};
-    pair<int, int> seqStep15ButtonLocation = {786, 425};
-    pair<int, int> seqStep16ButtonLocation = {839, 425};
-
+// step toggles (rest editing, display LEDs)and selected-step navigation)
+    const int switchStepWidth =  45;
+    const int switchStepHeight =  45;
+    const int switchStepGap =  8;
+    const int switchStepX0 =  44;   // x of the first step toggle
+    const int stepToggleY =  425;
+    const int ledWidth =  20;
+    const int ledHeight =  20;
+    const int ledY =  470;   // just below the step toggles
+    const int navButtonWidth =  30;
+    const int navButtonHeight =  18;
+    const int navButtonY =  470 + (ledHeight - navButtonHeight) / 2;
     // menu navigation controls (top row)
     const int menuButtonWidth = 34; //53;
     const int menuButtonHeight = 31; //48;
@@ -455,21 +510,15 @@ void JC303Editor::setControlsLayout()
     //lfoDepthSlider->setBounds(lfoDepthLocation.first, lfoDepthLocation.second, sliderSmallSize, sliderSmallSize);
     //lfoDestinationSlider->setBounds(lfoDestinationLocation.first, lfoDestinationLocation.second, sliderSmallSize, sliderSmallSize);
 
-    // sequencer step toggles
-    seqStep1Button->setBounds(seqStep1ButtonLocation.first, seqStep1ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep2Button->setBounds(seqStep2ButtonLocation.first, seqStep2ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep3Button->setBounds(seqStep3ButtonLocation.first, seqStep3ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep4Button->setBounds(seqStep4ButtonLocation.first, seqStep4ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep5Button->setBounds(seqStep5ButtonLocation.first, seqStep5ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep6Button->setBounds(seqStep6ButtonLocation.first, seqStep6ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep7Button->setBounds(seqStep7ButtonLocation.first, seqStep7ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep8Button->setBounds(seqStep8ButtonLocation.first, seqStep8ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep9Button->setBounds(seqStep9ButtonLocation.first, seqStep9ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep10Button->setBounds(seqStep10ButtonLocation.first, seqStep10ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep11Button->setBounds(seqStep11ButtonLocation.first, seqStep11ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep12Button->setBounds(seqStep12ButtonLocation.first, seqStep12ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep13Button->setBounds(seqStep13ButtonLocation.first, seqStep13ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep14Button->setBounds(seqStep14ButtonLocation.first, seqStep14ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep15Button->setBounds(seqStep15ButtonLocation.first, seqStep15ButtonLocation.second, switchStepWidth, switchStepHeight);
-    seqStep16Button->setBounds(seqStep16ButtonLocation.first, seqStep16ButtonLocation.second, switchStepWidth, switchStepHeight);
+// step toggles, display LEDs (just below each toggle)and selected-step prev/next buttons
+    for (int i =  0; i < 16; ++i)
+    {
+        const int stepX = switchStepX0 + i * (switchStepWidth + switchStepGap);
+        seqStepButtons[i]->setBounds(stepX, stepToggleY, switchStepWidth, switchStepHeight);
+        stepLeds[i]->setBounds(stepX + (switchStepWidth - ledWidth) / 2, ledY, ledWidth, ledHeight);
+    }
+
+    // selected-step prev/next buttons(wrap around the active pattern length)
+    seqStepPrevButton->setBounds(8, navButtonY, navButtonWidth, navButtonHeight);
+    seqStepNextButton->setBounds(930 - 8 - navButtonWidth, navButtonY, navButtonWidth, navButtonHeight);
 }
