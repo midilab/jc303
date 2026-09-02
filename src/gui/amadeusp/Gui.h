@@ -3,9 +3,7 @@
 #include <JuceHeader.h>
 #include "../../JC303.h"
 #include "KnobLookAndFeel.h"
-#include "ModKnobLookAndFeel.h"
 #include "SwitchButton.h"
-#include "SwitchStepSeqButton.h"
 #include "SwitchLed.h"
 #include "OverdriveModelSelect.h"
 #include "AcidSmile.h"
@@ -24,15 +22,10 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
-    void setScaleFactor(float scale) override { juce::AudioProcessorEditor::setScaleFactor(1.0f); }
-
 private:
-    juce::Slider* createKnob(const juce::String& knobType, bool useModLookAndFeel = false);
-    juce::Slider* createModKnob(const juce::String& label);
+    juce::Slider* createKnob(const juce::String& knobType);
     SwitchButton* createSwitch();
-    SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size size = SwitchStepSeqButton::Size::Large, bool useLedIndicator = false, int8_t ledOffsetX = 0);
     SwitchLed* createLed(const juce::String& paramID);
-    juce::Label* createLabel(const juce::String& text);
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -62,26 +55,6 @@ private:
     juce::Slider* overdriveDryWetSlider;
     SwitchButton* switchOverdriveButton;
     SwitchLed* ledOverdriveButton;
-    // generative sequencer
-    juce::Slider* seqGenerativeFillSlider;
-    juce::Slider* seqGenerativeAccentProbabilitySlider;
-    juce::Slider* seqGenerativeSlideProbabilitySlider;
-    juce::Slider* seqGenerativeTieProbabilitySlider;
-    juce::Slider* numberOfTonesSlider;
-    juce::Slider* lowerNoteSlider;
-    juce::Slider* rangeNoteSlider;
-    SwitchStepSeqButton* seqPlayButton;
-    SwitchStepSeqButton* seqGenerateButton;
-    SwitchStepSeqButton* seqClearButton;
-    // generative sequencer new controls
-    juce::Slider* seqHarmonizerSlider;
-    juce::Slider* seqLengthSlider;
-    juce::Slider* seqShiftSlider;
-    // LFO controls
-    juce::Slider* lfoWaveformSlider;
-    juce::Slider* lfoRateSlider;
-    juce::Slider* lfoDepthSlider;
-    juce::Slider* lfoDestinationSlider;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -104,24 +77,6 @@ private:
     std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
     std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
     std::unique_ptr<ButtonAttachment> switchOverdriveButtonAttachment;
-    // generative sequencer
-    std::unique_ptr<SliderAttachment> seqGenerativeFillAttachment;
-    std::unique_ptr<SliderAttachment> seqGenerativeAccentProbabilityAttachment;
-    std::unique_ptr<SliderAttachment> seqGenerativeSlideProbabilityAttachment;
-    std::unique_ptr<SliderAttachment> seqGenerativeTieProbabilityAttachment;
-    std::unique_ptr<SliderAttachment> numberOfTonesAttachment;
-    std::unique_ptr<SliderAttachment> lowerNoteAttachment;
-    std::unique_ptr<SliderAttachment> rangeNoteAttachment;
-    std::unique_ptr<ButtonAttachment> seqPlayButtonAttachment;
-    std::unique_ptr<ButtonAttachment> seqGenerateButtonAttachment;
-    std::unique_ptr<ButtonAttachment> seqClearButtonAttachment;
-    std::unique_ptr<SliderAttachment> seqHarmonizerAttachment;
-    std::unique_ptr<SliderAttachment> seqLengthAttachment;
-    std::unique_ptr<SliderAttachment> seqShiftAttachment;
-    std::unique_ptr<SliderAttachment> lfoWaveformAttachment;
-    std::unique_ptr<SliderAttachment> lfoRateAttachment;
-    std::unique_ptr<SliderAttachment> lfoDepthAttachment;
-    std::unique_ptr<SliderAttachment> lfoDestinationAttachment;
     // previous, next buttons and model name display component
     OverdriveModelSelect* overdriveModelSelect;
 
@@ -131,7 +86,6 @@ private:
     KnobLookAndFeel smallKnobLookAndFeel{"small"};
     KnobLookAndFeel mediumKnobLookAndFeel{"medium"};
     KnobLookAndFeel largeKnobLookAndFeel{"large"};
-    ModKnobLookAndFeel modKnobLookAndFeel;
 
     // Easter egg mr. acid smile.
     AcidSmile acidSmile;

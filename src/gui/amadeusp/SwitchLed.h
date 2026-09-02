@@ -30,8 +30,8 @@ public:
         // Ensure the image is loaded
         if (imageLed.isValid())
         {
-            int frameHeight = imageLed.getHeight() / 2;
-            int sourceY = ledState == false ? 0 : frameHeight;
+            int frameHeight = imageLed.getHeight() / 2; 
+            int sourceY = ledState == false ? 0 : frameHeight; 
 
             juce::Rectangle<int> sourceRect(0, sourceY, imageLed.getWidth(), frameHeight);
 

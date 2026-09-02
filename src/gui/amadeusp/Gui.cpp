@@ -32,27 +32,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // overdrive model select component
     addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, processorRef.getModelListNames()));
 
-    // generative sequencer controls
-    addAndMakeVisible(seqPlayButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large, true, 23));
-    addAndMakeVisible(seqClearButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
-    addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Medium));
-    addAndMakeVisible(seqGenerativeFillSlider = createModKnob("FILL"));
-    addAndMakeVisible(seqGenerativeAccentProbabilitySlider = createModKnob("ACC"));
-    addAndMakeVisible(seqGenerativeSlideProbabilitySlider = createModKnob("SLIDE"));
-    addAndMakeVisible(seqGenerativeTieProbabilitySlider = createModKnob("TIE"));
-    addAndMakeVisible(numberOfTonesSlider = createModKnob("TONES"));
-    addAndMakeVisible(lowerNoteSlider = createModKnob("LOW"));
-    addAndMakeVisible(rangeNoteSlider = createModKnob("RANGE"));
-    addAndMakeVisible(seqHarmonizerSlider = createModKnob("HARM"));
-    // sequencer controls
-    addAndMakeVisible(seqLengthSlider = createModKnob("LEN"));
-    addAndMakeVisible(seqShiftSlider = createModKnob("SHIFT"));
-    // LFO controls
-    addAndMakeVisible(lfoRateSlider = createModKnob("RATE"));
-    addAndMakeVisible(lfoDepthSlider = createModKnob("DEPTH"));
-    addAndMakeVisible(lfoDestinationSlider = createModKnob("DEST"));
-    addAndMakeVisible(lfoWaveformSlider = createModKnob("WAVE"));
-
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);
 
@@ -77,32 +56,12 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     switchOverdriveButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchOverdriveState", *switchOverdriveButton));
-
-    // generative sequencer attachments
-    seqGenerativeFillAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeFill", *seqGenerativeFillSlider));
-    seqGenerativeAccentProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeAccentProbability", *seqGenerativeAccentProbabilitySlider));
-    seqGenerativeSlideProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeSlideProbability", *seqGenerativeSlideProbabilitySlider));
-    seqGenerativeTieProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeTieProbability", *seqGenerativeTieProbabilitySlider));
-    numberOfTonesAttachment.reset(new SliderAttachment(valueTreeState, "numberOfTones", *numberOfTonesSlider));
-    lowerNoteAttachment.reset(new SliderAttachment(valueTreeState, "lowerNote", *lowerNoteSlider));
-    rangeNoteAttachment.reset(new SliderAttachment(valueTreeState, "rangeNote", *rangeNoteSlider));
-    seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
-    seqGenerateButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqGenerate", *seqGenerateButton));
-    seqClearButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqClear", *seqClearButton));
-    seqHarmonizerAttachment.reset(new SliderAttachment(valueTreeState, "seqHarmonizer", *seqHarmonizerSlider));
-    seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
-    seqShiftAttachment.reset(new SliderAttachment(valueTreeState, "seqShift", *seqShiftSlider));
-    lfoWaveformAttachment.reset(new SliderAttachment(valueTreeState, "lfoWaveform", *lfoWaveformSlider));
-    lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));
-    lfoDepthAttachment.reset(new SliderAttachment(valueTreeState, "lfoDepth", *lfoDepthSlider));
-    lfoDestinationAttachment.reset(new SliderAttachment(valueTreeState, "lfoDestination", *lfoDestinationSlider));
-
+    
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
-    //setSize (930, 363);
-    setSize (930, 557);
+    setSize (930, 363);
 }
 
 JC303Editor::~JC303Editor()
@@ -131,16 +90,11 @@ void JC303Editor::resized()
     setControlsLayout();
 }
 
-juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModLookAndFeel)
+juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
 {
     auto* slider = new juce::Slider();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-
-    if (useModLookAndFeel)
-    {
-        slider->setLookAndFeel(&modKnobLookAndFeel);
-    }
-    else if (knobType == "small")
+    if (knobType == "small")
     {
         slider->setLookAndFeel(&smallKnobLookAndFeel);
     }
@@ -152,7 +106,7 @@ juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModL
     {
         slider->setLookAndFeel(&largeKnobLookAndFeel);
     }
-
+    
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 
     // adjust our start and end point for knob
@@ -166,29 +120,6 @@ SwitchButton* JC303Editor::createSwitch()
     button->setClickingTogglesState(false);
 
     return button;
-}
-
-SwitchStepSeqButton* JC303Editor::createSwitchStepSeq(SwitchStepSeqButton::Mode mode, SwitchStepSeqButton::Size size, bool useLedIndicator, int8_t ledOffsetX)
-{
-    auto* button = new SwitchStepSeqButton(mode, size, useLedIndicator, ledOffsetX);
-    return button;
-}
-
-juce::Slider* JC303Editor::createModKnob(const juce::String& label)
-{
-    auto* slider = new juce::Slider();
-    slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider->setLookAndFeel(&modKnobLookAndFeel);
-    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
-    slider->setRotaryParameters(0, 5.3, true);
-
-    auto* labelComponent = new AttachedLabel();
-    labelComponent->setText(label, juce::dontSendNotification);
-    labelComponent->setJustificationType(juce::Justification::centredTop);
-    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
-    labelComponent->attachToComponent(slider, true);
-
-    return slider;
 }
 
 SwitchLed* JC303Editor::createLed(const juce::String& paramID)
@@ -209,26 +140,20 @@ void JC303Editor::setControlsLayout()
     const int ledHeight = 15;
     const int selectModellWidth = 127;
     const int selectModelHeight = 100;
-    const float acidSmileWidth = 56.25; //225/4;
-    const float acidSmileHeight = 77.5; //310/4;
-    const float seqPlayButtonWidth = 100 / 2;
-    const float seqPlayButtonHeight = (70 / 2) + 15;
-    const float seqSmallButtonWidth = 60 / 2;
-    const float seqSmallButtonHeight = 36 / 2;
-    const float seqMediumButtonWidth = 36 / 2;
-    const float seqMediumButtonHeight = 70 / 2;
+    const int acidSmileWidth = 56.25; //225/4;
+    const int acidSmileHeight = 77.5; //310/4;
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {46, 140};
-    pair<int, int> volumeLocation = {813, 140};
+    pair<int, int> waveFormLocation = {46, 140}; 
+    pair<int, int> volumeLocation = {813, 140}; 
     // second row
-    pair<int, int> tuningLocation = {188, 139};
-    pair<int, int> cutoffFreqLocation = {287, 139};
-    pair<int, int> resonanceLocation = {386, 139};
-    pair<int, int> envelopeLocation = {485, 139};
-    pair<int, int> decayLocation = {584, 139};
-    pair<int, int> accentLocation = {683, 139};
+    pair<int, int> tuningLocation = {188, 139}; 
+    pair<int, int> cutoffFreqLocation = {287, 139}; 
+    pair<int, int> resonanceLocation = {386, 139}; 
+    pair<int, int> envelopeLocation = {485, 139}; 
+    pair<int, int> decayLocation = {584, 139}; 
+    pair<int, int> accentLocation = {683, 139}; 
     // MODs knobs row
     pair<int, int> normalDecayLocation = {147, 273};
     pair<int, int> accentDecayLocation = {208, 273};
@@ -248,29 +173,7 @@ void JC303Editor::setControlsLayout()
     pair<int, int> overdriveModelSelectLocation = {610, 265};
 
     // Easter egg mr. smile
-    pair<int, int> acidSmileLocation = {484, 16};
-
-    // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {52, 433};
-    pair<int, int> seqClearButtonLocation = {61, 395};
-    pair<int, int> seqGenerateButtonLocation = {142, 451};
-    pair<int, int> seqGenerativeFillLocation = {165, 20};
-    pair<int, int> seqGenerativeAccentProbabilityLocation = {205, 20};
-    pair<int, int> seqGenerativeSlideProbabilityLocation = {245, 20};
-    pair<int, int> seqGenerativeTieProbabilityLocation = {285, 20};
-    pair<int, int> numberOfTonesLocation = {165, 60};
-    pair<int, int> lowerNoteLocation = {205, 60};
-    pair<int, int> rangeNoteLocation = {245, 60};
-    pair<int, int> seqHarmonizerLocation = {285, 60};
-
-    pair<int, int> seqLengthLocation = {132, 395};
-    pair<int, int> seqShiftLocation = {172, 395};
-
-    // LFO controls
-    pair<int, int> lfoDepthLocation = {680, 20};
-    pair<int, int> lfoRateLocation = {720, 20};
-    pair<int, int> lfoWaveformLocation = {680, 60};
-    pair<int, int> lfoDestinationLocation = {720, 60};
+    pair<int, int> acidSmileLocation = {484, 16}; 
 
     // large knobs
     waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderLargeSize, sliderLargeSize);
@@ -300,28 +203,4 @@ void JC303Editor::setControlsLayout()
 
     // Easter egg mr. smile
     acidSmile.setBounds(acidSmileLocation.first, acidSmileLocation.second, acidSmileWidth, acidSmileHeight);
-
-    // generative sequencer controls
-    seqPlayButton->setBounds(seqPlayButtonLocation.first, seqPlayButtonLocation.second,
-                             seqPlayButtonWidth, seqPlayButtonHeight);
-    seqGenerativeFillSlider->setBounds(seqGenerativeFillLocation.first, seqGenerativeFillLocation.second, sliderSmallSize, sliderSmallSize);
-    seqGenerativeAccentProbabilitySlider->setBounds(seqGenerativeAccentProbabilityLocation.first, seqGenerativeAccentProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
-    seqGenerativeSlideProbabilitySlider->setBounds(seqGenerativeSlideProbabilityLocation.first, seqGenerativeSlideProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
-    seqGenerativeTieProbabilitySlider->setBounds(seqGenerativeTieProbabilityLocation.first, seqGenerativeTieProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
-    numberOfTonesSlider->setBounds(numberOfTonesLocation.first, numberOfTonesLocation.second, sliderSmallSize, sliderSmallSize);
-    lowerNoteSlider->setBounds(lowerNoteLocation.first, lowerNoteLocation.second, sliderSmallSize, sliderSmallSize);
-    rangeNoteSlider->setBounds(rangeNoteLocation.first, rangeNoteLocation.second, sliderSmallSize, sliderSmallSize);
-    seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second,
-                                 seqMediumButtonWidth, seqMediumButtonHeight);
-    seqClearButton->setBounds(seqClearButtonLocation.first, seqClearButtonLocation.second,
-                              seqSmallButtonWidth, seqSmallButtonHeight);
-    // generative sequencer new controls
-    seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
-    seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
-    seqShiftSlider->setBounds(seqShiftLocation.first, seqShiftLocation.second, sliderSmallSize, sliderSmallSize);
-    // LFO controls
-    lfoWaveformSlider->setBounds(lfoWaveformLocation.first, lfoWaveformLocation.second, sliderSmallSize, sliderSmallSize);
-    lfoRateSlider->setBounds(lfoRateLocation.first, lfoRateLocation.second, sliderSmallSize, sliderSmallSize);
-    lfoDepthSlider->setBounds(lfoDepthLocation.first, lfoDepthLocation.second, sliderSmallSize, sliderSmallSize);
-    lfoDestinationSlider->setBounds(lfoDestinationLocation.first, lfoDestinationLocation.second, sliderSmallSize, sliderSmallSize);
 }
