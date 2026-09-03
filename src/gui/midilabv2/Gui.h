@@ -27,6 +27,7 @@ public:
     void resized() override;
     void timerCallback() override;
     void updateKeyboardForSelectedStep();
+    void selectStepFromLed(int step);
 
     void setScaleFactor(float scale) override { juce::AudioProcessorEditor::setScaleFactor(1.0f); }
 
@@ -101,11 +102,13 @@ private:
     juce::Label* modAssign1Label;
     juce::Label* modAssign2Label;
     int menuMode = 0;
-    // sequencer step toggles (rest editing) and display LEDs
+    // sequencer step toggles (note/rest editing), per-step accent/slide/tie toggles,
+    // and click-to-select display LEDs
     SwitchButton* seqStepButtons[16];
+    SwitchStepSeqButton* seqAccentButtons[16];
+    SwitchStepSeqButton* seqSlideButtons[16];
+    SwitchStepSeqButton* seqTieButtons[16];
     StepLed* stepLeds[16];
-    SwitchStepSeqButton* seqStepPrevButton;
-    SwitchStepSeqButton* seqStepNextButton;
     int selectedStep = 0;
 
     // declare the attchaments

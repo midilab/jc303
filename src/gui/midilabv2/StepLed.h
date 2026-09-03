@@ -2,9 +2,9 @@
 
 #include <JuceHeader.h>
 
-// Small display-only LED used to visualise the step rest state of the sequencer.
-// The sprite (sequencer_led.png) is a vertical two-frame strip: off = top
-// frame, on = bottom frame.  setOn() repaints only when the state actually changes.
+// Small LED used to visualise the sequencer step state; clicking it selects the
+// step to edit (the top/bottom frames are off/on). setOn() repaints only when
+// the state actually changes.
 class StepLed : public juce::Component
 {
 public:
@@ -19,6 +19,15 @@ public:
         if (ledOn == on) return;
         ledOn = on;
         repaint();
+    }
+
+    // Clicking an LED selects the corresponding sequencer step (wired by the editor).
+    std::function<void()> onClick;
+
+    void mouseDown(const juce::MouseEvent&) override
+    {
+        if (onClick != nullptr)
+            onClick();
     }
 
     void paint(juce::Graphics& g) override

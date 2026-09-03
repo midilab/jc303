@@ -94,16 +94,23 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             menuKnob->setValue(v, juce::dontSendNotification);
     };
 
-    // sequencer step toggles (rest editing), display LEDs and selected-step navigation
+    // sequencer step toggles (note/rest editing) and click-to-select display LEDs
     for (int i = 0; i < 16; ++i)
     {
         addAndMakeVisible(seqStepButtons[i] = createSwitch());
         addAndMakeVisible(stepLeds[i] = new StepLed());
     }
-    addAndMakeVisible(seqStepPrevButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
-    addAndMakeVisible(seqStepNextButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
 
-    // wire step toggles to sequencer rest state (write-through on user toggle)
+    // per-step accent/slide/tie micro toggles (small sequencer-button art),
+    // one stacked column below each note button, in that order (top to bottom)
+    for (int i = 0; i < 16; ++i)
+    {
+        addAndMakeVisible(seqAccentButtons[i] = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
+        addAndMakeVisible(seqSlideButtons[i] = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
+        addAndMakeVisible(seqTieButtons[i] = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
+    }
+
+    // wire step toggles to sequencer note state (write-through on user toggle)
     for (int i = 0; i < 16; ++i)
     {
         const int step = i;
@@ -111,23 +118,22 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         {
             processorRef.getSequencer().setRest(step, !seqStepButtons[step]->getToggleState());
         };
+        // micro toggles write their flag directly (button ON == feature active)
+        seqAccentButtons[i]->onClick = [this, step]
+        {
+            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getToggleState());
+        };
+        seqSlideButtons[i]->onClick = [this, step]
+        {
+            processorRef.getSequencer().setSlide(step, seqSlideButtons[step]->getToggleState());
+        };
+        seqTieButtons[i]->onClick = [this, step]
+        {
+            processorRef.getSequencer().setTie(step, seqTieButtons[step]->getToggleState());
+        };
+        // clicking an LED selects the step to edit
+        stepLeds[i]->onClick = [this, step] { selectStepFromLed(step); };
     }
-
-    // selected-step navigation (wrap around the active pattern length)
-    seqStepPrevButton->onPress = [this]
-    {
-        auto& seq = processorRef.getSequencer();
-        const int length = seq.getTrackLength();
-        selectedStep = (selectedStep -  1 + length) % length;
-        updateKeyboardForSelectedStep();
-    };
-    seqStepNextButton->onPress = [this]
-    {
-        auto& seq = processorRef.getSequencer();
-        const int length = seq.getTrackLength();
-        selectedStep = (selectedStep +  1) % length;
-        updateKeyboardForSelectedStep();
-    };
 
     // keyboard edits the note of the selected step (monophonic)
     seqKeyboard->onNoteOn = [this] (int midiNote, float velocity)
@@ -223,18 +229,31 @@ void JC303Editor::timerCallback()
 
     for (int i = 0; i < 16; ++i)
     {
-        const bool stepOn = i < length && seq.stepOn(i);
         const bool isCurrent = playing && i == currentStep;
         const bool isSelected = i == selectedStep;
 
         // LED only indicates the active pattern length + the selected step (blinking):
-        // rest state is NOT shown (the step toggle button already does that). The playing
-        // current step is forced off for the progress sweep (overrides the blink).
+        // note/rest and the per-step flags are shown by the buttons below/above. The
+        // playing current step is forced off for the progress sweep (overrides the blink).
         const bool ledOn = !isCurrent && ((isSelected && blinkOn) || (!isSelected && i < length));
         stepLeds[i]->setOn(ledOn);
 
-        if (seqStepButtons[i]->getToggleState() != stepOn)
-            seqStepButtons[i]->setToggleState(stepOn, juce::dontSendNotification);
+        // note step button: ON == note active, rest == OFF
+        const bool noteOn = (i < length) && seq.stepOn(i);
+        if (seqStepButtons[i]->getToggleState() != noteOn)
+            seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
+
+        // per-step accent/slide/tie toggles: ON == flag active (steps beyond the
+        // active pattern length show OFF, but stay editable)
+        const bool accentOn = (i < length) && seq.accentOn(i);
+        const bool slideOn  = (i < length) && seq.slideOn(i);
+        const bool tieOn    = (i < length) && seq.tieOn(i);
+        if (seqAccentButtons[i]->getToggleState() != accentOn)
+            seqAccentButtons[i]->setToggleState(accentOn, juce::dontSendNotification);
+        if (seqSlideButtons[i]->getToggleState() != slideOn)
+            seqSlideButtons[i]->setToggleState(slideOn, juce::dontSendNotification);
+        if (seqTieButtons[i]->getToggleState() != tieOn)
+            seqTieButtons[i]->setToggleState(tieOn, juce::dontSendNotification);
     }
 
     updateKeyboardForSelectedStep();
@@ -244,6 +263,15 @@ void JC303Editor::updateKeyboardForSelectedStep()
 {
     const uint8_t rawNote = processorRef.getSequencer().getRawNote(selectedStep);
     seqKeyboard->showNote(48 + (rawNote % 12));
+}
+
+void JC303Editor::selectStepFromLed(int step)
+{
+    auto& seq = processorRef.getSequencer();
+    // clicking a step at/after the active pattern length snaps to the last active step
+    const int length = seq.getTrackLength();
+    selectedStep = (step < length) ? step : length - 1;
+    updateKeyboardForSelectedStep();
 }
 juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModLookAndFeel)
 {
@@ -404,7 +432,7 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> seqLengthLocation = {200, 390};
     //pair<int, int> seqShiftLocation = {240, 390};
 
-    pair<int, int> keyboardLocation = {470, 347};
+    pair<int, int> keyboardLocation = {470, 300};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -412,7 +440,8 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> lfoWaveformLocation = {680, 60};
     //pair<int, int> lfoDestinationLocation = {720, 60};
 
-// step toggles (rest editing, display LEDs)and selected-step navigation)
+// step toggles (note/rest editing), display LEDs above,and per-step
+    // accent/slide/tie micro toggles below (click-to-select LEDs)
     const int switchStepWidth =  45;
     const int switchStepHeight =  45;
     const int switchStepGap =  8;
@@ -420,10 +449,12 @@ void JC303Editor::setControlsLayout()
     const int stepToggleY =  425;
     const int ledWidth =  15;
     const int ledHeight =  15;
-    const int ledY =  475;   // just below the step toggles
-    const int navButtonWidth =  30;
-    const int navButtonHeight =  18;
-    const int navButtonY =  470 + (ledHeight - navButtonHeight) / 2;
+    const int ledY =  408;   // just above the step toggles
+    const int microButtonHeight =  8;
+    const int microButtonGap    =  2;
+    const int accentButtonY     = 472;   // just below the step toggles
+    const int slideButtonY      = accentButtonY + (microButtonHeight + microButtonGap);
+    const int tieButtonY        = slideButtonY  + (microButtonHeight + microButtonGap);
     // menu navigation controls (top row)
     const int menuButtonWidth = 34; //53;
     const int menuButtonHeight = 31; //48;
@@ -510,15 +541,16 @@ void JC303Editor::setControlsLayout()
     //lfoDepthSlider->setBounds(lfoDepthLocation.first, lfoDepthLocation.second, sliderSmallSize, sliderSmallSize);
     //lfoDestinationSlider->setBounds(lfoDestinationLocation.first, lfoDestinationLocation.second, sliderSmallSize, sliderSmallSize);
 
-    // step toggles, display LEDs (just below each toggle)and selected-step prev/next buttons
+    // step toggles, display LEDs(just above each toggle)and per-step accent/slide/tie
+    // micro toggles (stacked below each toggle)
     for (int i =  0; i < 16; ++i)
     {
         const int stepX = switchStepX0 + i * (switchStepWidth + switchStepGap);
         seqStepButtons[i]->setBounds(stepX, stepToggleY, switchStepWidth, switchStepHeight);
         stepLeds[i]->setBounds(stepX + (switchStepWidth - ledWidth) / 2, ledY, ledWidth, ledHeight);
+        seqAccentButtons[i]->setBounds(stepX, accentButtonY, switchStepWidth, microButtonHeight);
+        seqSlideButtons[i]->setBounds(stepX, slideButtonY, switchStepWidth, microButtonHeight);
+        seqTieButtons[i]->setBounds(stepX, tieButtonY, switchStepWidth, microButtonHeight);
     }
 
-    // selected-step prev/next buttons(wrap around the active pattern length)
-    seqStepPrevButton->setBounds(8, navButtonY, navButtonWidth, navButtonHeight);
-    seqStepNextButton->setBounds(930 - 8 - navButtonWidth, navButtonY, navButtonWidth, navButtonHeight);
 }
