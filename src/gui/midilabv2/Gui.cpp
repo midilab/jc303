@@ -472,9 +472,17 @@ void JC303Editor::setControlsLayout()
     {
         SequencerStepSelector* menuNav[8] = { menuPresetButton, menuOverdriveButton, menuModButton, menuSeqButton,
                                               menuPrevButton,   menuNextButton,      menuDecButton,  menuIncButton };
-        for (int k = 0; k < 8; ++k)
+        // first 6 stay where they are
+        for (int k = 0; k < 6; ++k)
         {
             const int stepX = 50 + k * (menuButtonWidth + 2);
+            menuNav[k]->setBounds(stepX, menuNavY, menuButtonWidth, menuButtonHeight);
+        }
+        // last 2 (dec/inc) centered on the menu knob
+        const int pairStartX = menuKnobLocation.first + sliderMediumSize / 2 - menuButtonWidth - 1;
+        for (int k = 6; k < 8; ++k)
+        {
+            const int stepX = pairStartX + (k - 6) * (menuButtonWidth + 2);
             menuNav[k]->setBounds(stepX, menuNavY, menuButtonWidth, menuButtonHeight);
         }
     }
