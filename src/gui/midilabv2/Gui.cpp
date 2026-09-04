@@ -105,9 +105,9 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // one stacked column below each note button, in that order (top to bottom)
     for (int i = 0; i < 16; ++i)
     {
-        addAndMakeVisible(seqAccentButtons[i] = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
-        addAndMakeVisible(seqSlideButtons[i] = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
-        addAndMakeVisible(seqTieButtons[i] = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
+        addAndMakeVisible(seqAccentButtons[i] = new SequencerStepSelector());
+        addAndMakeVisible(seqSlideButtons[i] = new SequencerStepSelector());
+        addAndMakeVisible(seqTieButtons[i] = new SequencerStepSelector());
     }
 
     // wire step toggles to sequencer note state (write-through on user toggle)
@@ -119,17 +119,20 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             processorRef.getSequencer().setRest(step, !seqStepButtons[step]->getToggleState());
         };
         // micro toggles write their flag directly (button ON == feature active)
+        seqAccentButtons[i]->setClickTogglesState(true);
+        seqSlideButtons[i]->setClickTogglesState(true);
+        seqTieButtons[i]->setClickTogglesState(true);
         seqAccentButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getToggleState());
+            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
         };
         seqSlideButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setSlide(step, seqSlideButtons[step]->getToggleState());
+            processorRef.getSequencer().setSlide(step, seqSlideButtons[step]->getState() != 0);
         };
         seqTieButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setTie(step, seqTieButtons[step]->getToggleState());
+            processorRef.getSequencer().setTie(step, seqTieButtons[step]->getState() != 0);
         };
         // clicking an LED selects the step to edit
         stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
@@ -248,12 +251,12 @@ void JC303Editor::timerCallback()
         const bool accentOn = (i < length) && seq.accentOn(i);
         const bool slideOn  = (i < length) && seq.slideOn(i);
         const bool tieOn    = (i < length) && seq.tieOn(i);
-        if (seqAccentButtons[i]->getToggleState() != accentOn)
-            seqAccentButtons[i]->setToggleState(accentOn, juce::dontSendNotification);
-        if (seqSlideButtons[i]->getToggleState() != slideOn)
-            seqSlideButtons[i]->setToggleState(slideOn, juce::dontSendNotification);
-        if (seqTieButtons[i]->getToggleState() != tieOn)
-            seqTieButtons[i]->setToggleState(tieOn, juce::dontSendNotification);
+        if (seqAccentButtons[i]->getState() != accentOn)
+            seqAccentButtons[i]->setState(accentOn ? 1 : 0);
+        if (seqSlideButtons[i]->getState() != slideOn)
+            seqSlideButtons[i]->setState(slideOn ? 1 : 0);
+        if (seqTieButtons[i]->getState() != tieOn)
+            seqTieButtons[i]->setState(tieOn ? 1 : 0);
     }
 
     updateKeyboardForSelectedStep();

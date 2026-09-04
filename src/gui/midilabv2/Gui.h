@@ -105,9 +105,9 @@ private:
     // sequencer step toggles (note/rest editing), per-step accent/slide/tie toggles,
     // and click-to-select display LEDs
     SwitchButton* seqStepButtons[16];
-    SwitchStepSeqButton* seqAccentButtons[16];
-    SwitchStepSeqButton* seqSlideButtons[16];
-    SwitchStepSeqButton* seqTieButtons[16];
+    SequencerStepSelector* seqAccentButtons[16];
+    SequencerStepSelector* seqSlideButtons[16];
+    SequencerStepSelector* seqTieButtons[16];
     SequencerStepSelector* stepSelectors[16];
     int selectedStep = 0;
 

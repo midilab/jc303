@@ -21,11 +21,18 @@ public:
         repaint();
     }
 
+    int getState() const { return ledState; }
+
+    // Toggle mode: clicking flips between state 0 (off) and 1 (on) before onClick.
+    void setClickTogglesState(bool enabled) { clickToggles = enabled; }
+
     // Clicking an LED selects the corresponding sequencer step (wired by the editor).
     std::function<void()> onClick;
 
     void mouseDown(const juce::MouseEvent&) override
     {
+        if (clickToggles)
+            setState(ledState == 0 ? 1 : 0);
         if (onClick != nullptr)
             onClick();
     }
@@ -46,6 +53,7 @@ public:
 private:
     juce::Image imageLed;
     int ledState = 0;
+    bool clickToggles = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SequencerStepSelector)
 };

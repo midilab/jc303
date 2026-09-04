@@ -37,7 +37,7 @@ public:
     void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
     {
         float scale = (float) getWidth() / imageButton.getWidth();
-        int buttonFrameHeight = (int) (imageButton.getHeight() / 2.0f * scale);
+        int buttonFrameHeight = jmin((int) (imageButton.getHeight() / 2.0f * scale), getHeight());
         int sourceY;
 
         if (buttonMode == Mode::Toggle)
