@@ -55,14 +55,14 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(lfoWaveformSlider = createModKnob("WAVE"));
 
     // menu navigation controls
-    addAndMakeVisible(menuPresetButton = createMenuSwitch(MenuSwitchButton::Mode::Toggle));
-    addAndMakeVisible(menuOverdriveButton = createMenuSwitch(MenuSwitchButton::Mode::Toggle));
-    addAndMakeVisible(menuModButton = createMenuSwitch(MenuSwitchButton::Mode::Toggle));
-    addAndMakeVisible(menuSeqButton = createMenuSwitch(MenuSwitchButton::Mode::Toggle));
-    addAndMakeVisible(menuPrevButton = createMenuSwitch(MenuSwitchButton::Mode::Press));
-    addAndMakeVisible(menuNextButton = createMenuSwitch(MenuSwitchButton::Mode::Press));
-    addAndMakeVisible(menuDecButton = createMenuSwitch(MenuSwitchButton::Mode::Press));
-    addAndMakeVisible(menuIncButton = createMenuSwitch(MenuSwitchButton::Mode::Press));
+    addAndMakeVisible(menuPresetButton = createMenuSwitch(SequencerStepSelector::Mode::Toggle, "PST"));
+    addAndMakeVisible(menuOverdriveButton = createMenuSwitch(SequencerStepSelector::Mode::Toggle, "OVD"));
+    addAndMakeVisible(menuModButton = createMenuSwitch(SequencerStepSelector::Mode::Toggle, "MOD"));
+    addAndMakeVisible(menuSeqButton = createMenuSwitch(SequencerStepSelector::Mode::Toggle, "SEQ"));
+    addAndMakeVisible(menuPrevButton = createMenuSwitch(SequencerStepSelector::Mode::Press, "<<"));
+    addAndMakeVisible(menuNextButton = createMenuSwitch(SequencerStepSelector::Mode::Press, ">>"));
+    addAndMakeVisible(menuDecButton = createMenuSwitch(SequencerStepSelector::Mode::Press, "-"));
+    addAndMakeVisible(menuIncButton = createMenuSwitch(SequencerStepSelector::Mode::Press, "+"));
     addAndMakeVisible(menuKnob = createKnob("medium"));
     menuKnob->setRange(0.0, 100.0);
 
@@ -309,11 +309,9 @@ SwitchButton* JC303Editor::createSwitch()
     return button;
 }
 
-MenuSwitchButton* JC303Editor::createMenuSwitch(MenuSwitchButton::Mode mode)
+SequencerStepSelector* JC303Editor::createMenuSwitch(SequencerStepSelector::Mode mode, const juce::String& label)
 {
-    auto* button = new MenuSwitchButton(mode);
-    button->setClickingTogglesState(false);
-
+    auto* button = new SequencerStepSelector(mode, label);
     return button;
 }
 
@@ -321,10 +319,10 @@ void JC303Editor::selectMenu(int mode)
 {
     menuMode = mode;
 
-    menuPresetButton->setToggleState(mode == 0, juce::dontSendNotification);
-    menuOverdriveButton->setToggleState(mode == 1, juce::dontSendNotification);
-    menuModButton->setToggleState(mode == 2, juce::dontSendNotification);
-    menuSeqButton->setToggleState(mode == 3, juce::dontSendNotification);
+    menuPresetButton->setState(mode == 0 ? 1 : 0);
+    menuOverdriveButton->setState(mode == 1 ? 1 : 0);
+    menuModButton->setState(mode == 2 ? 1 : 0);
+    menuSeqButton->setState(mode == 3 ? 1 : 0);
 
     menuPage->selectPage(mode);
 }
@@ -453,25 +451,17 @@ void JC303Editor::setControlsLayout()
     const int ledWidth = switchStepWidth;
     const int ledHeight = ledWidth * 34 / 62;
     const int ledY = stepToggleY - ledHeight - 1;   // just above the step toggles
-    const int microButtonHeight =  8;
+    const int microButtonHeight =  12;
     const int microButtonGap    =  2;
     const int accentButtonY     = 472;   // just below the step toggles
     const int slideButtonY      = accentButtonY + (microButtonHeight + microButtonGap);
     const int tieButtonY        = slideButtonY  + (microButtonHeight + microButtonGap);
-    // menu navigation controls (top row)
-    const int menuButtonWidth = 34; //53;
-    const int menuButtonHeight = 31; //48;
-
-    pair<int, int> menuPresetButtonLocation = {50, 320};
-    pair<int, int> menuOverdriveButtonLocation = {100, 320};
-    pair<int, int> menuModButtonLocation = {150, 320};
-    pair<int, int> menuSeqButtonLocation = {200, 320};
-
-    pair<int, int> menuPrevButtonLocation = {250, 320};
-    pair<int, int> menuNextButtonLocation = {300, 320};
-
-    pair<int, int> menuDecButtonLocation = {365, 320};
-    pair<int, int> menuIncButtonLocation = {416, 320};
+    // menu navigation controls (top row), same width/aspect as the step selector
+    // buttons: width = switchStepWidth, height keeps the step-selector art frame
+    // aspect (62x34), 2px gaps between buttons
+    const int menuButtonWidth = switchStepWidth;
+    const int menuButtonHeight = menuButtonWidth * 34 / 62 + 16;
+    const int menuNavY = 320;
 
     pair<int, int> menuKnobLocation = {375, 240};
 
@@ -479,14 +469,15 @@ void JC303Editor::setControlsLayout()
     pair<int, int> modKnob2Location = {608, 240};
 
     // menu navigation controls (top row)
-    menuPresetButton->setBounds(menuPresetButtonLocation.first, menuPresetButtonLocation.second, menuButtonWidth, menuButtonHeight);
-    menuOverdriveButton->setBounds(menuOverdriveButtonLocation.first, menuOverdriveButtonLocation.second, menuButtonWidth, menuButtonHeight);
-    menuModButton->setBounds(menuModButtonLocation.first, menuModButtonLocation.second, menuButtonWidth, menuButtonHeight);
-    menuSeqButton->setBounds(menuSeqButtonLocation.first, menuSeqButtonLocation.second, menuButtonWidth, menuButtonHeight);
-    menuPrevButton->setBounds(menuPrevButtonLocation.first, menuPrevButtonLocation.second, menuButtonWidth, menuButtonHeight);
-    menuNextButton->setBounds(menuNextButtonLocation.first, menuNextButtonLocation.second, menuButtonWidth, menuButtonHeight);
-    menuDecButton->setBounds(menuDecButtonLocation.first, menuDecButtonLocation.second, menuButtonWidth, menuButtonHeight);
-    menuIncButton->setBounds(menuIncButtonLocation.first, menuIncButtonLocation.second, menuButtonWidth, menuButtonHeight);
+    {
+        SequencerStepSelector* menuNav[8] = { menuPresetButton, menuOverdriveButton, menuModButton, menuSeqButton,
+                                              menuPrevButton,   menuNextButton,      menuDecButton,  menuIncButton };
+        for (int k = 0; k < 8; ++k)
+        {
+            const int stepX = 50 + k * (menuButtonWidth + 2);
+            menuNav[k]->setBounds(stepX, menuNavY, menuButtonWidth, menuButtonHeight);
+        }
+    }
     menuKnob->setBounds(menuKnobLocation.first, menuKnobLocation.second, sliderMediumSize, sliderMediumSize);
     modAssign1->setBounds(modKnob1Location.first, modKnob1Location.second, sliderMediumSize, sliderMediumSize);
     modAssign2->setBounds(modKnob2Location.first, modKnob2Location.second, sliderMediumSize, sliderMediumSize);

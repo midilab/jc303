@@ -5,7 +5,6 @@
 #include "KnobLookAndFeel.h"
 #include "ModKnobLookAndFeel.h"
 #include "SwitchButton.h"
-#include "MenuSwitchButton.h"
 #include "SwitchStepSeqButton.h"
 #include "SequencerStepSelector.h"
 #include "../shared/MenuPage.h"
@@ -36,7 +35,7 @@ private:
     juce::Slider* createModKnob(const juce::String& label);
     AssignableSlider* createAssignableSlider(const juce::String& label, juce::Label*& labelOut);
     SwitchButton* createSwitch();
-    MenuSwitchButton* createMenuSwitch(MenuSwitchButton::Mode mode);
+    SequencerStepSelector* createMenuSwitch(SequencerStepSelector::Mode mode, const juce::String& label = "");
     SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size size = SwitchStepSeqButton::Size::Large);
     juce::Label* createLabel(const juce::String& text);
     void setControlsLayout();
@@ -88,14 +87,14 @@ private:
     juce::Slider* lfoDepthSlider;
     juce::Slider* lfoDestinationSlider;
     // menu navigation controls
-    MenuSwitchButton* menuPresetButton;
-    MenuSwitchButton* menuOverdriveButton;
-    MenuSwitchButton* menuModButton;
-    MenuSwitchButton* menuSeqButton;
-    MenuSwitchButton* menuPrevButton;
-    MenuSwitchButton* menuNextButton;
-    MenuSwitchButton* menuDecButton;
-    MenuSwitchButton* menuIncButton;
+    SequencerStepSelector* menuPresetButton;
+    SequencerStepSelector* menuOverdriveButton;
+    SequencerStepSelector* menuModButton;
+    SequencerStepSelector* menuSeqButton;
+    SequencerStepSelector* menuPrevButton;
+    SequencerStepSelector* menuNextButton;
+    SequencerStepSelector* menuDecButton;
+    SequencerStepSelector* menuIncButton;
     juce::Slider* menuKnob;
     AssignableSlider* modAssign1;
     AssignableSlider* modAssign2;

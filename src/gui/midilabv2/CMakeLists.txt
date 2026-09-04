@@ -3,7 +3,6 @@ juce_add_binary_data(BinaryData SOURCES
     resources/jc-303-gui-background.png
     resources/knob_large_silver.png
     resources/switch.png
-    resources/switch2.png
     resources/sequencer-button1.png
     resources/sequencer-button2.png
     resources/sequencer_step_selector.png
