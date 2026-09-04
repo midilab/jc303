@@ -98,7 +98,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     for (int i = 0; i < 16; ++i)
     {
         addAndMakeVisible(seqStepButtons[i] = createSwitch());
-        addAndMakeVisible(stepLeds[i] = new StepLed());
+        addAndMakeVisible(stepSelectors[i] = new SequencerStepSelector());
     }
 
     // per-step accent/slide/tie micro toggles (small sequencer-button art),
@@ -132,7 +132,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             processorRef.getSequencer().setTie(step, seqTieButtons[step]->getToggleState());
         };
         // clicking an LED selects the step to edit
-        stepLeds[i]->onClick = [this, step] { selectStepFromLed(step); };
+        stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
     }
 
     // keyboard edits the note of the selected step (monophonic)
@@ -232,11 +232,11 @@ void JC303Editor::timerCallback()
         const bool isCurrent = playing && i == currentStep;
         const bool isSelected = i == selectedStep;
 
-        // LED only indicates the active pattern length + the selected step (blinking):
+        // LED indicates the active pattern length + the selected step (blinking);
         // note/rest and the per-step flags are shown by the buttons below/above. The
-        // playing current step is forced off for the progress sweep (overrides the blink).
-        const bool ledOn = !isCurrent && ((isSelected && blinkOn) || (!isSelected && i < length));
-        stepLeds[i]->setOn(ledOn);
+        // playing current step is state 2 (overrides the blink).
+        const int ledState = isCurrent ? 2 : ((isSelected && blinkOn) || (!isSelected && i < length) ? 1 : 0);
+        stepSelectors[i]->setState(ledState);
 
         // note step button: ON == note active, rest == OFF
         const bool noteOn = (i < length) && seq.stepOn(i);
@@ -265,7 +265,7 @@ void JC303Editor::updateKeyboardForSelectedStep()
     seqKeyboard->showNote(48 + (rawNote % 12));
 }
 
-void JC303Editor::selectStepFromLed(int step)
+void JC303Editor::selectStepFromSelector(int step)
 {
     auto& seq = processorRef.getSequencer();
     // clicking a step at/after the active pattern length snaps to the last active step
@@ -416,23 +416,23 @@ void JC303Editor::setControlsLayout()
     pair<int, int> displayMenuLocation = {60, 245};
 
     // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {50, 375};
+    pair<int, int> seqPlayButtonLocation = {45, 375};
     pair<int, int> seqClearButtonLocation = {130, 375};
 
-    pair<int, int> seqGenerateButtonLocation = {700, 347};
-    pair<int, int> seqGenerativeFillLocation = {730, 347};
-    pair<int, int> seqGenerativeAccentProbabilityLocation = {770, 347};
-    pair<int, int> seqGenerativeSlideProbabilityLocation = {810, 347};
-    pair<int, int> seqGenerativeTieProbabilityLocation = {850, 347};
-    pair<int, int> numberOfTonesLocation = {730, 387};
-    pair<int, int> lowerNoteLocation = {770, 387};
-    pair<int, int> rangeNoteLocation = {810, 387};
-    pair<int, int> seqHarmonizerLocation = {850, 387};
+    pair<int, int> seqGenerateButtonLocation = {700, 337};
+    pair<int, int> seqGenerativeFillLocation = {730, 337};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {770, 337};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {810, 337};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {850, 337};
+    pair<int, int> numberOfTonesLocation = {730, 377};
+    pair<int, int> lowerNoteLocation = {770, 377};
+    pair<int, int> rangeNoteLocation = {810, 377};
+    pair<int, int> seqHarmonizerLocation = {850, 377};
 
     //pair<int, int> seqLengthLocation = {200, 390};
     //pair<int, int> seqShiftLocation = {240, 390};
 
-    pair<int, int> keyboardLocation = {470, 300};
+    pair<int, int> keyboardLocation = {470, 330};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -447,9 +447,9 @@ void JC303Editor::setControlsLayout()
     const int switchStepGap =  8;
     const int switchStepX0 =  44;   // x of the first step toggle
     const int stepToggleY =  425;
-    const int ledWidth =  15;
-    const int ledHeight =  15;
-    const int ledY =  408;   // just above the step toggles
+    const int ledWidth = switchStepWidth;
+    const int ledHeight = ledWidth * 34 / 62;
+    const int ledY = stepToggleY - ledHeight - 1;   // just above the step toggles
     const int microButtonHeight =  8;
     const int microButtonGap    =  2;
     const int accentButtonY     = 472;   // just below the step toggles
@@ -547,7 +547,7 @@ void JC303Editor::setControlsLayout()
     {
         const int stepX = switchStepX0 + i * (switchStepWidth + switchStepGap);
         seqStepButtons[i]->setBounds(stepX, stepToggleY, switchStepWidth, switchStepHeight);
-        stepLeds[i]->setBounds(stepX + (switchStepWidth - ledWidth) / 2, ledY, ledWidth, ledHeight);
+        stepSelectors[i]->setBounds(stepX + (switchStepWidth - ledWidth) / 2, ledY, ledWidth, ledHeight);
         seqAccentButtons[i]->setBounds(stepX, accentButtonY, switchStepWidth, microButtonHeight);
         seqSlideButtons[i]->setBounds(stepX, slideButtonY, switchStepWidth, microButtonHeight);
         seqTieButtons[i]->setBounds(stepX, tieButtonY, switchStepWidth, microButtonHeight);

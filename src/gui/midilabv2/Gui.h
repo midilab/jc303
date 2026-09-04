@@ -7,7 +7,7 @@
 #include "SwitchButton.h"
 #include "MenuSwitchButton.h"
 #include "SwitchStepSeqButton.h"
-#include "StepLed.h"
+#include "SequencerStepSelector.h"
 #include "../shared/MenuPage.h"
 #include "../shared/SeqKeyboard.h"
 
@@ -27,7 +27,7 @@ public:
     void resized() override;
     void timerCallback() override;
     void updateKeyboardForSelectedStep();
-    void selectStepFromLed(int step);
+    void selectStepFromSelector(int step);
 
     void setScaleFactor(float scale) override { juce::AudioProcessorEditor::setScaleFactor(1.0f); }
 
@@ -108,7 +108,7 @@ private:
     SwitchStepSeqButton* seqAccentButtons[16];
     SwitchStepSeqButton* seqSlideButtons[16];
     SwitchStepSeqButton* seqTieButtons[16];
-    StepLed* stepLeds[16];
+    SequencerStepSelector* stepSelectors[16];
     int selectedStep = 0;
 
     // declare the attchaments

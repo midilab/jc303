@@ -3,21 +3,21 @@
 #include <JuceHeader.h>
 
 // Small LED used to visualise the sequencer step state; clicking it selects the
-// step to edit (the top/bottom frames are off/on). setOn() repaints only when
-// the state actually changes.
-class StepLed : public juce::Component
+// step to edit. The image is a 3-frame vertical strip: OFF (top), ON (middle),
+// and playing (bottom). setState() repaints only when the state actually changes.
+class SequencerStepSelector : public juce::Component
 {
 public:
-    StepLed()
+    SequencerStepSelector()
     {
-        imageLed = juce::ImageCache::getFromMemory(BinaryData::sequencer_led_png, BinaryData::sequencer_led_pngSize);
-        setOn(false);
+        imageLed = juce::ImageCache::getFromMemory(BinaryData::sequencer_step_selector_png, BinaryData::sequencer_step_selector_pngSize);
+        setState(0);
     }
 
-    void setOn(bool on)
+    void setState(int state)
     {
-        if (ledOn == on) return;
-        ledOn = on;
+        if (ledState == state) return;
+        ledState = state;
         repaint();
     }
 
@@ -34,8 +34,8 @@ public:
     {
         if (imageLed.isValid())
         {
-            const int frameHeight = imageLed.getHeight() / 2;
-            const int sourceY = ledOn ? frameHeight : 0;
+            const int frameHeight = imageLed.getHeight() / 3;
+            const int sourceY = ledState * frameHeight;
 
             g.drawImage(imageLed, 0,  0, getWidth(), getHeight(),
                         0, sourceY, imageLed.getWidth(), frameHeight,
@@ -45,7 +45,7 @@ public:
 
 private:
     juce::Image imageLed;
-    bool ledOn = false;
+    int ledState = 0;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepLed)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SequencerStepSelector)
 };

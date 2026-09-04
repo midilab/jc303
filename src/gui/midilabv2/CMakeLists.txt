@@ -6,7 +6,7 @@ juce_add_binary_data(BinaryData SOURCES
     resources/switch2.png
     resources/sequencer-button1.png
     resources/sequencer-button2.png
-    resources/sequencer_led.png
+    resources/sequencer_step_selector.png
     #resources/ErbosDraco1StOpenNbpRegular-l5wX.ttf
     resources/PressStart2PRegular.ttf
     # TODO: remove after finish UI end version
