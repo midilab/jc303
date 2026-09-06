@@ -56,7 +56,16 @@ namespace rosic
     void setCutoff(double newCutoff); 
 
     /** Sets the resonance amount for the filter. */
-    void setResonance(double newResonance) { filter.setResonance(newResonance); }
+    void setResonance(double newResonance)
+    {
+      filter.setResonance(newResonance);
+
+      // TB-303 accent capacitor: the resonance pot controls the accent-sweep
+      // circuit's discharge rate. Higher resonance = slower discharge = the accent
+      // sweeps up more smoothly and stacks higher on rapid successive accents.
+      resonanceSkewed = (1.0 - exp(-3.0 * 0.01 * newResonance)) / (1.0 - exp(-3.0));
+      rc2.setTimeConstant(accentAttack * (1.0 + resonanceSkewed * 2.0));
+    }
 
     /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator 
     (in percent). */
@@ -116,10 +125,12 @@ namespace rosic
 
     /** Sets the filter envelope's attack time for accented notes (in milliseconds). In the 
     Devil Fish, accented notes have a fixed attack time of 3 ms.  */
-    void setAccentAttack(double newAccentAttack) 
-    { 
-      accentAttack = newAccentAttack; 
-      rc2.setTimeConstant(accentAttack);
+    void setAccentAttack(double newAccentAttack)
+    {
+      accentAttack = newAccentAttack;
+      // The resonance pot scales the accent capacitor's discharge lag (see
+      // setResonance): tau = accentAttack * (1 + 2*resonance), so 1x..3x.
+      rc2.setTimeConstant(accentAttack * (1.0 + resonanceSkewed * 2.0));
     }
 
     /** Sets the filter envelope's decay time for accented notes (in milliseconds). 
@@ -295,6 +306,7 @@ namespace rosic
     double envScaler;        // scale-factor for the normalized envelope (derived from envMod)
     double normalAttack;     // attack time for the filter envelope on non-accented notes
     double accentAttack;     // attack time for the filter envelope on accented notes
+    double resonanceSkewed;  // skewed resonance (0-1), scales the accent capacitor lag
     double normalDecay;      // decay time for the filter envelope on non-accented notes
     double accentDecay;      // decay time for the filter envelope on accented notes
     double normalAmpRelease; // amp-env release time for non-accented notes
@@ -317,8 +329,10 @@ namespace rosic
 
   INLINE double Open303::getSample()
   {
-    //if( sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached() )
-    //  return 0.0;
+    // 'idle' short-circuits output before the first note is ever triggered (it starts true and is
+    // cleared on the first trigger). Note it is never set back to true afterwards, so this is only a
+    // pre-first-note guard; re-enabling end-of-note detection here to save CPU on silence is a
+    // possible future optimization but needs click-free retrigger testing.
     if( idle )
       return 0.0;
 
@@ -370,7 +384,7 @@ namespace rosic
     if( accentGain > 0.0 )
       tmp2 = mainEnvOut;
     tmp2 = n2 * rc2.getSample(tmp2);  
-    tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
+    tmp1 = envScaler * ( tmp1 - envOffset );  // main env-mod scaling (Schmidt's measured mapping)
     tmp2 = accentGain*tmp2;
     double instCutoff = cutoff * pow(2.0, tmp1+tmp2);
     filter.setCutoff(instCutoff);
@@ -399,11 +413,6 @@ namespace rosic
     tmp  = notch.getSample(tmp);
     tmp *= ampEnvOut;                       // amplified
     tmp *= ampScaler;
-
-    // find out whether we may switch ourselves off for the next call:
-    idle = false;
-    //idle = (sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached() 
-    //        && fabs(tmp) < 0.000001); // ampEnvOut < 0.000001;
 
     return tmp;
   }

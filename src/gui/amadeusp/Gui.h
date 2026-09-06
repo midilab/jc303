@@ -23,9 +23,9 @@ public:
     void resized() override;
 
 private:
-    juce::Slider* createKnob(const juce::String& knobType);
-    SwitchButton* createSwitch();
-    SwitchLed* createLed(const juce::String& paramID);
+    std::unique_ptr<juce::Slider> createKnob(const juce::String& knobType);
+    std::unique_ptr<SwitchButton> createSwitch();
+    std::unique_ptr<SwitchLed> createLed(const juce::String& paramID);
     void setControlsLayout();
 
     // This reference is provided as a quick way for your editor to
@@ -33,28 +33,29 @@ private:
     JC303& processorRef;
 
     // Main slider controls
-    juce::Slider* waveformSlider;
-    juce::Slider* tuningSlider;
-    juce::Slider* cutoffFreqSlider;
-    juce::Slider* resonanceSlider;
-    juce::Slider* envelopModSlider;
-    juce::Slider* decaySlider;
-    juce::Slider* accentSlider;
-    juce::Slider* volumeSlider;
+    std::unique_ptr<juce::Slider> waveformSlider;
+    std::unique_ptr<juce::Slider> tuningSlider;
+    std::unique_ptr<juce::Slider> cutoffFreqSlider;
+    std::unique_ptr<juce::Slider> resonanceSlider;
+    std::unique_ptr<juce::Slider> envelopModSlider;
+    std::unique_ptr<juce::Slider> decaySlider;
+    std::unique_ptr<juce::Slider> accentSlider;
+    std::unique_ptr<juce::Slider> volumeSlider;
     // MODs
-    juce::Slider* normalDecaySlider;
-    juce::Slider* accentDecaySlider;
-    juce::Slider* feedbackFilterSlider;
-    juce::Slider* softAttackSlider;
-    juce::Slider* slideTimeSlider;
-    juce::Slider* sqrDriverSlider;
-    SwitchButton* switchModButton;
-    SwitchLed* ledModButton;
+    std::unique_ptr<juce::Slider> normalDecaySlider;
+    std::unique_ptr<juce::Slider> accentDecaySlider;
+    std::unique_ptr<juce::Slider> feedbackFilterSlider;
+    std::unique_ptr<juce::Slider> softAttackSlider;
+    std::unique_ptr<juce::Slider> accentSoftAttackSlider;
+    std::unique_ptr<juce::Slider> slideTimeSlider;
+    std::unique_ptr<juce::Slider> sqrDriverSlider;
+    std::unique_ptr<SwitchButton> switchModButton;
+    std::unique_ptr<SwitchLed> ledModButton;
     // overdrive
-    juce::Slider* overdriveLevelSlider;
-    juce::Slider* overdriveDryWetSlider;
-    SwitchButton* switchOverdriveButton;
-    SwitchLed* ledOverdriveButton;
+    std::unique_ptr<juce::Slider> overdriveLevelSlider;
+    std::unique_ptr<juce::Slider> overdriveDryWetSlider;
+    std::unique_ptr<SwitchButton> switchOverdriveButton;
+    std::unique_ptr<SwitchLed> ledOverdriveButton;
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
@@ -70,6 +71,7 @@ private:
     std::unique_ptr<SliderAttachment> accentDecayAttachment;
     std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
     std::unique_ptr<SliderAttachment> softAttackAttachment;
+    std::unique_ptr<SliderAttachment> accentSoftAttackAttachment;
     std::unique_ptr<SliderAttachment> slideTimeAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
@@ -78,7 +80,7 @@ private:
     std::unique_ptr<SliderAttachment> overdriveDryWetAttachment;
     std::unique_ptr<ButtonAttachment> switchOverdriveButtonAttachment;
     // previous, next buttons and model name display component
-    OverdriveModelSelect* overdriveModelSelect;
+    std::unique_ptr<OverdriveModelSelect> overdriveModelSelect;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;

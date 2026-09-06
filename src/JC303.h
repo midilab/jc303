@@ -23,6 +23,7 @@ enum Open303Parameters
   SWITCH_MOD,
   NORMAL_DECAY,
   ACCENT_DECAY,
+  ACCENT_SOFT_ATTACK,
   FEEDBACK_HPF,
   SOFT_ATTACK,
   SLIDE_TIME,
@@ -87,6 +88,9 @@ public:
 private:
     void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
+    // Re-applies all cheap DSP parameters from the APVTS atomics on the audio thread. Called from
+    // processBlock when parametersNeedUpdate is set, so parameter writes never race getSample().
+    void updateOpen303Parameters();
 
     // presets and overdrive models user data management
     void setupDataDirectories();
@@ -118,6 +122,7 @@ private:
     std::atomic<float>* switchModState = nullptr;
     std::atomic<float>* normalDecay = nullptr;
     std::atomic<float>* accentDecay = nullptr;
+    std::atomic<float>* accentSoftAttack = nullptr;
     std::atomic<float>* feedbackFilter = nullptr;
     std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* slideTime = nullptr;
