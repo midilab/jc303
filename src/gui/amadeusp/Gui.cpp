@@ -13,6 +13,9 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(envelopModSlider = createKnob("medium"));
     addAndMakeVisible(decaySlider = createKnob("medium"));
     addAndMakeVisible(accentSlider = createKnob("medium"));
+    // reverse gate on/off toggle
+    addAndMakeVisible(switchReverseButton = createSwitch());
+    addAndMakeVisible(ledReverseButton = createLed("reverseGate"));
     // MODs row
     addAndMakeVisible(normalDecaySlider = createKnob("small"));
     addAndMakeVisible(accentDecaySlider = createKnob("small"));
@@ -44,6 +47,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     decayAttachment.reset (new SliderAttachment (valueTreeState, "decay", *decaySlider));
     accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
     volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
+    // reverse gate on/off toggle
+    switchReverseButtonAttachment.reset(new ButtonAttachment(valueTreeState, "reverseGate", *switchReverseButton));
     // MODs row
     normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
     accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
@@ -83,6 +88,11 @@ void JC303Editor::paint (juce::Graphics& g)
 
     // Draw the image to fill the entire component area
     g.drawImage (background, getLocalBounds().toFloat());
+
+    // Label for the reverse-gate toggle (no baked-in text on the skin for it)
+    g.setColour (juce::Colours::black);
+    g.setFont (12.0f);
+    g.drawText ("REVERSE", 222, 344, 62, 16, juce::Justification::centredLeft, false);
 }
 
 void JC303Editor::resized()
@@ -161,6 +171,9 @@ void JC303Editor::setControlsLayout()
     pair<int, int> softAttackLocation = {330, 273};
     pair<int, int> slideTimeLocation = {391, 273};
     pair<int, int> sqrDriverLocation = {452, 273};
+    // reverse gate toggle (bottom gray margin, under the Normal/Accent Decay knobs)
+    pair<int, int> reverseLedLocation = {150, 344};
+    pair<int, int> reverseSwitchLocation = {170, 343};
     // MODs switch
     pair<int, int> switchLocation = {52, 273};
     pair<int, int> modLedLocation = {82, 243};
@@ -185,6 +198,9 @@ void JC303Editor::setControlsLayout()
     envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderMediumSize, sliderMediumSize);
     decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderMediumSize, sliderMediumSize);
     accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderMediumSize, sliderMediumSize);
+    // reverse gate toggle
+    switchReverseButton->setBounds(reverseSwitchLocation.first, reverseSwitchLocation.second, switchWidth, switchHeight);
+    ledReverseButton->setBounds(reverseLedLocation.first, reverseLedLocation.second, ledWidth, ledHeight);
     // MODs, small knobs, switch
     normalDecaySlider->setBounds(normalDecayLocation.first, normalDecayLocation.second, sliderSmallSize, sliderSmallSize);
     accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderSmallSize, sliderSmallSize);
