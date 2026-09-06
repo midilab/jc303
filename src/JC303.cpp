@@ -57,6 +57,9 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.75f),
+            std::make_unique<juce::AudioParameterBool> ("reverseGate",
+                                                        "Reverse Gate",
+                                                        false),
             // MODs parameters
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
@@ -336,6 +339,7 @@ JC303::JC303()
     decay = parameters.getRawParameterValue("decay");
     accent = parameters.getRawParameterValue("accent");
     volume = parameters.getRawParameterValue("volume");
+    reverseGate = parameters.getRawParameterValue("reverseGate");
     // MODs parameters
     switchModState = parameters.getRawParameterValue("switchModState");
     normalDecay = parameters.getRawParameterValue("normalDecay");
@@ -405,6 +409,7 @@ JC303::JC303()
     setParameter(DECAY, *decay);
     setParameter(ACCENT, *accent);
     setParameter(VOLUME, *volume);
+    setParameter(REVERSE_GATE, *reverseGate);
     // MOD/LFO/sub-osc values are applied only through setDevilMod so a mod-off
     // startup never overwrites the restored core defaults (they are all loaded
     // from the params inside setDevilMod(true)).
@@ -429,6 +434,7 @@ JC303::JC303()
     parameters.addParameterListener("decay", this);
     parameters.addParameterListener("accent", this);
     parameters.addParameterListener("volume", this);
+    parameters.addParameterListener("reverseGate", this);
     parameters.addParameterListener("normalDecay", this);
     parameters.addParameterListener("accentDecay", this);
     parameters.addParameterListener("accentSweep", this);
@@ -499,6 +505,7 @@ JC303::~JC303()
     parameters.removeParameterListener("decay", this);
     parameters.removeParameterListener("accent", this);
     parameters.removeParameterListener("volume", this);
+    parameters.removeParameterListener("reverseGate", this);
     parameters.removeParameterListener("normalDecay", this);
     parameters.removeParameterListener("accentDecay", this);
     parameters.removeParameterListener("accentSweep", this);
@@ -764,6 +771,7 @@ void JC303::updateOpen303Parameters()
     setParameter(ENVMOD, *envelopMod);
     setParameter(ACCENT, *accent);
     setParameter(VOLUME, *volume);
+    setParameter(REVERSE_GATE, *reverseGate);
     // setDevilMod adjusts decayMin/decayMax and (re)applies the mod pots (or restores fixed 303
     // values), so it must run before DECAY, which reads that range.
     setDevilMod(*switchModState > 0.5f);
@@ -817,6 +825,13 @@ void JC303::setParameter (Open303Parameters index, float value)
     case VOLUME:
         open303Core.setVolume(
             linToLin(value, 0.0, 1.0, -60.0,      0.0)
+        );
+        break;
+    case REVERSE_GATE:
+        // 0 = normal note, 1 = fully time-reversed amp/filter/accent contour (swell up then cut).
+        // Swell timing follows the Decay knob (the main envelope's time constant).
+        open303Core.setReverseGate(
+            linToLin(value, 0.0, 1.0,   0.0,      1.0)
         );
         break;
 
@@ -1409,6 +1424,12 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // coefficients are never rewritten concurrently with getSample() reading them.
     if (parametersNeedUpdate.exchange(false))
         updateOpen303Parameters();
+
+    // pass the host tempo to the core so the reverse-gate can snap its length prediction to the grid
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+            if (auto bpm = pos->getBpm())
+                open303Core.setReverseTempo(*bpm);
 
     // clear buffer
     auto totalNumInputChannels  = getTotalNumInputChannels();
