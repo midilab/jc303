@@ -443,112 +443,34 @@ JC303::~JC303()
     parameters.removeParameterListener("subOscBlend", this);
 }
 
-// Parameter change callback
+// Parameter change callback. Runs on the message/automation thread, NOT the audio thread, so it may
+// only touch cheap flags here - the actual open303 setters (which rewrite filter/envelope
+// coefficients the audio thread reads inside getSample) are deferred to updateOpen303Parameters(),
+// applied at the top of processBlock. This closes the torn-read race Fable flagged.
 void JC303::parameterChanged(const juce::String& parameterID, float newValue)
 {
-    // Map parameter ID to enum and update immediately or set flag
-    if (parameterID == "waveform") {
-        setParameter(WAVEFORM, newValue);
-    }
-    else if (parameterID == "tuning") {
-        setParameter(TUNING, newValue);
-    }
-    else if (parameterID == "cutoff") {
-        setParameter(CUTOFF, newValue);
-    }
-    else if (parameterID == "resonance") {
-        setParameter(RESONANCE, newValue);
-    }
-    else if (parameterID == "envmod") {
-        setParameter(ENVMOD, newValue);
-    }
-    else if (parameterID == "decay") {
-        setParameter(DECAY, newValue);
-    }
-    else if (parameterID == "accent") {
-        setParameter(ACCENT, newValue);
-    }
-    else if (parameterID == "volume") {
-        setParameter(VOLUME, newValue);
-    }
-    else if (parameterID == "switchModState") {
-        setDevilMod(newValue > 0.5f);
-    }
-    else if (parameterID == "normalDecay" && *switchModState) {
-        setParameter(NORMAL_DECAY, newValue);
-    }
-    else if (parameterID == "accentDecay" && *switchModState) {
-        setParameter(ACCENT_DECAY, newValue);
-    }
-    else if (parameterID == "accentSweep" && *switchModState) {
-        setParameter(ACCENT_SWEEP, newValue);
-    }
-    else if (parameterID == "feedbackFilter" && *switchModState) {
-        setParameter(FEEDBACK_HPF, newValue);
-    }
-    else if (parameterID == "softAttack" && *switchModState) {
-        setParameter(SOFT_ATTACK, newValue);
-    }
-    else if (parameterID == "slideTime" && *switchModState) {
-        setParameter(SLIDE_TIME, newValue);
-    }
-    else if (parameterID == "sqrDriver" && *switchModState) {
-        setParameter(TANH_SHAPER_DRIVE, newValue);
-    }
-    // LFO parameters (MOD-menu values: only apply while mod is active)
-    else if (parameterID == "lfoWaveform" && *switchModState) {
-        setParameter(LFO_WAVEFORM, newValue);
-    }
-    else if (parameterID == "lfoRate" && *switchModState) {
-        setParameter(LFO_RATE, newValue);
-    }
-    else if (parameterID == "lfoDepth" && *switchModState) {
-        setParameter(LFO_DEPTH, newValue);
-    }
-    else if (parameterID == "lfoDestination" && *switchModState) {
-        setParameter(LFO_DESTINATION, newValue);
-    }
-    else if (parameterID == "lfoPhase" && *switchModState) {
-        setParameter(LFO_PHASE, newValue);
-    }
-    else if (parameterID == "lfoSync" && *switchModState) {
-        setParameter(LFO_SYNC, newValue);
-    }
-    // overdrive parameter
-    else if (parameterID == "overdriveLevel") {
-        setParameter(OVERDRIVE_LEVEL, newValue);
-    }
-    else if (parameterID == "overdriveDryWet") {
-        setParameter(OVERDRIVE_DRY_WET, newValue);
-    }
-    else if (parameterID == "overdriveModelIndex") {
+    // Exception: loading an overdrive model allocates and touches the filesystem, which must happen
+    // off the audio thread. Keep it here on the message thread rather than deferring it.
+    if (parameterID == "overdriveModelIndex") {
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
+        return;
     }
-    else if (parameterID == "filterType" && *switchModState) {
-        open303Core.setFilterType(static_cast<FilterType>((int) newValue));
-    }
-    else if (parameterID == "squareModel" && *switchModState) {
-        open303Core.setSquareModel(static_cast<SquareModel>((int) newValue));
-    }
-    else if (parameterID == "filterDrive" && *switchModState) {
-        setParameter(FILTER_DRIVE, newValue);
-    }
-    else if (parameterID == "bassComp" && *switchModState) {
-        setParameter(BASS_COMP, newValue);
-    }
-    else if (parameterID == "filterFm" && *switchModState) {
-        setParameter(FILTER_FM, newValue);
-    }
-    else if (parameterID == "seqPlayState") {
+
+    // Sequencer transport/edit commands bypass the deferred DSP path: play/stop/generate/clear are
+    // queued through _seqCommand and consumed on the audio thread by applySeqCommands().
+    if (parameterID == "seqPlayState") {
         _seqCommand.store (newValue > 0.5f ? static_cast<int>(SeqCommand::Play)
                                            : static_cast<int>(SeqCommand::Stop),
                            std::memory_order_release);
+        return;
     }
     else if (parameterID == "seqGenerate") {
         _seqCommand.store (static_cast<int>(SeqCommand::Generate), std::memory_order_release);
+        return;
     }
     else if (parameterID == "seqClear") {
         _seqCommand.store (static_cast<int>(SeqCommand::Clear), std::memory_order_release);
+        return;
     }
     //else if (parameterID == "seqHarmonizer") {
     //    uint8_t seqHarmony = static_cast<uint8_t>(*seqHarmonizer);
@@ -562,25 +484,28 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "seqLength") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqLength")))
             _sequencer.setTrackLength(static_cast<uint8_t>(p->get()));
+        return;
     }
     else if (parameterID == "seqSyncMode") {
         if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqSyncMode")))
             _sequencer.setSyncMode((AcidSequencer303::SyncMode) p->getIndex());
+        return;
     }
     else if (parameterID == "seqStartMode") {
         if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqStartMode")))
             _sequencer.setStartMode((AcidSequencer303::StartMode) p->getIndex());
+        return;
     }
     else if (parameterID == "seqTempo") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
             _sequencer.setTempo((float) p->get());
+        return;
     }
-    else if (parameterID == "subOscGain" && *switchModState) {
-        setParameter(SUB_OSC_GAIN, newValue);
-    }
-    else if (parameterID == "subOscBlend" && *switchModState) {
-        setParameter(SUB_OSC_BLEND, newValue);
-    }
+
+    // Everything else (the main knobs, the devil mod toggle + its pots, filter/square model, LFO,
+    // sub-osc, and overdrive level/mix) maps to cheap DSP setters. Flag them so the
+    // audio thread re-applies the current APVTS values in updateOpen303Parameters().
+    parametersNeedUpdate.store(true);
 }
 
 // Consumes a sequencer command queued by the UI thread.  Must run on the audio
@@ -636,6 +561,25 @@ void JC303::applySeqCommands()
     default:
         break;
     }
+}
+
+// Applies every cheap DSP parameter from the current APVTS atomic values. Audio-thread only.
+void JC303::updateOpen303Parameters()
+{
+    setParameter(WAVEFORM, *waveForm);
+    setParameter(TUNING, *tuning);
+    setParameter(CUTOFF, *cutoffFreq);
+    setParameter(RESONANCE, *resonance);
+    setParameter(ENVMOD, *envelopMod);
+    setParameter(ACCENT, *accent);
+    setParameter(VOLUME, *volume);
+    // setDevilMod adjusts decayMin/decayMax and (re)applies the mod pots (or restores fixed 303
+    // values), so it must run before DECAY, which reads that range.
+    setDevilMod(*switchModState > 0.5f);
+    setParameter(DECAY, *decay);
+    // Overdrive gain/mix are cheap; the model index is loaded on the message thread (see above).
+    setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
+    setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
 }
 
 void JC303::setParameter (Open303Parameters index, float value)
@@ -706,6 +650,16 @@ void JC303::setParameter (Open303Parameters index, float value)
     // https://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
     //
     case NORMAL_DECAY:
+        /*
+        Background (Devil Fish): on non-accented notes the TB-303's Main Envelope Generator (MEG) had
+        a decay time between 200 ms and 2 s (the Decay pot); on accented notes it was fixed to 200 ms.
+        The Devil Fish adds Normal Decay and Accent Decay pots, each 30 ms - 3 s.
+
+        NOTE: unlike the Devil Fish "Normal Decay" (which retimes the MEG / filter envelope), this
+        control drives the *amplitude* envelope decay via setAmpDecay(). The MEG decay is still set by
+        the main DECAY parameter. Kept as-is to preserve the current voicing; treat the name as
+        "normal (amp) decay" rather than a literal Devil Fish MEG-decay clone.
+        */
         open303Core.setAmpDecay(
             linToLin(value, 0.0, 1.0, 30.0,      3000.0)
         );
@@ -1240,6 +1194,11 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
 {
     juce::ScopedNoDenormals noDenormals;
     const auto numSamples = buffer.getNumSamples();
+
+    // Apply any pending parameter changes here on the audio thread, before rendering, so open303's
+    // coefficients are never rewritten concurrently with getSample() reading them.
+    if (parametersNeedUpdate.exchange(false))
+        updateOpen303Parameters();
 
     // clear buffer
     auto totalNumInputChannels  = getTotalNumInputChannels();
