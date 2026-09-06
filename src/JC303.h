@@ -120,6 +120,7 @@ enum Open303Parameters
   DECAY,
   ACCENT,
   VOLUME,
+  REVERSE_GATE,
   // MODs
   SWITCH_MOD,
   NORMAL_DECAY,
@@ -356,6 +357,7 @@ private:
     std::atomic<float>* decay = nullptr;
     std::atomic<float>* accent = nullptr;
     std::atomic<float>* volume = nullptr;
+    std::atomic<float>* reverseGate = nullptr;
     // MODs
     std::atomic<float>* switchModState = nullptr;
     std::atomic<float>* normalDecay = nullptr;
