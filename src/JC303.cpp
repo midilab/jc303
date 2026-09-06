@@ -52,6 +52,9 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.75f),
+            std::make_unique<juce::AudioParameterBool> ("reverseGate",
+                                                        "Reverse Gate",
+                                                        false),
             // MODs parameters
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
@@ -116,6 +119,7 @@ JC303::JC303()
     decay = parameters.getRawParameterValue("decay");
     accent = parameters.getRawParameterValue("accent");
     volume = parameters.getRawParameterValue("volume");
+    reverseGate = parameters.getRawParameterValue("reverseGate");
     // MODs parameters
     switchModState = parameters.getRawParameterValue("switchModState");
     normalDecay = parameters.getRawParameterValue("normalDecay");
@@ -139,6 +143,7 @@ JC303::JC303()
     setParameter(DECAY, *decay);
     setParameter(ACCENT, *accent);
     setParameter(VOLUME, *volume);
+    setParameter(REVERSE_GATE, *reverseGate);
     setDevilMod(*switchModState);
     setParameter(NORMAL_DECAY, *normalDecay);
     setParameter(ACCENT_DECAY, *accentDecay);
@@ -169,6 +174,7 @@ JC303::JC303()
     parameters.addParameterListener("decay", this);
     parameters.addParameterListener("accent", this);
     parameters.addParameterListener("volume", this);
+    parameters.addParameterListener("reverseGate", this);
     parameters.addParameterListener("normalDecay", this);
     parameters.addParameterListener("accentDecay", this);
     parameters.addParameterListener("feedbackFilter", this);
@@ -192,6 +198,7 @@ JC303::~JC303()
     parameters.removeParameterListener("decay", this);
     parameters.removeParameterListener("accent", this);
     parameters.removeParameterListener("volume", this);
+    parameters.removeParameterListener("reverseGate", this);
     parameters.removeParameterListener("normalDecay", this);
     parameters.removeParameterListener("accentDecay", this);
     parameters.removeParameterListener("feedbackFilter", this);
@@ -232,6 +239,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "volume") {
         setParameter(VOLUME, newValue);
+    }
+    else if (parameterID == "reverseGate") {
+        setParameter(REVERSE_GATE, newValue);
     }
     else if (parameterID == "switchModState") {
         setDevilMod(newValue > 0.5f);
@@ -310,6 +320,13 @@ void JC303::setParameter (Open303Parameters index, float value)
     case VOLUME:
         open303Core.setVolume(
             linToLin(value, 0.0, 1.0, -60.0,      0.0)
+        );
+        break;
+    case REVERSE_GATE:
+        // 0 = normal note, 1 = fully time-reversed amp/filter/accent contour (swell up then cut).
+        // Swell timing follows the Decay knob (the main envelope's time constant).
+        open303Core.setReverseGate(
+            linToLin(value, 0.0, 1.0,   0.0,      1.0)
         );
         break;
 
@@ -548,7 +565,14 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     auto currentSample = 0;
     const auto numSamples = buffer.getNumSamples();
-    
+
+    // pass the host tempo to the core so the reverse-gate can snap its length prediction to the grid
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+            if (auto bpm = pos->getBpm())
+                open303Core.setReverseTempo(*bpm);
+
+
     // clear buffer
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
