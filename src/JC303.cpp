@@ -156,7 +156,7 @@ JC303::JC303()
                                                     "Lower Note",
                                                     0.0f,
                                                     127.0f,
-                                                    30.0f),
+                                                    20.0f),
             std::make_unique<juce::AudioParameterFloat> ("rangeNote",
                                                     "Range Note",
                                                     0.0f,

@@ -190,7 +190,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
-    setSize (930, 523);
+    setSize (930, 540);
     startTimer(30);
 }
 
@@ -381,7 +381,7 @@ void JC303Editor::setControlsLayout()
     //const int ledHeight = 15;
     const int displayMenuWidth = 260;
     const int selectModelHeight = 130;
-    const float seqPlayButtonWidth = 100 / 2;
+    const float seqPlayButtonWidth = 55; //100 / 2;
     const float seqPlayButtonHeight = (70 / 2) + 15;
     const float seqSmallButtonWidth = 60 / 2;
     const float seqSmallButtonHeight = 36 / 2;
@@ -390,14 +390,14 @@ void JC303Editor::setControlsLayout()
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {45, 84};
-    pair<int, int> cutoffFreqLocation = {156, 84};
-    pair<int, int> resonanceLocation = {267, 84};
-    pair<int, int> envelopeLocation = {378, 84};
-    pair<int, int> decayLocation = {489, 84};
-    pair<int, int> accentLocation = {600, 84};
-    pair<int, int> tuningLocation = {722, 84};
-    pair<int, int> volumeLocation = {840, 84};
+    pair<int, int> waveFormLocation = {45, 80};
+    pair<int, int> cutoffFreqLocation = {156, 80};
+    pair<int, int> resonanceLocation = {267, 80};
+    pair<int, int> envelopeLocation = {378, 80};
+    pair<int, int> decayLocation = {489, 80};
+    pair<int, int> accentLocation = {600, 80};
+    pair<int, int> tuningLocation = {722, 80};
+    pair<int, int> volumeLocation = {840, 80};
     // MODs knobs row
     //pair<int, int> normalDecayLocation = {147, 380};
     //pair<int, int> accentDecayLocation = {208, 380};
@@ -406,34 +406,34 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> slideTimeLocation = {391, 380};
     //pair<int, int> sqrDriverLocation = {452, 380};
     // MODs switch
-    pair<int, int> switchLocation = {563, 227};
+    pair<int, int> switchLocation = {563, 220};
     //pair<int, int> modLedLocation = {566, 243};
     // overdrive
-    pair<int, int> overdriveLevelLocation = {718, 212};
-    pair<int, int> overdriveDryWetLocation = {838, 212};
+    pair<int, int> overdriveLevelLocation = {718, 205};
+    pair<int, int> overdriveDryWetLocation = {838, 205};
     // overdrive switch
-    pair<int, int> overdriveSwitchLocation = {794, 227};
+    pair<int, int> overdriveSwitchLocation = {794, 220};
     //pair<int, int> overdriveLedLocation = {856, 243};
-    pair<int, int> displayMenuLocation = {60, 217};
+    pair<int, int> displayMenuLocation = {60, 210};
 
     // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {45, 347};
-    pair<int, int> seqClearButtonLocation = {130, 347};
+    pair<int, int> seqPlayButtonLocation = {45, 353};
+    pair<int, int> seqClearButtonLocation = {110, 353};
 
-    pair<int, int> seqGenerateButtonLocation = {700, 309};
-    pair<int, int> seqGenerativeFillLocation = {730, 309};
-    pair<int, int> seqGenerativeAccentProbabilityLocation = {770, 309};
-    pair<int, int> seqGenerativeSlideProbabilityLocation = {810, 309};
-    pair<int, int> seqGenerativeTieProbabilityLocation = {850, 309};
-    pair<int, int> numberOfTonesLocation = {730, 349};
-    pair<int, int> lowerNoteLocation = {770, 349};
-    pair<int, int> rangeNoteLocation = {810, 349};
-    pair<int, int> seqHarmonizerLocation = {850, 349};
+    pair<int, int> seqGenerateButtonLocation = {700, 327};
+    pair<int, int> seqGenerativeFillLocation = {730, 327};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {770, 327};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {810, 327};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {850, 327};
+    pair<int, int> numberOfTonesLocation = {730, 367};
+    pair<int, int> lowerNoteLocation = {770, 367};
+    pair<int, int> rangeNoteLocation = {810, 367};
+    pair<int, int> seqHarmonizerLocation = {850, 367};
 
     //pair<int, int> seqLengthLocation = {200, 390};
     //pair<int, int> seqShiftLocation = {240, 390};
 
-    pair<int, int> keyboardLocation = {470, 302};
+    pair<int, int> keyboardLocation = {470, 320};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -447,13 +447,13 @@ void JC303Editor::setControlsLayout()
     const int switchStepHeight =  45;
     const int switchStepGap =  8;
     const int switchStepX0 =  44;   // x of the first step toggle
-    const int stepToggleY =  403;
+    const int stepToggleY =  421;
     const int ledWidth = switchStepWidth;
     const int ledHeight = ledWidth * 34 / 62;
     const int ledY = stepToggleY - ledHeight - 1;   // just above the step toggles
     const int microButtonHeight =  14;
     const int microButtonGap    =  2;
-    const int accentButtonY     = 450;   // just below the step toggles
+    const int accentButtonY     = 468;   // just below the step toggles
     const int slideButtonY      = accentButtonY + (microButtonHeight + microButtonGap);
     const int tieButtonY        = slideButtonY  + (microButtonHeight + microButtonGap);
     // menu navigation controls (top row), same width/aspect as the step selector
@@ -461,12 +461,12 @@ void JC303Editor::setControlsLayout()
     // aspect (62x34), 2px gaps between buttons
     const int menuButtonWidth = switchStepWidth;
     const int menuButtonHeight = menuButtonWidth * 34 / 62 + 16;
-    const int menuNavY = 292;
+    const int menuNavY = 285;
 
-    pair<int, int> menuKnobLocation = {375, 212};
+    pair<int, int> menuKnobLocation = {376, 205};
 
-    pair<int, int> modKnob1Location = {487, 212};
-    pair<int, int> modKnob2Location = {608, 212};
+    pair<int, int> modKnob1Location = {487, 205};
+    pair<int, int> modKnob2Location = {608, 205};
 
     // menu navigation controls (top row)
     {
@@ -532,7 +532,7 @@ void JC303Editor::setControlsLayout()
     seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second,
                                  seqMediumButtonWidth, seqMediumButtonHeight);
     seqClearButton->setBounds(seqClearButtonLocation.first, seqClearButtonLocation.second,
-                              seqSmallButtonWidth, seqSmallButtonHeight);
+                              seqPlayButtonWidth, seqPlayButtonHeight);
     // generative sequencer new controls
     seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
     //seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
