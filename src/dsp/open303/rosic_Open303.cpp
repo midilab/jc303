@@ -326,9 +326,11 @@ void Open303::calculateEnvModScalerAndOffset()
 
 void Open303::updateNormalizer1()
 {
-  n1 = LeakyIntegrator::getNormalizer(mainEnv.getDecayTimeConstant(), rc1.getTimeConstant(),
-    sampleRate);
-  n1 = 1.0; // test
+  // Normalization intentionally disabled: the leaky integrator rc1 runs unnormalized (n1 = 1) to
+  // preserve the envelope depth this emulation was voiced against. The analytic
+  // LeakyIntegrator::getNormalizer() compensation was previously computed here and then immediately
+  // overwritten (the "// test" line), i.e. dead - so the call has been removed.
+  n1 = 1.0;
 }
 
 void Open303::updateNormalizer2()

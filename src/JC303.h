@@ -88,6 +88,9 @@ public:
 private:
     void render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
+    // Re-applies all cheap DSP parameters from the APVTS atomics on the audio thread. Called from
+    // processBlock when parametersNeedUpdate is set, so parameter writes never race getSample().
+    void updateOpen303Parameters();
 
     // presets and overdrive models user data management
     void setupDataDirectories();

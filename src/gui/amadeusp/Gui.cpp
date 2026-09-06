@@ -5,33 +5,34 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     : AudioProcessorEditor (&p), processorRef (p), valueTreeState (vts)
 {
     // Create and configure rotary sliders for each parameter
-    addAndMakeVisible(waveformSlider = createKnob("large"));
-    addAndMakeVisible(volumeSlider = createKnob("large"));
-    addAndMakeVisible(tuningSlider = createKnob("medium"));
-    addAndMakeVisible(cutoffFreqSlider = createKnob("medium"));
-    addAndMakeVisible(resonanceSlider = createKnob("medium"));
-    addAndMakeVisible(envelopModSlider = createKnob("medium"));
-    addAndMakeVisible(decaySlider = createKnob("medium"));
-    addAndMakeVisible(accentSlider = createKnob("medium"));
+    addAndMakeVisible(*(waveformSlider = createKnob("large")));
+    addAndMakeVisible(*(volumeSlider = createKnob("large")));
+    addAndMakeVisible(*(tuningSlider = createKnob("medium")));
+    addAndMakeVisible(*(cutoffFreqSlider = createKnob("medium")));
+    addAndMakeVisible(*(resonanceSlider = createKnob("medium")));
+    addAndMakeVisible(*(envelopModSlider = createKnob("medium")));
+    addAndMakeVisible(*(decaySlider = createKnob("medium")));
+    addAndMakeVisible(*(accentSlider = createKnob("medium")));
     // MODs row
-    addAndMakeVisible(normalDecaySlider = createKnob("small"));
-    addAndMakeVisible(accentDecaySlider = createKnob("small"));
-    addAndMakeVisible(feedbackFilterSlider = createKnob("small"));
-    addAndMakeVisible(softAttackSlider = createKnob("small"));
-    addAndMakeVisible(accentSoftAttackSlider = createKnob("small"));
-    addAndMakeVisible(slideTimeSlider = createKnob("small"));
-    addAndMakeVisible(sqrDriverSlider = createKnob("small"));
+    addAndMakeVisible(*(normalDecaySlider = createKnob("small")));
+    addAndMakeVisible(*(accentDecaySlider = createKnob("small")));
+    addAndMakeVisible(*(feedbackFilterSlider = createKnob("small")));
+    addAndMakeVisible(*(softAttackSlider = createKnob("small")));
+    addAndMakeVisible(*(accentSoftAttackSlider = createKnob("small")));
+    addAndMakeVisible(*(slideTimeSlider = createKnob("small")));
+    addAndMakeVisible(*(sqrDriverSlider = createKnob("small")));
     // on/off mod switch
-    addAndMakeVisible(switchModButton = createSwitch());
-    addAndMakeVisible(ledModButton = createLed("switchModState"));
+    addAndMakeVisible(*(switchModButton = createSwitch()));
+    addAndMakeVisible(*(ledModButton = createLed("switchModState")));
     // overdrive
-    addAndMakeVisible(overdriveLevelSlider = createKnob("small"));
-    addAndMakeVisible(overdriveDryWetSlider = createKnob("small"));
+    addAndMakeVisible(*(overdriveLevelSlider = createKnob("small")));
+    addAndMakeVisible(*(overdriveDryWetSlider = createKnob("small")));
     // on/off overdrive switch
-    addAndMakeVisible(switchOverdriveButton = createSwitch());
-    addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
+    addAndMakeVisible(*(switchOverdriveButton = createSwitch()));
+    addAndMakeVisible(*(ledOverdriveButton = createLed("switchOverdriveState")));
     // overdrive model select component
-    addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, processorRef.getModelListNames()));
+    overdriveModelSelect = std::make_unique<OverdriveModelSelect>(valueTreeState, processorRef.getModelListNames());
+    addAndMakeVisible(*overdriveModelSelect);
 
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);
@@ -68,6 +69,19 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
 JC303Editor::~JC303Editor()
 {
+    // Detach each knob from its KnobLookAndFeel before the look-and-feel members are destroyed, so no
+    // slider is left holding a dangling look-and-feel pointer during teardown.
+    for (juce::Slider* s : { waveformSlider.get(), tuningSlider.get(), cutoffFreqSlider.get(),
+                             resonanceSlider.get(), envelopModSlider.get(), decaySlider.get(),
+                             accentSlider.get(), volumeSlider.get(), normalDecaySlider.get(),
+                             accentDecaySlider.get(), feedbackFilterSlider.get(), softAttackSlider.get(),
+                             accentSoftAttackSlider.get(),
+                             slideTimeSlider.get(), sqrDriverSlider.get(), overdriveLevelSlider.get(),
+                             overdriveDryWetSlider.get() })
+    {
+        if (s != nullptr)
+            s->setLookAndFeel(nullptr);
+    }
 }
 
 //==============================================================================
@@ -92,9 +106,9 @@ void JC303Editor::resized()
     setControlsLayout();
 }
 
-juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
+std::unique_ptr<juce::Slider> JC303Editor::createKnob(const juce::String& knobType)
 {
-    auto* slider = new juce::Slider();
+    auto slider = std::make_unique<juce::Slider>();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     if (knobType == "small")
     {
@@ -108,7 +122,7 @@ juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
     {
         slider->setLookAndFeel(&largeKnobLookAndFeel);
     }
-    
+
     slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
 
     // adjust our start and end point for knob
@@ -116,18 +130,17 @@ juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
     return slider;
 }
 
-SwitchButton* JC303Editor::createSwitch()
+std::unique_ptr<SwitchButton> JC303Editor::createSwitch()
 {
-    auto* button = new SwitchButton();
+    auto button = std::make_unique<SwitchButton>();
     button->setClickingTogglesState(false);
 
     return button;
 }
 
-SwitchLed* JC303Editor::createLed(const juce::String& paramID)
+std::unique_ptr<SwitchLed> JC303Editor::createLed(const juce::String& paramID)
 {
-    auto* led = new SwitchLed(valueTreeState, paramID);
-    return led;
+    return std::make_unique<SwitchLed>(valueTreeState, paramID);
 }
 
 void JC303Editor::setControlsLayout()
