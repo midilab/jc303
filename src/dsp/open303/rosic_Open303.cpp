@@ -129,7 +129,19 @@ void Open303::setSlideTime(double newSlideTime)
   if( newSlideTime >= 0.0 )
   {
     slideTime = newSlideTime;
-    pitchSlewLimiter.setTimeConstant((float)(0.2*slideTime));  // \todo: tweak the scaling constant
+    // The TB-303 slide is a passive RC lag on the pitch DAC output: the DAC feeds C = 0.22 uF
+    // through R = 100 kOhm (stock) up to ~603 kOhm (with the Devil Fish slide pot), so the RC time
+    // constant tau = R*C runs from ~22 ms stock to ~133 ms at maximum (~6x). Because the pitch CV is
+    // volts/octave, this lag acts in the log-frequency domain (see getSample / triggerNote), which
+    // is why the glide is even in pitch and takes the same time regardless of interval.
+    //
+    // slideTime is the full slide time in ms; the stock 303 is ~60 ms, which corresponds to the
+    // ~22 ms RC constant (about 3 tau to settle). tau = slideTime * (22/60) keeps the digital
+    // one-pole matched to the hardware RC across the whole range, so the Devil Fish "Slide Time" mod
+    // knob (which drives this via setParameter, mapping its 0..1 to ~2..360 ms) sweeps tau from
+    // ~0.7 ms (near-instant) through 22 ms at the 60 ms stock point up to ~133 ms - i.e. the knob's
+    // top lands exactly on the real hardware maximum.
+    pitchSlewLimiter.setTimeConstant((float)(slideTime * (22.0/60.0)));
   }
 }
 
@@ -239,7 +251,9 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   }
 
   oscFreq = pitchToFreq(noteNumber, tuning);
-  pitchSlewLimiter.setState(oscFreq);
+  // Seed the slew limiter in the log-frequency domain (it glides log(freq), see getSample), so a
+  // freshly triggered note starts exactly on pitch with no glide.
+  pitchSlewLimiter.setState(log(oscFreq));
   mainEnv.trigger();
   ampEnv.noteOn(true, noteNumber, 64);
   idle = false;
