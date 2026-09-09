@@ -110,6 +110,26 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         addAndMakeVisible(seqTieButtons[i] = new SequencerStepSelector());
     }
 
+    // row labels for the accent/slide/tie micro toggles (right-aligned, 4px left of each row)
+    {
+        const char* texts[3] = { "accent", "slide", "tie" };
+        juce::Label** labels[3] = { &seqAccentLabel, &seqSlideLabel, &seqTieLabel };
+        for (int r = 0; r < 3; ++r)
+        {
+            auto* lbl = new juce::Label();
+            *labels[r] = lbl;
+            addAndMakeVisible(lbl);
+            lbl->setText(texts[r], juce::dontSendNotification);
+            lbl->setJustificationType(juce::Justification::centredRight);
+            lbl->setFont(juce::Font(12.0f));
+            lbl->setMinimumHorizontalScale(0.5f);
+            lbl->setColour(juce::Label::textColourId, juce::Colours::black);
+            lbl->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+            lbl->setEditable(false);
+            lbl->setInterceptsMouseClicks(false, false);
+        }
+    }
+
     // wire step toggles to sequencer note state (write-through on user toggle)
     for (int i = 0; i < 16; ++i)
     {
@@ -433,7 +453,7 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> seqLengthLocation = {200, 390};
     //pair<int, int> seqShiftLocation = {240, 390};
 
-    pair<int, int> keyboardLocation = {470, 320};
+    pair<int, int> keyboardLocation = {470, 323};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -517,7 +537,7 @@ void JC303Editor::setControlsLayout()
     menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
 
     // shared single-octave keyboard
-    seqKeyboard->setBounds(keyboardLocation.first, keyboardLocation.second, 210, 70);
+    seqKeyboard->setBounds(keyboardLocation.first, keyboardLocation.second, 210, 66);
 
     // generative sequencer controls
     seqPlayButton->setBounds(seqPlayButtonLocation.first, seqPlayButtonLocation.second,
@@ -553,6 +573,22 @@ void JC303Editor::setControlsLayout()
         seqAccentButtons[i]->setBounds(stepX, accentButtonY, switchStepWidth, microButtonHeight);
         seqSlideButtons[i]->setBounds(stepX, slideButtonY, switchStepWidth, microButtonHeight);
         seqTieButtons[i]->setBounds(stepX, tieButtonY, switchStepWidth, microButtonHeight);
+    }
+
+    // row labels for accent/slide/tie micro toggles (right-aligned, 4px gap, centred on row)
+    {
+        const int labelGap = 2;
+        juce::Label* rowLabels[3] = { seqAccentLabel, seqSlideLabel, seqTieLabel };
+        const int rowYs[3] = { accentButtonY, slideButtonY, tieButtonY };
+        const int labelW = 12 + juce::jmax(
+            rowLabels[0]->getFont().getStringWidth("accent"),
+            rowLabels[1]->getFont().getStringWidth("slide"),
+            rowLabels[2]->getFont().getStringWidth("tie"));
+        for (int r = 0; r < 3; ++r)
+        {
+            auto* lbl = rowLabels[r];
+            lbl->setBounds(switchStepX0 - labelGap - labelW, rowYs[r], labelW, microButtonHeight);
+        }
     }
 
 }

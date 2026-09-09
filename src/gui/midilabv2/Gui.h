@@ -108,6 +108,9 @@ private:
     SequencerStepSelector* seqSlideButtons[16];
     SequencerStepSelector* seqTieButtons[16];
     SequencerStepSelector* stepSelectors[16];
+    juce::Label* seqAccentLabel;
+    juce::Label* seqSlideLabel;
+    juce::Label* seqTieLabel;
     int selectedStep = 0;
 
     // declare the attchaments

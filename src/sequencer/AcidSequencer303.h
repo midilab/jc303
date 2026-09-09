@@ -766,14 +766,17 @@ private:
         // Identical to the original engine_303 logic.
         // _noteLengthTicks = 12 (50% of 24 ticks), _slideExtraTicks = 20.
         int32_t       gateLength     = _noteLengthTicks;
-        const uint8_t lookaheadBound = static_cast<uint8_t>(stepLen + 1);
+        const uint8_t lookaheadBound = static_cast<uint8_t>(stepLen);
         uint8_t       nextStep       = stepPos;
 
-        for (uint8_t i = 1; i < lookaheadBound; ++i)
+        for (uint8_t i = 1; i <= lookaheadBound; ++i)
         {
             nextStep = static_cast<uint8_t>((nextStep + 1) % lookaheadBound);
 
-            if (cur.slide && ! _data.step[nextStep].rest)
+            // Slide overhang only applies to the immediate next step.  Once a
+            // tied rest has been consumed the accumulated tie gate owns the
+            // length; re-applying the slide overhang there truncates the note.
+            if (cur.slide && i == 1 && ! _data.step[nextStep].rest)
             {
                 gateLength = _noteLengthTicks + _slideExtraTicks;
                 break;
