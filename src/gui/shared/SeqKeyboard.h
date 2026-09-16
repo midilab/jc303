@@ -16,6 +16,7 @@ public:
         : keyboard (keyboardState,
                     juce::MidiKeyboardComponent::horizontalKeyboard)
     {
+        this->startNote = juce::jlimit (0, 108, startNote);
         keyboardState.addListener (this);
 
         keyboard.setAvailableRange (startNote, startNote + 11);
@@ -24,6 +25,21 @@ public:
                                   : 30.0f);
         keyboard.setScrollButtonsVisible (false);
         keyboard.setOctaveForMiddleC (5);
+        keyboard.onWheel = [this] (const juce::MouseWheelDetails& wheel)
+        {
+            // Some hosts/trackpads deliver sub-integer deltas per tick, so the
+            // magnitude can't be trusted — use its sign, one octave per scroll.
+            const float delta = wheel.deltaX != 0.0f
+                                    ? wheel.deltaX
+                                    : (wheel.isReversed ? -wheel.deltaY : wheel.deltaY);
+            if (delta > -0.05f && delta < 0.05f)
+                return;
+
+            const int semitones = delta > 0.0f ? 12 : -12;
+            setStartNote (this->startNote + semitones);
+            if (onOctaveScroll)
+                onOctaveScroll (semitones);
+        };
         addAndMakeVisible (keyboard);
     }
 
@@ -35,6 +51,32 @@ public:
     // Public API — themes wire these up to the sequencer / JC303 engine later.
     std::function<void (int midiNote, float velocity)> onNoteOn;
     std::function<void (int midiNote, float velocity)> onNoteOff;
+
+    // Fired when the mouse wheel transposes the keyboard: reports the size of the
+    // jump in semitones (an octave, signed) so a theme can mirror it into the
+    // note of the selected sequencer step. The keyboard octave has already moved
+    // by the time this is called.
+    std::function<void (int deltaSemitones)> onOctaveScroll;
+
+    int  getStartNote() const { return startNote; }
+
+    // Moves the whole keyboard up/down by whole octaves. startNote is always a C
+    // (multiple of 12), so the visible layout never shifts — only the octave of
+    // the displayed notes changes.
+    void setStartNote (int note)
+    {
+        const int oldStart = startNote;
+        startNote = juce::jlimit (0, 108, note);   // 108 + 11 = 119 < 128
+        if (startNote == oldStart)
+            return;
+        keyboard.setAvailableRange (startNote, startNote + 11);
+        if (shownNote >= 0)
+        {
+            const int relative = ((shownNote - oldStart) % 12 + 12) % 12;
+            showNote (startNote + relative);
+        }
+        keyboard.repaint();
+    }
 
     juce::MidiKeyboardState&     getKeyboardState()       { return keyboardState; }
     juce::MidiKeyboardComponent& getKeyboardComponent()   { return keyboard; }
@@ -64,6 +106,25 @@ public:
     }
 
 private:
+    // MidiKeyboardComponent's base class consumes wheel events to scroll the
+    // visible keys horizontally; this subclass swallows that and hands the wheel
+    // to the parent instead, so scrolling transposes the octave.
+    class Keyboard  : public juce::MidiKeyboardComponent
+    {
+    public:
+        using juce::MidiKeyboardComponent::MidiKeyboardComponent;
+
+        std::function<void (const juce::MouseWheelDetails&)> onWheel;
+
+    private:
+        void mouseWheelMove (const juce::MouseEvent&,
+                             const juce::MouseWheelDetails& wheel) override
+        {
+            if (onWheel)
+                onWheel (wheel);
+        }
+    };
+
     void handleNoteOn (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override
     {
         juce::ignoreUnused (midiChannel);
@@ -85,8 +146,9 @@ private:
     }
 
     juce::MidiKeyboardState keyboardState;
-    juce::MidiKeyboardComponent keyboard;
+    Keyboard keyboard;
 
+    int startNote { 36 };
     int shownNote = -1;
     bool _suppressCallbacks = false;
 

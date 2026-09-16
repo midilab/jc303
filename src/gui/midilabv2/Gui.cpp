@@ -200,6 +200,18 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         }
     };
 
+    // mouse-wheel over the keyboard transposes the selected step's note by octaves;
+    // in rec mode only the keyboard octave moves — the rec engine owns step writes
+    seqKeyboard->onOctaveScroll = [this] (int deltaSemitones)
+    {
+        auto& seq = processorRef.getSequencer();
+        if (seq.isRecOn())
+            return;
+        seq.setStepData (selectedStep,
+                         static_cast<uint8_t> (juce::jlimit (0, 127, seq.getRawNote (selectedStep) + deltaSemitones)));
+        updateKeyboardForSelectedStep();
+    };
+
     // attach controls to processor parameters tree
     waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
     tuningAttachment.reset (new SliderAttachment (valueTreeState, "tuning", *tuningSlider));
@@ -324,7 +336,7 @@ void JC303Editor::timerCallback()
 void JC303Editor::updateKeyboardForSelectedStep()
 {
     const uint8_t rawNote = processorRef.getSequencer().getRawNote(selectedStep);
-    seqKeyboard->showNote(48 + (rawNote % 12));
+    seqKeyboard->showNote(seqKeyboard->getStartNote() + (rawNote % 12));
 }
 
 void JC303Editor::selectStepFromSelector(int step)
@@ -500,7 +512,7 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> seqLengthLocation = {200, 390};
     //pair<int, int> seqShiftLocation = {240, 390};
 
-    pair<int, int> keyboardLocation = {215, 323};
+    pair<int, int> keyboardLocation = {247, 325};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
