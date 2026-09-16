@@ -77,7 +77,6 @@ private:
     juce::Slider* rangeNoteSlider;
     SwitchStepSeqButton* seqPlayButton;
     SwitchStepSeqButton* seqGenerateButton;
-    juce::Label* seqGenerateButtonLabel;
     SwitchStepSeqButton* seqClearButton;
     SwitchStepSeqButton* seqRecButton;
     SwitchStepSeqButton* seqRestButton;
@@ -86,7 +85,6 @@ private:
     juce::Label* seqRecButtonLabel;
     juce::Label* seqRestButtonLabel;
     // generative sequencer new controls
-    juce::Slider* seqHarmonizerSlider;
     juce::Slider* seqLengthSlider;
     juce::Slider* seqShiftSlider;
     // LFO controls
@@ -153,7 +151,6 @@ private:
     std::unique_ptr<ButtonAttachment> seqPlayButtonAttachment;
     std::unique_ptr<ButtonAttachment> seqGenerateButtonAttachment;
     std::unique_ptr<ButtonAttachment> seqClearButtonAttachment;
-    std::unique_ptr<SliderAttachment> seqHarmonizerAttachment;
     std::unique_ptr<SliderAttachment> seqLengthAttachment;
     std::unique_ptr<SliderAttachment> seqShiftAttachment;
     std::unique_ptr<SliderAttachment> lfoWaveformAttachment;

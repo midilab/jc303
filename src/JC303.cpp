@@ -162,11 +162,11 @@ JC303::JC303()
                                                     0.0f,
                                                     127.0f,
                                                     48.0f),
-            std::make_unique<juce::AudioParameterFloat> ("seqHarmonizer",
-                                                        "Seq Harmonizer",
-                                                        0.0f,
-                                                        13.0f,
-                                                        0.0f),
+            //std::make_unique<juce::AudioParameterFloat> ("seqHarmonizer",
+            //                                            "Seq Harmonizer",
+            //                                            0.0f,
+            //                                            13.0f,
+            //                                            0.0f),
             std::make_unique<juce::AudioParameterInt> ("seqSyncMode",
                                                         "Seq Sync Mode",
                                                         0,
@@ -238,7 +238,7 @@ JC303::JC303()
     numberOfTones = parameters.getRawParameterValue("numberOfTones");
     lowerNote = parameters.getRawParameterValue("lowerNote");
     rangeNote = parameters.getRawParameterValue("rangeNote");
-    seqHarmonizer = parameters.getRawParameterValue("seqHarmonizer");
+    //seqHarmonizer = parameters.getRawParameterValue("seqHarmonizer");
     seqLength = parameters.getRawParameterValue("seqLength");
     seqShift = parameters.getRawParameterValue("seqShift");
     seqSyncMode = parameters.getRawParameterValue("seqSyncMode");
@@ -309,7 +309,7 @@ JC303::JC303()
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
     parameters.addParameterListener("seqClear", this);
-    parameters.addParameterListener("seqHarmonizer", this);
+    //parameters.addParameterListener("seqHarmonizer", this);
     parameters.addParameterListener("seqLength", this);
     parameters.addParameterListener("seqShift", this);
     parameters.addParameterListener("seqSyncMode", this);
@@ -362,7 +362,7 @@ JC303::~JC303()
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
     parameters.removeParameterListener("seqClear", this);
-    parameters.removeParameterListener("seqHarmonizer", this);
+    //parameters.removeParameterListener("seqHarmonizer", this);
     parameters.removeParameterListener("seqLength", this);
     parameters.removeParameterListener("seqShift", this);
     parameters.removeParameterListener("seqSyncMode", this);
@@ -475,15 +475,15 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "seqClear") {
         _sequencer.clearTrack();
     }
-    else if (parameterID == "seqHarmonizer") {
-        uint8_t seqHarmony = static_cast<uint8_t>(*seqHarmonizer);
-        if (seqHarmony == 0) {
-            _sequencer.setTune(0);
-        } else {
-            _sequencer.setTemperament(seqHarmony - 1);
-            _sequencer.setTune(1);
-        }
-    }
+    //else if (parameterID == "seqHarmonizer") {
+    //    uint8_t seqHarmony = static_cast<uint8_t>(*seqHarmonizer);
+    //    if (seqHarmony == 0) {
+    //        _sequencer.setTune(0);
+    //    } else {
+    //        _sequencer.setTemperament(seqHarmony - 1);
+    //        _sequencer.setTune(1);
+    //    }
+    //}
     else if (parameterID == "seqLength") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqLength")))
             _sequencer.setTrackLength(static_cast<uint8_t>(p->get()));
@@ -1126,8 +1126,8 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
     seqXml->setAttribute ("stepLength",  _sequencer.getTrackLength());
     seqXml->setAttribute ("shift",       _sequencer.getShiftPos());
     seqXml->setAttribute ("transpose",   _sequencer.getTranspose());
-    seqXml->setAttribute ("tune",        _sequencer.getTune());
-    seqXml->setAttribute ("temperament", _sequencer.getTemperamentId());
+    //seqXml->setAttribute ("tune",        _sequencer.getTune());
+    //seqXml->setAttribute ("temperament", _sequencer.getTemperamentId());
 
     const TrackData303& td = _sequencer.getTrackData();
     for (int i = 0; i < SEQ303_STEP_MAX; ++i)
@@ -1182,10 +1182,10 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
 
                 _sequencer.setTranspose (static_cast<int8_t>
                                             (seqXml->getIntAttribute ("transpose", 0)));
-                _sequencer.setTune      (static_cast<uint8_t>
-                                            (seqXml->getIntAttribute ("tune",      0)));
-                _sequencer.setTemperament (static_cast<uint8_t>
-                                            (seqXml->getIntAttribute ("temperament", 1)));
+                //_sequencer.setTune      (static_cast<uint8_t>
+                //                            (seqXml->getIntAttribute ("tune",      0)));
+                //_sequencer.setTemperament (static_cast<uint8_t>
+                //                            (seqXml->getIntAttribute ("temperament", 1)));
 
                 for (auto* stepXml : seqXml->getChildIterator())
                 {

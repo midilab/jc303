@@ -43,7 +43,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(seqRecButtonLabel = createSeqButtonLabel("REC"));
     addAndMakeVisible(seqRestButtonLabel = createSeqButtonLabel("REST"));
     addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
-    addAndMakeVisible(seqGenerateButtonLabel = createSeqButtonLabel("GEN"));
     addAndMakeVisible(seqGenerativeFillSlider = createModKnob("FILL"));
     addAndMakeVisible(seqGenerativeAccentProbabilitySlider = createModKnob("ACC"));
     addAndMakeVisible(seqGenerativeSlideProbabilitySlider = createModKnob("SLIDE"));
@@ -51,7 +50,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(numberOfTonesSlider = createModKnob("TONES"));
     addAndMakeVisible(lowerNoteSlider = createModKnob("LOW"));
     addAndMakeVisible(rangeNoteSlider = createModKnob("RANGE"));
-    addAndMakeVisible(seqHarmonizerSlider = createModKnob("HARM"));
     // sequencer controls
     addAndMakeVisible(seqLengthSlider = createModKnob("LEN"));
     addAndMakeVisible(seqShiftSlider = createModKnob("SHIFT"));
@@ -250,7 +248,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
     seqGenerateButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqGenerate", *seqGenerateButton));
     seqClearButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqClear", *seqClearButton));
-    seqHarmonizerAttachment.reset(new SliderAttachment(valueTreeState, "seqHarmonizer", *seqHarmonizerSlider));
     seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
     seqShiftAttachment.reset(new SliderAttachment(valueTreeState, "seqShift", *seqShiftSlider));
     lfoWaveformAttachment.reset(new SliderAttachment(valueTreeState, "lfoWaveform", *lfoWaveformSlider));
@@ -341,7 +338,17 @@ void JC303Editor::timerCallback()
 void JC303Editor::updateKeyboardForSelectedStep()
 {
     const uint8_t rawNote = processorRef.getSequencer().getRawNote(selectedStep);
-    seqKeyboard->showNote(seqKeyboard->getStartNote() + (rawNote % 12));
+    if (processorRef.getSequencer().stepOn(selectedStep))
+    {
+        // show the note in its own octave, not just its pitch class
+        seqKeyboard->setStartNote((rawNote / 12) * 12);
+        seqKeyboard->showNote(rawNote);
+    }
+    else
+    {
+        // rest: no octave to follow — keep the pitch class at the current octave
+        seqKeyboard->showNote(seqKeyboard->getStartNote() + (rawNote % 12));
+    }
 }
 
 void JC303Editor::selectStepFromSelector(int step)
@@ -518,7 +525,7 @@ void JC303Editor::setControlsLayout()
     pair<int, int> seqRecButtonLocation = {578, 340};
     pair<int, int> seqRestButtonLocation = {621, 340};
 
-    pair<int, int> seqGenerateButtonLocation = {47, 342};
+    pair<int, int> seqGenerateButtonLocation = {45, 348};
     pair<int, int> seqGenerativeFillLocation = {89, 350};
     pair<int, int> seqGenerativeAccentProbabilityLocation = {129, 350};
     pair<int, int> seqGenerativeSlideProbabilityLocation = {169, 350};
@@ -526,7 +533,6 @@ void JC303Editor::setControlsLayout()
     pair<int, int> numberOfTonesLocation = {249, 350};
     pair<int, int> lowerNoteLocation = {289, 350};
     pair<int, int> rangeNoteLocation = {329, 350};
-    pair<int, int> seqHarmonizerLocation = {369, 350};
 
     //pair<int, int> seqLengthLocation = {200, 390};
     //pair<int, int> seqShiftLocation = {240, 390};
@@ -643,12 +649,10 @@ void JC303Editor::setControlsLayout()
         label->setBounds(x + (width - textWidth) / 2, (int) seqButtonLabelY, textWidth, 16);
     };
     placeLabel(seqPlayButtonLabel, seqPlayButtonLocation.first, (int) seqPlayButtonWidth);
-    placeLabel(seqGenerateButtonLabel, seqGenerateButtonLocation.first, (int) seqSquareButtonSize);
     placeLabel(seqClearButtonLabel, seqClearButtonLocation.first, (int) seqSquareButtonSize);
     placeLabel(seqRecButtonLabel, seqRecButtonLocation.first, (int) seqSquareButtonSize);
     placeLabel(seqRestButtonLabel, seqRestButtonLocation.first, (int) seqSquareButtonSize);
     // generative sequencer new controls
-    seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
     //seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
     //seqShiftSlider->setBounds(seqShiftLocation.first, seqShiftLocation.second, sliderSmallSize, sliderSmallSize);
     // LFO controls
