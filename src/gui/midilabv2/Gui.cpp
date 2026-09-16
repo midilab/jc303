@@ -38,6 +38,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(seqClearButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
     addAndMakeVisible(seqRecButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Small));
     addAndMakeVisible(seqRestButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqPlayButtonLabel = createSeqButtonLabel("PLAY/STOP"));
+    addAndMakeVisible(seqClearButtonLabel = createSeqButtonLabel("CLEAR"));
+    addAndMakeVisible(seqRecButtonLabel = createSeqButtonLabel("REC"));
+    addAndMakeVisible(seqRestButtonLabel = createSeqButtonLabel("REST"));
     addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Medium));
     addAndMakeVisible(seqGenerativeFillSlider = createModKnob("FILL"));
     addAndMakeVisible(seqGenerativeAccentProbabilitySlider = createModKnob("ACC"));
@@ -406,6 +410,20 @@ SwitchStepSeqButton* JC303Editor::createSwitchStepSeq(SwitchStepSeqButton::Mode 
     return button;
 }
 
+juce::Label* JC303Editor::createSeqButtonLabel(const juce::String& text)
+{
+    auto* label = new juce::Label();
+    label->setText(text, juce::dontSendNotification);
+    label->setJustificationType(juce::Justification::centred);
+    label->setFont(juce::Font(12.0f));
+    label->setMinimumHorizontalScale(0.5f);
+    label->setColour(juce::Label::textColourId, juce::Colours::black);
+    label->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+    label->setEditable(false);
+    label->setInterceptsMouseClicks(false, false);
+    return label;
+}
+
 juce::Slider* JC303Editor::createModKnob(const juce::String& label)
 {
     auto* slider = new juce::Slider();
@@ -494,10 +512,10 @@ void JC303Editor::setControlsLayout()
     pair<int, int> displayMenuLocation = {60, 210};
 
     // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {45, 353};
-    pair<int, int> seqClearButtonLocation = {110, 353};
-    pair<int, int> seqRecButtonLocation = {153, 353};
-    pair<int, int> seqRestButtonLocation = {196, 353};
+    pair<int, int> seqPlayButtonLocation = {45, 340};
+    pair<int, int> seqClearButtonLocation = {110, 340};
+    pair<int, int> seqRecButtonLocation = {153, 340};
+    pair<int, int> seqRestButtonLocation = {196, 340};
 
     pair<int, int> seqGenerateButtonLocation = {700, 327};
     pair<int, int> seqGenerativeFillLocation = {730, 327};
@@ -616,6 +634,17 @@ void JC303Editor::setControlsLayout()
                             seqSquareButtonSize, seqSquareButtonSize);
     seqRestButton->setBounds(seqRestButtonLocation.first, seqRestButtonLocation.second,
                              seqSquareButtonSize, seqSquareButtonSize);
+    // labels sit on one row, just under the square buttons' face height
+    const float seqButtonLabelY = seqPlayButtonLocation.second + seqSquareButtonSize + 6;
+    auto placeLabel = [&] (juce::Label* label, int x, int width)
+    {
+        const int textWidth = (int) juce::Font(12.0f).getStringWidth(label->getText()) + 20;
+        label->setBounds(x + (width - textWidth) / 2, (int) seqButtonLabelY, textWidth, 16);
+    };
+    placeLabel(seqPlayButtonLabel, seqPlayButtonLocation.first, (int) seqPlayButtonWidth);
+    placeLabel(seqClearButtonLabel, seqClearButtonLocation.first, (int) seqSquareButtonSize);
+    placeLabel(seqRecButtonLabel, seqRecButtonLocation.first, (int) seqSquareButtonSize);
+    placeLabel(seqRestButtonLabel, seqRestButtonLocation.first, (int) seqSquareButtonSize);
     // generative sequencer new controls
     seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
     //seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);

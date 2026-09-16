@@ -37,6 +37,7 @@ private:
     SwitchButton* createSwitch();
     SequencerStepSelector* createMenuSwitch(SequencerStepSelector::Mode mode, const juce::String& label = "");
     SwitchStepSeqButton* createSwitchStepSeq(SwitchStepSeqButton::Mode mode = SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size size = SwitchStepSeqButton::Size::Large);
+    juce::Label* createSeqButtonLabel(const juce::String& text);
     juce::Label* createLabel(const juce::String& text);
     void setControlsLayout();
     void selectMenu(int mode);
@@ -79,6 +80,10 @@ private:
     SwitchStepSeqButton* seqClearButton;
     SwitchStepSeqButton* seqRecButton;
     SwitchStepSeqButton* seqRestButton;
+    juce::Label* seqPlayButtonLabel;
+    juce::Label* seqClearButtonLabel;
+    juce::Label* seqRecButtonLabel;
+    juce::Label* seqRestButtonLabel;
     // generative sequencer new controls
     juce::Slider* seqHarmonizerSlider;
     juce::Slider* seqLengthSlider;
