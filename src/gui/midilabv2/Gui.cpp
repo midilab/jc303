@@ -42,7 +42,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(seqClearButtonLabel = createSeqButtonLabel("CLEAR"));
     addAndMakeVisible(seqRecButtonLabel = createSeqButtonLabel("REC"));
     addAndMakeVisible(seqRestButtonLabel = createSeqButtonLabel("REST"));
-    addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Medium));
+    addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqGenerateButtonLabel = createSeqButtonLabel("GEN"));
     addAndMakeVisible(seqGenerativeFillSlider = createModKnob("FILL"));
     addAndMakeVisible(seqGenerativeAccentProbabilitySlider = createModKnob("ACC"));
     addAndMakeVisible(seqGenerativeSlideProbabilitySlider = createModKnob("SLIDE"));
@@ -512,25 +513,25 @@ void JC303Editor::setControlsLayout()
     pair<int, int> displayMenuLocation = {60, 210};
 
     // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {45, 340};
-    pair<int, int> seqClearButtonLocation = {110, 340};
-    pair<int, int> seqRecButtonLocation = {153, 340};
-    pair<int, int> seqRestButtonLocation = {196, 340};
+    pair<int, int> seqPlayButtonLocation = {470, 340};
+    pair<int, int> seqClearButtonLocation = {535, 340};
+    pair<int, int> seqRecButtonLocation = {578, 340};
+    pair<int, int> seqRestButtonLocation = {621, 340};
 
-    pair<int, int> seqGenerateButtonLocation = {700, 327};
-    pair<int, int> seqGenerativeFillLocation = {730, 327};
-    pair<int, int> seqGenerativeAccentProbabilityLocation = {770, 327};
-    pair<int, int> seqGenerativeSlideProbabilityLocation = {810, 327};
-    pair<int, int> seqGenerativeTieProbabilityLocation = {850, 327};
-    pair<int, int> numberOfTonesLocation = {730, 367};
-    pair<int, int> lowerNoteLocation = {770, 367};
-    pair<int, int> rangeNoteLocation = {810, 367};
-    pair<int, int> seqHarmonizerLocation = {850, 367};
+    pair<int, int> seqGenerateButtonLocation = {47, 342};
+    pair<int, int> seqGenerativeFillLocation = {89, 350};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {129, 350};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {169, 350};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {209, 350};
+    pair<int, int> numberOfTonesLocation = {249, 350};
+    pair<int, int> lowerNoteLocation = {289, 350};
+    pair<int, int> rangeNoteLocation = {329, 350};
+    pair<int, int> seqHarmonizerLocation = {369, 350};
 
     //pair<int, int> seqLengthLocation = {200, 390};
     //pair<int, int> seqShiftLocation = {240, 390};
 
-    pair<int, int> keyboardLocation = {247, 325};
+    pair<int, int> keyboardLocation = {672, 325};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -627,7 +628,7 @@ void JC303Editor::setControlsLayout()
     lowerNoteSlider->setBounds(lowerNoteLocation.first, lowerNoteLocation.second, sliderSmallSize, sliderSmallSize);
     rangeNoteSlider->setBounds(rangeNoteLocation.first, rangeNoteLocation.second, sliderSmallSize, sliderSmallSize);
     seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second,
-                                 seqMediumButtonWidth, seqMediumButtonHeight);
+                                 seqSquareButtonSize, seqSquareButtonSize);
     seqClearButton->setBounds(seqClearButtonLocation.first, seqClearButtonLocation.second,
                               seqSquareButtonSize, seqSquareButtonSize);
     seqRecButton->setBounds(seqRecButtonLocation.first, seqRecButtonLocation.second,
@@ -642,6 +643,7 @@ void JC303Editor::setControlsLayout()
         label->setBounds(x + (width - textWidth) / 2, (int) seqButtonLabelY, textWidth, 16);
     };
     placeLabel(seqPlayButtonLabel, seqPlayButtonLocation.first, (int) seqPlayButtonWidth);
+    placeLabel(seqGenerateButtonLabel, seqGenerateButtonLocation.first, (int) seqSquareButtonSize);
     placeLabel(seqClearButtonLabel, seqClearButtonLocation.first, (int) seqSquareButtonSize);
     placeLabel(seqRecButtonLabel, seqRecButtonLocation.first, (int) seqSquareButtonSize);
     placeLabel(seqRestButtonLabel, seqRestButtonLocation.first, (int) seqSquareButtonSize);

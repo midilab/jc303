@@ -77,6 +77,7 @@ private:
     juce::Slider* rangeNoteSlider;
     SwitchStepSeqButton* seqPlayButton;
     SwitchStepSeqButton* seqGenerateButton;
+    juce::Label* seqGenerateButtonLabel;
     SwitchStepSeqButton* seqClearButton;
     SwitchStepSeqButton* seqRecButton;
     SwitchStepSeqButton* seqRestButton;
