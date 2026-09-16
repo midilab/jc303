@@ -14,6 +14,10 @@ Open303::Open303()
   levelByVel       =    12.0;
   accent           =     0.0;
   slideTime        =    60.0;
+  gateDutyCycle    =     0.5;   // ~50% gate like the real 303 (3 of 6 clocks on in 4/4)
+  hwTiming         = false;     // interrupt-clock beating off by default (sample-accurate)
+  interruptPeriod  = 0.0018 * sampleRate;  // ~1.8ms ISR period (refreshed in setSampleRate)
+  interruptPhase   =     0.0;
   cutoff           =  1000.0;
   envUpFraction    =     2.0/3.0;
   normalAttack     =     3.0;
@@ -87,6 +91,13 @@ Open303::~Open303()
 
 void Open303::setSampleRate(double newSampleRate)
 {
+  sampleRate = newSampleRate;
+
+  // ~1.8ms interrupt period for the hardware-timing model (Schmidt, µPD650C-133 analysis)
+  interruptPeriod = 0.0018 * newSampleRate;
+  if( interruptPhase >= interruptPeriod )
+    interruptPhase = 0.0;
+
   mainEnv.setSampleRate         (       newSampleRate);
   ampEnv.setSampleRate          (       newSampleRate);
   pitchSlewLimiter.setSampleRate((float)newSampleRate);

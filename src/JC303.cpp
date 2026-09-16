@@ -125,7 +125,15 @@ JC303::JC303()
                                                         0.25f),
             std::make_unique<juce::AudioParameterBool> ("switchOverdriveState",
                                                         "Switch Overdrive Mod",
-                                                        false)
+                                                        false),
+            std::make_unique<juce::AudioParameterFloat> ("gateDuty",
+                                                        "Gate Length",
+                                                        0.0f,    // near-instant blip
+                                                        1.0f,    // full-step (legacy legato)
+                                                        0.5f),   // ~50% like the real 303
+            std::make_unique<juce::AudioParameterBool> ("hwTiming",
+                                                        "Vintage Timing",
+                                                        false)   // interrupt-clock beating off by default
        })
 {
     // assign a pointer to use it around for each parameter
@@ -155,6 +163,9 @@ JC303::JC303()
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
     overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
     overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
+    // sequencer gate timing
+    gateDuty = parameters.getRawParameterValue("gateDuty");
+    hwTiming = parameters.getRawParameterValue("hwTiming");
 
     // force initial user values(some hosts migth not do it using value tree state)
     setParameter(WAVEFORM, *waveForm);
@@ -181,6 +192,9 @@ JC303::JC303()
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
     setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
+    // sequencer gate timing
+    setParameter(GATE_DUTY, *gateDuty);
+    setParameter(HW_TIMING, *hwTiming);
 
     // presets and overdrive models
     setupDataDirectories();
@@ -218,6 +232,8 @@ JC303::JC303()
     parameters.addParameterListener("overdriveDryWet", this);
     parameters.addParameterListener("overdriveModelIndex", this);
     parameters.addParameterListener("switchOverdriveState", this);
+    parameters.addParameterListener("gateDuty", this);
+    parameters.addParameterListener("hwTiming", this);
 }
 
 JC303::~JC303()
@@ -247,6 +263,8 @@ JC303::~JC303()
     parameters.removeParameterListener("overdriveDryWet", this);
     parameters.removeParameterListener("overdriveModelIndex", this);
     parameters.removeParameterListener("switchOverdriveState", this);
+    parameters.removeParameterListener("gateDuty", this);
+    parameters.removeParameterListener("hwTiming", this);
 }
 
 // Parameter change callback
@@ -320,6 +338,12 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "overdriveModelIndex") {
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
+    }
+    else if (parameterID == "gateDuty") {
+        setParameter(GATE_DUTY, newValue);
+    }
+    else if (parameterID == "hwTiming") {
+        setParameter(HW_TIMING, newValue);
     }
 }
 
@@ -441,7 +465,6 @@ void JC303::setParameter (Open303Parameters index, float value)
             //linToLin(value, 0.0, 1.0,   36.9,     90.0)
         );
         break;
-
     // LFO parameters
     case LFO_WAVEFORM:
         open303Core.setLfoWaveform(static_cast<int>(value));
@@ -459,6 +482,14 @@ void JC303::setParameter (Open303Parameters index, float value)
     case LFO_DESTINATION:
         // 0 - filter cutoff, 1 - volume(tremolo style), 2 - pitch
         open303Core.setLfoDestination(static_cast<int>(value));
+        break;
+    case GATE_DUTY:
+        // Fraction of the step the gate stays high (real 303 ~50%, 1.0 = legacy full-step legato)
+        open303Core.setGateDutyCycle(value);
+        break;
+    case HW_TIMING:
+        // Model the ~1.8ms interrupt-clock beating (duty-cycle wander); >0.5 = on for the bool param
+        open303Core.setHardwareTiming(value > 0.5f);
         break;
 	}
 }

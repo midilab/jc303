@@ -156,6 +156,24 @@ namespace rosic
     /** Sets the LFO destination (volume, cutoff). */
     void setLfoDestination(double dest) { lfoDestination = dest; }
 
+    /** Sets the gate duty cycle in sequencer mode (fraction of the step the gate stays high before
+     *  the amp/filter envelopes release). The real TB-303 runs ~50% in 4/4 (3 of 6 clocks on), which
+     *  makes notes bounce/staccato rather than run fully legato. Range is clamped to (0, 1]; 1.0
+     *  reproduces the legacy behaviour of holding the gate for the whole step. Slid notes ignore this
+     *  (their gate is held open into the next note). */
+    void setGateDutyCycle(double newDutyCycle)
+    { gateDutyCycle = (newDutyCycle < 0.01) ? 0.01 : ((newDutyCycle > 1.0) ? 1.0 : newDutyCycle); }
+
+    /** Enables modelling of the µPD650C CPU's interrupt-clock timing. The 303 services a fixed
+     *  ~1.8 ms interrupt that is asynchronous to the tempo clock, so the gate-off edge snaps to that
+     *  grid and its position beats against the tempo - the step duty cycle wanders (~50-56%), most
+     *  audible at fast tempos. Off by default.
+     *
+     *  Timing figures (1.8 ms interrupt, ~50% / 3-of-6-clock gate, 49.96-55.8% duty spread) are from
+     *  the logic-analyzer measurements in Julian Schmidt, "Analysis of the µPD650C-133 CPU timing",
+     *  http://sonic-potions.com/Documentation/Analysis_of_the_D650C-133_CPU_timing.pdf */
+    void setHardwareTiming(bool shouldModel) { hwTiming = shouldModel; }
+
     //-----------------------------------------------------------------------------------------------
     // inquiry:
 
@@ -305,6 +323,10 @@ namespace rosic
     double levelByVel;       // velocity dependence of the level (in dB)
     double accent;           // scales all "byVel" parameters
     double slideTime;        // the time to slide from one note to another (in ms)
+    double gateDutyCycle;    // fraction of step the gate stays high (1.0 = legacy full-step gate)
+    bool   hwTiming;         // model the fixed ~1.8ms interrupt-clock beating against tempo
+    double interruptPeriod;  // samples per ~1.8ms interrupt tick (0 = uninitialised)
+    double interruptPhase;   // free-running interrupt phase in [0, interruptPeriod)
     double cutoff;           // nominal cutoff frequency of the filter
     double envMod;           // strength of the envelope modulation in percent
     double envUpFraction;    // fraction of the envelope that goes upward
@@ -346,9 +368,32 @@ namespace rosic
     // check the sequencer if we have some note to trigger:
     if( sequencer.getSequencerMode() != AcidSequencer::OFF )
     {
+      // Advance the free-running interrupt clock (fires once per ~1.8ms period). When
+      // hardware-timing modelling is on, the gate-off edge is snapped to this grid, so its
+      // position beats against the (asynchronous) tempo clock and the step duty cycle wanders -
+      // the µPD650C behaviour analysed by Schmidt. See setHardwareTiming().
+      bool interruptTick = true;
+      if( hwTiming && interruptPeriod > 1.0 )
+      {
+        interruptPhase += 1.0;
+        if( interruptPhase >= interruptPeriod )
+          interruptPhase -= interruptPeriod;
+        interruptTick = (interruptPhase < 1.0);
+      }
+
       noteOffCountDown--;
-      if( noteOffCountDown == 0 || sequencer.isRunning() == false )
+      if( sequencer.isRunning() == false )
         releaseNote(currentNote);
+      else if( noteOffCountDown == 0 )
+      {
+        // Release on the nominal sample (fires exactly once, as before), unless we're modelling the
+        // interrupt clock and haven't reached its next tick yet - in that case hold the gate one
+        // more sample (re-arm the countdown to 0) so the release snaps to the interrupt grid.
+        if( !hwTiming || interruptTick )
+          releaseNote(currentNote);
+        else
+          noteOffCountDown = 1;
+      }
 
       AcidNote *note = sequencer.getNote();
       if( note != NULL )
@@ -371,7 +416,11 @@ namespace rosic
           }
           else
           {
-            noteOffCountDown = sequencer.getStepLengthInSamples();
+            // gateDutyCycle sets how much of the step the gate stays high (real 303 ~50%)
+            int gateLength = (int)(sequencer.getStepLengthInSamples() * gateDutyCycle);
+            if( gateLength < 1 )
+              gateLength = 1;
+            noteOffCountDown = gateLength;
             slideToNextNote  = false;
           }
         }
