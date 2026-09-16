@@ -728,6 +728,9 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     _wasHostPlaying   = false;
     _heldNote         = -1;
     _lastStepHadSlide = false;
+    _recHeldNote      = -1;
+    _sustainArmed     = true;
+    _recWasOn         = false;
 }
 
 void JC303::releaseResources()
@@ -937,6 +940,51 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         {
             render303 (buffer, currentSample, samplePosition);
             currentSample = samplePosition;
+        }
+
+        // ── Rec mode (works whether or not the sequencer is playing) ─────────
+        // Reset per-press state each time rec is (re)enabled so a stale held
+        // note or sustain latch from a previous session can't leak in.
+        const bool recOnNow = _sequencer.isRecOn();
+        if (recOnNow && ! _recWasOn)
+        {
+            _recHeldNote   = -1;
+            _sustainArmed  = true;
+        }
+        _recWasOn = recOnNow;
+
+        if (recOnNow)
+        {
+            if (message.isNoteOn())
+            {
+                // A second note struck while the previous one is still held
+                // records with slide (legato) — the record step is set below
+                // _recHeldNote, i.e. the newly pressed note carries the slide.
+                const bool legato = (_recHeldNote >= 0
+                                     && _recHeldNote != message.getNoteNumber());
+                _sequencer.recNote (static_cast<uint8_t> (message.getNoteNumber()),
+                                    message.getVelocity() >= SEQ303_ACCENT_VELOCITY_THRESHOLD,
+                                    legato);
+                _recHeldNote = message.getNoteNumber();
+            }
+            else if (message.isNoteOff() && message.getNoteNumber() == _recHeldNote)
+            {
+                _recHeldNote = -1;
+            }
+            else if (message.isController() && message.getControllerNumber() == 64)
+            {
+                // Sustain pedal: a 127 tap records one rest, then waits for a
+                // 0 to re-arm before the next 127 can record another rest.
+                if (message.getControllerValue() == 127 && _sustainArmed)
+                {
+                    _sequencer.recRest();
+                    _sustainArmed = false;
+                }
+                else if (message.getControllerValue() == 0)
+                {
+                    _sustainArmed = true;
+                }
+            }
         }
 
         // External MIDI note handling (sequencer not running only)

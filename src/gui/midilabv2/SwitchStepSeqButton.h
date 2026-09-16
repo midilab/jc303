@@ -36,23 +36,25 @@ public:
 
     void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
     {
-        float scale = (float) getWidth() / imageButton.getWidth();
-        int buttonFrameHeight = jmin((int) (imageButton.getHeight() / 2.0f * scale), getHeight());
-        int sourceY;
+        const int frameHeight = imageButton.getHeight() / 2;
+        const int sourceY = buttonMode == Mode::Toggle
+                                ? (getToggleState() ? frameHeight : 0)
+                                : (isButtonDown ? frameHeight : 0);
 
-        if (buttonMode == Mode::Toggle)
+        if (buttonSize == Size::Small)
         {
-            sourceY = getToggleState() ? (int)(imageButton.getHeight() / 2.0f) : 0;
-        }
-        else
-        {
-            sourceY = isButtonDown ? (int)(imageButton.getHeight() / 2.0f) : 0;
+            // square buttons (clear/rec/rest): stretch the frame to fill the
+            // full (square) bounds instead of the artwork's landscape aspect
+            g.drawImage(imageButton, 0, 0, getWidth(), getHeight(),
+                        0, sourceY, imageButton.getWidth(), frameHeight,
+                        false);
+            return;
         }
 
-        int buttonY = 0;
-
-        g.drawImage(imageButton, 0, buttonY, getWidth(), buttonFrameHeight,
-                    0, sourceY, imageButton.getWidth(), imageButton.getHeight() / 2,
+        const float scale = (float) getWidth() / imageButton.getWidth();
+        const int buttonFrameHeight = jmin((int) (imageButton.getHeight() / 2.0f * scale), getHeight());
+        g.drawImage(imageButton, 0, 0, getWidth(), buttonFrameHeight,
+                    0, sourceY, imageButton.getWidth(), frameHeight,
                     false);
     }
 

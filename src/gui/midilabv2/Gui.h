@@ -77,6 +77,8 @@ private:
     SwitchStepSeqButton* seqPlayButton;
     SwitchStepSeqButton* seqGenerateButton;
     SwitchStepSeqButton* seqClearButton;
+    SwitchStepSeqButton* seqRecButton;
+    SwitchStepSeqButton* seqRestButton;
     // generative sequencer new controls
     juce::Slider* seqHarmonizerSlider;
     juce::Slider* seqLengthSlider;

@@ -160,6 +160,16 @@ private:
     // Mute flag for sequencer (used during acidRandomize to prevent note triggering)
     std::atomic<bool> _sequencerMuted { false };
 
+    // Rec-mode live state (audio thread only):
+    // - _recHeldNote: last MIDI note recorded while still held, for legato/slide
+    //   detection (a new noteOn while one is held records the step with slide).
+    // - _sustainArmed: CC64 (sustain pedal) re-arm latch — a 127 tap records one
+    //   rest, then waits for 0 before the next 127 can record another.
+    // - _recWasOn: edge detector to reset the two above when rec is re-enabled.
+    int  _recHeldNote   { -1    };
+    bool _sustainArmed  { true  };
+    bool _recWasOn      { false };
+
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
     File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";

@@ -50,6 +50,10 @@ static constexpr uint8_t  SEQ303_NOTE_VELOCITY     = 70;   // NOTE_VELOCITY_303
 static constexpr uint8_t  SEQ303_ACCENT_VELOCITY   = 127;  // ACCENT_VELOCITY_303
 static constexpr uint8_t  SEQ303_DEFAULT_NOTE      = 36;   // C2
 
+// MIDI velocity at/above which a recorded step is marked accented — matches
+// Open303::noteOn() (`velocity >= 100` triggers accent on the synth side).
+static constexpr uint8_t  SEQ303_ACCENT_VELOCITY_THRESHOLD = 100;
+
 // NOTE_LENGTH_303 = 12 pulses at 96 PPQN  →  12/24 = 50% gate (original TB-303).
 // The comment in engine_303.h says explicitly: "12 = 50% on 96ppqn, same as original tb303".
 // Slide extra = 20 pulses at 96 PPQN (extends the gate slightly past the next note-on).
@@ -402,6 +406,46 @@ public:
             clearStepDataInternal (true);
         }
         setMute (false);
+    }
+
+    // =========================================================================
+    // ── Rec mode — serial note/rest entry from UI + MIDI ──────────────────────
+    // =========================================================================
+
+    void setRecState (bool on) { _recOn.store (on); }
+    bool isRecOn() const       { return _recOn.load (std::memory_order_relaxed); }
+
+    void    setRecStep (uint8_t step)                  { _recStep.store (step, std::memory_order_relaxed); }
+    uint8_t getRecStep() const                         { return _recStep.load (std::memory_order_relaxed); }
+
+    /** Record a note at the current rec cursor and advance it (wraps at track
+     *  length). Legato (slide) is used when a note is struck while the previous
+     *  recorded note was still held down. */
+    void recNote (uint8_t note, bool accent, bool legato)
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        const uint8_t st = _recStep.load (std::memory_order_relaxed);
+        auto& s = _data.step[st];
+        s.note   = note;
+        s.rest   = false;
+        s.accent = accent;
+        s.slide  = legato;
+        s.tie    = false;
+        _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
+    }
+
+    /** Record a rest at the current rec cursor and advance it (wraps at track
+     *  length). Same effect as the REST button / sustain-pedal tap. */
+    void recRest()
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        const uint8_t st = _recStep.load (std::memory_order_relaxed);
+        auto& s = _data.step[st];
+        s.rest   = true;
+        s.accent = false;
+        s.slide  = false;
+        s.tie    = false;
+        _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
 
     /** clearStackNote — mirrors Engine303::clearStackNote(track).
@@ -910,6 +954,11 @@ private:
 
     // Mute — settable from any thread
     std::atomic<bool>      _mute { false };
+
+    // Rec state + cursor — UI and audio threads both touch them (all updates
+    // are single-word atomic; the advance is guarded by _dataLock in recNote/recRest)
+    std::atomic<bool>      _recOn   { false };
+    std::atomic<uint8_t>   _recStep { 0 };
 
     // Harmonizer — writes under _dataLock, reads on audio thread
     Harmonizer             _harmonizer;

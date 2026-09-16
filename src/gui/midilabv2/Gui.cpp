@@ -36,6 +36,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // generative sequencer controls
     addAndMakeVisible(seqPlayButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
     addAndMakeVisible(seqClearButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqRecButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqRestButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
     addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Medium));
     addAndMakeVisible(seqGenerativeFillSlider = createModKnob("FILL"));
     addAndMakeVisible(seqGenerativeAccentProbabilitySlider = createModKnob("ACC"));
@@ -158,11 +160,44 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
     }
 
-    // keyboard edits the note of the selected step (monophonic)
+    // rec on/off + rest entry (rec cursor also drives the keyboard in rec mode)
+    seqRecButton->onClick = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        seq.setRecState(seqRecButton->getToggleState());
+        if (seq.isRecOn())
+            seq.setRecStep(static_cast<uint8_t>(selectedStep));
+    };
+    seqRestButton->onPress = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        if (seq.isRecOn())
+        {
+            seq.recRest();
+        }
+        else
+        {
+            seq.setRest(selectedStep, true);
+            selectedStep = (selectedStep + 1) % seq.getTrackLength();
+            updateKeyboardForSelectedStep();
+        }
+    };
+
+    // keyboard edits the note of the selected step (monophonic); in rec mode
+    // every key press records at the rec cursor and advances to the next step
     seqKeyboard->onNoteOn = [this] (int midiNote, float velocity)
     {
         juce::ignoreUnused (velocity);
-        processorRef.getSequencer().setStepData(selectedStep, static_cast<uint8_t>(midiNote));
+        auto& seq = processorRef.getSequencer();
+        if (seq.isRecOn())
+        {
+            seq.recNote(static_cast<uint8_t>(midiNote), false, false);
+            updateKeyboardForSelectedStep();
+        }
+        else
+        {
+            seq.setStepData(selectedStep, static_cast<uint8_t>(midiNote));
+        }
     };
 
     // attach controls to processor parameters tree
@@ -248,6 +283,10 @@ void JC303Editor::timerCallback()
     if (length > 0)
         selectedStep = ((selectedStep % length) + length) % length;
 
+    // in rec mode the engine owns the record cursor — mirror it for display
+    if (seq.isRecOn())
+        selectedStep = seq.getRecStep();
+
     const bool blinkOn = ((juce::Time::getMillisecondCounter() / 250) & 1) != 0;
 
     for (int i = 0; i < 16; ++i)
@@ -294,6 +333,8 @@ void JC303Editor::selectStepFromSelector(int step)
     // clicking a step at/after the active pattern length snaps to the last active step
     const int length = seq.getTrackLength();
     selectedStep = (step < length) ? step : length - 1;
+    if (seq.isRecOn())
+        seq.setRecStep(static_cast<uint8_t>(selectedStep));
     updateKeyboardForSelectedStep();
 }
 juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModLookAndFeel)
@@ -403,6 +444,10 @@ void JC303Editor::setControlsLayout()
     const int selectModelHeight = 130;
     const float seqPlayButtonWidth = 55; //100 / 2;
     const float seqPlayButtonHeight = (70 / 2) + 15;
+    // clear/rec/rest are square buttons whose visible height matches the play
+    // button's rendered face: play draws its 78x48 artwork frame at width 55,
+    // so its face is 55 x (48/78*55) ~ 34px tall.
+    const float seqSquareButtonSize = seqPlayButtonWidth * (48.0f / 78.0f);
     const float seqSmallButtonWidth = 60 / 2;
     const float seqSmallButtonHeight = 36 / 2;
     const float seqMediumButtonWidth = 36 / 2;
@@ -439,6 +484,8 @@ void JC303Editor::setControlsLayout()
     // generative sequencer controls (top row, left to right)
     pair<int, int> seqPlayButtonLocation = {45, 353};
     pair<int, int> seqClearButtonLocation = {110, 353};
+    pair<int, int> seqRecButtonLocation = {153, 353};
+    pair<int, int> seqRestButtonLocation = {196, 353};
 
     pair<int, int> seqGenerateButtonLocation = {700, 327};
     pair<int, int> seqGenerativeFillLocation = {730, 327};
@@ -453,7 +500,7 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> seqLengthLocation = {200, 390};
     //pair<int, int> seqShiftLocation = {240, 390};
 
-    pair<int, int> keyboardLocation = {470, 323};
+    pair<int, int> keyboardLocation = {215, 323};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -552,7 +599,11 @@ void JC303Editor::setControlsLayout()
     seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second,
                                  seqMediumButtonWidth, seqMediumButtonHeight);
     seqClearButton->setBounds(seqClearButtonLocation.first, seqClearButtonLocation.second,
-                              seqPlayButtonWidth, seqPlayButtonHeight);
+                              seqSquareButtonSize, seqSquareButtonSize);
+    seqRecButton->setBounds(seqRecButtonLocation.first, seqRecButtonLocation.second,
+                            seqSquareButtonSize, seqSquareButtonSize);
+    seqRestButton->setBounds(seqRestButtonLocation.first, seqRestButtonLocation.second,
+                             seqSquareButtonSize, seqSquareButtonSize);
     // generative sequencer new controls
     seqHarmonizerSlider->setBounds(seqHarmonizerLocation.first, seqHarmonizerLocation.second, sliderSmallSize, sliderSmallSize);
     //seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
