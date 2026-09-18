@@ -434,6 +434,19 @@ public:
         _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
 
+    /** Record a note at the current rec cursor and advance it (wraps at track
+     *  length), keeping the step's existing accent/slide/tie flags. Used by the
+     *  on-screen keyboard, where the note is the whole input. */
+    void recNoteKeepFlags (uint8_t note)
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        const uint8_t st = _recStep.load (std::memory_order_relaxed);
+        auto& s = _data.step[st];
+        s.note = note;
+        s.rest = false;
+        _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
+    }
+
     /** Record a rest at the current rec cursor and advance it (wraps at track
      *  length). Same effect as the REST button / sustain-pedal tap. */
     void recRest()
