@@ -115,6 +115,13 @@ private:
     void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
 
+    // Sequencer UI→audio command channel, consumed at the top of every audio
+    // buffer so play/stop/generate/clear (and the accompanying Open303 note
+    // flushes) always run on the audio thread.  Setting it from the message
+    // thread keeps sequencer + Open303 state single-threaded while running.
+    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear };
+    void applySeqCommands();
+
     // presets and overdrive models user data management
     void setupDataDirectories();
     void installTones();
@@ -224,6 +231,10 @@ private:
 
     // Flag to track if any parameter has changed
     std::atomic<bool> parametersNeedUpdate { false };
+
+    // Pending sequencer command set by parameterChanged, applied by the audio
+    // thread in renderMidi (see applySeqCommands).
+    std::atomic<int> _seqCommand { static_cast<int>(SeqCommand::None) };
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

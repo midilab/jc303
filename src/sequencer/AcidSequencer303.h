@@ -184,10 +184,10 @@ public:
     // Sync / Start modes
     // =========================================================================
 
-    void      setSyncMode  (SyncMode  m) { _syncMode  = m; }
-    void      setStartMode (StartMode m) { _startMode = m; }
-    SyncMode  getSyncMode()  const       { return _syncMode;  }
-    StartMode getStartMode() const       { return _startMode; }
+    void      setSyncMode  (SyncMode  m) { _syncMode.store  (m, std::memory_order_relaxed); }
+    void      setStartMode (StartMode m) { _startMode.store (m, std::memory_order_relaxed); }
+    SyncMode  getSyncMode()  const       { return _syncMode.load  (std::memory_order_relaxed); }
+    StartMode getStartMode() const       { return _startMode.load (std::memory_order_relaxed); }
 
     // =========================================================================
     // Internal tempo (SyncMode::Internal)
@@ -195,10 +195,12 @@ public:
 
     void  setTempo (float bpm)
     {
-        _internalBpm = juce::jlimit (20.f, 300.f, bpm);
-        updateSamplesPerTick();
+        // Stored atomically; _samplesPerTick is recomputed on the audio thread
+        // at the top of processBlock() so a UI-thread change can't tear the
+        // double the audio thread reads while clocking.
+        _internalBpm.store (juce::jlimit (20.f, 300.f, bpm), std::memory_order_relaxed);
     }
-    float getTempo() const { return _internalBpm; }
+    float getTempo() const { return _internalBpm.load (std::memory_order_relaxed); }
 
     // =========================================================================
     // Transport control
@@ -241,6 +243,10 @@ public:
                        double bpm,
                        int    shufflePulses = 0)
     {
+        // Apply any tempo queued from the UI thread before clocking.
+        // _samplesPerTick is only ever written on the audio thread from here.
+        updateSamplesPerTick();
+
         // ── MIDI transport + note-triggered start ─────────────────────────────
         for (const auto meta : midiIn)
         {
@@ -645,9 +651,10 @@ private:
     // uses _samplesPerTick and _ticksPerStep.
     void updateSamplesPerTick()
     {
-        if (_internalBpm > 0.f && _sampleRate > 0.0)
+        const float bpm = _internalBpm.load (std::memory_order_relaxed);
+        if (bpm > 0.f && _sampleRate > 0.0)
             _samplesPerTick = (_sampleRate * 60.0)
-                              / (static_cast<double>(_internalBpm) * 96.0);
+                              / (static_cast<double>(bpm) * 96.0);
     }
 
     // ── Internal clock ────────────────────────────────────────────────────────
@@ -705,7 +712,7 @@ private:
 
         if (bpm > 0.0)
         {
-            _internalBpm = static_cast<float>(bpm);
+            _internalBpm.store (static_cast<float>(bpm), std::memory_order_relaxed);
             updateSamplesPerTick();
         }
 
@@ -976,9 +983,9 @@ private:
     // Harmonizer — writes under _dataLock, reads on audio thread
     Harmonizer             _harmonizer;
 
-    // Sync / start mode
-    SyncMode               _syncMode  { SyncMode::Internal };
-    StartMode              _startMode { StartMode::TransportStart };
+    // Sync / start mode — set from the UI thread, read on the audio thread
+    std::atomic<SyncMode>    _syncMode  { SyncMode::Internal };
+    std::atomic<StartMode>   _startMode { StartMode::TransportStart };
 
     // Transport
     std::atomic<bool>      _running { false };
@@ -991,6 +998,7 @@ private:
     int                    _ticksPerStep    { 24      };   // always 24 at 96-PPQN resolution
 
     // Internal clock — event-driven accumulator (advances by samplesPerTick each tick)
+    // _samplesPerTick is written only on the audio thread (see processBlock).
     double                 _samplesPerTick  { 0.0     };   // sampleRate*60 / (bpm*96)
     double                 _sampleAccum     { 0.0     };   // fractional sample accumulator
     uint32_t               _tickCounter     { 0       };   // monotonic 96-PPQN tick counter
@@ -1002,7 +1010,7 @@ private:
     int32_t                _noteLengthTicks { 0 };   // = 12 ticks = 50% gate
     int32_t                _slideExtraTicks { 0 };   // = 20 ticks
 
-    float                  _internalBpm { 120.f };
+    std::atomic<float>     _internalBpm { 120.f };
 
     // RNG (portable std::mt19937 replaces Arduino random())
     std::mt19937           _rng;

@@ -319,6 +319,14 @@ JC303::JC303()
             _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset };
     };
 
+    // Reset held-note tracking whenever the sequencer silences its note stack
+    // (stop, mute, clearTrack, acidRandomize) so no stale gate is left open.
+    _sequencer.onAllNotesOff = [this]
+    {
+        _heldNote         = -1;
+        _lastStepHadSlide = false;
+    };
+
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
     // and the AcidSeq303 child (stepLength) on state restore.
     _sequencer.setTrackLength (16);
@@ -435,37 +443,15 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
     }
     else if (parameterID == "seqPlayState") {
-        if (newValue > 0.5f) {
-            _sequencer.start();
-        } else {
-            _sequencer.stop();
-        }
+        _seqCommand.store (newValue > 0.5f ? static_cast<int>(SeqCommand::Play)
+                                           : static_cast<int>(SeqCommand::Stop),
+                           std::memory_order_release);
     }
     else if (parameterID == "seqGenerate") {
-        _sequencerMuted.store(true, std::memory_order_release);
-
-        if (_heldNote >= 0) {
-            //open303Core.noteOn(_heldNote, 0, 0);
-            for (int i = 0; i <= 127; i++)
-                open303Core.noteOn (i, 0, 0);
-            _heldNote = -1;
-            _lastStepHadSlide = false;
-        }
-
-        _sequencer.acidRandomize(
-            static_cast<uint8_t>(*seqGenerativeFill),
-            static_cast<uint8_t>(*seqGenerativeAccentProbability),
-            static_cast<uint8_t>(*seqGenerativeSlideProbability),
-            static_cast<uint8_t>(*seqGenerativeTieProbability),
-            static_cast<uint8_t>(*numberOfTones),
-            static_cast<uint8_t>(*lowerNote),
-            static_cast<uint8_t>(*rangeNote)
-        );
-
-        _sequencerMuted.store(false, std::memory_order_release);
+        _seqCommand.store (static_cast<int>(SeqCommand::Generate), std::memory_order_release);
     }
     else if (parameterID == "seqClear") {
-        _sequencer.clearTrack();
+        _seqCommand.store (static_cast<int>(SeqCommand::Clear), std::memory_order_release);
     }
     //else if (parameterID == "seqHarmonizer") {
     //    uint8_t seqHarmony = static_cast<uint8_t>(*seqHarmonizer);
@@ -491,6 +477,61 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "seqTempo") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
             _sequencer.setTempo((float) p->get());
+    }
+}
+
+// Consumes a sequencer command queued by the UI thread.  Must run on the audio
+// thread, after _pendingCount has been reset, so all Open303 calls and sequencer
+// emits stay on the audio thread while the device is rendering.
+void JC303::applySeqCommands()
+{
+    const int cmd = _seqCommand.exchange (static_cast<int>(SeqCommand::None),
+                                          std::memory_order_acq_rel);
+    if (cmd == static_cast<int>(SeqCommand::None))
+        return;
+
+    switch (static_cast<SeqCommand>(cmd))
+    {
+    case SeqCommand::Play:
+        _heldNote         = -1;
+        _lastStepHadSlide = false;
+        _sequencer.start();
+        break;
+
+    case SeqCommand::Stop:
+        _heldNote         = -1;
+        _lastStepHadSlide = false;
+        _sequencer.stop();
+        break;
+
+    case SeqCommand::Clear:
+        _sequencer.clearTrack();
+        break;
+
+    case SeqCommand::Generate:
+        _sequencerMuted.store (true, std::memory_order_release);
+
+        for (int i = 0; i <= 127; i++)
+            open303Core.noteOn (i, 0, 0);
+        _heldNote         = -1;
+        _lastStepHadSlide = false;
+
+        _sequencer.acidRandomize(
+            static_cast<uint8_t>(*seqGenerativeFill),
+            static_cast<uint8_t>(*seqGenerativeAccentProbability),
+            static_cast<uint8_t>(*seqGenerativeSlideProbability),
+            static_cast<uint8_t>(*seqGenerativeTieProbability),
+            static_cast<uint8_t>(*numberOfTones),
+            static_cast<uint8_t>(*lowerNote),
+            static_cast<uint8_t>(*rangeNote)
+        );
+
+        _sequencerMuted.store (false, std::memory_order_release);
+        break;
+
+    case SeqCommand::None:
+    default:
+        break;
     }
 }
 
@@ -789,6 +830,14 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
 
     // ── Tick sequencer — populates _pendingNotes[] via the callback ───────────
     _pendingCount = 0;
+
+    // Apply any sequencer command queued from the UI thread (play/stop/
+    // generate/clear).  Running here — after the pending queue was reset and
+    // before the clock tick — keeps every note event the sequencer emits
+    // (including the note-alls-off flush on generate/clear) on the audio
+    // thread and inside this buffer's event queue.
+    applySeqCommands();
+
     _sequencer.processBlock (midiMessages,
                              numSamples,
                              hostIsPlaying,
