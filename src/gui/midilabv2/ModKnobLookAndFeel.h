@@ -48,6 +48,7 @@ public:
         setFont(juce::Font(12.0f));
         setMinimumHorizontalScale(1.0f);
         setBufferedToImage(false);
+        setJustificationType(m_justification);
     }
     void setJustification(Justification justification) { m_justification = justification; }
     void componentMovedOrResized (Component& component, bool wasMoved, bool wasResized)
@@ -57,7 +58,7 @@ public:
 
         setSize (textWidth+20, f.getHeight());
 
-        setTopLeftPosition (component.getX() + (component.getWidth() - textWidth-20) / 2,
+        setTopLeftPosition (component.getX() + (component.getWidth() - getWidth()) / 2,
                             m_below ? component.getY() + component.getHeight() + 6 : component.getY() - getHeight() + 2);
     }
 private:

@@ -31,7 +31,7 @@ public:
     void setScaleFactor(float scale) override { juce::AudioProcessorEditor::setScaleFactor(1.0f); }
 
 private:
-    juce::Slider* createKnob(const juce::String& knobType, bool useModLookAndFeel = false);
+    juce::Slider* createKnob(const juce::String& knobType, bool useModLookAndFeel = false, const juce::String& label = "");
     juce::Slider* createModKnob(const juce::String& label);
     AssignableSlider* createAssignableSlider(const juce::String& label, juce::Label*& labelOut);
     SwitchButton* createSwitch();

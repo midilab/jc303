@@ -5,14 +5,14 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     : AudioProcessorEditor (&p), processorRef (p), valueTreeState (vts)
 {
     // Create and configure rotary sliders for each parameter
-    addAndMakeVisible(waveformSlider = createKnob("medium"));
-    addAndMakeVisible(volumeSlider = createKnob("medium"));
-    addAndMakeVisible(tuningSlider = createKnob("medium"));
-    addAndMakeVisible(cutoffFreqSlider = createKnob("medium"));
-    addAndMakeVisible(resonanceSlider = createKnob("medium"));
-    addAndMakeVisible(envelopModSlider = createKnob("medium"));
-    addAndMakeVisible(decaySlider = createKnob("medium"));
-    addAndMakeVisible(accentSlider = createKnob("medium"));
+    addAndMakeVisible(waveformSlider = createKnob("medium", false, "WAVEFORM"));
+    addAndMakeVisible(volumeSlider = createKnob("medium", false, "VOLUME"));
+    addAndMakeVisible(tuningSlider = createKnob("medium", false, "TUNING"));
+    addAndMakeVisible(cutoffFreqSlider = createKnob("medium", false, "CUTOFF FREQ"));
+    addAndMakeVisible(resonanceSlider = createKnob("medium", false, "RESONANCE"));
+    addAndMakeVisible(envelopModSlider = createKnob("medium", false, "ENVMOD"));
+    addAndMakeVisible(decaySlider = createKnob("medium", false, "DECAY"));
+    addAndMakeVisible(accentSlider = createKnob("medium", false, "ACCENT"));
     // MODs row
     addAndMakeVisible(normalDecaySlider = createKnob("small"));
     addAndMakeVisible(accentDecaySlider = createKnob("small"));
@@ -24,8 +24,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(switchModButton = createSwitch());
     //addAndMakeVisible(ledModButton = createLed("switchModState"));
     // overdrive
-    addAndMakeVisible(overdriveLevelSlider = createKnob("medium"));
-    addAndMakeVisible(overdriveDryWetSlider = createKnob("medium"));
+    addAndMakeVisible(overdriveLevelSlider = createKnob("medium", false, "DRIVE"));
+    addAndMakeVisible(overdriveDryWetSlider = createKnob("medium", false, "DRY/WET"));
     // on/off overdrive switch
     addAndMakeVisible(switchOverdriveButton = createSwitch());
     //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
@@ -361,7 +361,7 @@ void JC303Editor::selectStepFromSelector(int step)
         seq.setRecStep(static_cast<uint8_t>(selectedStep));
     updateKeyboardForSelectedStep();
 }
-juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModLookAndFeel)
+juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModLookAndFeel, const juce::String& label)
 {
     auto* slider = new juce::Slider();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -383,6 +383,15 @@ juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModL
 
     // adjust our start and end point for knob
     slider->setRotaryParameters(0, 5.3, true);
+
+    if (label.isNotEmpty())
+    {
+        auto* labelComponent = new AttachedLabel(juce::Justification::centredTop, true);
+        labelComponent->setText(label, juce::dontSendNotification);
+        labelComponent->setFont(juce::Font(16.0f));
+        labelComponent->attachToComponent(slider, true);
+    }
+
     return slider;
 }
 
