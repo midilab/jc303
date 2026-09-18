@@ -52,7 +52,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(rangeNoteSlider = createModKnob("RANGE"));
     // sequencer controls
     addAndMakeVisible(seqLengthSlider = createModKnob("LEN"));
-    addAndMakeVisible(seqShiftSlider = createModKnob("SHIFT"));
     // LFO controls
     addAndMakeVisible(lfoRateSlider = createModKnob("RATE"));
     addAndMakeVisible(lfoDepthSlider = createModKnob("DEPTH"));
@@ -247,7 +246,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     seqGenerateButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqGenerate", *seqGenerateButton));
     seqClearButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqClear", *seqClearButton));
     seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
-    seqShiftAttachment.reset(new SliderAttachment(valueTreeState, "seqShift", *seqShiftSlider));
     lfoWaveformAttachment.reset(new SliderAttachment(valueTreeState, "lfoWaveform", *lfoWaveformSlider));
     lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));
     lfoDepthAttachment.reset(new SliderAttachment(valueTreeState, "lfoDepth", *lfoDepthSlider));
@@ -542,7 +540,6 @@ void JC303Editor::setControlsLayout()
     pair<int, int> rangeNoteLocation = {329, 350};
 
     //pair<int, int> seqLengthLocation = {200, 390};
-    //pair<int, int> seqShiftLocation = {240, 390};
 
     pair<int, int> keyboardLocation = {672, 325};
 
@@ -661,7 +658,6 @@ void JC303Editor::setControlsLayout()
     placeLabel(seqRestButtonLabel, seqRestButtonLocation.first, (int) seqSquareButtonSize);
     // generative sequencer new controls
     //seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
-    //seqShiftSlider->setBounds(seqShiftLocation.first, seqShiftLocation.second, sliderSmallSize, sliderSmallSize);
     // LFO controls
     //lfoWaveformSlider->setBounds(lfoWaveformLocation.first, lfoWaveformLocation.second, sliderSmallSize, sliderSmallSize);
     //lfoRateSlider->setBounds(lfoRateLocation.first, lfoRateLocation.second, sliderSmallSize, sliderSmallSize);

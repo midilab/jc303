@@ -181,12 +181,7 @@ JC303::JC303()
                                                         "Seq Length",
                                                         1,
                                                         16,
-                                                        16),
-            std::make_unique<juce::AudioParameterInt> ("seqShift",
-                                                        "Seq Shift",
-                                                        0,
-                                                        16,
-                                                        0),
+16),
             std::make_unique<juce::AudioParameterInt> ("seqTempo",
                                                         "Seq Tempo BPM",
                                                         20,
@@ -240,7 +235,6 @@ JC303::JC303()
     rangeNote = parameters.getRawParameterValue("rangeNote");
     //seqHarmonizer = parameters.getRawParameterValue("seqHarmonizer");
     seqLength = parameters.getRawParameterValue("seqLength");
-    seqShift = parameters.getRawParameterValue("seqShift");
     seqSyncMode = parameters.getRawParameterValue("seqSyncMode");
     seqStartMode = parameters.getRawParameterValue("seqStartMode");
     seqTempo = parameters.getRawParameterValue("seqTempo");
@@ -311,7 +305,6 @@ JC303::JC303()
     parameters.addParameterListener("seqClear", this);
     //parameters.addParameterListener("seqHarmonizer", this);
     parameters.addParameterListener("seqLength", this);
-    parameters.addParameterListener("seqShift", this);
     parameters.addParameterListener("seqSyncMode", this);
     parameters.addParameterListener("seqStartMode", this);
     parameters.addParameterListener("seqTempo", this);
@@ -327,7 +320,7 @@ JC303::JC303()
     };
 
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
-    // and the AcidSeq303 child (stepLength/shift) on state restore.
+    // and the AcidSeq303 child (stepLength) on state restore.
     _sequencer.setTrackLength (16);
 }
 
@@ -364,7 +357,6 @@ JC303::~JC303()
     parameters.removeParameterListener("seqClear", this);
     //parameters.removeParameterListener("seqHarmonizer", this);
     parameters.removeParameterListener("seqLength", this);
-    parameters.removeParameterListener("seqShift", this);
     parameters.removeParameterListener("seqSyncMode", this);
     parameters.removeParameterListener("seqStartMode", this);
     parameters.removeParameterListener("seqTempo", this);
@@ -487,10 +479,6 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "seqLength") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqLength")))
             _sequencer.setTrackLength(static_cast<uint8_t>(p->get()));
-    }
-    else if (parameterID == "seqShift") {
-        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqShift")))
-            _sequencer.setShiftPos(static_cast<int8_t>(p->get()));
     }
     else if (parameterID == "seqSyncMode") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqSyncMode")))
@@ -1124,7 +1112,6 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
     // ── Persist sequencer state as a child element ────────────────────────────
     auto seqXml = std::make_unique<juce::XmlElement> ("AcidSeq303");
     seqXml->setAttribute ("stepLength",  _sequencer.getTrackLength());
-    seqXml->setAttribute ("shift",       _sequencer.getShiftPos());
     seqXml->setAttribute ("transpose",   _sequencer.getTranspose());
     //seqXml->setAttribute ("tune",        _sequencer.getTune());
     //seqXml->setAttribute ("temperament", _sequencer.getTemperamentId());
@@ -1170,15 +1157,11 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
             {
                 _sequencer.setTrackLength (static_cast<uint8_t>
                                             (seqXml->getIntAttribute ("stepLength", SEQ303_STEP_MAX)));
-                _sequencer.setShiftPos  (static_cast<int8_t>
-                                            (seqXml->getIntAttribute ("shift",     0)));
 
-                // Mirror the AcidSeq303 child (source of truth for length/shift) into the
-                // APVTS params so the UI, LEN/SHIFT knobs and the saved param state agree.
+                // Mirror the AcidSeq303 child (source of truth for length) into the
+                // APVTS params so the UI, LEN knob and the saved param state agree.
                 if (auto* lp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqLength")))
                     *lp = _sequencer.getTrackLength();
-                if (auto* sp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqShift")))
-                    *sp = _sequencer.getShiftPos();
 
                 _sequencer.setTranspose (static_cast<int8_t>
                                             (seqXml->getIntAttribute ("transpose", 0)));

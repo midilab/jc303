@@ -541,7 +541,6 @@ public:
 
         Page seq; seq.title = "Sequencer";
         seq.items.add(Item { "seqLength",    "Length",     Type::value, {}, 0.0f });
-        seq.items.add(Item { "seqShift",     "Shift",      Type::value, {}, 0.0f });
         seq.items.add(Item { "seqTempo",     "Tempo",      Type::value, {}, 0.0f });
         seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 0.0f });
         seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 0.0f });

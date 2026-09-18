@@ -215,7 +215,6 @@ private:
     std::atomic<float>* seqClear = nullptr;
     //std::atomic<float>* seqHarmonizer = nullptr;
     std::atomic<float>* seqLength = nullptr;
-    std::atomic<float>* seqShift = nullptr;
     std::atomic<float>* seqSyncMode = nullptr;
     std::atomic<float>* seqStartMode = nullptr;
     std::atomic<float>* seqTempo = nullptr;
