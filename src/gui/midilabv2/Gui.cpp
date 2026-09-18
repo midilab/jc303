@@ -203,13 +203,11 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         }
     };
 
-    // mouse-wheel over the keyboard transposes the selected step's note by octaves;
-    // in rec mode only the keyboard octave moves — the rec engine owns step writes
+    // mouse-wheel over the keyboard transposes the selected step's note by
+    // octaves; in rec mode the selected step is the rec cursor
     seqKeyboard->onOctaveScroll = [this] (int deltaSemitones)
     {
         auto& seq = processorRef.getSequencer();
-        if (seq.isRecOn())
-            return;
         seq.setStepData (selectedStep,
                          static_cast<uint8_t> (juce::jlimit (0, 127, seq.getRawNote (selectedStep) + deltaSemitones)));
         updateKeyboardForSelectedStep();
