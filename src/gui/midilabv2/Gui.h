@@ -81,6 +81,7 @@ private:
     SwitchStepSeqButton* seqRecButton;
     SwitchStepSeqButton* seqRestButton;
     juce::Label* seqPlayButtonLabel;
+    juce::Label* seqGenerateButtonLabel;
     juce::Label* seqClearButtonLabel;
     juce::Label* seqRecButtonLabel;
     juce::Label* seqRestButtonLabel;

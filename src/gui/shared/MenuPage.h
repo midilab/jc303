@@ -440,7 +440,9 @@ private:
             for (int i = 0; i < item.options.size(); ++i)
                 menu.addItem(1 + i, item.options[i], true, i == p->get());
             menu.setLookAndFeel(&popupLookAndFeel);
-            menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+            menu.showMenuAsync(juce::PopupMenu::Options()
+                                   .withTargetComponent(this)
+                                   .withMousePosition(),
                                juce::ModalCallbackFunction::create(onChoice));
             return;
         }
@@ -454,7 +456,9 @@ private:
             menu.addItem(1 + i, text, true, i == cursor);
         }
         menu.setLookAndFeel(&popupLookAndFeel);
-        menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+        menu.showMenuAsync(juce::PopupMenu::Options()
+                               .withTargetComponent(this)
+                               .withMousePosition(),
                            juce::ModalCallbackFunction::create(onChoice));
     }
 

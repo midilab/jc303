@@ -43,6 +43,15 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(seqRecButtonLabel = createSeqButtonLabel("REC"));
     addAndMakeVisible(seqRestButtonLabel = createSeqButtonLabel("REST"));
     addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqGenerateButtonLabel = new juce::Label());
+    seqGenerateButtonLabel->setText("gen", juce::dontSendNotification);
+    seqGenerateButtonLabel->setJustificationType(juce::Justification::centredRight);
+    seqGenerateButtonLabel->setFont(juce::Font(12.0f));
+    seqGenerateButtonLabel->setMinimumHorizontalScale(0.5f);
+    seqGenerateButtonLabel->setColour(juce::Label::textColourId, juce::Colours::black);
+    seqGenerateButtonLabel->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+    seqGenerateButtonLabel->setEditable(false);
+    seqGenerateButtonLabel->setInterceptsMouseClicks(false, false);
     addAndMakeVisible(seqGenerativeFillSlider = createModKnob("FILL"));
     addAndMakeVisible(seqGenerativeAccentProbabilitySlider = createModKnob("ACC"));
     addAndMakeVisible(seqGenerativeSlideProbabilitySlider = createModKnob("SLIDE"));
@@ -637,8 +646,17 @@ void JC303Editor::setControlsLayout()
     numberOfTonesSlider->setBounds(numberOfTonesLocation.first, numberOfTonesLocation.second, sliderSmallSize, sliderSmallSize);
     lowerNoteSlider->setBounds(lowerNoteLocation.first, lowerNoteLocation.second, sliderSmallSize, sliderSmallSize);
     rangeNoteSlider->setBounds(rangeNoteLocation.first, rangeNoteLocation.second, sliderSmallSize, sliderSmallSize);
-    seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second,
+seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second,
                                  seqSquareButtonSize, seqSquareButtonSize);
+    // "gen" row label: right-aligned, left of the button, vertically centred on it
+    {
+        const int labelGap = 2;
+        const int genLabelH = 16;
+        const int genLabelW = 12 + (int) juce::Font(12.0f).getStringWidth("gen");
+        seqGenerateButtonLabel->setBounds(seqGenerateButtonLocation.first - labelGap - genLabelW,
+                                          seqGenerateButtonLocation.second + (int) (seqSquareButtonSize - genLabelH) / 2,
+                                          genLabelW, genLabelH);
+    }
     seqClearButton->setBounds(seqClearButtonLocation.first, seqClearButtonLocation.second,
                               seqSquareButtonSize, seqSquareButtonSize);
     seqRecButton->setBounds(seqRecButtonLocation.first, seqRecButtonLocation.second,
