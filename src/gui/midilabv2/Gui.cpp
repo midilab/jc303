@@ -1,0 +1,713 @@
+#include "Gui.h"
+
+//==============================================================================
+JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
+    : AudioProcessorEditor (&p), processorRef (p), valueTreeState (vts)
+{
+    // Create and configure rotary sliders for each parameter
+    addAndMakeVisible(waveformSlider = createKnob("medium", false, "WAVEFORM"));
+    addAndMakeVisible(volumeSlider = createKnob("medium", false, "VOLUME"));
+    addAndMakeVisible(tuningSlider = createKnob("medium", false, "TUNING"));
+    addAndMakeVisible(cutoffFreqSlider = createKnob("medium", false, "CUTOFF FREQ"));
+    addAndMakeVisible(resonanceSlider = createKnob("medium", false, "RESONANCE"));
+    addAndMakeVisible(envelopModSlider = createKnob("medium", false, "ENVMOD"));
+    addAndMakeVisible(decaySlider = createKnob("medium", false, "DECAY"));
+    addAndMakeVisible(accentSlider = createKnob("medium", false, "ACCENT"));
+    // MODs row
+    addAndMakeVisible(normalDecaySlider = createKnob("small"));
+    addAndMakeVisible(accentDecaySlider = createKnob("small"));
+    addAndMakeVisible(feedbackFilterSlider = createKnob("small"));
+    addAndMakeVisible(softAttackSlider = createKnob("small"));
+    addAndMakeVisible(slideTimeSlider = createKnob("small"));
+    addAndMakeVisible(sqrDriverSlider = createKnob("small"));
+    // on/off mod switch
+    addAndMakeVisible(switchModButton = createSwitch());
+    //addAndMakeVisible(ledModButton = createLed("switchModState"));
+    // overdrive
+    addAndMakeVisible(overdriveLevelSlider = createKnob("medium", false, "DRIVE"));
+    addAndMakeVisible(overdriveDryWetSlider = createKnob("medium", false, "DRY/WET"));
+    // on/off overdrive switch
+    addAndMakeVisible(switchOverdriveButton = createSwitch());
+    //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
+    // overdrive model select component
+    addAndMakeVisible(menuPage = new MenuPage(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames())));
+    addAndMakeVisible(seqKeyboard = new SeqKeyboard(48));
+
+    // generative sequencer controls
+    addAndMakeVisible(seqPlayButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Large));
+    addAndMakeVisible(seqClearButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqRecButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Toggle, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqRestButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqPlayButtonLabel = createSeqButtonLabel("PLAY/STOP"));
+    addAndMakeVisible(seqClearButtonLabel = createSeqButtonLabel("CLEAR"));
+    addAndMakeVisible(seqRecButtonLabel = createSeqButtonLabel("REC"));
+    addAndMakeVisible(seqRestButtonLabel = createSeqButtonLabel("REST"));
+    addAndMakeVisible(seqGenerateButton = createSwitchStepSeq(SwitchStepSeqButton::Mode::Press, SwitchStepSeqButton::Size::Small));
+    addAndMakeVisible(seqGenerateButtonLabel = new juce::Label());
+    seqGenerateButtonLabel->setText("gen", juce::dontSendNotification);
+    seqGenerateButtonLabel->setJustificationType(juce::Justification::centredRight);
+    seqGenerateButtonLabel->setFont(juce::Font(12.0f));
+    seqGenerateButtonLabel->setMinimumHorizontalScale(0.5f);
+    seqGenerateButtonLabel->setColour(juce::Label::textColourId, juce::Colours::black);
+    seqGenerateButtonLabel->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+    seqGenerateButtonLabel->setEditable(false);
+    seqGenerateButtonLabel->setInterceptsMouseClicks(false, false);
+    addAndMakeVisible(seqGenerativeFillSlider = createModKnob("FILL"));
+    addAndMakeVisible(seqGenerativeAccentProbabilitySlider = createModKnob("ACC"));
+    addAndMakeVisible(seqGenerativeSlideProbabilitySlider = createModKnob("SLIDE"));
+    addAndMakeVisible(seqGenerativeTieProbabilitySlider = createModKnob("TIE"));
+    addAndMakeVisible(numberOfTonesSlider = createModKnob("TONES"));
+    addAndMakeVisible(lowerNoteSlider = createModKnob("LOW"));
+    addAndMakeVisible(rangeNoteSlider = createModKnob("RANGE"));
+    // sequencer controls
+    addAndMakeVisible(seqLengthSlider = createModKnob("LEN"));
+    // LFO controls
+    addAndMakeVisible(lfoRateSlider = createModKnob("RATE"));
+    addAndMakeVisible(lfoDepthSlider = createModKnob("DEPTH"));
+    addAndMakeVisible(lfoDestinationSlider = createModKnob("DEST"));
+    addAndMakeVisible(lfoWaveformSlider = createModKnob("WAVE"));
+
+    // menu navigation controls
+    addAndMakeVisible(menuPresetButton = createMenuSwitch(SequencerStepSelector::Mode::Toggle, "PST"));
+    addAndMakeVisible(menuOverdriveButton = createMenuSwitch(SequencerStepSelector::Mode::Toggle, "OVD"));
+    addAndMakeVisible(menuModButton = createMenuSwitch(SequencerStepSelector::Mode::Toggle, "MOD"));
+    addAndMakeVisible(menuSeqButton = createMenuSwitch(SequencerStepSelector::Mode::Toggle, "SEQ"));
+    addAndMakeVisible(menuPrevButton = createMenuSwitch(SequencerStepSelector::Mode::Press, "<<"));
+    addAndMakeVisible(menuNextButton = createMenuSwitch(SequencerStepSelector::Mode::Press, ">>"));
+    addAndMakeVisible(menuDecButton = createMenuSwitch(SequencerStepSelector::Mode::Press, "-"));
+    addAndMakeVisible(menuIncButton = createMenuSwitch(SequencerStepSelector::Mode::Press, "+"));
+    addAndMakeVisible(menuKnob = createKnob("medium"));
+    menuKnob->setRange(0.0, 100.0);
+
+    // assignable macro knobs (double-click -> assign current MOD item)
+    addAndMakeVisible(modAssign1 = createAssignableSlider("LFO rate", modAssign1Label));
+    addAndMakeVisible(modAssign2 = createAssignableSlider("LFO depth", modAssign2Label));
+    menuPage->bindAssignableSlider(0, modAssign1, modAssign1Label);
+    menuPage->bindAssignableSlider(1, modAssign2, modAssign2Label);
+    menuPage->setAssignableParam(0, "lfoRate");
+    menuPage->setAssignableParam(1, "lfoDepth");
+
+    selectMenu(2);   // default menu page = OVD (Overdrive)
+    menuPresetButton->onClick = [this] { selectMenu(0); };
+    menuOverdriveButton->onClick = [this] { selectMenu(1); };
+    menuModButton->onClick = [this] { selectMenu(2); };
+    menuSeqButton->onClick = [this] { selectMenu(3); };
+    menuPrevButton->onPress = [this] { menuPage->indexStep(-1); };
+    menuNextButton->onPress = [this] { menuPage->indexStep(1); };
+    menuDecButton->onPress = [this] { menuPage->valueStep(-1); };
+    menuIncButton->onPress = [this] { menuPage->valueStep(1); };
+    menuKnob->onValueChange = [this] { menuPage->setValue((float) menuKnob->getValue()); };
+    menuPage->onCurrentItemChanged = [this] (float v)
+    {
+        const bool editable = (v >= 0.0f);
+        menuKnob->setEnabled(editable);
+        menuDecButton->setEnabled(editable);
+        menuIncButton->setEnabled(editable);
+        if (editable)
+            menuKnob->setValue(v, juce::dontSendNotification);
+    };
+
+    // sequencer step toggles (note/rest editing) and click-to-select display LEDs
+    for (int i = 0; i < 16; ++i)
+    {
+        addAndMakeVisible(seqStepButtons[i] = createSwitch());
+        addAndMakeVisible(stepSelectors[i] = new SequencerStepSelector());
+    }
+
+    // per-step accent/slide/tie micro toggles (small sequencer-button art),
+    // one stacked column below each note button, in that order (top to bottom)
+    for (int i = 0; i < 16; ++i)
+    {
+        addAndMakeVisible(seqAccentButtons[i] = new SequencerStepSelector());
+        addAndMakeVisible(seqSlideButtons[i] = new SequencerStepSelector());
+        addAndMakeVisible(seqTieButtons[i] = new SequencerStepSelector());
+    }
+
+    // row labels for the accent/slide/tie micro toggles (right-aligned, 4px left of each row)
+    {
+        const char* texts[3] = { "accent", "slide", "tie" };
+        juce::Label** labels[3] = { &seqAccentLabel, &seqSlideLabel, &seqTieLabel };
+        for (int r = 0; r < 3; ++r)
+        {
+            auto* lbl = new juce::Label();
+            *labels[r] = lbl;
+            addAndMakeVisible(lbl);
+            lbl->setText(texts[r], juce::dontSendNotification);
+            lbl->setJustificationType(juce::Justification::centredRight);
+            lbl->setFont(juce::Font(12.0f));
+            lbl->setMinimumHorizontalScale(0.5f);
+            lbl->setColour(juce::Label::textColourId, juce::Colours::black);
+            lbl->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+            lbl->setEditable(false);
+            lbl->setInterceptsMouseClicks(false, false);
+        }
+    }
+
+    // wire step toggles to sequencer note state (write-through on user toggle)
+    for (int i = 0; i < 16; ++i)
+    {
+        const int step = i;
+        seqStepButtons[i]->onClick = [this, step]
+        {
+            processorRef.getSequencer().setRest(step, !seqStepButtons[step]->getToggleState());
+        };
+        // micro toggles write their flag directly (button ON == feature active)
+        seqAccentButtons[i]->setClickTogglesState(true);
+        seqSlideButtons[i]->setClickTogglesState(true);
+        seqTieButtons[i]->setClickTogglesState(true);
+        seqAccentButtons[i]->onClick = [this, step]
+        {
+            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
+        };
+        seqSlideButtons[i]->onClick = [this, step]
+        {
+            processorRef.getSequencer().setSlide(step, seqSlideButtons[step]->getState() != 0);
+        };
+        seqTieButtons[i]->onClick = [this, step]
+        {
+            processorRef.getSequencer().setTie(step, seqTieButtons[step]->getState() != 0);
+        };
+        // clicking an LED selects the step to edit
+        stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
+    }
+
+    // rec on/off + rest entry (rec cursor also drives the keyboard in rec mode)
+    seqRecButton->onClick = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        seq.setRecState(seqRecButton->getToggleState());
+        if (seq.isRecOn())
+            seq.setRecStep(static_cast<uint8_t>(selectedStep));
+    };
+    seqGenerateButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Generate); };
+    seqClearButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Clear); };
+    seqRestButton->onPress = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        if (seq.isRecOn())
+        {
+            seq.recRest();
+        }
+        else
+        {
+            seq.setRest(selectedStep, true);
+            selectedStep = (selectedStep + 1) % seq.getTrackLength();
+            updateKeyboardForSelectedStep();
+        }
+    };
+
+    // keyboard edits the note of the selected step (monophonic); in rec mode
+    // every key press records at the rec cursor and advances to the next step
+    seqKeyboard->onNoteOn = [this] (int midiNote, float velocity)
+    {
+        juce::ignoreUnused (velocity);
+        auto& seq = processorRef.getSequencer();
+        if (seq.isRecOn())
+        {
+            seq.recNoteKeepFlags(static_cast<uint8_t>(midiNote));
+            updateKeyboardForSelectedStep();
+        }
+        else
+        {
+            seq.setStepData(selectedStep, static_cast<uint8_t>(midiNote));
+        }
+    };
+
+    // mouse-wheel over the keyboard transposes the selected step's note by
+    // octaves; in rec mode the selected step is the rec cursor
+    seqKeyboard->onOctaveScroll = [this] (int deltaSemitones)
+    {
+        auto& seq = processorRef.getSequencer();
+        seq.setStepData (selectedStep,
+                         static_cast<uint8_t> (juce::jlimit (0, 127, seq.getRawNote (selectedStep) + deltaSemitones)));
+        updateKeyboardForSelectedStep();
+    };
+
+    // attach controls to processor parameters tree
+    waveformAttachment.reset (new SliderAttachment (valueTreeState, "waveform", *waveformSlider));
+    tuningAttachment.reset (new SliderAttachment (valueTreeState, "tuning", *tuningSlider));
+    cutoffFreqAttachment.reset (new SliderAttachment (valueTreeState, "cutoff", *cutoffFreqSlider));
+    resonanceAttachment.reset (new SliderAttachment (valueTreeState, "resonance", *resonanceSlider));
+    envelopModAttachment.reset (new SliderAttachment (valueTreeState, "envmod", *envelopModSlider));
+    decayAttachment.reset (new SliderAttachment (valueTreeState, "decay", *decaySlider));
+    accentAttachment.reset (new SliderAttachment (valueTreeState, "accent", *accentSlider));
+    volumeAttachment.reset (new SliderAttachment (valueTreeState, "volume", *volumeSlider));
+    // MODs row
+    normalDecayAttachment.reset(new SliderAttachment(valueTreeState, "normalDecay", *normalDecaySlider));
+    accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
+    feedbackFilterAttachment.reset(new SliderAttachment(valueTreeState, "feedbackFilter", *feedbackFilterSlider));
+    softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
+    slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
+    sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
+    switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
+    // overdrive
+    overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
+    overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
+    switchOverdriveButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchOverdriveState", *switchOverdriveButton));
+
+    // generative sequencer attachments
+    seqGenerativeFillAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeFill", *seqGenerativeFillSlider));
+    seqGenerativeAccentProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeAccentProbability", *seqGenerativeAccentProbabilitySlider));
+    seqGenerativeSlideProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeSlideProbability", *seqGenerativeSlideProbabilitySlider));
+    seqGenerativeTieProbabilityAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeTieProbability", *seqGenerativeTieProbabilitySlider));
+    numberOfTonesAttachment.reset(new SliderAttachment(valueTreeState, "numberOfTones", *numberOfTonesSlider));
+    lowerNoteAttachment.reset(new SliderAttachment(valueTreeState, "lowerNote", *lowerNoteSlider));
+    rangeNoteAttachment.reset(new SliderAttachment(valueTreeState, "rangeNote", *rangeNoteSlider));
+    seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
+    seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
+    lfoWaveformAttachment.reset(new SliderAttachment(valueTreeState, "lfoWaveform", *lfoWaveformSlider));
+    lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));
+    lfoDepthAttachment.reset(new SliderAttachment(valueTreeState, "lfoDepth", *lfoDepthSlider));
+    lfoDestinationAttachment.reset(new SliderAttachment(valueTreeState, "lfoDestination", *lfoDestinationSlider));
+
+    setControlsLayout();
+
+    // Make sure that before the constructor has finished, you've set the
+    // editor's size to whatever you need it to be.
+    setSize (930, 540);
+    startTimer(30);
+}
+
+JC303Editor::~JC303Editor()
+{
+    stopTimer();
+}
+
+//==============================================================================
+void JC303Editor::paint (juce::Graphics& g)
+{
+    // opaque base layer
+    juce::Image background = ImageCache::getFromMemory (BinaryData::jc303guibackground_png, BinaryData::jc303guibackground_pngSize);
+    g.drawImage (background, getLocalBounds().toFloat());
+
+    // transparent detail layer on top
+    juce::Image overlay = ImageCache::getFromMemory (BinaryData::jc303gui_png, BinaryData::jc303gui_pngSize);
+    g.drawImage (overlay, getLocalBounds().toFloat());
+}
+
+void JC303Editor::resized()
+{
+    setControlsLayout();
+}
+
+void JC303Editor::timerCallback()
+{
+    auto& seq = processorRef.getSequencer();
+
+    const int length = seq.getTrackLength();
+    const bool playing = seq.isRunning();
+    const int currentStep = static_cast<int>(seq.getCurrentStep());
+
+    // keep the selected step inside the active pattern length
+    if (length > 0)
+        selectedStep = ((selectedStep % length) + length) % length;
+
+    // in rec mode the engine owns the record cursor — mirror it for display
+    if (seq.isRecOn())
+        selectedStep = seq.getRecStep();
+
+    const bool blinkOn = ((juce::Time::getMillisecondCounter() / 250) & 1) != 0;
+
+    for (int i = 0; i < 16; ++i)
+    {
+        const bool isCurrent = playing && i == currentStep;
+        const bool isSelected = i == selectedStep;
+
+        // LED indicates the active pattern length + the selected step (blinking);
+        // note/rest and the per-step flags are shown by the buttons below/above. The
+        // playing current step is state 2 (overrides the blink).
+        const int ledState = isCurrent ? 2 : ((isSelected && blinkOn) || (!isSelected && i < length) ? 1 : 0);
+        stepSelectors[i]->setState(ledState);
+
+        // note step button: ON == note active, rest == OFF
+        const bool noteOn = (i < length) && seq.stepOn(i);
+        if (seqStepButtons[i]->getToggleState() != noteOn)
+            seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
+
+        // per-step accent/slide/tie toggles: ON == flag active (steps beyond the
+        // active pattern length show OFF, but stay editable)
+        const bool accentOn = (i < length) && seq.accentOn(i);
+        const bool slideOn  = (i < length) && seq.slideOn(i);
+        const bool tieOn    = (i < length) && seq.tieOn(i);
+        if (seqAccentButtons[i]->getState() != accentOn)
+            seqAccentButtons[i]->setState(accentOn ? 1 : 0);
+        if (seqSlideButtons[i]->getState() != slideOn)
+            seqSlideButtons[i]->setState(slideOn ? 1 : 0);
+        if (seqTieButtons[i]->getState() != tieOn)
+            seqTieButtons[i]->setState(tieOn ? 1 : 0);
+    }
+
+    updateKeyboardForSelectedStep();
+}
+
+void JC303Editor::updateKeyboardForSelectedStep()
+{
+    const uint8_t rawNote = processorRef.getSequencer().getRawNote(selectedStep);
+    if (processorRef.getSequencer().stepOn(selectedStep))
+    {
+        // show the note in its own octave, not just its pitch class
+        seqKeyboard->setStartNote((rawNote / 12) * 12);
+        seqKeyboard->showNote(rawNote);
+    }
+    else
+    {
+        // rest: no octave to follow — keep the pitch class at the current octave
+        seqKeyboard->showNote(seqKeyboard->getStartNote() + (rawNote % 12));
+    }
+}
+
+void JC303Editor::selectStepFromSelector(int step)
+{
+    auto& seq = processorRef.getSequencer();
+    // clicking a step at/after the active pattern length snaps to the last active step
+    const int length = seq.getTrackLength();
+    selectedStep = (step < length) ? step : length - 1;
+    if (seq.isRecOn())
+        seq.setRecStep(static_cast<uint8_t>(selectedStep));
+    updateKeyboardForSelectedStep();
+}
+juce::Slider* JC303Editor::createKnob(const juce::String& knobType, bool useModLookAndFeel, const juce::String& label)
+{
+    auto* slider = new juce::Slider();
+    slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+
+    if (useModLookAndFeel)
+    {
+        slider->setLookAndFeel(&modKnobLookAndFeel);
+    }
+    else if (knobType == "small")
+    {
+        slider->setLookAndFeel(&modKnobLookAndFeel);
+    }
+    else
+    {
+        slider->setLookAndFeel(&knobLookAndFeel);
+    }
+
+    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+
+    // adjust our start and end point for knob
+    slider->setRotaryParameters(0, 5.3, true);
+
+    if (label.isNotEmpty())
+    {
+        auto* labelComponent = new AttachedLabel(juce::Justification::centredTop, true);
+        labelComponent->setText(label, juce::dontSendNotification);
+        labelComponent->setFont(juce::Font(16.0f));
+        labelComponent->attachToComponent(slider, true);
+    }
+
+    return slider;
+}
+
+SwitchButton* JC303Editor::createSwitch()
+{
+    auto* button = new SwitchButton();
+    button->setClickingTogglesState(false);
+
+    return button;
+}
+
+SequencerStepSelector* JC303Editor::createMenuSwitch(SequencerStepSelector::Mode mode, const juce::String& label)
+{
+    auto* button = new SequencerStepSelector(mode, label);
+    return button;
+}
+
+void JC303Editor::selectMenu(int mode)
+{
+    menuMode = mode;
+
+    menuPresetButton->setState(mode == 0 ? 1 : 0);
+    menuOverdriveButton->setState(mode == 1 ? 1 : 0);
+    menuModButton->setState(mode == 2 ? 1 : 0);
+    menuSeqButton->setState(mode == 3 ? 1 : 0);
+
+    menuPage->selectPage(mode);
+}
+
+SwitchStepSeqButton* JC303Editor::createSwitchStepSeq(SwitchStepSeqButton::Mode mode, SwitchStepSeqButton::Size size)
+{
+    auto* button = new SwitchStepSeqButton(mode, size);
+    return button;
+}
+
+juce::Label* JC303Editor::createSeqButtonLabel(const juce::String& text)
+{
+    auto* label = new juce::Label();
+    label->setText(text, juce::dontSendNotification);
+    label->setJustificationType(juce::Justification::centred);
+    label->setFont(juce::Font(12.0f));
+    label->setMinimumHorizontalScale(0.5f);
+    label->setColour(juce::Label::textColourId, juce::Colours::black);
+    label->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+    label->setEditable(false);
+    label->setInterceptsMouseClicks(false, false);
+    return label;
+}
+
+juce::Slider* JC303Editor::createModKnob(const juce::String& label)
+{
+    auto* slider = new juce::Slider();
+    slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    slider->setLookAndFeel(&modKnobLookAndFeel);
+    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+    slider->setRotaryParameters(0, 5.3, true);
+
+    auto* labelComponent = new AttachedLabel();
+    labelComponent->setText(label, juce::dontSendNotification);
+    labelComponent->setJustificationType(juce::Justification::centredTop);
+    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
+    labelComponent->attachToComponent(slider, true);
+
+    return slider;
+}
+
+AssignableSlider* JC303Editor::createAssignableSlider(const juce::String& label, juce::Label*& labelOut)
+{
+    auto* slider = new AssignableSlider();
+    slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    slider->setLookAndFeel(&knobLookAndFeel);
+    slider->setTextBoxStyle(juce::Slider::TextEntryBoxPosition::NoTextBox, true, 0, 0);
+    slider->setRotaryParameters(0, 5.3, true);
+
+    auto* labelComponent = new AttachedLabel(juce::Justification::centredTop, true);
+    labelComponent->setText(label, juce::dontSendNotification);
+    labelComponent->setJustificationType(juce::Justification::centredTop);
+    labelComponent->setColour(juce::Label::textColourId, juce::Colours::black);
+    labelComponent->attachToComponent(slider, true);
+    labelOut = labelComponent;
+    labelComponent->setFont(juce::Font(16.0f));
+
+    return slider;
+}
+
+void JC303Editor::setControlsLayout()
+{
+    // Set the bounds and other properties for each gui component
+    const int sliderLargeSize = 70;
+    const int sliderMediumSize = 60;
+    const int sliderSmallSize = 30;
+    const int switchWidth = 30;
+    const int switchHeight = 30;
+    //const int ledWidth = 15;
+    //const int ledHeight = 15;
+    const int displayMenuWidth = 260;
+    const int selectModelHeight = 130;
+    const float seqPlayButtonWidth = 55; //100 / 2;
+    const float seqPlayButtonHeight = (70 / 2) + 15;
+    // clear/rec/rest are square buttons whose visible height matches the play
+    // button's rendered face: play draws its 78x48 artwork frame at width 55,
+    // so its face is 55 x (48/78*55) ~ 34px tall.
+    const float seqSquareButtonSize = seqPlayButtonWidth * (48.0f / 78.0f);
+    const float seqSmallButtonWidth = 60 / 2;
+    const float seqSmallButtonHeight = 36 / 2;
+    const float seqMediumButtonWidth = 36 / 2;
+    const float seqMediumButtonHeight = 70 / 2;
+
+    // knob positioning location
+    // first row
+    pair<int, int> waveFormLocation = {45, 80};
+    pair<int, int> cutoffFreqLocation = {156, 80};
+    pair<int, int> resonanceLocation = {267, 80};
+    pair<int, int> envelopeLocation = {378, 80};
+    pair<int, int> decayLocation = {489, 80};
+    pair<int, int> accentLocation = {600, 80};
+    pair<int, int> tuningLocation = {840, 80};
+    pair<int, int> volumeLocation = {722, 80};
+    // MODs knobs row
+    //pair<int, int> normalDecayLocation = {147, 380};
+    //pair<int, int> accentDecayLocation = {208, 380};
+    //pair<int, int> feedbackFilterLocation = {269, 380};
+    //pair<int, int> softAttackLocation = {330, 380};
+    //pair<int, int> slideTimeLocation = {391, 380};
+    //pair<int, int> sqrDriverLocation = {452, 380};
+    // MODs switch
+    pair<int, int> switchLocation = {563, 220};
+    //pair<int, int> modLedLocation = {566, 243};
+    // overdrive
+    pair<int, int> overdriveLevelLocation = {718, 205};
+    pair<int, int> overdriveDryWetLocation = {838, 205};
+    // overdrive switch
+    pair<int, int> overdriveSwitchLocation = {794, 220};
+    //pair<int, int> overdriveLedLocation = {856, 243};
+    pair<int, int> displayMenuLocation = {60, 210};
+
+    // generative sequencer controls (top row, left to right)
+    pair<int, int> seqPlayButtonLocation = {470, 340};
+    pair<int, int> seqClearButtonLocation = {535, 340};
+    pair<int, int> seqRecButtonLocation = {578, 340};
+    pair<int, int> seqRestButtonLocation = {621, 340};
+
+    pair<int, int> seqGenerateButtonLocation = {45, 348};
+    pair<int, int> seqGenerativeFillLocation = {89, 350};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {129, 350};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {169, 350};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {209, 350};
+    pair<int, int> numberOfTonesLocation = {249, 350};
+    pair<int, int> lowerNoteLocation = {289, 350};
+    pair<int, int> rangeNoteLocation = {329, 350};
+
+    //pair<int, int> seqLengthLocation = {200, 390};
+
+    pair<int, int> keyboardLocation = {672, 325};
+
+    // LFO controls
+    //pair<int, int> lfoDepthLocation = {680, 20};
+    //pair<int, int> lfoRateLocation = {720, 20};
+    //pair<int, int> lfoWaveformLocation = {680, 60};
+    //pair<int, int> lfoDestinationLocation = {720, 60};
+
+// step toggles (note/rest editing), display LEDs above,and per-step
+    // accent/slide/tie micro toggles below (click-to-select LEDs)
+    const int switchStepWidth =  45;
+    const int switchStepHeight =  45;
+    const int switchStepGap =  8;
+    const int switchStepX0 =  44;   // x of the first step toggle
+    const int stepToggleY =  421;
+    const int ledWidth = switchStepWidth;
+    const int ledHeight = ledWidth * 34 / 62;
+    const int ledY = stepToggleY - ledHeight - 1;   // just above the step toggles
+    const int microButtonHeight =  14;
+    const int microButtonGap    =  2;
+    const int accentButtonY     = 468;   // just below the step toggles
+    const int slideButtonY      = accentButtonY + (microButtonHeight + microButtonGap);
+    const int tieButtonY        = slideButtonY  + (microButtonHeight + microButtonGap);
+    // menu navigation controls (top row), same width/aspect as the step selector
+    // buttons: width = switchStepWidth, height keeps the step-selector art frame
+    // aspect (62x34), 2px gaps between buttons
+    const int menuButtonWidth = switchStepWidth;
+    const int menuButtonHeight = menuButtonWidth * 34 / 62 + 16;
+    const int menuNavY = 285;
+
+    pair<int, int> menuKnobLocation = {376, 205};
+
+    pair<int, int> modKnob1Location = {487, 205};
+    pair<int, int> modKnob2Location = {608, 205};
+
+    // menu navigation controls (top row)
+    {
+        SequencerStepSelector* menuNav[8] = { menuPresetButton, menuOverdriveButton, menuModButton, menuSeqButton,
+                                              menuPrevButton,   menuNextButton,      menuDecButton,  menuIncButton };
+        // first 6 stay where they are
+        for (int k = 0; k < 6; ++k)
+        {
+            const int stepX = 50 + k * (menuButtonWidth + 2);
+            menuNav[k]->setBounds(stepX, menuNavY, menuButtonWidth, menuButtonHeight);
+        }
+        // last 2 (dec/inc) centered on the menu knob
+        const int pairStartX = menuKnobLocation.first + sliderMediumSize / 2 - menuButtonWidth - 1;
+        for (int k = 6; k < 8; ++k)
+        {
+            const int stepX = pairStartX + (k - 6) * (menuButtonWidth + 2);
+            menuNav[k]->setBounds(stepX, menuNavY, menuButtonWidth, menuButtonHeight);
+        }
+    }
+    menuKnob->setBounds(menuKnobLocation.first, menuKnobLocation.second, sliderMediumSize, sliderMediumSize);
+    modAssign1->setBounds(modKnob1Location.first, modKnob1Location.second, sliderMediumSize, sliderMediumSize);
+    modAssign2->setBounds(modKnob2Location.first, modKnob2Location.second, sliderMediumSize, sliderMediumSize);
+
+    // large knobs
+    waveformSlider->setBounds(waveFormLocation.first, waveFormLocation.second, sliderMediumSize, sliderMediumSize);
+    volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderMediumSize, sliderMediumSize);
+    // medium knobs
+    tuningSlider->setBounds(tuningLocation.first, tuningLocation.second, sliderMediumSize, sliderMediumSize);
+    cutoffFreqSlider->setBounds(cutoffFreqLocation.first, cutoffFreqLocation.second, sliderMediumSize, sliderMediumSize);
+    resonanceSlider->setBounds(resonanceLocation.first, resonanceLocation.second, sliderMediumSize, sliderMediumSize);
+    envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderMediumSize, sliderMediumSize);
+    decaySlider->setBounds(decayLocation.first, decayLocation.second, sliderMediumSize, sliderMediumSize);
+    accentSlider->setBounds(accentLocation.first, accentLocation.second, sliderMediumSize, sliderMediumSize);
+    // MODs, small knobs, switch
+    //normalDecaySlider->setBounds(normalDecayLocation.first, normalDecayLocation.second, sliderSmallSize, sliderSmallSize);
+    //accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderSmallSize, sliderSmallSize);
+    //feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderSmallSize, sliderSmallSize);
+    //softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderSmallSize, sliderSmallSize);
+    //slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
+    //sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
+    switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
+    //ledModButton->setBounds(modLedLocation.first, modLedLocation.second, ledWidth, ledHeight);
+    // overdrive
+    overdriveLevelSlider->setBounds(overdriveLevelLocation.first, overdriveLevelLocation.second, sliderMediumSize, sliderMediumSize);
+    overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderMediumSize, sliderMediumSize);
+    switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
+    //ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
+    menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
+
+    // shared single-octave keyboard
+    seqKeyboard->setBounds(keyboardLocation.first, keyboardLocation.second, 210, 66);
+
+    // generative sequencer controls
+    seqPlayButton->setBounds(seqPlayButtonLocation.first, seqPlayButtonLocation.second,
+                             seqPlayButtonWidth, seqPlayButtonHeight);
+    seqGenerativeFillSlider->setBounds(seqGenerativeFillLocation.first, seqGenerativeFillLocation.second, sliderSmallSize, sliderSmallSize);
+    seqGenerativeAccentProbabilitySlider->setBounds(seqGenerativeAccentProbabilityLocation.first, seqGenerativeAccentProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
+    seqGenerativeSlideProbabilitySlider->setBounds(seqGenerativeSlideProbabilityLocation.first, seqGenerativeSlideProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
+    seqGenerativeTieProbabilitySlider->setBounds(seqGenerativeTieProbabilityLocation.first, seqGenerativeTieProbabilityLocation.second, sliderSmallSize, sliderSmallSize);
+    numberOfTonesSlider->setBounds(numberOfTonesLocation.first, numberOfTonesLocation.second, sliderSmallSize, sliderSmallSize);
+    lowerNoteSlider->setBounds(lowerNoteLocation.first, lowerNoteLocation.second, sliderSmallSize, sliderSmallSize);
+    rangeNoteSlider->setBounds(rangeNoteLocation.first, rangeNoteLocation.second, sliderSmallSize, sliderSmallSize);
+seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonLocation.second,
+                                 seqSquareButtonSize, seqSquareButtonSize);
+    // "gen" row label: right-aligned, left of the button, vertically centred on it
+    {
+        const int labelGap = 2;
+        const int genLabelH = 16;
+        const int genLabelW = 12 + (int) juce::Font(12.0f).getStringWidth("gen");
+        seqGenerateButtonLabel->setBounds(seqGenerateButtonLocation.first - labelGap - genLabelW,
+                                          seqGenerateButtonLocation.second + (int) (seqSquareButtonSize - genLabelH) / 2,
+                                          genLabelW, genLabelH);
+    }
+    seqClearButton->setBounds(seqClearButtonLocation.first, seqClearButtonLocation.second,
+                              seqSquareButtonSize, seqSquareButtonSize);
+    seqRecButton->setBounds(seqRecButtonLocation.first, seqRecButtonLocation.second,
+                            seqSquareButtonSize, seqSquareButtonSize);
+    seqRestButton->setBounds(seqRestButtonLocation.first, seqRestButtonLocation.second,
+                             seqSquareButtonSize, seqSquareButtonSize);
+    // labels sit on one row, just under the square buttons' face height
+    const float seqButtonLabelY = seqPlayButtonLocation.second + seqSquareButtonSize + 6;
+    auto placeLabel = [&] (juce::Label* label, int x, int width)
+    {
+        const int textWidth = (int) juce::Font(12.0f).getStringWidth(label->getText()) + 20;
+        label->setBounds(x + (width - textWidth) / 2, (int) seqButtonLabelY, textWidth, 16);
+    };
+    placeLabel(seqPlayButtonLabel, seqPlayButtonLocation.first, (int) seqPlayButtonWidth);
+    placeLabel(seqClearButtonLabel, seqClearButtonLocation.first, (int) seqSquareButtonSize);
+    placeLabel(seqRecButtonLabel, seqRecButtonLocation.first, (int) seqSquareButtonSize);
+    placeLabel(seqRestButtonLabel, seqRestButtonLocation.first, (int) seqSquareButtonSize);
+    // generative sequencer new controls
+    //seqLengthSlider->setBounds(seqLengthLocation.first, seqLengthLocation.second, sliderSmallSize, sliderSmallSize);
+    // LFO controls
+    //lfoWaveformSlider->setBounds(lfoWaveformLocation.first, lfoWaveformLocation.second, sliderSmallSize, sliderSmallSize);
+    //lfoRateSlider->setBounds(lfoRateLocation.first, lfoRateLocation.second, sliderSmallSize, sliderSmallSize);
+    //lfoDepthSlider->setBounds(lfoDepthLocation.first, lfoDepthLocation.second, sliderSmallSize, sliderSmallSize);
+    //lfoDestinationSlider->setBounds(lfoDestinationLocation.first, lfoDestinationLocation.second, sliderSmallSize, sliderSmallSize);
+
+    // step toggles, display LEDs(just above each toggle)and per-step accent/slide/tie
+    // micro toggles (stacked below each toggle)
+    for (int i =  0; i < 16; ++i)
+    {
+        const int stepX = switchStepX0 + i * (switchStepWidth + switchStepGap);
+        seqStepButtons[i]->setBounds(stepX, stepToggleY, switchStepWidth, switchStepHeight);
+        stepSelectors[i]->setBounds(stepX + (switchStepWidth - ledWidth) / 2, ledY, ledWidth, ledHeight);
+        seqAccentButtons[i]->setBounds(stepX, accentButtonY, switchStepWidth, microButtonHeight);
+        seqSlideButtons[i]->setBounds(stepX, slideButtonY, switchStepWidth, microButtonHeight);
+        seqTieButtons[i]->setBounds(stepX, tieButtonY, switchStepWidth, microButtonHeight);
+    }
+
+    // row labels for accent/slide/tie micro toggles (right-aligned, 4px gap, centred on row)
+    {
+        const int labelGap = 2;
+        juce::Label* rowLabels[3] = { seqAccentLabel, seqSlideLabel, seqTieLabel };
+        const int rowYs[3] = { accentButtonY, slideButtonY, tieButtonY };
+        const int labelW = 12 + juce::jmax(
+            rowLabels[0]->getFont().getStringWidth("accent"),
+            rowLabels[1]->getFont().getStringWidth("slide"),
+            rowLabels[2]->getFont().getStringWidth("tie"));
+        for (int r = 0; r < 3; ++r)
+        {
+            auto* lbl = rowLabels[r];
+            lbl->setBounds(switchStepX0 - labelGap - labelW, rowYs[r], labelW, microButtonHeight);
+        }
+    }
+
+}
