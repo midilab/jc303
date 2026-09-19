@@ -39,7 +39,7 @@ public:
         const int frameHeight = imageButton.getHeight() / 2;
         const int sourceY = buttonMode == Mode::Toggle
                                 ? (getToggleState() ? frameHeight : 0)
-                                : (isButtonDown ? frameHeight : 0);
+                                : (pressed ? frameHeight : 0);
 
         if (buttonSize == Size::Small)
         {
@@ -62,7 +62,8 @@ public:
     {
         if (buttonMode == Mode::Press)
         {
-            setToggleState(true, juce::sendNotification);
+            pressed = true;
+            repaint();
             if (onPress != nullptr)
                 onPress();
         }
@@ -76,7 +77,8 @@ public:
         }
         else
         {
-            setToggleState(false, juce::sendNotification);
+            pressed = false;
+            repaint();
         }
     }
 
@@ -86,4 +88,5 @@ private:
     juce::Image imageButton;
     Mode buttonMode;
     Size buttonSize;
+    bool pressed = false;
 };

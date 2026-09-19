@@ -148,8 +148,6 @@ private:
     std::unique_ptr<SliderAttachment> lowerNoteAttachment;
     std::unique_ptr<SliderAttachment> rangeNoteAttachment;
     std::unique_ptr<ButtonAttachment> seqPlayButtonAttachment;
-    std::unique_ptr<ButtonAttachment> seqGenerateButtonAttachment;
-    std::unique_ptr<ButtonAttachment> seqClearButtonAttachment;
     std::unique_ptr<SliderAttachment> seqLengthAttachment;
     std::unique_ptr<SliderAttachment> lfoWaveformAttachment;
     std::unique_ptr<SliderAttachment> lfoRateAttachment;

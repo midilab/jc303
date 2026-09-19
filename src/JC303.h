@@ -110,6 +110,10 @@ public:
     void sequencerStart() { _sequencer.start(); }
     void sequencerStop()  { _sequencer.stop();  }
 
+    // ── Sequencer UI→audio command channel ────────────────────────────────────
+    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear };
+    void seqCommand (SeqCommand command) { _seqCommand.store (static_cast<int>(command), std::memory_order_release); }
+
 private:
     void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
@@ -119,7 +123,6 @@ private:
     // buffer so play/stop/generate/clear (and the accompanying Open303 note
     // flushes) always run on the audio thread.  Setting it from the message
     // thread keeps sequencer + Open303 state single-threaded while running.
-    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear };
     void applySeqCommands();
 
     // presets and overdrive models user data management

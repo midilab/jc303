@@ -170,6 +170,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         if (seq.isRecOn())
             seq.setRecStep(static_cast<uint8_t>(selectedStep));
     };
+    seqGenerateButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Generate); };
+    seqClearButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Clear); };
     seqRestButton->onPress = [this]
     {
         auto& seq = processorRef.getSequencer();
@@ -243,8 +245,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     lowerNoteAttachment.reset(new SliderAttachment(valueTreeState, "lowerNote", *lowerNoteSlider));
     rangeNoteAttachment.reset(new SliderAttachment(valueTreeState, "rangeNote", *rangeNoteSlider));
     seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
-    seqGenerateButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqGenerate", *seqGenerateButton));
-    seqClearButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqClear", *seqClearButton));
     seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
     lfoWaveformAttachment.reset(new SliderAttachment(valueTreeState, "lfoWaveform", *lfoWaveformSlider));
     lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));
