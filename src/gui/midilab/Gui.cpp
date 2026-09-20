@@ -46,7 +46,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // overdrive
     overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
-    
+
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
@@ -129,15 +129,15 @@ void JC303Editor::setControlsLayout()
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {9, 20}; 
-    pair<int, int> volumeLocation = {130, 20}; 
+    pair<int, int> waveFormLocation = {9, 20};
+    pair<int, int> volumeLocation = {130, 20};
     // second row
-    pair<int, int> tuningLocation = {9, 160}; 
-    pair<int, int> cutoffFreqLocation = {130, 160}; 
-    pair<int, int> resonanceLocation = {252, 160}; 
-    pair<int, int> envelopeLocation = {374, 160}; 
-    pair<int, int> decayLocation = {496, 160}; 
-    pair<int, int> accentLocation = {618, 160}; 
+    pair<int, int> tuningLocation = {9, 160};
+    pair<int, int> cutoffFreqLocation = {130, 160};
+    pair<int, int> resonanceLocation = {252, 160};
+    pair<int, int> envelopeLocation = {374, 160};
+    pair<int, int> decayLocation = {496, 160};
+    pair<int, int> accentLocation = {618, 160};
     // MOD Switch
     pair<int, int> switchLocation = {395, 21};
     // MODs knobs
