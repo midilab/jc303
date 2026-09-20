@@ -87,10 +87,9 @@ JC303::JC303()
                                                         "Switch Mod",
                                                         false),
             // LFO parameters
-            std::make_unique<juce::AudioParameterInt> ("lfoWaveform",
+            std::make_unique<juce::AudioParameterChoice> ("lfoWaveform",
                                                         "LFO Wave",
-                                                        0,
-                                                        5,
+                                                        juce::StringArray{ "Triangle", "Saw Up", "Saw Down", "Square", "Random", "Pink Noise" },
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("lfoRate",
                                                         "LFO Rate",
@@ -102,10 +101,9 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.0f),
-            std::make_unique<juce::AudioParameterInt> ("lfoDestination",
+            std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        0,
-                                                        2,
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch" },
                                                         0),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
@@ -182,15 +180,13 @@ JC303::JC303()
             //                                            0.0f,
             //                                            13.0f,
             //                                            0.0f),
-            std::make_unique<juce::AudioParameterInt> ("seqSyncMode",
+            std::make_unique<juce::AudioParameterChoice> ("seqSyncMode",
                                                         "Seq Sync Mode",
-                                                        0,
-                                                        2,
+                                                        juce::StringArray{ "Internal", "Host", "Midi Clock" },
                                                         0),
-            std::make_unique<juce::AudioParameterInt> ("seqStartMode",
+            std::make_unique<juce::AudioParameterChoice> ("seqStartMode",
                                                         "Seq Start Mode",
-                                                        0,
-                                                        1,
+                                                        juce::StringArray{ "Transport", "Note Trigger" },
                                                         0),
             std::make_unique<juce::AudioParameterInt> ("seqLength",
                                                         "Seq Length",
@@ -286,9 +282,12 @@ JC303::JC303()
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
     setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
-    open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
-    setParameter(FILTER_DRIVE, *filterDrive);
-    setParameter(BASS_COMP, *bassComp);
+    if (*switchModState)
+    {
+        open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
+        setParameter(FILTER_DRIVE, *filterDrive);
+        setParameter(BASS_COMP, *bassComp);
+    }
 
     // presets and overdrive models
     setupDataDirectories();
@@ -470,13 +469,13 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "overdriveModelIndex") {
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
     }
-    else if (parameterID == "filterType") {
+    else if (parameterID == "filterType" && *switchModState) {
         open303Core.setFilterType(static_cast<FilterType>((int) newValue));
     }
-    else if (parameterID == "filterDrive") {
+    else if (parameterID == "filterDrive" && *switchModState) {
         setParameter(FILTER_DRIVE, newValue);
     }
-    else if (parameterID == "bassComp") {
+    else if (parameterID == "bassComp" && *switchModState) {
         setParameter(BASS_COMP, newValue);
     }
     else if (parameterID == "seqPlayState") {
@@ -504,12 +503,12 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
             _sequencer.setTrackLength(static_cast<uint8_t>(p->get()));
     }
     else if (parameterID == "seqSyncMode") {
-        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqSyncMode")))
-            _sequencer.setSyncMode((AcidSequencer303::SyncMode) p->get());
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqSyncMode")))
+            _sequencer.setSyncMode((AcidSequencer303::SyncMode) p->getIndex());
     }
     else if (parameterID == "seqStartMode") {
-        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqStartMode")))
-            _sequencer.setStartMode((AcidSequencer303::StartMode) p->get());
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqStartMode")))
+            _sequencer.setStartMode((AcidSequencer303::StartMode) p->getIndex());
     }
     else if (parameterID == "seqTempo") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
@@ -684,7 +683,7 @@ void JC303::setParameter (Open303Parameters index, float value)
 
     // LFO parameters
     case LFO_WAVEFORM:
-        open303Core.setLfoWaveform(static_cast<int>(value));
+        open303Core.setLfoWaveform(juce::roundToInt(value * 5.0f));
         break;
     case LFO_RATE:
         open303Core.setLfoRate(
@@ -695,7 +694,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setLfoDepth(value);
         break;
     case LFO_DESTINATION:
-        open303Core.setLfoDestination(static_cast<int>(value));
+        open303Core.setLfoDestination(juce::roundToInt(value * 2.0f));
         break;
 	}
 }
@@ -712,8 +711,12 @@ void JC303::setDevilMod(bool mode)
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(SLIDE_TIME, *slideTime);
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
+        open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
+        setParameter(FILTER_DRIVE, *filterDrive);
+        setParameter(BASS_COMP, *bassComp);
         open303Core.setLfoOn(true);
     } else if (mode == false) {
+        open303Core.setFilterType(FILTER_TEEBEE);
         open303Core.setLfoOn(false);
         decayMin = 200.0;
         decayMax = 2000.0;
@@ -1243,10 +1246,10 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
             // ── Restore sequencer sync state ──────────────────────────────────
             // SyncMode/StartMode/Tempo live in the APVTS params only; replaceState
             // does not fire parameterChanged, so push them into the engine here.
-            if (auto* sm = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqSyncMode")))
-                _sequencer.setSyncMode((AcidSequencer303::SyncMode) sm->get());
-            if (auto* sm = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqStartMode")))
-                _sequencer.setStartMode((AcidSequencer303::StartMode) sm->get());
+            if (auto* sm = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqSyncMode")))
+                _sequencer.setSyncMode((AcidSequencer303::SyncMode) sm->getIndex());
+            if (auto* sm = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqStartMode")))
+                _sequencer.setStartMode((AcidSequencer303::StartMode) sm->getIndex());
             if (auto* tp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
                 _sequencer.setTempo((float) tp->get());
 

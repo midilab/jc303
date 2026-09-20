@@ -4,8 +4,9 @@
 // standard-library includes:
 #include <stdlib.h>
 #include <cmath>
-#include <algorithm>   // math_approx.hpp uses std::max/std::min unqualified
-#include <utility>     // math_approx.hpp uses std::make_pair
+#include <cstring>    // math_approx.hpp's bit_cast uses std::memcpy
+#include <algorithm>  // math_approx.hpp uses std::max/std::min unqualified
+#include <utility>    // math_approx.hpp uses std::make_pair
 
 // rosic includes:
 #include "rosic_RealFunctions.h"
