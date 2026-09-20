@@ -23,6 +23,8 @@ endif()
 set(GUI_THEME_HEADER "gui/${GUI}/Gui.h")
 set(GUI_THEME ${GUI})
 
+set(BUILD_CLAP ON)
+
 # Add the GUI_THEME_HEADER macro definition
 add_definitions(-DGUI_THEME_HEADER="${GUI_THEME_HEADER}")
 
@@ -130,10 +132,12 @@ juce_add_plugin("${PROJECT_NAME}"
     COPY_PLUGIN_AFTER_BUILD FALSE)              # Should the plugin be installed to a default location after building?
 # NOTE: Writing to the default install locations might require administrator privileges on Windows.
 
-clap_juce_extensions_plugin(
-    TARGET "${PROJECT_NAME}"
-    CLAP_ID "co.midilab.${PROJECT_NAME}"
-    CLAP_FEATURES "instrument" "synthesizer")
+if(BUILD_CLAP)
+    clap_juce_extensions_plugin(
+        TARGET "${PROJECT_NAME}"
+        CLAP_ID "co.midilab.${PROJECT_NAME}"
+        CLAP_FEATURES "instrument" "synthesizer")
+endif()
 
 # Set the C++ language standard requirenment for the "shared code" library target.
 # Setting this to PUBLIC ensures that all dependent targets will inherit the specified C++ standard.
