@@ -296,6 +296,8 @@ void JC303Editor::timerCallback()
 
     const int length = seq.getTrackLength();
     const bool playing = seq.isRunning();
+    if (seqPlayButton->getToggleState() != playing)
+        seqPlayButton->setToggleState(playing, juce::dontSendNotification);
     const int currentStep = static_cast<int>(seq.getCurrentStep());
 
     // keep the selected step inside the active pattern length
