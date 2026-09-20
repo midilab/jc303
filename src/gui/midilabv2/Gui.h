@@ -117,6 +117,8 @@ private:
     juce::Label* seqAccentLabel;
     juce::Label* seqSlideLabel;
     juce::Label* seqTieLabel;
+    juce::Label* seqStepLabel;
+    juce::Label* seqRestLabel;
     int selectedStep = 0;
 
     // declare the attchaments

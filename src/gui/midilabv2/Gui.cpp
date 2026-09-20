@@ -125,9 +125,9 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
     // row labels for the accent/slide/tie micro toggles (right-aligned, 4px left of each row)
     {
-        const char* texts[3] = { "accent", "slide", "tie" };
-        juce::Label** labels[3] = { &seqAccentLabel, &seqSlideLabel, &seqTieLabel };
-        for (int r = 0; r < 3; ++r)
+        const char* texts[5] = { "step", "rest", "accent", "slide", "tie" };
+        juce::Label** labels[5] = { &seqStepLabel, &seqRestLabel, &seqAccentLabel, &seqSlideLabel, &seqTieLabel };
+        for (int r = 0; r < 5; ++r)
         {
             auto* lbl = new juce::Label();
             *labels[r] = lbl;
@@ -169,6 +169,16 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         };
         // clicking an LED selects the step to edit
         stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
+        // right-clicking an LED sets the pattern length (step 1..16 -> length 1..16)
+        stepSelectors[i]->onRightClick = [this, step]
+        {
+            if (auto* param = valueTreeState.getParameter("seqLength"))
+            {
+                param->beginChangeGesture();
+                param->setValueNotifyingHost(param->getNormalisableRange().convertTo0to1(step + 1.0f));
+                param->endChangeGesture();
+            }
+        };
     }
 
     // rec on/off + rest entry (rec cursor also drives the keyboard in rec mode)
@@ -696,19 +706,20 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
         seqTieButtons[i]->setBounds(stepX, tieButtonY, switchStepWidth, microButtonHeight);
     }
 
-    // row labels for accent/slide/tie micro toggles (right-aligned, 4px gap, centred on row)
+    // row labels for step LED / note-rest / accent/slide/tie rows (right-aligned,
+    // 4px left of each row)
     {
         const int labelGap = 2;
-        juce::Label* rowLabels[3] = { seqAccentLabel, seqSlideLabel, seqTieLabel };
-        const int rowYs[3] = { accentButtonY, slideButtonY, tieButtonY };
-        const int labelW = 12 + juce::jmax(
-            rowLabels[0]->getFont().getStringWidth("accent"),
-            rowLabels[1]->getFont().getStringWidth("slide"),
-            rowLabels[2]->getFont().getStringWidth("tie"));
-        for (int r = 0; r < 3; ++r)
+        juce::Label* rowLabels[5] = { seqStepLabel, seqRestLabel, seqAccentLabel, seqSlideLabel, seqTieLabel };
+        const int rowYs[5] = { ledY, stepToggleY, accentButtonY, slideButtonY, tieButtonY };
+        const int rowHs[5] = { ledHeight, switchStepHeight, microButtonHeight, microButtonHeight, microButtonHeight };
+        int labelW = 12;
+        for (int r = 0; r < 5; ++r)
+            labelW = juce::jmax(labelW, 12 + (int) rowLabels[r]->getFont().getStringWidth(rowLabels[r]->getText()));
+        for (int r = 0; r < 5; ++r)
         {
             auto* lbl = rowLabels[r];
-            lbl->setBounds(switchStepX0 - labelGap - labelW, rowYs[r], labelW, microButtonHeight);
+            lbl->setBounds(switchStepX0 - labelGap - labelW, rowYs[r], labelW, rowHs[r]);
         }
     }
 

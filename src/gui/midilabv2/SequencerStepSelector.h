@@ -55,16 +55,26 @@ public:
     // Clicking an LED selects the corresponding sequencer step (wired by the editor).
     std::function<void()> onClick;
 
+    // Right-clicking an LED (wired by the editor, e.g. to set pattern length).
+    std::function<void()> onRightClick;
+
     // Press mode: fires onPress while the mouse is down (state 1 highlight).
     std::function<void()> onPress;
 
-    void mouseDown(const juce::MouseEvent&) override
+    void mouseDown(const juce::MouseEvent& event) override
     {
         if (buttonMode == Mode::Press)
         {
             setState(1);
             if (onPress != nullptr)
                 onPress();
+            return;
+        }
+
+        if (event.mods.isRightButtonDown())
+        {
+            if (onRightClick != nullptr)
+                onRightClick();
             return;
         }
 
