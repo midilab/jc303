@@ -683,7 +683,7 @@ void JC303::setParameter (Open303Parameters index, float value)
 
     // LFO parameters
     case LFO_WAVEFORM:
-        open303Core.setLfoWaveform(juce::roundToInt(value * 5.0f));
+        open303Core.setLfoWaveform((int) value);
         break;
     case LFO_RATE:
         open303Core.setLfoRate(
@@ -694,7 +694,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setLfoDepth(value);
         break;
     case LFO_DESTINATION:
-        open303Core.setLfoDestination(juce::roundToInt(value * 2.0f));
+        open303Core.setLfoDestination((int) value);
         break;
 	}
 }
