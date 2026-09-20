@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "neural_utils/ResampledRNNAccelerated.h"
 
 #include "../BaseProcessor.h"
@@ -117,7 +119,7 @@ public:
     bool getCustomComponents (OwnedArray<Component>& customComps, chowdsp::HostContextProvider& hcp) override;
     void addToPopupMenu (PopupMenu& menu) override; */
 
-    void loadModel (int modelIndex, Component* parentComponent = nullptr);
+    void loadModel (int modelIndex, Component* parentComponent = nullptr, bool immediate = false);
     String getCurrentModelName() const;
     
     // added by midilab
@@ -146,7 +148,7 @@ public:
             {
                 const auto modelFile = modelList[modelIndex];
                 const auto modelJson = chowdsp::JSONUtils::fromFile (modelFile);
-                loadModelFromJson (modelJson, modelFile.getFileNameWithoutExtension());
+                requestModelSwap (modelJson, modelFile.getFileNameWithoutExtension());
                 currentModelIndex = modelIndex;
             } catch (const std::exception& exc) {
                 loadModel (0);
@@ -163,6 +165,7 @@ public:
 
 private:
     void loadModelFromJson (const chowdsp::json& modelJson, const String& newModelName = {});
+    void requestModelSwap (const chowdsp::json& modelJson, const String& newModelName);
     using ModelChangeBroadcaster = chowdsp::Broadcaster<void()>;
     ModelChangeBroadcaster modelChangeBroadcaster;
 
@@ -203,6 +206,17 @@ private:
     DCBlocker dcBlocker;
 
     float normalizationGain = 1.0f;
+
+    // click-free model swap: UI thread parses + queues, audio thread fades/swaps/fades
+    enum class FadeState { Idle, FadeOut, Gap, FadeIn };
+    std::atomic<bool> modelSwapRequested { false };
+    chowdsp::json pendingModelJson {};
+    String pendingModelName {};
+
+    // audio-thread-only swap fade state
+    FadeState fadeState = FadeState::Idle;
+    float overdriveFade = 1.0f;
+    static constexpr float modelFadeSeconds = 0.01f; // 10 ms fade-out + fade-in
 
     // added by midilab
     juce::Array<juce::File> modelList;    
