@@ -18,6 +18,7 @@ Open303::Open303()
   envUpFraction    =     2.0/3.0;
   normalAttack     =     3.0;
   accentAttack     =     3.0;
+  resonanceSkewed  =     0.0;
   normalDecay      =  1000.0;
   accentDecay      =   200.0;
   normalAmpRelease =     1.0;
@@ -134,6 +135,13 @@ void Open303::setResonance(double newResonance)
 
   filter.setResonance(newResonance);
   diodeFilter.setResonance(skewedResonance);
+
+  // TB-303 accent capacitor: the resonance pot controls the accent-sweep circuit's
+  // discharge rate. Reuse the same skew curve so higher resonance = slower discharge =
+  // the accent sweeps up more smoothly and stacks higher on rapid successive accents.
+  // tau = accentAttack * (1 + 2*resonanceSkewed), i.e. 1x..3x (see setAccentAttack).
+  resonanceSkewed = skewedResonance;
+  rc2.setTimeConstant(accentAttack * (1.0 + resonanceSkewed * 2.0));
 }
 
 void Open303::setFilterType(FilterType newType)
@@ -381,14 +389,22 @@ void Open303::calculateEnvModScalerAndOffset()
 
 void Open303::updateNormalizer1()
 {
-  n1 = LeakyIntegrator::getNormalizer(mainEnv.getDecayTimeConstant(), rc1.getTimeConstant(),
-    sampleRate);
-  n1 = 1.0; // test
+  // Normalization intentionally disabled: the leaky integrator rc1 runs unnormalized (n1 = 1) to
+  // preserve the envelope depth this emulation was voiced against. The analytic
+  // LeakyIntegrator::getNormalizer() compensation was previously computed here and then immediately
+  // overwritten (the "// test" line), i.e. dead - so the call has been removed.
+  n1 = 1.0;
 }
 
 void Open303::updateNormalizer2()
 {
+  // Intentionally leave the accent capacitor (rc2) un-normalized. getNormalizer
+  // would rescale rc2's output to hold the accent's peak level constant as its
+  // time constant changes, decoupling level from timing. We keep n2 = 1.0 so a
+  // slower discharge (higher Accent Soft Attack / resonance) also lowers the
+  // per-note accent level - modelling a real analog cap that reaches a lower
+  // voltage when it charges more slowly.
   n2 = LeakyIntegrator::getNormalizer(mainEnv.getDecayTimeConstant(), rc2.getTimeConstant(),
     sampleRate);
-  n2 = 1.0; // test
+  n2 = 1.0;
 }
