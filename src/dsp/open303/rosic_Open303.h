@@ -149,7 +149,9 @@ namespace rosic
     void setAccentAttack(double newAccentAttack)
     {
       accentAttack = newAccentAttack;
-      rc2.setTimeConstant(accentAttack);
+      // The resonance pot scales the accent capacitor's discharge lag (see
+      // setResonance): tau = accentAttack * (1 + 2*resonance), so 1x..3x.
+      rc2.setTimeConstant(accentAttack * (1.0 + resonanceSkewed * 2.0));
     }
 
     /** Sets the filter envelope's decay time for accented notes (in milliseconds).
@@ -345,6 +347,7 @@ namespace rosic
     double envScaler;        // scale-factor for the normalized envelope (derived from envMod)
     double normalAttack;     // attack time for the filter envelope on non-accented notes
     double accentAttack;     // attack time for the filter envelope on accented notes
+    double resonanceSkewed;  // skewed resonance (0-1), scales the accent capacitor lag
     double normalDecay;      // decay time for the filter envelope on non-accented notes
     double accentDecay;      // decay time for the filter envelope on accented notes
     double normalAmpRelease; // amp-env release time for non-accented notes

@@ -18,6 +18,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(accentDecaySlider = createKnob("small"));
     addAndMakeVisible(feedbackFilterSlider = createKnob("small"));
     addAndMakeVisible(softAttackSlider = createKnob("small"));
+    addAndMakeVisible(accentSoftAttackSlider = createKnob("small"));
     addAndMakeVisible(slideTimeSlider = createKnob("small"));
     addAndMakeVisible(sqrDriverSlider = createKnob("small"));
     // diode filter mods
@@ -67,6 +68,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     accentDecayAttachment.reset(new SliderAttachment(valueTreeState, "accentDecay", *accentDecaySlider));
     feedbackFilterAttachment.reset(new SliderAttachment(valueTreeState, "feedbackFilter", *feedbackFilterSlider));
     softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
+    accentSoftAttackAttachment.reset(new SliderAttachment(valueTreeState, "accentSoftAttack", *accentSoftAttackSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
     // diode filter mods
@@ -182,6 +184,9 @@ void JC303Editor::setControlsLayout()
     pair<int, int> softAttackLocation = {330, 273};
     pair<int, int> slideTimeLocation = {391, 273};
     pair<int, int> sqrDriverLocation = {452, 273};
+    // placeholder position directly below the Soft Attack knob (x=330); the
+    // amadeusp background art has no label here yet
+    pair<int, int> accentSoftAttackLocation = {330, 310};
     // diode filter mods (provisional: stacked in the gap after SQUARE DRIVE)
     pair<int, int> filterDriveLocation = {500, 260};
     pair<int, int> bassCompLocation = {500, 303};
@@ -220,6 +225,7 @@ void JC303Editor::setControlsLayout()
     accentDecaySlider->setBounds(accentDecayLocation.first, accentDecayLocation.second, sliderSmallSize, sliderSmallSize);
     feedbackFilterSlider->setBounds(feedbackFilterLocation.first, feedbackFilterLocation.second, sliderSmallSize, sliderSmallSize);
     softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderSmallSize, sliderSmallSize);
+    accentSoftAttackSlider->setBounds(accentSoftAttackLocation.first, accentSoftAttackLocation.second, sliderSmallSize, sliderSmallSize);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
     sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
     // diode filter mods (label centred above each knob)
