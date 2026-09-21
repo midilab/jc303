@@ -46,7 +46,7 @@ Open303::Open303()
   ampEnv.setRelease(0.5);
   ampEnv.setTauScale(1.0);
 
-  pitchSlewLimiter.setTimeConstant(60.0);
+  pitchSlewLimiter.setTimeConstant((float)(slideTime * (22.0/60.0)));  // matches setSlideTime()'s RC mapping
   //ampDeClicker.setTimeConstant(2.0);
   ampDeClicker.setMode(BiquadFilter::LOWPASS12);
   ampDeClicker.setGain( amp2dB(sqrt(0.5)) );
