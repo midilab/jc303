@@ -6,6 +6,7 @@
 #include "SwitchButton.h"
 #include "SwitchLed.h"
 #include "OverdriveModelSelect.h"
+#include "FilterModelSelect.h"
 #include "AcidSmile.h"
 
 typedef juce::AudioProcessorValueTreeState::SliderAttachment SliderAttachment;
@@ -49,6 +50,11 @@ private:
     std::unique_ptr<juce::Slider> accentSoftAttackSlider;
     std::unique_ptr<juce::Slider> slideTimeSlider;
     std::unique_ptr<juce::Slider> sqrDriverSlider;
+    // diode filter mods
+    std::unique_ptr<juce::Slider> filterDriveSlider;
+    std::unique_ptr<juce::Slider> bassCompSlider;
+    juce::Label filterDriveLabel;
+    juce::Label bassCompLabel;
     std::unique_ptr<SwitchButton> switchModButton;
     std::unique_ptr<SwitchLed> ledModButton;
     // overdrive
@@ -74,6 +80,9 @@ private:
     std::unique_ptr<SliderAttachment> accentSoftAttackAttachment;
     std::unique_ptr<SliderAttachment> slideTimeAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
+    // diode filter mods
+    std::unique_ptr<SliderAttachment> filterDriveAttachment;
+    std::unique_ptr<SliderAttachment> bassCompAttachment;
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
     // overdrive
     std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
@@ -81,6 +90,8 @@ private:
     std::unique_ptr<ButtonAttachment> switchOverdriveButtonAttachment;
     // previous, next buttons and model name display component
     std::unique_ptr<OverdriveModelSelect> overdriveModelSelect;
+    // filter model selector (overlaid in the MODIFICATIONS cell)
+    std::unique_ptr<FilterModelSelect> filterModelSelect;
 
     // our value tree state
     juce::AudioProcessorValueTreeState& valueTreeState;
