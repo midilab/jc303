@@ -32,6 +32,7 @@ enum Open303Parameters
   TANH_SHAPER_DRIVE,
   FILTER_DRIVE,
   BASS_COMP,
+  FILTER_FM,
   // LFO
   LFO_WAVEFORM,
   LFO_RATE,
@@ -217,6 +218,7 @@ private:
     std::atomic<float>* filterType = nullptr;
     std::atomic<float>* filterDrive = nullptr;
     std::atomic<float>* bassComp = nullptr;
+    std::atomic<float>* filterFm = nullptr;
     // generative sequencer
     std::atomic<float>* seqGenerativeFill = nullptr;
     std::atomic<float>* seqGenerativeAccentProbability = nullptr;
