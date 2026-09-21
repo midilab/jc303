@@ -29,6 +29,8 @@ namespace rosic
     FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
     FILTER_DIODE_OCTAVE,    // Diode ladder with 1st pole one octave above (~18dB/oct)
     FILTER_DIODE,           // Diode ladder (4-pole, 24dB/oct)
+    FILTER_DIODE_BP,        // Diode ladder, bandpass response (12/12 dB/oct)
+    FILTER_DIODE_HP,        // Diode ladder, highpass response (24 dB/oct)
     NUM_FILTER_TYPES
   };
 
