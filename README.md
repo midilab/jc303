@@ -111,7 +111,7 @@ Generate the cmake project build files first for the OS of your choice.
 |--|--|--|
 | GUI | Select GUI theme interface to use | midilabv2 |
   
-Available themes: midilabv2 (amadeusp is deprecated)  
+Available themes: midilabv2 | amadeusp | midilab
   
 To change JC303 GUI theme add the following to the first cmake call: -D GUI=midilabv2  
   
