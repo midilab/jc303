@@ -371,7 +371,7 @@ namespace dfl
     // return c.mA * dU + c.mB * dLP1 + c.mC * dLP2 + c.mD * dLP3 +  c.mE * dLP4;
 
     // Apply passband gain compensation at output (keeps saturation independent of compensation)
-    return lp * (1.0 + passbandCompensation * K);
+    return lp * (2.0 + passbandCompensation * K);
   }
 
 } // end namespace dfl
