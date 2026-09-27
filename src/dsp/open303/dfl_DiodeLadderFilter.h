@@ -68,6 +68,13 @@ namespace dfl
       }
     }
 
+    /** Sets the Filter FM depth (0 to 1). Devilfish-style audio-rate cutoff modulation.
+     *  Uses AC-coupled input signal to modulate filter cutoff frequency. */
+    void setFilterFmDepth(double depth) { filterFmDepth = std::max(0.0, std::min(1.0, depth)); }
+
+    /** Returns the Filter FM depth. */
+    double getFilterFmDepth() const { return filterFmDepth; }
+
     //---------------------------------------------------------------------------------------------
     // inquiry:
 
@@ -181,6 +188,12 @@ namespace dfl
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
     bool   octaveMode;            // true = 1st pole one octave above (TB-303 style)
+
+    // Filter FM (Devilfish mod) - audio-rate cutoff modulation from input
+    double filterFmDepth;                          // User parameter: 0 (off) to 1 (full)
+    double acCouplingState;                        // One-pole HPF state for AC coupling
+    static constexpr double acCouplingFreq = 20.0; // AC coupling corner frequency (Hz)
+    static constexpr double filterFmScale  = 0.4;  // Scale factor for FM modulation depth
   };
 
   //-----------------------------------------------------------------------------------------------
@@ -321,6 +334,26 @@ namespace dfl
     // Input without compensation - compensation applied at output
     double input = in;
 
+    // -------------------------------------------------------------------------
+    // Filter FM (Devilfish mod): AC-coupled input modulates cutoff
+    // Uses one-pole HPF for AC coupling (~20Hz corner), then scales the one-pole
+    // alpha coefficients per sample for audio-rate cutoff modulation.
+    // -------------------------------------------------------------------------
+    double fmMod = 1.0;
+    if (filterFmDepth > 0.0) {
+      // One-pole HPF for AC coupling: y[n] = x[n] - x_lp[n]
+      // where x_lp is one-pole LPF output
+      double acAlpha = 2.0 * PI * acCouplingFreq / sampleRate;
+      acCouplingState += acAlpha * (input - acCouplingState);
+      double acCoupledInput = input - acCouplingState;  // HPF output = input - LPF output
+
+      // Modulate alpha coefficients based on AC-coupled input
+      fmMod = std::max(0.5, std::min(1.5, 1.0 + filterFmDepth * filterFmScale * acCoupledInput));
+    }
+
+    double alphaFM  = alpha  * fmMod;
+    double alpha2FM = alpha2 * fmMod;
+
     // Calculate feedback signals (S4 -> S3 -> S2 -> S1)
     double S4 = beta4 * z4;
     double S3 = beta3 * (z3 + S4 * delta3);
@@ -346,24 +379,24 @@ namespace dfl
 
     // 1st stage (optionally one octave above for TB-303 style slope)
     double xin = un * gamma1 + S2 + epsilon1 * S1;
-    double v = (a1 * xin - z1) * (octaveMode ? alpha2 : alpha);
+    double v = (a1 * xin - z1) * (octaveMode ? alpha2FM : alphaFM);
     double lp = v + z1;
     z1 = lp + v;
 
     // 2nd stage
     xin = lp * gamma2 + S3 + epsilon2 * S2;
-    v = (a2 * xin - z2) * alpha;
+    v = (a2 * xin - z2) * alphaFM;
     lp = v + z2;
     z2 = lp + v;
 
     // 3rd stage
     xin = lp * gamma3 + S4 + epsilon3 * S3;
-    v = (a3 * xin - z3) * alpha;
+    v = (a3 * xin - z3) * alphaFM;
     lp = v + z3;
     z3 = lp + v;
 
     // 4th stage
-    v = (a4 * lp - z4) * alpha;
+    v = (a4 * lp - z4) * alphaFM;
     lp = v + z4;
     z4 = lp + v;
 
