@@ -178,6 +178,8 @@ public:
         updateSamplesPerTick();
         _sampleAccum     = 0.0;
         _tickCounter     = 0;
+        _lastHostTick    = -1;
+        _lastMode        = _syncMode.load (std::memory_order_relaxed);
     }
 
     // =========================================================================
@@ -247,13 +249,39 @@ public:
         // _samplesPerTick is only ever written on the audio thread from here.
         updateSamplesPerTick();
 
+        // Read the sync mode once per buffer.  It is written from the UI
+        // thread, so the change is observed here — all state mutation below
+        // stays on the audio thread.
+        const SyncMode mode = _syncMode.load (std::memory_order_relaxed);
+
+        // ── Sync-mode change: land in a clean, predictable state ──────────────
+        // Switching modes mid-playback must stop the sequencer and reset the
+        // clock bookkeeping that belongs to the previous mode (_lastHostTick /
+        // _tickCounter / _sampleAccum).  Without this, a stale host tick can
+        // trigger a pathological catch-up run and cross-mode garbage.
+        if (mode != _lastMode)
+        {
+            _lastMode = mode;
+            stop();
+            _lastHostTick  = -1;
+            _tickCounter   = 0;
+            _sampleAccum   = 0.0;
+
+            // Entering Host while the host is already playing produces no play
+            // edge, so re-arm immediately; the host ppq re-anchors the position.
+            if (mode == SyncMode::Host
+                && hostIsPlaying
+                && _startMode == StartMode::TransportStart)
+                start();
+        }
+
         // ── MIDI transport + note-triggered start ─────────────────────────────
         for (const auto meta : midiIn)
         {
             const auto msg       = meta.getMessage();
             const int  samplePos = meta.samplePosition;
 
-            if (_syncMode == SyncMode::MidiClock)
+            if (mode == SyncMode::MidiClock)
             {
                 if (msg.isMidiStart())
                 {
@@ -278,7 +306,7 @@ public:
         }
 
         // ── Clock advancement ─────────────────────────────────────────────────
-        switch (_syncMode)
+        switch (mode)
         {
             case SyncMode::Internal:
                 processInternalClock (numSamples, shufflePulses);
@@ -705,9 +733,6 @@ private:
             return;
         }
 
-        if (! _running && _startMode == StartMode::TransportStart)
-            start();
-
         if (! _running) return;
 
         if (bpm > 0.0)
@@ -749,7 +774,22 @@ private:
             }
 
             // New tick(s) have started — fire each one
-            const int64_t firstNew = _lastHostTick < 0 ? tickNow : _lastHostTick + 1;
+            int64_t firstNew = _lastHostTick < 0 ? tickNow : _lastHostTick + 1;
+
+            // Runaway position jump (stale _lastHostTick from a previous sync
+            // mode, DAW loop-wrap or seek): iterating tens of thousands of stale
+            // ticks inside one audio callback would hammer the CPU and flood the
+            // note queue.  Re-anchor to the current position instead; the single
+            // current tick below keeps us in time.
+            const int64_t ticksPerBuffer = std::max<int64_t> (1,
+                static_cast<int64_t>(numSamples / sampPerTick) + 2);
+            if (tickNow - firstNew >= ticksPerBuffer)
+            {
+                _lastHostTick = tickNow - 1;
+                _tickCounter  = static_cast<uint32_t>(tickNow);
+                firstNew      = tickNow;
+            }
+
             for (int64_t t = firstNew; t <= tickNow; ++t)
             {
                 // Sample offset of tick t within this buffer
@@ -986,6 +1026,10 @@ private:
     // Sync / start mode — set from the UI thread, read on the audio thread
     std::atomic<SyncMode>    _syncMode  { SyncMode::Internal };
     std::atomic<StartMode>   _startMode { StartMode::TransportStart };
+
+    // Audio-thread-only mirror of _syncMode.  Used by processBlock to detect
+    // a sync-mode change and reset transport/clock state on the audio thread.
+    SyncMode                 _lastMode  { SyncMode::Internal };
 
     // Transport
     std::atomic<bool>      _running { false };

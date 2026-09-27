@@ -191,6 +191,17 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     };
     seqGenerateButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Generate); };
     seqClearButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Clear); };
+    // Play/Stop goes straight to the sequencer command channel instead of the
+    // seqPlayState param latch: the sequencer may be started/stopped by the host
+    // transport, MIDI clock or note-trigger, which leaves the param value stale
+    // and makes a later click a no-op.  The timer keeps the LED synced to
+    // seq.isRunning(), so every click here always emits a fresh command.
+    seqPlayButton->onClick = [this]
+    {
+        processorRef.seqCommand(seqPlayButton->getToggleState()
+                                    ? JC303::SeqCommand::Play
+                                    : JC303::SeqCommand::Stop);
+    };
     seqRestButton->onPress = [this]
     {
         auto& seq = processorRef.getSequencer();
@@ -263,7 +274,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     numberOfTonesAttachment.reset(new SliderAttachment(valueTreeState, "numberOfTones", *numberOfTonesSlider));
     lowerNoteAttachment.reset(new SliderAttachment(valueTreeState, "lowerNote", *lowerNoteSlider));
     rangeNoteAttachment.reset(new SliderAttachment(valueTreeState, "rangeNote", *rangeNoteSlider));
-    seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
     seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
     lfoWaveformAttachment.reset(new SliderAttachment(valueTreeState, "lfoWaveform", *lfoWaveformSlider));
     lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));

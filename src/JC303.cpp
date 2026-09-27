@@ -884,9 +884,13 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     }
 
     // ── Detect host play start / stop edge (Host sync mode only) ─────────────
+    // Auto-start on the host play edge only in TransportStart mode; in
+    // NoteTriggered the first incoming MIDI note owns the start.
     if (_sequencer.getSyncMode() == AcidSequencer303::SyncMode::Host)
     {
-        if (hostIsPlaying && ! _wasHostPlaying)
+        const bool autoStart = _sequencer.getStartMode()
+                               == AcidSequencer303::StartMode::TransportStart;
+        if (hostIsPlaying && ! _wasHostPlaying && autoStart)
             _sequencer.start();
         else if (! hostIsPlaying && _wasHostPlaying)
         {
