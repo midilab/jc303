@@ -18,10 +18,12 @@ set(LIB_CHOWDSP_UTILS_TAG "ffc70ba399f9afaeefb996eb14e55a1d487270b8")
 # check if the GUI variable is set
 if(NOT DEFINED GUI)
     # no GUI set defaults to amadeusp
-    set(GUI "amadeusp")
+    set(GUI "midilabv2")
 endif()
 set(GUI_THEME_HEADER "gui/${GUI}/Gui.h")
 set(GUI_THEME ${GUI})
+
+set(BUILD_CLAP ON)
 
 # Add the GUI_THEME_HEADER macro definition
 add_definitions(-DGUI_THEME_HEADER="${GUI_THEME_HEADER}")
@@ -92,10 +94,12 @@ endif()
 # Check the readme at `docs/CMake API.md` in the JUCE repo for the full list.
 
 juce_add_plugin("${PROJECT_NAME}"
-    FORMATS ${PLUGIN_FORMATS}                   # The formats to build. Valid formats: Standalone Unity VST3 AU AUv3 AAX VST LV2.
+    FORMATS ${PLUGIN_FORMATS} Standalone        # The formats to build. Valid formats: Standalone Unity VST3 AU AUv3 AAX VST LV2.
                                                 # AU and AUv3 plugins will only be enabled when building on macOS.
     PRODUCT_NAME "JC303"                        # The name of the final executable, which can differ from the target name.
     PLUGIN_NAME "JC303"                         # Name of the plugin that will be displayed in the DAW. Can differ from PRODUCT_NAME.
+
+    ICON_BIG "${PROJECT_SOURCE_DIR}/img/ICON_BIG.png"
 
     # ICON_BIG                                  # ICON_* arguments specify a path to an image file to use as an icon for the Standalone.
     # ICON_SMALL
@@ -110,7 +114,7 @@ juce_add_plugin("${PROJECT_NAME}"
 
     IS_SYNTH TRUE                               # Is this a synth or an effect?
     NEEDS_MIDI_INPUT TRUE                       # Does the plugin need midi input?
-    NEEDS_MIDI_OUTPUT FALSE                     # Does the plugin need midi output?
+    NEEDS_MIDI_OUTPUT TRUE                      # Does the plugin need midi output?
     IS_MIDI_EFFECT FALSE                        # Is this plugin a MIDI effect?
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE           # Does the editor need keyboard focus?
 
@@ -130,10 +134,12 @@ juce_add_plugin("${PROJECT_NAME}"
     COPY_PLUGIN_AFTER_BUILD FALSE)              # Should the plugin be installed to a default location after building?
 # NOTE: Writing to the default install locations might require administrator privileges on Windows.
 
-clap_juce_extensions_plugin(
-    TARGET "${PROJECT_NAME}"
-    CLAP_ID "co.midilab.${PROJECT_NAME}"
-    CLAP_FEATURES "instrument" "synthesizer")
+if(BUILD_CLAP)
+    clap_juce_extensions_plugin(
+        TARGET "${PROJECT_NAME}"
+        CLAP_ID "co.midilab.${PROJECT_NAME}"
+        CLAP_FEATURES "instrument" "synthesizer")
+endif()
 
 # Set the C++ language standard requirenment for the "shared code" library target.
 # Setting this to PUBLIC ensures that all dependent targets will inherit the specified C++ standard.

@@ -4,8 +4,9 @@
 // standard-library includes:
 #include <stdlib.h>
 #include <cmath>
-#include <algorithm>   // math_approx.hpp uses std::max/std::min unqualified
-#include <utility>     // math_approx.hpp uses std::make_pair
+#include <cstring>    // math_approx.hpp's bit_cast uses std::memcpy
+#include <algorithm>  // math_approx.hpp uses std::max/std::min unqualified
+#include <utility>    // math_approx.hpp uses std::make_pair
 
 // rosic includes:
 #include "rosic_RealFunctions.h"
@@ -80,6 +81,13 @@ namespace dfl
     /** Sets the response mode (LP/BP/HP). This only re-mixes the ladder's stage
         outputs, so it needs no coefficient recalculation. @see ResponseMode */
     INLINE void setResponseMode(int newMode) { responseMode = newMode; }
+
+    /** Sets the Filter FM depth (0 to 1). Devilfish-style audio-rate cutoff modulation.
+     *  Uses AC-coupled input signal to modulate filter cutoff frequency. */
+    void setFilterFmDepth(double depth) { filterFmDepth = std::max(0.0, std::min(1.0, depth)); }
+
+    /** Returns the Filter FM depth. */
+    double getFilterFmDepth() const { return filterFmDepth; }
 
     //---------------------------------------------------------------------------------------------
     // inquiry:
@@ -207,6 +215,12 @@ namespace dfl
     double sampleRate;
     bool   octaveMode;            // true = 1st pole one octave above (TB-303 style)
     int    responseMode;          // LP/BP/HP output mixing (@see ResponseMode)
+
+    // Filter FM (Devilfish mod) - audio-rate cutoff modulation from input
+    double filterFmDepth;                          // User parameter: 0 (off) to 1 (full)
+    double acCouplingState;                        // One-pole HPF state for AC coupling
+    static constexpr double acCouplingFreq = 20.0; // AC coupling corner frequency (Hz)
+    static constexpr double filterFmScale  = 0.4;  // Scale factor for FM modulation depth
   };
 
   //-----------------------------------------------------------------------------------------------
@@ -347,6 +361,26 @@ namespace dfl
     // Input without compensation - compensation applied at output
     double input = in;
 
+    // -------------------------------------------------------------------------
+    // Filter FM (Devilfish mod): AC-coupled input modulates cutoff
+    // Uses one-pole HPF for AC coupling (~20Hz corner), then scales the one-pole
+    // alpha coefficients per sample for audio-rate cutoff modulation.
+    // -------------------------------------------------------------------------
+    double fmMod = 1.0;
+    if (filterFmDepth > 0.0) {
+      // One-pole HPF for AC coupling: y[n] = x[n] - x_lp[n]
+      // where x_lp is one-pole LPF output
+      double acAlpha = 2.0 * PI * acCouplingFreq / sampleRate;
+      acCouplingState += acAlpha * (input - acCouplingState);
+      double acCoupledInput = input - acCouplingState;  // HPF output = input - LPF output
+
+      // Modulate alpha coefficients based on AC-coupled input
+      fmMod = std::max(0.5, std::min(1.5, 1.0 + filterFmDepth * filterFmScale * acCoupledInput));
+    }
+
+    double alphaFM  = alpha  * fmMod;
+    double alpha2FM = alpha2 * fmMod;
+
     // Calculate feedback signals (S4 -> S3 -> S2 -> S1)
     double S4 = beta4 * z4;
     double S3 = beta3 * (z3 + S4 * delta3);
@@ -372,24 +406,24 @@ namespace dfl
 
     // 1st stage (optionally one octave above for TB-303 style slope)
     double xin = un * gamma1 + S2 + epsilon1 * S1;
-    double v = (a1 * xin - z1) * (octaveMode ? alpha2 : alpha);
+    double v = (a1 * xin - z1) * (octaveMode ? alpha2FM : alphaFM);
     double lp1 = v + z1;
     z1 = lp1 + v;
 
     // 2nd stage
     xin = lp1 * gamma2 + S3 + epsilon2 * S2;
-    v = (a2 * xin - z2) * alpha;
+    v = (a2 * xin - z2) * alphaFM;
     double lp2 = v + z2;
     z2 = lp2 + v;
 
     // 3rd stage
     xin = lp2 * gamma3 + S4 + epsilon3 * S3;
-    v = (a3 * xin - z3) * alpha;
+    v = (a3 * xin - z3) * alphaFM;
     double lp3 = v + z3;
     z3 = lp3 + v;
 
     // 4th stage
-    v = (a4 * lp3 - z4) * alpha;
+    v = (a4 * lp3 - z4) * alphaFM;
     double lp4 = v + z4;
     z4 = lp4 + v;
 
@@ -432,7 +466,7 @@ namespace dfl
     // In HP mode the same knob is repurposed as the HP->LP morph (above), so the
     // bass-comp boost is not applied there (would double-use the control + run hot).
     double comp = (responseMode == RESPONSE_HP) ? 1.0
-                                                : (1.0 + passbandCompensation * K);
+                                                : (2.0 + passbandCompensation * K);
     return out * comp;
   }
 
