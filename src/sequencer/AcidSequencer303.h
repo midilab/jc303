@@ -735,9 +735,16 @@ private:
 
         if (! _running) return;
 
-        if (bpm > 0.0)
+        if (bpm > 0.0 && std::isfinite (bpm))
         {
             _internalBpm.store (static_cast<float>(bpm), std::memory_order_relaxed);
+            updateSamplesPerTick();
+        }
+        else
+        {
+            // Host handed us NaN / 0 / negative tempo — fall back to our cached
+            // tempo so the division below can never produce NaN/inf.
+            bpm = _internalBpm.load (std::memory_order_relaxed);
             updateSamplesPerTick();
         }
 
@@ -747,8 +754,9 @@ private:
 
         // Samples per quarter note at current BPM
         const double samplesPerQuarter = (_sampleRate * 60.0) / bpm;
-        // Samples per 96-PPQN tick
-        const double sampPerTick = samplesPerQuarter / 96.0;
+        // Samples per 96-PPQN tick (floored at 1.0 so a degenerate host tempo can
+        // never yield sampPerTick = NaN/inf/0 and wedge the loop below)
+        const double sampPerTick = std::max (1.0, samplesPerQuarter / 96.0);
 
         int sampleCursor = 0;
 
@@ -761,6 +769,19 @@ private:
 
             if (tickNow <= _lastHostTick)
             {
+                // Host jumped BACKWARDS (DAW loop-wrap or seek) while playing:
+                // _lastHostTick is frozen at the pre-loop position, so the plain
+                // "advance to the next tick" path below would scan for the rest
+                // of the buffer, find nothing, and go permanently mute until the
+                // transport is stopped and re-started.  Re-anchor to the loop
+                // position instead so the pattern continues from there.
+                if (tickNow < _lastHostTick)
+                {
+                    _lastHostTick = tickNow - 1;
+                    _tickCounter  = static_cast<uint32_t>(tickNow);
+                    continue; // re-evaluate the same sampleCursor against the new anchor
+                }
+
                 // Still inside the same tick — jump to where the next one starts
                 const double sampUntilNext = sampPerTick
                     - (offsetInBuffer - static_cast<double>(tickNow - tickAtStart) * sampPerTick);

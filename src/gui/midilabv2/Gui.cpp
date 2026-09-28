@@ -97,15 +97,25 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuDecButton->onPress = [this] { menuPage->valueStep(-1); };
     menuIncButton->onPress = [this] { menuPage->valueStep(1); };
     menuKnob->onValueChange = [this] { menuPage->setValue((float) menuKnob->getValue()); };
-    menuPage->onCurrentItemChanged = [this] (float v)
     {
-        const bool editable = (v >= 0.0f);
-        menuKnob->setEnabled(editable);
-        menuDecButton->setEnabled(editable);
-        menuIncButton->setEnabled(editable);
-        if (editable)
-            menuKnob->setValue(v, juce::dontSendNotification);
-    };
+        // Capture with a SafePointer: the MenuPage APVTS listener (registered on
+        // the audio processor) can outlive the editor, so a bare `this` capture
+        // would deref a freed editor when the host tears down and recreates the
+        // window and a stale parameter callback fires later.
+        const auto editorSaver = juce::Component::SafePointer<JC303Editor>(this);
+        menuPage->onCurrentItemChanged = [editorSaver] (float v)
+        {
+            auto* editor = editorSaver.getComponent();
+            if (editor == nullptr)
+                return;
+            const bool editable = (v >= 0.0f);
+            if (editor->menuKnob != nullptr)      editor->menuKnob->setEnabled(editable);
+            if (editor->menuDecButton != nullptr) editor->menuDecButton->setEnabled(editable);
+            if (editor->menuIncButton != nullptr) editor->menuIncButton->setEnabled(editable);
+            if (editable && editor->menuKnob != nullptr)
+                editor->menuKnob->setValue(v, juce::dontSendNotification);
+        };
+    }
 
     // sequencer step toggles (note/rest editing) and click-to-select display LEDs
     for (int i = 0; i < 16; ++i)
@@ -674,7 +684,7 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
     {
         const int labelGap = 2;
         const int genLabelH = 16;
-        const int genLabelW = 12 + (int) juce::Font(12.0f).getStringWidth("gen");
+        const int genLabelW = 12 + (int) juce::TextLayout::getStringWidth(juce::Font(12.0f), "gen");
         seqGenerateButtonLabel->setBounds(seqGenerateButtonLocation.first - labelGap - genLabelW,
                                           seqGenerateButtonLocation.second + (int) (seqSquareButtonSize - genLabelH) / 2,
                                           genLabelW, genLabelH);
@@ -689,7 +699,7 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
     const float seqButtonLabelY = seqPlayButtonLocation.second + seqSquareButtonSize + 6;
     auto placeLabel = [&] (juce::Label* label, int x, int width)
     {
-        const int textWidth = (int) juce::Font(12.0f).getStringWidth(label->getText()) + 20;
+        const int textWidth = (int) juce::TextLayout::getStringWidth(juce::Font(12.0f), label->getText()) + 20;
         label->setBounds(x + (width - textWidth) / 2, (int) seqButtonLabelY, textWidth, 16);
     };
     placeLabel(seqPlayButtonLabel, seqPlayButtonLocation.first, (int) seqPlayButtonWidth);
@@ -725,7 +735,7 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
         const int rowHs[5] = { ledHeight, switchStepHeight, microButtonHeight, microButtonHeight, microButtonHeight };
         int labelW = 12;
         for (int r = 0; r < 5; ++r)
-            labelW = juce::jmax(labelW, 12 + (int) rowLabels[r]->getFont().getStringWidth(rowLabels[r]->getText()));
+            labelW = juce::jmax(labelW, 12 + (int) juce::TextLayout::getStringWidth(rowLabels[r]->getFont(), rowLabels[r]->getText()));
         for (int r = 0; r < 5; ++r)
         {
             auto* lbl = rowLabels[r];

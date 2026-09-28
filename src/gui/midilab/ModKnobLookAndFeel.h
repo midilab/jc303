@@ -49,7 +49,7 @@ public:
         const Font f (getLookAndFeel().getLabelFont (*this));
 
         // Set size based on text width, not component width
-        setSize (f.getStringWidth(getText()), roundToInt (f.getHeight()));
+        setSize (juce::TextLayout::getStringWidth (f, getText()), roundToInt (f.getHeight()));
 
         // Position label centered above the component
         setTopLeftPosition (component.getX() + (component.getWidth() - getWidth()) / 2,
