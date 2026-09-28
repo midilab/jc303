@@ -14,7 +14,7 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
 
     // model indexing from RONNTags::guitarMLModelResources and RONNTags::guitarMLModelNames
     //loadModel (currentModelIndex);
-    loadModel (0);
+    loadModel (0, nullptr, true);
 
     /* uiOptions.backgroundColour = Colours::cornsilk.darker();
     uiOptions.powerColour = Colours::cyan;
@@ -106,7 +106,16 @@ void GuitarMLAmp::loadModelFromJson (const chowdsp::json& modelJson, const Strin
     modelChangeBroadcaster();
 }
 
-void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent)
+void GuitarMLAmp::requestModelSwap (const chowdsp::json& modelJson, const String& newModelName)
+{
+    // called on the UI thread; the audio thread performs the actual swap at a silent fade-out point
+    const SpinLock::ScopedLockType modelChangingLock { modelChangingMutex };
+    pendingModelJson = modelJson;
+    pendingModelName = newModelName;
+    modelSwapRequested.store (true);
+}
+
+void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent, bool immediate)
 {
     normalizationGain = 1.0f;
 
@@ -117,7 +126,10 @@ void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent)
         jassert (modelData != nullptr);
 
         const auto modelJson = chowdsp::JSONUtils::fromBinaryData (modelData, modelDataSize);
-        loadModelFromJson (modelJson, RONNTags::guitarMLModelNames[modelIndex]);
+        if (immediate)
+            loadModelFromJson (modelJson, RONNTags::guitarMLModelNames[modelIndex]);
+        else
+            requestModelSwap (modelJson, RONNTags::guitarMLModelNames[modelIndex]);
 
         // The Mesa model is a bit loud, so let's normalize the level down a bit
         // Eventually it would be good to do this sort of thing programmatically.
@@ -144,7 +156,7 @@ void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent)
                                              {
                                                  auto chosenFileStream = chosenFile.createInputStream (URL::InputStreamOptions (URL::ParameterHandling::inAddress));
                                                  const auto& modelJson = chowdsp::JSONUtils::fromInputStream (*chosenFileStream);
-                                                 loadModelFromJson (modelJson, chosenFile.getLocalFile().getFileNameWithoutExtension());
+                                                 requestModelSwap (modelJson, chosenFile.getLocalFile().getFileNameWithoutExtension());
                                              }
 #else
                 const auto chosenFile = modelChooser.getResult();
@@ -157,7 +169,7 @@ void GuitarMLAmp::loadModel (int modelIndex, Component* parentComponent)
                 try
                 {
                     const auto& modelJson = chowdsp::JSONUtils::fromFile (chosenFile);
-                    loadModelFromJson (modelJson, chosenFile.getFileNameWithoutExtension());
+                    requestModelSwap (modelJson, chosenFile.getFileNameWithoutExtension());
                 }
 #endif
                                              catch (const std::exception& exc)
@@ -211,46 +223,112 @@ void GuitarMLAmp::prepare (double sampleRate, int samplesPerBlock)
 
 void GuitarMLAmp::processAudio (AudioBuffer<float>& buffer)
 {
-    const SpinLock::ScopedTryLockType modelChangingLock { modelChangingMutex };
-    if (! modelChangingLock.isLocked())
-        return;
+    // model swap (loadModelFromJson) takes modelChangingMutex internally, and the
+    // spinlock is not re-entrant, so the swap must run after this scope releases it.
+    bool doSwap = false;
+    chowdsp::json swapJson {};
+    String swapName {};
 
-    const auto numChannels = 1; //buffer.getNumChannels();
-    const auto numSamples = buffer.getNumSamples();
-
-    if (modelArch == ModelArch::LSTM40NoCond)
     {
-        inGain.setGainDecibels (gainParam->getCurrentValue() - 12.0f);
-        inGain.process (buffer);
+        const SpinLock::ScopedTryLockType modelChangingLock { modelChangingMutex };
+        if (! modelChangingLock.isLocked())
+            return;
 
-        for (int ch = 0; ch < numChannels; ++ch)
+        const auto numChannels = 1; //buffer.getNumChannels();
+        const auto numSamples = buffer.getNumSamples();
+
+        if (modelArch == ModelArch::LSTM40NoCond)
         {
-            auto* x = buffer.getWritePointer (ch);
-            lstm40NoCondModels[ch].visit ([x, numSamples] (auto& model)
-                                          { model.process ({ x, (size_t) numSamples }, true); });
+            inGain.setGainDecibels (gainParam->getCurrentValue() - 12.0f);
+            inGain.process (buffer);
+
+            for (int ch = 0; ch < numChannels; ++ch)
+            {
+                auto* x = buffer.getWritePointer (ch);
+                lstm40NoCondModels[ch].visit ([x, numSamples] (auto& model)
+                                              { model.process ({ x, (size_t) numSamples }, true); });
+            }
+        }
+        else if (modelArch == ModelArch::LSTM40Cond)
+        {
+            conditionParam.process (numSamples);
+            const auto* conditionData = conditionParam.getSmoothedBuffer();
+
+            for (int ch = 0; ch < numChannels; ++ch)
+            {
+                auto* x = buffer.getWritePointer (ch);
+                lstm40CondModels[ch].visit ([x, conditionData, numSamples] (auto& model)
+                                            { model.process_conditioned ({ x, (size_t) numSamples }, { conditionData, (size_t) numSamples }, true); });
+            }
+        }
+
+        if (sampleRateCorrectionFilterParam->get())
+        {
+            sampleRateCorrectionFilter.processBlock (buffer);
+        }
+
+        buffer.applyGain (normalizationGain);
+
+        dcBlocker.processAudio (buffer);
+
+        // click-free model swap: fade old model out -> silent gap block (swap runs
+        // here, after this scope) -> fade the new model back in
+        const bool gapBlock = fadeState == FadeState::Gap;
+        if (gapBlock)
+        {
+            doSwap = true;
+        }
+        else if (fadeState == FadeState::Idle && modelSwapRequested.load())
+        {
+            modelSwapRequested.store (false); // claim the request; a newer racing request restarts a cycle
+            fadeState = FadeState::FadeOut;
+        }
+
+        const auto fadeSamples = jmax (1, (int) (modelFadeSeconds * (float) processSampleRate));
+        const float step = 1.0f / (float) fadeSamples;
+        const bool ramping = fadeState == FadeState::FadeOut || fadeState == FadeState::FadeIn;
+        auto* x = buffer.getWritePointer (0);
+        for (int n = 0; n < numSamples; ++n)
+        {
+            if (ramping)
+            {
+                if (fadeState == FadeState::FadeOut)
+                    overdriveFade = jmax (0.0f, overdriveFade - step);
+                else
+                    overdriveFade = jmin (1.0f, overdriveFade + step);
+                x[n] *= overdriveFade;
+            }
+            else
+            {
+                x[n] *= gapBlock ? 0.0f : overdriveFade; // gap block is silent, idle is unity
+            }
+        }
+
+        if (fadeState == FadeState::FadeOut && overdriveFade <= 0.0f)
+        {
+            overdriveFade = 0.0f;
+            fadeState = FadeState::Gap;
+        }
+        else if (fadeState == FadeState::FadeIn && overdriveFade >= 1.0f)
+        {
+            overdriveFade = 1.0f;
+            fadeState = FadeState::Idle;
+        }
+        else if (fadeState == FadeState::Gap)
+        {
+            fadeState = FadeState::FadeIn; // next block ramps in the newly swapped model
+        }
+
+        if (doSwap)
+        {
+            swapJson = pendingModelJson; // safe copy: trylock excludes the UI thread's mailbox write
+            swapName = pendingModelName;
         }
     }
-    else if (modelArch == ModelArch::LSTM40Cond)
-    {
-        conditionParam.process (numSamples);
-        const auto* conditionData = conditionParam.getSmoothedBuffer();
 
-        for (int ch = 0; ch < numChannels; ++ch)
-        {
-            auto* x = buffer.getWritePointer (ch);
-            lstm40CondModels[ch].visit ([x, conditionData, numSamples] (auto& model)
-                                        { model.process_conditioned ({ x, (size_t) numSamples }, { conditionData, (size_t) numSamples }, true); });
-        }
-    }
-
-    if (sampleRateCorrectionFilterParam->get())
-    {
-        sampleRateCorrectionFilter.processBlock (buffer);
-    }
-
-    buffer.applyGain (normalizationGain);
-
-    dcBlocker.processAudio (buffer);
+    // swap the model between blocks, at a point where the output is silent
+    if (doSwap)
+        loadModelFromJson (swapJson, swapName);
 }
 /* 
 std::unique_ptr<XmlElement> GuitarMLAmp::toXML()

@@ -6,6 +6,7 @@
 #include "rosic_BlendOscillator.h"
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
+#include "dfl_DiodeLadderFilter.h"
 #include "rosic_AnalogEnvelope.h"
 #include "rosic_DecayEnvelope.h"
 #include "rosic_LeakyIntegrator.h"
@@ -19,6 +20,19 @@ using namespace std; // for the noteList
 
 namespace rosic
 {
+  // Import dfl classes
+  using dfl::DiodeLadderFilter;
+
+  /** Filter types available for selection. */
+  enum FilterType
+  {
+    FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
+    FILTER_DIODE_OCTAVE,    // Diode ladder with 1st pole one octave above (~18dB/oct)
+    FILTER_DIODE,           // Diode ladder (4-pole, 24dB/oct)
+    FILTER_DIODE_BP,        // Diode ladder, bandpass response (12/12 dB/oct)
+    FILTER_DIODE_HP,        // Diode ladder, highpass response (24 dB/oct)
+    NUM_FILTER_TYPES
+  };
 
   /**
 
@@ -58,7 +72,30 @@ namespace rosic
     void setCutoff(double newCutoff);
 
     /** Sets the resonance amount for the filter. */
-    void setResonance(double newResonance) { filter.setResonance(newResonance); }
+    void setResonance(double newResonance);
+
+    /** Sets the filter type. */
+    void setFilterType(FilterType newType);
+
+    /** Sets the filter input drive in decibels. Pushes the signal into the
+    diode ladder's saturating nonlinearity for overdrive character. The TeeBee
+    filter is linear in TB_303 mode, so this only affects the diode models. */
+    void setFilterDrive(double newDriveDb);
+
+    /** Returns the current filter type. */
+    FilterType getFilterType() const { return currentFilterType; }
+
+    /** Sets the diode filter's passband (bass) compensation, 0..1. Boosts the
+    low end to offset the thinning that the diode ladder exhibits at high
+    resonance. Only affects the diode filter models. */
+    void setPassbandCompensation(double newCompensation);
+
+    /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
+     *  Uses AC-coupled input to modulate filter cutoff frequency. */
+    void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
+
+    /** Returns the Filter FM depth. */
+    double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
 
     /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator
     (in percent). */
@@ -155,6 +192,10 @@ namespace rosic
 
     /** Sets the LFO destination (volume, cutoff). */
     void setLfoDestination(double dest) { lfoDestination = dest; }
+
+    /** Enables/disables LFO processing (master on/off). */
+    void setLfoOn(bool on) { lfoEnabled = on; }
+    bool getLfoOn() const { return lfoEnabled; }
 
     //-----------------------------------------------------------------------------------------------
     // inquiry:
@@ -256,6 +297,7 @@ namespace rosic
     MipMappedWaveTable        waveTable1, waveTable2;
     BlendOscillator           oscillator;
     TeeBeeFilter              filter;
+    DiodeLadderFilter         diodeFilter;
     AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
     LeakyIntegrator           pitchSlewLimiter;
@@ -339,9 +381,12 @@ namespace rosic
     double muteMorph;        // smoothed 0..1 muted amount for click-free mute transitions
     double muteMorphCoeff;   // one-pole coefficient for ~2ms mute smoothing
 
+    FilterType currentFilterType;  // currently selected filter type
+
     // LFO modulation depth
     double lfoDepth;    // LFO depth (-1.0 to +1.0)
     int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch)
+    bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;
 
@@ -417,7 +462,7 @@ namespace rosic
     double volumeModFactor = 1.0;
     double pitchModFactor = 1.0;
 
-    if (lfoDepth > 0.0)
+    if (lfoEnabled && lfoDepth > 0.0)
     {
       // Get LFO output (0.0 to +1.0 unipolar, convert to bipolar for modulation)
       double lfoValue = lfo.getSample() * 2.0 - 1.0;  // Convert unipolar to bipolar
@@ -472,6 +517,7 @@ namespace rosic
     instCutoff *= 1.0 + muteMorph * (muteCutoffFactor - 1.0);
     instCutoff *= pow(2.0, tmp1+tmp2+lfoFilterMod);
     filter.setCutoff(instCutoff);
+    diodeFilter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
@@ -485,7 +531,11 @@ namespace rosic
     {
       tmp  = -oscillator.getSample();         // the raw oscillator signal
       tmp  = highpass1.getSample(tmp);        // pre-filter highpass
-      tmp  = filter.getSample(tmp);           // now it's filtered
+      // Apply selected filter
+      if(currentFilterType == FILTER_TEEBEE)
+        tmp = filter.getSample(tmp);
+      else
+        tmp = diodeFilter.getSample(tmp);
       tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
 
     }

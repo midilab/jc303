@@ -20,6 +20,22 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(softAttackSlider = createKnob("small"));
     addAndMakeVisible(slideTimeSlider = createKnob("small"));
     addAndMakeVisible(sqrDriverSlider = createKnob("small"));
+    // diode filter mods
+    addAndMakeVisible(filterDriveSlider = createKnob("small"));
+    addAndMakeVisible(bassCompSlider = createKnob("small"));
+    // labels for the diode filter mod knobs (panel has no printed labels here)
+    juce::Font panelFont(juce::Typeface::createSystemTypefaceFor(BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttf, BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttfSize));
+    panelFont.setHeight(9.0f);
+    for (auto* label : { &filterDriveLabel, &bassCompLabel })
+    {
+        label->setFont(panelFont);
+        label->setJustificationType(juce::Justification::centred);
+        label->setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+        label->setInterceptsMouseClicks(false, false);
+        addAndMakeVisible(label);
+    }
+    filterDriveLabel.setText("DRIVE", juce::dontSendNotification);
+    bassCompLabel.setText("BASS", juce::dontSendNotification);
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
     addAndMakeVisible(ledModButton = createLed("switchModState"));
@@ -31,6 +47,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
     addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, processorRef.getModelListNames()));
+    // filter model selector (MODIFICATIONS section)
+    addAndMakeVisible(filterModelSelect = new FilterModelSelect(valueTreeState));
 
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);
@@ -51,6 +69,9 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     softAttackAttachment.reset(new SliderAttachment(valueTreeState, "softAttack", *softAttackSlider));
     slideTimeAttachment.reset(new SliderAttachment(valueTreeState, "slideTime", *slideTimeSlider));
     sqrDriverAttachment.reset(new SliderAttachment(valueTreeState, "sqrDriver", *sqrDriverSlider));
+    // diode filter mods
+    filterDriveAttachment.reset(new SliderAttachment(valueTreeState, "filterDrive", *filterDriveSlider));
+    bassCompAttachment.reset(new SliderAttachment(valueTreeState, "bassComp", *bassCompSlider));
     switchModButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchModState", *switchModButton));
     // overdrive
     overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
@@ -161,9 +182,18 @@ void JC303Editor::setControlsLayout()
     pair<int, int> softAttackLocation = {330, 273};
     pair<int, int> slideTimeLocation = {391, 273};
     pair<int, int> sqrDriverLocation = {452, 273};
+    // diode filter mods (provisional: stacked in the gap after SQUARE DRIVE)
+    pair<int, int> filterDriveLocation = {500, 260};
+    pair<int, int> bassCompLocation = {500, 303};
+    const int filterModLabelWidth = 46;
+    const int filterModLabelHeight = 10;
     // MODs switch
     pair<int, int> switchLocation = {52, 273};
     pair<int, int> modLedLocation = {82, 243};
+    // filter model selector (overlaid in the MODIFICATIONS label cell)
+    pair<int, int> filterModelSelectLocation = {33, 295};
+    const int filterModelSelectWidth = 112;
+    const int filterModelSelectHeight = 20;
     // overdrive
     pair<int, int> overdriveLevelLocation = {566, 273};
     pair<int, int> overdriveDryWetLocation = {749, 273};
@@ -192,6 +222,12 @@ void JC303Editor::setControlsLayout()
     softAttackSlider->setBounds(softAttackLocation.first, softAttackLocation.second, sliderSmallSize, sliderSmallSize);
     slideTimeSlider->setBounds(slideTimeLocation.first, slideTimeLocation.second, sliderSmallSize, sliderSmallSize);
     sqrDriverSlider->setBounds(sqrDriverLocation.first, sqrDriverLocation.second, sliderSmallSize, sliderSmallSize);
+    // diode filter mods (label centred above each knob)
+    filterDriveSlider->setBounds(filterDriveLocation.first, filterDriveLocation.second, sliderSmallSize, sliderSmallSize);
+    bassCompSlider->setBounds(bassCompLocation.first, bassCompLocation.second, sliderSmallSize, sliderSmallSize);
+    const int filterDriveCentreX = filterDriveLocation.first + sliderSmallSize / 2;
+    filterDriveLabel.setBounds(filterDriveCentreX - filterModLabelWidth / 2, filterDriveLocation.second - filterModLabelHeight - 1, filterModLabelWidth, filterModLabelHeight);
+    bassCompLabel.setBounds(filterDriveCentreX - filterModLabelWidth / 2, bassCompLocation.second - filterModLabelHeight - 1, filterModLabelWidth, filterModLabelHeight);
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
     ledModButton->setBounds(modLedLocation.first, modLedLocation.second, ledWidth, ledHeight);
     // overdrive
@@ -200,6 +236,7 @@ void JC303Editor::setControlsLayout()
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
     ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
     overdriveModelSelect->setBounds(overdriveModelSelectLocation.first, overdriveModelSelectLocation.second, selectModellWidth, selectModelHeight);
+    filterModelSelect->setBounds(filterModelSelectLocation.first, filterModelSelectLocation.second, filterModelSelectWidth, filterModelSelectHeight);
 
     // Easter egg mr. smile
     acidSmile.setBounds(acidSmileLocation.first, acidSmileLocation.second, acidSmileWidth, acidSmileHeight);
