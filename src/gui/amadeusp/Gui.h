@@ -47,6 +47,7 @@ private:
     juce::Slider* accentDecaySlider;
     juce::Slider* feedbackFilterSlider;
     juce::Slider* softAttackSlider;
+    juce::Slider* accentSoftAttackSlider;
     juce::Slider* slideTimeSlider;
     juce::Slider* sqrDriverSlider;
     // diode filter mods
@@ -76,6 +77,7 @@ private:
     std::unique_ptr<SliderAttachment> accentDecayAttachment;
     std::unique_ptr<SliderAttachment> feedbackFilterAttachment;
     std::unique_ptr<SliderAttachment> softAttackAttachment;
+    std::unique_ptr<SliderAttachment> accentSoftAttackAttachment;
     std::unique_ptr<SliderAttachment> slideTimeAttachment;
     std::unique_ptr<SliderAttachment> sqrDriverAttachment;
     // diode filter mods

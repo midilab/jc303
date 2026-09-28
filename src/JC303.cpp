@@ -63,6 +63,11 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.03f),
+            std::make_unique<juce::AudioParameterFloat> ("accentSoftAttack",
+                                                        "Accent Soft Attack",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.6f),   // ~15 ms base, the original 303 value
             std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
                                                         "Filt. FeedBack",
                                                         0.0f,
@@ -227,6 +232,7 @@ JC303::JC303()
     switchModState = parameters.getRawParameterValue("switchModState");
     normalDecay = parameters.getRawParameterValue("normalDecay");
     accentDecay = parameters.getRawParameterValue("accentDecay");
+    accentSoftAttack = parameters.getRawParameterValue("accentSoftAttack");
     feedbackFilter = parameters.getRawParameterValue("feedbackFilter");
     softAttack = parameters.getRawParameterValue("softAttack");
     slideTime = parameters.getRawParameterValue("slideTime");
@@ -275,6 +281,7 @@ JC303::JC303()
     setDevilMod(*switchModState);
     setParameter(NORMAL_DECAY, *normalDecay);
     setParameter(ACCENT_DECAY, *accentDecay);
+    setParameter(ACCENT_SOFT_ATTACK, *accentSoftAttack);
     setParameter(FEEDBACK_HPF, *feedbackFilter);
     setParameter(SOFT_ATTACK, *softAttack);
     setParameter(SLIDE_TIME, *slideTime);
@@ -312,6 +319,7 @@ JC303::JC303()
     parameters.addParameterListener("volume", this);
     parameters.addParameterListener("normalDecay", this);
     parameters.addParameterListener("accentDecay", this);
+    parameters.addParameterListener("accentSoftAttack", this);
     parameters.addParameterListener("feedbackFilter", this);
     parameters.addParameterListener("softAttack", this);
     parameters.addParameterListener("slideTime", this);
@@ -376,6 +384,7 @@ JC303::~JC303()
     parameters.removeParameterListener("volume", this);
     parameters.removeParameterListener("normalDecay", this);
     parameters.removeParameterListener("accentDecay", this);
+    parameters.removeParameterListener("accentSoftAttack", this);
     parameters.removeParameterListener("feedbackFilter", this);
     parameters.removeParameterListener("softAttack", this);
     parameters.removeParameterListener("slideTime", this);
@@ -442,6 +451,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "accentDecay" && *switchModState) {
         setParameter(ACCENT_DECAY, newValue);
+    }
+    else if (parameterID == "accentSoftAttack" && *switchModState) {
+        setParameter(ACCENT_SOFT_ATTACK, newValue);
     }
     else if (parameterID == "feedbackFilter" && *switchModState) {
         setParameter(FEEDBACK_HPF, newValue);
@@ -660,6 +672,16 @@ void JC303::setParameter (Open303Parameters index, float value)
             linToLin(value, 0.0, 1.0, 30.0,      3000.0)
         );
         break;
+    case ACCENT_SOFT_ATTACK:
+        /*
+        Base time for the accent "capacitor" discharge (1..100 ms). Resonance
+        scales this 1x..3x, so effective range is ~1..300 ms. Low = sharp/direct
+        (Devil Fish style), high = slow/accumulative TB-303 accent sweeps.
+        */
+        open303Core.setAccentAttack(
+            linToExp(value, 0.0, 1.0,  1.0,    100.0)
+        );
+        break;
     case FEEDBACK_HPF:
         open303Core.setFeedbackHighpass(
             linToExp(value, 0.0, 1.0,  350.0,    100.0)
@@ -723,6 +745,7 @@ void JC303::setDevilMod(bool mode)
         decayMax = 3000.0;
         setParameter(NORMAL_DECAY, *normalDecay);
         setParameter(ACCENT_DECAY, *accentDecay);
+    setParameter(ACCENT_SOFT_ATTACK, *accentSoftAttack);
         setParameter(FEEDBACK_HPF, *feedbackFilter);
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(SLIDE_TIME, *slideTime);
@@ -743,6 +766,10 @@ void JC303::setDevilMod(bool mode)
         open303Core.setNormalAttack(3.0);
         open303Core.setSlideTime(60.0);
         open303Core.setTanhShaperDrive(36.9);
+        // stock accent capacitor: 15 ms, the original Open303 value (the Accent
+        // Soft Attack mod knob only applies in devilfish mode). Resonance still
+        // scales this in setResonance, as on the real 303.
+        open303Core.setAccentAttack(15.0);
     }
 }
 
