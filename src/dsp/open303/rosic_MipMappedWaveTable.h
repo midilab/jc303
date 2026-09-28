@@ -5,6 +5,9 @@
 #include "rosic_FunctionTemplates.h"
 #include "rosic_FourierTransformerRadix2.h"
 
+// forward declaration so MipMappedWaveTable can befriend the dfl blend oscillator:
+namespace dfl { class BlendOscillator; }
+
 namespace rosic
 {
 
@@ -21,7 +24,7 @@ namespace rosic
     // Oscillator and SuperOscillator classes need access to certain protected member-variables 
     // (namely the tableLength and related quantities), so we declare them as friend-classes:
     friend class Oscillator;
-    friend class BlendOscillator;
+    friend class dfl::BlendOscillator;
     friend class SuperOscillator;
     // \ todo: get rid of this by providing get-functions
 
