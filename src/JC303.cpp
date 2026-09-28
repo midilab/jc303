@@ -132,7 +132,7 @@ JC303::JC303()
             // filter model selection
             std::make_unique<juce::AudioParameterChoice> ("filterType",
                                                         "Filter Model",
-                                                        juce::StringArray{ "TeeBee", "Diode Octave", "Diode" },
+                                                        juce::StringArray{ "TeeBee", "Diode Octave", "Diode", "Diode BP", "Diode HP" },
                                                         FILTER_TEEBEE),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
                                                         "Filter Drive",
@@ -144,6 +144,11 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.1f),   // light passband/bass makeup by default
+            std::make_unique<juce::AudioParameterFloat> ("filterFm",
+                                                        "Filter FM",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // Devilfish audio-rate cutoff FM, off by default
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -246,6 +251,7 @@ JC303::JC303()
     filterType = parameters.getRawParameterValue("filterType");
     filterDrive = parameters.getRawParameterValue("filterDrive");
     bassComp = parameters.getRawParameterValue("bassComp");
+    filterFm = parameters.getRawParameterValue("filterFm");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -294,6 +300,7 @@ JC303::JC303()
         open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
         setParameter(FILTER_DRIVE, *filterDrive);
         setParameter(BASS_COMP, *bassComp);
+        setParameter(FILTER_FM, *filterFm);
     }
 
     // presets and overdrive models
@@ -331,6 +338,7 @@ JC303::JC303()
     parameters.addParameterListener("filterType", this);
     parameters.addParameterListener("filterDrive", this);
     parameters.addParameterListener("bassComp", this);
+    parameters.addParameterListener("filterFm", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -395,6 +403,7 @@ JC303::~JC303()
     parameters.removeParameterListener("filterType", this);
     parameters.removeParameterListener("filterDrive", this);
     parameters.removeParameterListener("bassComp", this);
+    parameters.removeParameterListener("filterFm", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -671,6 +680,10 @@ void JC303::setParameter (Open303Parameters index, float value)
         // 0..1 diode-ladder passband (bass) compensation, applied directly
         open303Core.setPassbandCompensation(value);
         break;
+    case FILTER_FM:
+        // 0..1 Devilfish-style audio-rate cutoff FM depth, applied directly
+        open303Core.setFilterFmDepth(value);
+        break;
 
     // LFO parameters
     case LFO_WAVEFORM:
@@ -706,6 +719,7 @@ void JC303::setDevilMod(bool mode)
         open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
         setParameter(FILTER_DRIVE, *filterDrive);
         setParameter(BASS_COMP, *bassComp);
+        setParameter(FILTER_FM, *filterFm);
         open303Core.setLfoOn(true);
     } else if (mode == false) {
         open303Core.setFilterType(FILTER_TEEBEE);
@@ -868,9 +882,13 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     }
 
     // ── Detect host play start / stop edge (Host sync mode only) ─────────────
+    // Auto-start on the host play edge only in TransportStart mode; in
+    // NoteTriggered the first incoming MIDI note owns the start.
     if (_sequencer.getSyncMode() == AcidSequencer303::SyncMode::Host)
     {
-        if (hostIsPlaying && ! _wasHostPlaying)
+        const bool autoStart = _sequencer.getStartMode()
+                               == AcidSequencer303::StartMode::TransportStart;
+        if (hostIsPlaying && ! _wasHostPlaying && autoStart)
             _sequencer.start();
         else if (! hostIsPlaying && _wasHostPlaying)
         {

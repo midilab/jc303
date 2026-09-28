@@ -29,6 +29,8 @@ namespace rosic
     FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
     FILTER_DIODE_OCTAVE,    // Diode ladder with 1st pole one octave above (~18dB/oct)
     FILTER_DIODE,           // Diode ladder (4-pole, 24dB/oct)
+    FILTER_DIODE_BP,        // Diode ladder, bandpass response (12/12 dB/oct)
+    FILTER_DIODE_HP,        // Diode ladder, highpass response (24 dB/oct)
     NUM_FILTER_TYPES
   };
 
@@ -87,6 +89,13 @@ namespace rosic
     low end to offset the thinning that the diode ladder exhibits at high
     resonance. Only affects the diode filter models. */
     void setPassbandCompensation(double newCompensation);
+
+    /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
+     *  Uses AC-coupled input to modulate filter cutoff frequency. */
+    void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
+
+    /** Returns the Filter FM depth. */
+    double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
 
     /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator
     (in percent). */
