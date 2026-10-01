@@ -159,19 +159,43 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         const int step = i;
         seqStepButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setRest(step, !seqStepButtons[step]->getToggleState());
+            auto& seq = processorRef.getSequencer();
+            const bool on = seqStepButtons[step]->getToggleState();
+            seq.setRest(step, !on);
+            if (! on)
+                seq.setReverse(step, false);   // a rest has no reverse state
+        };
+        // shift-click toggles the step's reverse flag (turning the note on if it was a rest)
+        seqStepButtons[i]->onShiftClick = [this, step]
+        {
+            auto& seq = processorRef.getSequencer();
+            if (seq.stepOn(step))
+            {
+                seq.setReverse(step, ! seq.reverseOn(step));
+            }
+            else
+            {
+                seq.setRest(step, false);
+                seq.setReverse(step, true);
+            }
         };
         // micro toggles write their flag directly (button ON == feature active)
         seqAccentButtons[i]->setClickTogglesState(true);
         seqSlideButtons[i]->setClickTogglesState(true);
         seqTieButtons[i]->setClickTogglesState(true);
+        seqAccentButtons[i]->setSecondaryEnabled(true);
+        seqSlideButtons[i]->setSecondaryEnabled(true);
         seqAccentButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
+            const int state = seqAccentButtons[step]->getState();
+            processorRef.getSequencer().setAccent(step, state == 1);
+            processorRef.getSequencer().setMute(step, state == SequencerStepSelector::kSecondary);
         };
         seqSlideButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setSlide(step, seqSlideButtons[step]->getState() != 0);
+            const int state = seqSlideButtons[step]->getState();
+            processorRef.getSequencer().setSlide(step, state == 1);
+            processorRef.getSequencer().setHammer(step, state == SequencerStepSelector::kSecondary);
         };
         seqTieButtons[i]->onClick = [this, step]
         {
@@ -208,9 +232,25 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // seq.isRunning(), so every click here always emits a fresh command.
     seqPlayButton->onClick = [this]
     {
+        if (seqPlayButton->getToggleState())
+            processorRef.getSequencer().setReversePlayback(false);
         processorRef.seqCommand(seqPlayButton->getToggleState()
                                     ? JC303::SeqCommand::Play
                                     : JC303::SeqCommand::Stop);
+    };
+    // shift-click: start playing in reverse, or flip the direction while running
+    seqPlayButton->onShiftClick = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        if (seq.isRunning())
+        {
+            seq.setReversePlayback(! seq.getReversePlayback());
+        }
+        else
+        {
+            seq.setReversePlayback(true);
+            processorRef.seqCommand(JC303::SeqCommand::Play);
+        }
     };
     seqRestButton->onPress = [this]
     {
@@ -328,6 +368,7 @@ void JC303Editor::timerCallback()
     const bool playing = seq.isRunning();
     if (seqPlayButton->getToggleState() != playing)
         seqPlayButton->setToggleState(playing, juce::dontSendNotification);
+    seqPlayButton->setSecondary(playing && seq.getReversePlayback());
     const int currentStep = static_cast<int>(seq.getCurrentStep());
 
     // keep the selected step inside the active pattern length
@@ -355,16 +396,15 @@ void JC303Editor::timerCallback()
         const bool noteOn = (i < length) && seq.stepOn(i);
         if (seqStepButtons[i]->getToggleState() != noteOn)
             seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
+        seqStepButtons[i]->setSecondary(noteOn && seq.reverseOn(i));
 
         // per-step accent/slide/tie toggles: ON == flag active (steps beyond the
         // active pattern length show OFF, but stay editable)
-        const bool accentOn = (i < length) && seq.accentOn(i);
-        const bool slideOn  = (i < length) && seq.slideOn(i);
+        const int  accentState = (i < length) ? (seq.accentOn(i) ? 1 : (seq.muteOn(i)   ? SequencerStepSelector::kSecondary : 0)) : 0;
+        const int  slideState  = (i < length) ? (seq.slideOn(i)  ? 1 : (seq.hammerOn(i) ? SequencerStepSelector::kSecondary : 0)) : 0;
         const bool tieOn    = (i < length) && seq.tieOn(i);
-        if (seqAccentButtons[i]->getState() != accentOn)
-            seqAccentButtons[i]->setState(accentOn ? 1 : 0);
-        if (seqSlideButtons[i]->getState() != slideOn)
-            seqSlideButtons[i]->setState(slideOn ? 1 : 0);
+        seqAccentButtons[i]->setState(accentState);
+        seqSlideButtons[i]->setState(slideState);
         if (seqTieButtons[i]->getState() != tieOn)
             seqTieButtons[i]->setState(tieOn ? 1 : 0);
     }

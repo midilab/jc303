@@ -1,10 +1,12 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "BlueGlow.h"
 
 // Small LED used to visualise the sequencer step state; clicking it selects the
 // step to edit. The image is a 3-frame vertical strip: OFF (top), ON (middle),
 // and playing (bottom). setState() repaints only when the state actually changes.
+// Tri-state buttons (accent/mute, slide/hammer) add kSecondary: the ON frame tinted blue.
 class SequencerStepSelector : public juce::Component
 {
 public:
@@ -14,10 +16,13 @@ public:
         Press
     };
 
+    static constexpr int kSecondary = 3;
+
     explicit SequencerStepSelector(Mode mode = Mode::Toggle, const juce::String& labelText = "")
         : buttonMode(mode)
     {
         imageLed = juce::ImageCache::getFromMemory(BinaryData::sequencer_step_selector_png, BinaryData::sequencer_step_selector_pngSize);
+        imageSecondary = makeBlueGlowFrame(imageLed, 3, 0, 1);
         setState(0);
 
         if (labelText.isNotEmpty())
@@ -52,6 +57,9 @@ public:
     // Toggle mode: clicking flips between state 0 (off) and 1 (on) before onClick.
     void setClickTogglesState(bool enabled) { clickToggles = enabled; }
 
+    // Click toggles off/on; shift-click toggles off/secondary (mute, hammer).
+    void setSecondaryEnabled(bool enabled) { hasSecondary = enabled; }
+
     // Clicking an LED selects the corresponding sequencer step (wired by the editor).
     std::function<void()> onClick;
 
@@ -79,7 +87,12 @@ public:
         }
 
         if (clickToggles)
-            setState(ledState == 0 ? 1 : 0);
+        {
+            if (hasSecondary && event.mods.isShiftDown())
+                setState(ledState == kSecondary ? 0 : kSecondary);
+            else
+                setState(ledState == 0 ? 1 : 0);
+        }
         if (onClick != nullptr)
             onClick();
     }
@@ -95,20 +108,28 @@ public:
         if (imageLed.isValid())
         {
             const int frameHeight = imageLed.getHeight() / 3;
-            const int sourceY = ledState * frameHeight;
+            const bool secondary = (ledState == kSecondary && imageSecondary.isValid());
+            const int sourceY = (ledState == kSecondary ? 1 : ledState) * frameHeight;
             const int drawHeight = (label != nullptr) ? jmax(0, getHeight() - 16) : getHeight();
 
-            g.drawImage(imageLed, 0,  0, getWidth(), drawHeight,
-                        0, sourceY, imageLed.getWidth(), frameHeight,
-                        false);
+            if (secondary)
+                g.drawImage(imageSecondary, 0, 0, getWidth(), drawHeight,
+                            0, 0, imageSecondary.getWidth(), imageSecondary.getHeight(),
+                            false);
+            else
+                g.drawImage(imageLed, 0,  0, getWidth(), drawHeight,
+                            0, sourceY, imageLed.getWidth(), frameHeight,
+                            false);
         }
     }
 
 private:
     juce::Image imageLed;
+    juce::Image imageSecondary;
     std::unique_ptr<juce::Label> label;
     int ledState = 0;
     bool clickToggles = false;
+    bool hasSecondary = false;
     Mode buttonMode = Mode::Toggle;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SequencerStepSelector)
