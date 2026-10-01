@@ -27,18 +27,56 @@ public:
         keyboard.setOctaveForMiddleC (5);
         keyboard.onWheel = [this] (const juce::MouseWheelDetails& wheel)
         {
-            // Some hosts/trackpads deliver sub-integer deltas per tick, so the
-            // magnitude can't be trusted — use its sign, one octave per scroll.
-            const float delta = wheel.deltaX != 0.0f
+            const float delta = std::abs (wheel.deltaX) > std::abs (wheel.deltaY)
                                     ? wheel.deltaX
                                     : (wheel.isReversed ? -wheel.deltaY : wheel.deltaY);
-            if (delta > -0.05f && delta < 0.05f)
+            if (delta == 0.0f)
                 return;
 
-            const int semitones = delta > 0.0f ? 12 : -12;
-            setStartNote (this->startNote + semitones);
-            if (onOctaveScroll)
-                onOctaveScroll (semitones);
+            const auto now = juce::Time::getMillisecondCounter();
+            const bool gap = (now - lastWheelMs) > 150;
+            lastWheelMs = now;
+
+            auto step = [this] (int semitones)
+            {
+                setStartNote (this->startNote + semitones);
+                if (onOctaveScroll)
+                    onOctaveScroll (semitones);
+            };
+
+            // macOS momentum tail: fingers are already off the pad. Ignore it and
+            // close the gesture so the next touch starts fresh with no lockout.
+            if (wheel.isInertial)
+            {
+                wheelFired = false;
+                wheelAccum = 0.0f;
+                return;
+            }
+
+            // discrete mouse wheel: one notch = one octave
+            if (! wheel.isSmooth)
+            {
+                if (now - lastStepMs > 60)
+                {
+                    lastStepMs = now;
+                    step (delta > 0.0f ? 12 : -12);
+                }
+                return;
+            }
+
+            // trackpad: one octave per swipe; a pause or direction change re-arms
+            if (gap || (delta > 0.0f) != (wheelAccum > 0.0f))
+            {
+                wheelAccum = 0.0f;
+                wheelFired = false;
+            }
+            wheelAccum += delta;
+
+            if (wheelFired || std::abs (wheelAccum) < 0.15f)
+                return;
+
+            wheelFired = true;
+            step (wheelAccum > 0.0f ? 12 : -12);
         };
         addAndMakeVisible (keyboard);
     }
@@ -151,6 +189,10 @@ private:
     int startNote { 36 };
     int shownNote = -1;
     bool _suppressCallbacks = false;
+    float wheelAccum = 0.0f;
+    juce::uint32 lastWheelMs = 0;
+    bool wheelFired = false;
+    juce::uint32 lastStepMs = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SeqKeyboard)
 };
