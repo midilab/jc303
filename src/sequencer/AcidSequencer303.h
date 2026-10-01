@@ -109,6 +109,7 @@ struct Acid303Event
     bool             mute { false };
     bool             reverse { false };   // effective: step flag XOR reverse playback
     bool             hammerInto { false };  // note arrives by legato from the previously played step
+    double           gateSamples { 0.0 };   // gate length in samples (0 = unknown, e.g. MIDI clock)
 };
 
 // =============================================================================
@@ -225,6 +226,7 @@ public:
         _sampleAccum  = 0.0;
         _lastHostTick = -1;
         _running      = true;
+        _mirrorLeft   = 0;
     }
 
     void stop()
@@ -734,6 +736,7 @@ private:
     {
         if (! _running) return;
 
+        _activeSampPerTick = _samplesPerTick;
         int sampleCursor = 0;
 
         while (sampleCursor < numSamples)
@@ -790,6 +793,7 @@ private:
         const double samplesPerQuarter = (_sampleRate * 60.0) / bpm;
         // Samples per 96-PPQN tick
         const double sampPerTick = samplesPerQuarter / 96.0;
+        _activeSampPerTick = sampPerTick;
 
         int sampleCursor = 0;
 
@@ -856,6 +860,7 @@ private:
     // each incoming MIDI clock message = 4 ticks.  Integer math, no fractions.
     void tickMidiClock (int samplePos, int shufflePulses)
     {
+        _activeSampPerTick = 0.0;   // tick length unknown on external MIDI clock
         // 96 / 24 = 4 ticks per MIDI clock message — always exact integer
         static constexpr int kTicksPerMidiClock = 4;
 
@@ -894,6 +899,7 @@ private:
         const uint8_t stepLen = _data.stepLength;
 
         const bool    rev  = _reversePlay.load (std::memory_order_relaxed);
+        const auto    isTiedRest = [this] (uint8_t p) { return _data.step[p].rest && _data.step[p].tie; };
         const int32_t sh   = static_cast<int32_t>(_data.shift) + static_cast<int32_t>(stepLen) * 1024;
 
         // Circular step position with shift (reverse playback runs last step to first)
@@ -901,7 +907,23 @@ private:
             ? static_cast<uint8_t>((static_cast<int32_t>(stepLen) - 1 - static_cast<int32_t>(stepTick % stepLen) + sh) % stepLen)
             : static_cast<uint8_t>((stepTick + static_cast<uint32_t>(sh)) % stepLen);
 
-        _stepLocation.store (stepPos, std::memory_order_relaxed);
+        // A reversed tied section played forward shows the step indicator running backwards
+        // (see the trigger below); its tied rests continue that mirrored run.
+        uint8_t shownPos = stepPos;
+        if (_mirrorLeft > 0)
+        {
+            if (! rev && isTiedRest (stepPos))
+            {
+                shownPos = static_cast<uint8_t>((_mirrorTop + stepLen - (_mirrorJ % stepLen)) % stepLen);
+                ++_mirrorJ;
+                --_mirrorLeft;
+            }
+            else
+            {
+                _mirrorLeft = 0;
+            }
+        }
+        _stepLocation.store (shownPos, std::memory_order_relaxed);
 
         if (_mute) return;
 
@@ -909,8 +931,9 @@ private:
         // far end, starting the anchor note that holds through the run.
         uint8_t       srcPos         = stepPos;
         int32_t       gateLength     = _noteLengthTicks;
+        int32_t       tiedRests      = 0;   // forward: tied rests held by this note
         const uint8_t lookaheadBound = static_cast<uint8_t>(stepLen);
-        const auto    isTied = [this] (uint8_t p) { return _data.step[p].rest && _data.step[p].tie; };
+        const auto&   isTied = isTiedRest;
 
         if (! rev)
         {
@@ -939,6 +962,7 @@ private:
                     // Each tied rest adds one full step (24 ticks)
                     gateLength = _noteLengthTicks
                                  + static_cast<int32_t>(i) * static_cast<int32_t>(_ticksPerStep);
+                    tiedRests  = i;
                 }
                 else if (! _data.step[nextStep].rest || ! _data.step[nextStep].tie)
                 {
@@ -987,6 +1011,16 @@ private:
         if (shufflePulses != 0)
             gateLength = std::max (1, gateLength + shufflePulses);
 
+        // Forward playback of a reversed note held by tied rests: the section plays back to front,
+        // so the step indicator starts at the section's end and runs backwards to the note.
+        if (! rev && cur.reverse && tiedRests > 0)
+        {
+            _mirrorTop  = static_cast<uint8_t>((stepPos + tiedRests) % stepLen);
+            _mirrorJ    = 1;
+            _mirrorLeft = tiedRests;
+            _stepLocation.store (_mirrorTop, std::memory_order_relaxed);
+        }
+
         // ── Note resolution ───────────────────────────────────────────────────
         uint8_t note = cur.note;
         if (_data.tune > 0)
@@ -1011,7 +1045,8 @@ private:
                         cur.mute,
                         cur.reverse != rev,
                         rev ? cur.hammer
-                            : _data.step[(srcPos + lookaheadBound - 1) % lookaheadBound].hammer });
+                            : _data.step[(srcPos + lookaheadBound - 1) % lookaheadBound].hammer,
+                        static_cast<double>(gateLength) * _activeSampPerTick });
                 break;
             }
         }
@@ -1109,6 +1144,11 @@ private:
     // Mute — settable from any thread
     std::atomic<bool>      _mute { false };
     std::atomic<bool>      _reversePlay { false };
+    // mirrored step-indicator run for a reversed tied section (audio thread only)
+    uint8_t                _mirrorTop  { 0 };
+    uint8_t                _mirrorJ    { 0 };
+    uint8_t                _mirrorLeft { 0 };
+    double                 _activeSampPerTick { 0.0 };   // samples per tick of the running clock (0 = unknown)
 
     // Rec state + cursor — UI and audio threads both touch them (all updates
     // are single-word atomic; the advance is guarded by _dataLock in recNote/recRest)

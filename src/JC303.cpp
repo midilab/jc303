@@ -354,7 +354,7 @@ JC303::JC303()
     _sequencer.onNoteEvent = [this] (const Acid303Event& ev)
     {
         if (_pendingCount < kPendingMax)
-            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.reverse, ev.hammerInto };
+            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.reverse, ev.hammerInto, ev.gateSamples };
     };
 
     // Reset held-note tracking whenever the sequencer silences its note stack
@@ -1001,7 +1001,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
                 // Normal new note, or slide into a different pitch.
                 // _lastStepHadSlide was set by the previous NoteOn dispatch.
                 const int slide = _lastStepHadSlide ? 1 : 0;
-                open303Core.setNextNoteModifiers (ev.mute, ev.hammerInto, ev.reverse);
+                open303Core.setNextNoteModifiers (ev.mute, ev.hammerInto, ev.reverse, ev.gateSamples);
                 open303Core.noteOn (ev.note, ev.velocity, slide);
                 _heldNote = static_cast<int>(ev.note);
 

@@ -301,7 +301,7 @@ namespace rosic
 
     /** Flags the next note-on (via noteOn) as muted and/or a hammer (instant-pitch legato when
     a note is already held). Cleared once that note-on has been handled. */
-    void setNextNoteModifiers(bool muted, bool hammer, bool reversed = false);
+    void setNextNoteModifiers(bool muted, bool hammer, bool reversed = false, double gateSamples = 0.0);
 
     /** Turns all possibly running notes off. */
     void allNotesOff();
@@ -420,6 +420,7 @@ namespace rosic
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     bool   nextNoteMuted;    // set by setNextNoteModifiers, consumed by the next noteOn
     bool   nextNoteHammer;   // likewise: legato note-on snaps pitch instead of gliding
+    double nextNoteGate;     // gate length in samples of the next note-on (0 = unknown)
     bool   nextNoteReverse;  // likewise: a triggered (non-legato) note plays time-reversed
     bool   currentNoteReverse; // reversed flag of the note (or legato group) currently sounding
     double reverseNoteMorph; // smoothed 0..1 per-note reverse amount (click-free switching)
