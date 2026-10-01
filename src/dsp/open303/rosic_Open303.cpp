@@ -36,6 +36,8 @@ Open303::Open303()
   currentFilterType = dfl::FILTER_TEEBEE;
   pendingFilterType = dfl::FILTER_TEEBEE;
   currentNoteMuted = false;
+  nextNoteMuted    = false;
+  nextNoteHammer   = false;
   muteMorph        =   0.0;   // start unmuted
   muteMorphCoeff   =   0.0;   // will be set in setSampleRate
 
@@ -343,6 +345,12 @@ void Open303::renderBlock(double* out, int numSamples)
   }
 }
 
+void Open303::setNextNoteModifiers(bool muted, bool hammer)
+{
+  nextNoteMuted  = muted;
+  nextNoteHammer = hammer;
+}
+
 void Open303::noteOn(int noteNumber, int velocity, double detune)
 {
   if( sequencer.modeWasChanged() )
@@ -389,10 +397,17 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
   {
     // check if the note-list is empty (indicating that currently no note is playing) - if so,
     // trigger a new note, otherwise, slide to the new note:
+    const bool hasAccent = velocity >= 100 && !nextNoteMuted;
     if( noteList.empty() )
-      triggerNote(noteNumber, velocity >= 100);
+      triggerNote(noteNumber, hasAccent);
+    else if( nextNoteHammer )
+      hammerToNote(noteNumber, hasAccent);
     else
-      slideToNote(noteNumber, velocity >= 100);
+      slideToNote(noteNumber, hasAccent);
+
+    currentNoteMuted = nextNoteMuted;
+    nextNoteMuted    = false;
+    nextNoteHammer   = false;
 
     currentNote = noteNumber;
     currentVel  = 64;
