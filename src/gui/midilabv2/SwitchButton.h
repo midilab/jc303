@@ -10,13 +10,13 @@ public:
         : juce::Button("")
     {
         imageSwitch = juce::ImageCache::getFromMemory(BinaryData::switch_png, BinaryData::switch_pngSize);
-        imageSecondary = makeGlowFrame(imageSwitch, 2, 0, 1);
+        imageSecondary = makeGlowFrame(imageSwitch, 2, 0, 1, juce::Colour::fromFloatRGBA(1.0f, 0.2f, 0.15f, 1.0f));
     }
 
     // Shift-click calls onShiftClick instead of toggling, when set
     std::function<void()> onShiftClick;
 
-    // Lit frame shows blue while the secondary state is set
+    // Lit frame shows red while the secondary state is set
     void setSecondary(bool on)
     {
         if (secondary == on) return;
