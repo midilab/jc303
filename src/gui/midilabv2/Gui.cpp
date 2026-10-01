@@ -155,13 +155,19 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         seqAccentButtons[i]->setClickTogglesState(true);
         seqSlideButtons[i]->setClickTogglesState(true);
         seqTieButtons[i]->setClickTogglesState(true);
+        seqAccentButtons[i]->setSecondaryEnabled(true);
+        seqSlideButtons[i]->setSecondaryEnabled(true);
         seqAccentButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
+            const int state = seqAccentButtons[step]->getState();
+            processorRef.getSequencer().setAccent(step, state == 1);
+            processorRef.getSequencer().setMute(step, state == SequencerStepSelector::kSecondary);
         };
         seqSlideButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setSlide(step, seqSlideButtons[step]->getState() != 0);
+            const int state = seqSlideButtons[step]->getState();
+            processorRef.getSequencer().setSlide(step, state == 1);
+            processorRef.getSequencer().setHammer(step, state == SequencerStepSelector::kSecondary);
         };
         seqTieButtons[i]->onClick = [this, step]
         {
@@ -348,13 +354,11 @@ void JC303Editor::timerCallback()
 
         // per-step accent/slide/tie toggles: ON == flag active (steps beyond the
         // active pattern length show OFF, but stay editable)
-        const bool accentOn = (i < length) && seq.accentOn(i);
-        const bool slideOn  = (i < length) && seq.slideOn(i);
+        const int  accentState = (i < length) ? (seq.accentOn(i) ? 1 : (seq.muteOn(i)   ? SequencerStepSelector::kSecondary : 0)) : 0;
+        const int  slideState  = (i < length) ? (seq.slideOn(i)  ? 1 : (seq.hammerOn(i) ? SequencerStepSelector::kSecondary : 0)) : 0;
         const bool tieOn    = (i < length) && seq.tieOn(i);
-        if (seqAccentButtons[i]->getState() != accentOn)
-            seqAccentButtons[i]->setState(accentOn ? 1 : 0);
-        if (seqSlideButtons[i]->getState() != slideOn)
-            seqSlideButtons[i]->setState(slideOn ? 1 : 0);
+        seqAccentButtons[i]->setState(accentState);
+        seqSlideButtons[i]->setState(slideState);
         if (seqTieButtons[i]->getState() != tieOn)
             seqTieButtons[i]->setState(tieOn ? 1 : 0);
     }

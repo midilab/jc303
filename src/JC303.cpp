@@ -348,7 +348,7 @@ JC303::JC303()
     _sequencer.onNoteEvent = [this] (const Acid303Event& ev)
     {
         if (_pendingCount < kPendingMax)
-            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset };
+            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute };
     };
 
     // Reset held-note tracking whenever the sequencer silences its note stack
@@ -357,6 +357,7 @@ JC303::JC303()
     {
         _heldNote         = -1;
         _lastStepHadSlide = false;
+        _lastStepHadHammer = false;
     };
 
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
@@ -543,12 +544,14 @@ void JC303::applySeqCommands()
     case SeqCommand::Play:
         _heldNote         = -1;
         _lastStepHadSlide = false;
+        _lastStepHadHammer = false;
         _sequencer.start();
         break;
 
     case SeqCommand::Stop:
         _heldNote         = -1;
         _lastStepHadSlide = false;
+        _lastStepHadHammer = false;
         _sequencer.stop();
         break;
 
@@ -563,6 +566,7 @@ void JC303::applySeqCommands()
             open303Core.noteOn (i, 0, 0);
         _heldNote         = -1;
         _lastStepHadSlide = false;
+        _lastStepHadHammer = false;
 
         _sequencer.acidRandomize(
             static_cast<uint8_t>(*seqGenerativeFill),
@@ -826,6 +830,7 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     _wasHostPlaying   = false;
     _heldNote         = -1;
     _lastStepHadSlide = false;
+    _lastStepHadHammer = false;
     _recHeldNote      = -1;
     _sustainArmed     = true;
     _recWasOn         = false;
@@ -897,6 +902,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             _sequencer.stop();
             _heldNote         = -1;
             _lastStepHadSlide = false;
+            _lastStepHadHammer = false;
         }
     }
     _wasHostPlaying = hostIsPlaying;
@@ -984,6 +990,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
                 // Normal new note, or slide into a different pitch.
                 // _lastStepHadSlide was set by the previous NoteOn dispatch.
                 const int slide = _lastStepHadSlide ? 1 : 0;
+                open303Core.setNextNoteModifiers (ev.mute, _lastStepHadHammer);
                 open303Core.noteOn (ev.note, ev.velocity, slide);
                 _heldNote = static_cast<int>(ev.note);
 
@@ -995,6 +1002,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             // Save the slide flag of the step we just played so the *next*
             // NoteOn dispatch knows whether to use slide=1.
             _lastStepHadSlide = _sequencer.slideOn (_sequencer.getCurrentStep());
+            _lastStepHadHammer = _sequencer.hammerOn (_sequencer.getCurrentStep());
         }
         else // NoteOff — always forward, never drop
         {
@@ -1008,6 +1016,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             {
                 _heldNote         = -1;
                 _lastStepHadSlide = false;
+                _lastStepHadHammer = false;
             }
         }
     };
@@ -1248,6 +1257,8 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
         stepXml->setAttribute ("accent", td.step[i].accent ? 1 : 0);
         stepXml->setAttribute ("slide",  td.step[i].slide  ? 1 : 0);
         stepXml->setAttribute ("tie",    td.step[i].tie    ? 1 : 0);
+        stepXml->setAttribute ("mute",   td.step[i].mute   ? 1 : 0);
+        stepXml->setAttribute ("hammer", td.step[i].hammer ? 1 : 0);
         seqXml->addChildElement (stepXml.release());
     }
 
@@ -1303,6 +1314,8 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                         _sequencer.setAccent (i, stepXml->getIntAttribute ("accent", 0) != 0);
                         _sequencer.setSlide  (i, stepXml->getIntAttribute ("slide",  0) != 0);
                         _sequencer.setTie    (i, stepXml->getIntAttribute ("tie",    0) != 0);
+                        _sequencer.setMute   (i, stepXml->getIntAttribute ("mute",   0) != 0);
+                        _sequencer.setHammer (i, stepXml->getIntAttribute ("hammer", 0) != 0);
                     }
                 }
             }

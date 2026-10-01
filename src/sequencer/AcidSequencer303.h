@@ -61,6 +61,9 @@ static constexpr uint8_t  SEQ303_ACCENT_VELOCITY_THRESHOLD = 100;
 static constexpr double SEQ303_NOTE_LENGTH_RATIO = 12.0 / 24.0;  // 50% gate
 static constexpr double SEQ303_SLIDE_EXTRA_RATIO = 20.0 / 24.0;  // slide overhang
 
+// Muted (choked) note: gate length multiplier, matches Open303 muteGateFactor.
+static constexpr double SEQ303_MUTE_GATE_FACTOR  = 0.5;
+
 // =============================================================================
 // Data structures
 // =============================================================================
@@ -71,6 +74,8 @@ struct StepData303
     bool    accent { false };
     bool    slide  { false };
     bool    tie    { false };
+    bool    mute   { false };   // choked note; excludes accent
+    bool    hammer { false };   // legato with instant pitch change; excludes slide
 };
 
 struct NoteStackEntry303
@@ -100,6 +105,7 @@ struct Acid303Event
     uint8_t          note;
     uint8_t          velocity;
     int              sampleOffset;   // sample position within the current buffer
+    bool             mute { false };
 };
 
 // =============================================================================
@@ -328,11 +334,15 @@ public:
     /** rest(step, state) — mirrors Engine303::rest() */
     void setRest   (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].rest   = v; }
     /** setAccent(step, state) */
-    void setAccent (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].accent = v; }
+    void setAccent (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].accent = v; if (v) _data.step[step].mute = false; }
     /** setSlide(step, state) */
-    void setSlide  (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].slide  = v; }
+    void setSlide  (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].slide  = v; if (v) _data.step[step].hammer = false; }
     /** setTie(step, state) */
     void setTie    (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].tie    = v; }
+    /** setMute(step, state) -- choked note; clears accent */
+    void setMute   (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].mute   = v; if (v) _data.step[step].accent = false; }
+    /** setHammer(step, state) -- instant-pitch legato; clears slide */
+    void setHammer (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].hammer = v; if (v) _data.step[step].slide  = false; }
 
     /** setStepData(step, note) — mirrors Engine303::setStepData() */
     void setStepData (int step, uint8_t note)
@@ -365,6 +375,10 @@ public:
     bool slideOn  (int step) const { return  _data.step[step].slide;  }
     /** tieOn(step) */
     bool tieOn    (int step) const { return  _data.step[step].tie;    }
+    /** muteOn(step) */
+    bool muteOn   (int step) const { return  _data.step[step].mute;   }
+    /** hammerOn(step) */
+    bool hammerOn (int step) const { return  _data.step[step].hammer; }
 
     // =========================================================================
     // ── Track-level getters / setters — mirrors engine_303 API ───────────────
@@ -465,6 +479,8 @@ public:
         s.accent = accent;
         s.slide  = legato;
         s.tie    = false;
+        s.mute   = false;
+        s.hammer = false;
         _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
 
@@ -492,6 +508,8 @@ public:
         s.accent = false;
         s.slide  = false;
         s.tie    = false;
+        s.mute   = false;
+        s.hammer = false;
         _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
 
@@ -529,6 +547,8 @@ public:
             _data.step[idx].rest   = true;
             _data.step[idx].tie    = true;
             _data.step[idx].slide  = false;
+            _data.step[idx].mute   = false;
+            _data.step[idx].hammer = false;
             _data.step[idx].note   = anchorNote;
         }
     }
@@ -596,6 +616,8 @@ public:
                     _data.step[i].accent = false;
                     _data.step[i].slide  = false;
                     _data.step[i].tie    = false;
+                    _data.step[i].mute   = false;
+                    _data.step[i].hammer = false;
 
                     // Tie: only probable when previous step had a note or a tie
                     const int lastIdx = (i == 0) ? SEQ303_STEP_MAX - 1 : i - 1;
@@ -626,6 +648,8 @@ public:
                 _data.step[i].accent = (randPercent() < accentProbability);
                 _data.step[i].slide  = (randPercent() < slideProbability);
                 _data.step[i].tie    = false;
+                _data.step[i].mute   = false;
+                _data.step[i].hammer = false;
             }
         }
 
@@ -880,7 +904,7 @@ private:
             // Slide overhang only applies to the immediate next step.  Once a
             // tied rest has been consumed the accumulated tie gate owns the
             // length; re-applying the slide overhang there truncates the note.
-            if (cur.slide && i == 1 && ! _data.step[nextStep].rest)
+            if ((cur.slide || cur.hammer) && i == 1 && ! _data.step[nextStep].rest)
             {
                 gateLength = _noteLengthTicks + _slideExtraTicks;
                 break;
@@ -896,6 +920,10 @@ private:
                 break;
             }
         }
+
+        // A muted note is choked: shorten the plain gate (legato/tie extensions stay intact)
+        if (cur.mute && gateLength == _noteLengthTicks)
+            gateLength = std::max (1, static_cast<int32_t>(gateLength * SEQ303_MUTE_GATE_FACTOR));
 
         if (shufflePulses != 0)
             gateLength = std::max (1, gateLength + shufflePulses);
@@ -919,8 +947,9 @@ private:
                 _stack[i].length = gateLength;
                 emit ({ Acid303EventType::NoteOn,
                         note,
-                        cur.accent ? SEQ303_ACCENT_VELOCITY : SEQ303_NOTE_VELOCITY,
-                        sampleOffset });
+                        (cur.accent && ! cur.mute) ? SEQ303_ACCENT_VELOCITY : SEQ303_NOTE_VELOCITY,
+                        sampleOffset,
+                        cur.mute });
                 break;
             }
         }
@@ -967,6 +996,8 @@ private:
             _data.step[i].accent = false;
             _data.step[i].slide  = false;
             _data.step[i].tie    = false;
+            _data.step[i].mute   = false;
+            _data.step[i].hammer = false;
         }
     }
 

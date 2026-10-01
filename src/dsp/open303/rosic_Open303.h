@@ -285,6 +285,10 @@ namespace rosic
     /** Accepts note-on events (note offs are also handled here as note ons with velocity zero). */
     void noteOn(int noteNumber, int velocity, double detune);
 
+    /** Flags the next note-on (via noteOn) as muted and/or a hammer (instant-pitch legato when
+    a note is already held). Cleared once that note-on has been handled. */
+    void setNextNoteModifiers(bool muted, bool hammer);
+
     /** Turns all possibly running notes off. */
     void allNotesOff();
 
@@ -371,6 +375,8 @@ namespace rosic
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   hammerToNextNote; // indicate that we need to hammer (legato w/ instant pitch) to the next note
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
+    bool   nextNoteMuted;    // set by setNextNoteModifiers, consumed by the next noteOn
+    bool   nextNoteHammer;   // likewise: legato note-on snaps pitch instead of gliding
     bool   currentNoteMuted; // flag indicating the current note is muted (shorter gate, darker, quieter)
 
     // TT-303 mute parameters

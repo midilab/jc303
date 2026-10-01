@@ -153,6 +153,7 @@ private:
         uint8_t          note;
         uint8_t          velocity;
         int              sampleOffset;
+        bool             mute;
     };
     static constexpr int kPendingMax = 64;
     PendingNote  _pendingNotes[kPendingMax];
@@ -169,6 +170,7 @@ private:
     // Slide flag from the last dispatched step, carried across buffer
     // boundaries so the *receiving* step's NoteOn gets slide=1 correctly.
     bool _lastStepHadSlide { false };
+    bool _lastStepHadHammer { false };
 
     // Mute flag for sequencer (used during acidRandomize to prevent note triggering)
     std::atomic<bool> _sequencerMuted { false };
