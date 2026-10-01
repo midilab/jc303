@@ -33,10 +33,10 @@ public:
         {
             imageButton = juce::ImageCache::getFromMemory(BinaryData::sequencerbutton2_png, BinaryData::sequencerbutton2_pngSize);
         }
-        imageSecondary = makeBlueGlowFrame(imageButton, 2, 0, 1);
+        imageSecondary = makeBlueGlowFrame(imageButton, 2, 0, 1, juce::Colour::fromFloatRGBA(0.2f, 1.0f, 0.3f, 1.0f));
     }
 
-    // Shift-click runs onShiftClick instead of toggling; the lit frame shows blue
+    // Shift-click runs onShiftClick instead of toggling; the lit frame shows green
     // while the secondary state is set.
     std::function<void()> onShiftClick;
     void setSecondary(bool on)
