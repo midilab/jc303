@@ -796,6 +796,27 @@ static void testTiedReversedNoteCarriesGateAndMirrorsIndicator()
     CHECK (r.seq.getCurrentStep() == 3);            // back to normal after the section
 }
 
+static void testFlaggedTiedSectionMirrorsIndicatorInReverse()
+{
+    Rig r;
+    r.step (0, 40); r.seq.setReverse (0, true);
+    r.seq.setTie (1, true); r.seq.setTie (2, true);
+    r.step (3, 47);
+    r.seq.setTrackLength (4);
+    r.seq.setReversePlayback (true);
+    r.seq.start();
+
+    r.run (kStep / 2);
+    CHECK (r.seq.getCurrentStep() == 3);
+    r.run (kStep);                                   // the run's far end triggers the anchor note
+    CHECK (r.ons().size() == 2 && ! r.ons()[1].reverse);
+    CHECK (r.seq.getCurrentStep() == 0);            // reverse of reverse: starts at the note
+    r.run (kStep);
+    CHECK (r.seq.getCurrentStep() == 1);
+    r.run (kStep);
+    CHECK (r.seq.getCurrentStep() == 2);
+}
+
 int main()
 {
     testStepSpacingAndGate();
@@ -803,6 +824,7 @@ int main()
     testReversePlaybackStartsTiedRunAtFarEnd();
     testHammerIntoFlagsTheReceivingNote();
     testTiedReversedNoteCarriesGateAndMirrorsIndicator();
+    testFlaggedTiedSectionMirrorsIndicatorInReverse();
     testAccentVelocity();
     testSlideOverlapsNextNote();
     testRestIsSilent();
