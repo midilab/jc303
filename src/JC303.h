@@ -300,6 +300,7 @@ private:
         bool             mute;
         bool             reverse;
         bool             hammerInto;
+        double           gateSamples;
     };
     static constexpr int kPendingMax = 64;
     PendingNote  _pendingNotes[kPendingMax];

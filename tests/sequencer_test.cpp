@@ -21,7 +21,7 @@ static int failures = 0;
 static constexpr int kStep = 6000;
 static constexpr int kTick = 250;
 
-struct Ev { bool on; int note; int vel; long at; bool reverse; bool hammerInto; };
+struct Ev { bool on; int note; int vel; long at; bool reverse; bool hammerInto; double gate; };
 
 // Runs a sequencer and records the note events it emits.
 struct Rig
@@ -34,7 +34,7 @@ struct Rig
     Rig()
     {
         seq.onNoteEvent = [this] (const Acid303Event& e)
-        { evs.push_back ({ e.type == Acid303EventType::NoteOn, e.note, e.velocity, pos + e.sampleOffset, e.reverse, e.hammerInto }); };
+        { evs.push_back ({ e.type == Acid303EventType::NoteOn, e.note, e.velocity, pos + e.sampleOffset, e.reverse, e.hammerInto, e.gateSamples }); };
         seq.onAllNotesOff = [this] { ++allNotesOffCalls; };
         seq.prepare (48000.0, 960.0);
         seq.setTempo (120.0f);
@@ -774,12 +774,35 @@ static void testHammerIntoFlagsTheReceivingNote()
     CHECK (r.offAfter (40, ons[0].at) > ons[1].at);  // hammer overlaps like a slide
 }
 
+static void testTiedReversedNoteCarriesGateAndMirrorsIndicator()
+{
+    Rig r;
+    r.step (0, 40); r.seq.setReverse (0, true);
+    r.seq.setTie (1, true); r.seq.setTie (2, true);
+    r.step (3, 47);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+
+    r.run (kStep / 2);
+    const auto ons = r.ons();
+    CHECK (ons.size() == 1 && ons[0].reverse);
+    CHECK (ons[0].gate == (2 * 24 + 12) * kTick);   // the whole tied section
+    CHECK (r.seq.getCurrentStep() == 2);            // indicator starts at the section's end
+    r.run (kStep);
+    CHECK (r.seq.getCurrentStep() == 1);
+    r.run (kStep);
+    CHECK (r.seq.getCurrentStep() == 0);
+    r.run (kStep);
+    CHECK (r.seq.getCurrentStep() == 3);            // back to normal after the section
+}
+
 int main()
 {
     testStepSpacingAndGate();
     testReversePlaybackRunsBackwards();
     testReversePlaybackStartsTiedRunAtFarEnd();
     testHammerIntoFlagsTheReceivingNote();
+    testTiedReversedNoteCarriesGateAndMirrorsIndicator();
     testAccentVelocity();
     testSlideOverlapsNextNote();
     testRestIsSilent();

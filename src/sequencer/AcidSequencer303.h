@@ -115,6 +115,7 @@ struct Acid303Event
     bool             mute       { false };
     bool             reverse    { false };   // effective: step flag XOR reverse playback
     bool             hammerInto { false };   // note arrives by legato from a hammer step: snap pitch
+    double           gateSamples { 0.0 };    // gate length in samples (0 = unknown)
 };
 
 // =============================================================================
@@ -254,6 +255,7 @@ public:
         _lastMidiClock = -1;
         _swingRelatch = true;
         _pitchPlayhead = -1;
+        _mirrorLeft   = 0;
         _running      = true;
     }
 
@@ -1049,8 +1051,25 @@ private:
         const bool    rev     = _reversePlay.load (std::memory_order_relaxed);
         const uint8_t fwdPos  = static_cast<uint8_t>(stepTick % stepLen);
         const uint8_t stepPos = rev ? static_cast<uint8_t>(stepLen - 1 - fwdPos) : fwdPos;
+        const auto    isTied  = [this] (uint8_t p) { return _data.step[p].rest && _data.step[p].tie; };
 
-        _stepLocation.store (stepPos, std::memory_order_relaxed);
+        // A reversed tied section played forward shows the step indicator running backwards
+        // (see the trigger below); its tied rests continue that mirrored run.
+        uint8_t shownPos = stepPos;
+        if (_mirrorLeft > 0)
+        {
+            if (! rev && isTied (stepPos))
+            {
+                shownPos = static_cast<uint8_t>((_mirrorTop + stepLen - (_mirrorJ % stepLen)) % stepLen);
+                ++_mirrorJ;
+                --_mirrorLeft;
+            }
+            else
+            {
+                _mirrorLeft = 0;
+            }
+        }
+        _stepLocation.store (shownPos, std::memory_order_relaxed);
 
         if (_mute) return;
 
@@ -1070,7 +1089,7 @@ private:
         uint8_t       srcPos         = stepPos;
         uint32_t      endStep        = stepTick;   // clock step the gate ends in
         int32_t       tail           = _noteLengthTicks;
-        const auto    isTied = [this] (uint8_t p) { return _data.step[p].rest && _data.step[p].tie; };
+        uint8_t       tiedRests      = 0;   // forward: tied rests held by this note
 
         if (! rev)
         {
@@ -1085,7 +1104,8 @@ private:
 
                 if (next.rest && next.tie)
                 {
-                    endStep = stepTick + i;
+                    endStep   = stepTick + i;
+                    tiedRests = i;
                     continue;
                 }
 
@@ -1142,6 +1162,16 @@ private:
         const int32_t gateLength = std::max (1, static_cast<int32_t>(std::floor (gateTicks)));
         const double  offFrac    = std::max (0.0, gateTicks - gateLength);
 
+        // Forward playback of a reversed note held by tied rests: the section plays back to front,
+        // so the step indicator starts at the section's end and runs backwards to the note.
+        if (! rev && cur.reverse && tiedRests > 0)
+        {
+            _mirrorTop  = static_cast<uint8_t>((stepPos + tiedRests) % stepLen);
+            _mirrorJ    = 1;
+            _mirrorLeft = tiedRests;
+            _stepLocation.store (_mirrorTop, std::memory_order_relaxed);
+        }
+
         // ── Note resolution ───────────────────────────────────────────────────
         const int pitchStep = _data.pitchLength != 0 ? resolvePitchStep (stepTick - fwdPos + srcPos, stepLen) : srcPos;
         _pitchPlayhead.store (pitchStep, std::memory_order_relaxed);
@@ -1171,7 +1201,8 @@ private:
                       sampleOffset + onsetFrac * _tickSamples,
                       cur.mute,
                       cur.reverse != rev,
-                      rev ? cur.hammer : _prevHammer);
+                      rev ? cur.hammer : _prevHammer,
+                      gateTicks * _tickSamples);
                 _prevHammer = cur.hammer;
                 break;
             }
@@ -1240,7 +1271,8 @@ private:
     /** Queue an event at `sampleOffset` (may fall past this block), or on the
      *  CPU-timing interrupt grid. */
     void send (Acid303EventType type, uint8_t note, uint8_t velocity, double sampleOffset,
-               bool mute = false, bool reverse = false, bool hammerInto = false)
+               bool mute = false, bool reverse = false, bool hammerInto = false,
+               double gateSamples = 0.0)
     {
         const double t = static_cast<double>(_blockStart) + sampleOffset;
         int64_t      at;
@@ -1264,7 +1296,7 @@ private:
                 if (_queue[i].ev.type == Acid303EventType::NoteOff && _queue[i].at > at)
                     _queue[i].at = at;
 
-        const Acid303Event ev { type, note, velocity, 0, mute, reverse, hammerInto };
+        const Acid303Event ev { type, note, velocity, 0, mute, reverse, hammerInto, gateSamples };
         if (_queueCount == kQueueSize)
         {
             emit ({ type, note, velocity,
@@ -1490,6 +1522,10 @@ private:
     // Mute — settable from any thread
     std::atomic<bool>      _mute { false };
     std::atomic<bool>      _reversePlay { false };
+    // mirrored step-indicator run for a reversed tied section (audio thread only)
+    uint8_t                _mirrorTop  { 0 };
+    uint8_t                _mirrorJ    { 0 };
+    uint8_t                _mirrorLeft { 0 };
 
     // Rec state + cursor — UI and audio threads both touch them (all updates
     // are single-word atomic; the advance is guarded by _dataLock in recNote/recRest)

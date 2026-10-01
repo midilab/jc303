@@ -57,6 +57,7 @@ Open303::Open303()
   nextNoteMuted    = false;
   nextNoteHammer   = false;
   nextNoteReverse  = false;
+  nextNoteGate     = 0.0;
   currentNoteReverse = false;
   reverseNoteMorph = 0.0;
   muteMorph        =   0.0;   // start unmuted
@@ -366,8 +367,9 @@ void Open303::renderBlock(double* out, int numSamples)
   }
 }
 
-void Open303::setNextNoteModifiers(bool muted, bool hammer, bool reversed)
+void Open303::setNextNoteModifiers(bool muted, bool hammer, bool reversed, double gateSamples)
 {
+  nextNoteGate    = gateSamples;
   nextNoteMuted   = muted;
   nextNoteHammer  = hammer;
   nextNoteReverse = reversed;
@@ -424,6 +426,11 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
     {
       triggerNote(noteNumber, hasAccent);
       currentNoteReverse = nextNoteReverse;   // a legato group keeps its first note's flag
+      if( nextNoteGate > 0.0 )                // exact gate length (tied sections included) beats the prediction
+      {
+        reverseLength = nextNoteGate;
+        updateReverseShape();
+      }
     }
     else if( nextNoteHammer )
       hammerToNote(noteNumber, hasAccent);
@@ -434,6 +441,7 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
     nextNoteMuted    = false;
     nextNoteHammer   = false;
     nextNoteReverse  = false;
+    nextNoteGate     = 0.0;
 
     currentNote = noteNumber;
     currentVel  = 64;

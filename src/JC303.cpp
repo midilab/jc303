@@ -486,7 +486,7 @@ JC303::JC303()
     _sequencer.onNoteEvent = [this] (const Acid303Event& ev)
     {
         if (_pendingCount < kPendingMax)
-            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.reverse, ev.hammerInto };
+            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.reverse, ev.hammerInto, ev.gateSamples };
     };
 
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
@@ -1268,7 +1268,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             if (_sequencerMuted.load(std::memory_order_acquire))
                 return;
 
-            open303Core.setNextNoteModifiers (ev.mute, ev.hammerInto, ev.reverse);
+            open303Core.setNextNoteModifiers (ev.mute, ev.hammerInto, ev.reverse, ev.gateSamples);
             open303Core.noteOn (ev.note, ev.velocity, 0);
 
             // MIDI out: NoteOn
