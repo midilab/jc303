@@ -1054,14 +1054,19 @@ private:
         const uint8_t stepPos = rev ? static_cast<uint8_t>(stepLen - 1 - fwdPos) : fwdPos;
         const auto    isTied  = [this] (uint8_t p) { return _data.step[p].rest && _data.step[p].tie; };
 
-        // A reversed tied section played forward shows the step indicator running backwards
-        // (see the trigger below); its tied rests continue that mirrored run.
+        // A tied section whose effective direction is the opposite of the pattern's (a reversed
+        // note played forward, or a flagged note under reverse playback) mirrors the step
+        // indicator across the section (see the trigger below); the rest of its steps continue it.
+        // Section steps are N..N+K; the pattern visits them N+J (forward) or N+K-J (reverse).
         uint8_t shownPos = stepPos;
         if (_mirrorLeft > 0)
         {
-            if (! rev && isTied (stepPos))
+            const uint8_t expected = static_cast<uint8_t>(
+                (rev ? _mirrorBase + _mirrorK - _mirrorJ : _mirrorBase + _mirrorJ) % stepLen);
+            if (rev == _mirrorRev && stepPos == expected)
             {
-                shownPos = static_cast<uint8_t>((_mirrorTop + stepLen - (_mirrorJ % stepLen)) % stepLen);
+                shownPos = static_cast<uint8_t>(
+                    (rev ? _mirrorBase + _mirrorJ : _mirrorBase + _mirrorK - _mirrorJ) % stepLen);
                 ++_mirrorJ;
                 --_mirrorLeft;
             }
@@ -1135,8 +1140,9 @@ private:
                     ++k;
                 }
                 if (_data.step[p].rest) return;
-                srcPos  = p;
-                endStep = stepTick + k;
+                srcPos    = p;
+                endStep   = stepTick + k;
+                tiedRests = static_cast<uint8_t>(k);
             }
             else if (_data.step[stepPos].rest || isTied (after))
             {
@@ -1163,14 +1169,19 @@ private:
         const int32_t gateLength = std::max (1, static_cast<int32_t>(std::floor (gateTicks)));
         const double  offFrac    = std::max (0.0, gateTicks - gateLength);
 
-        // Forward playback of a reversed note held by tied rests: the section plays back to front,
-        // so the step indicator starts at the section's end and runs backwards to the note.
-        if (! rev && cur.reverse && tiedRests > 0)
+        // A flagged note held by tied rests plays its section the opposite way round: forward
+        // playback shows the indicator running from the section's end back to the note, reverse
+        // playback (reverse of reverse) from the note forward to the section's end.
+        if (cur.reverse && tiedRests > 0)
         {
-            _mirrorTop  = static_cast<uint8_t>((stepPos + tiedRests) % stepLen);
+            _mirrorBase = srcPos;
+            _mirrorK    = tiedRests;
             _mirrorJ    = 1;
-            _mirrorLeft = tiedRests;
-            _stepLocation.store (_mirrorTop, std::memory_order_relaxed);
+            _mirrorLeft = tiedRests;   // the K steps that follow the trigger step
+            _mirrorRev  = rev;
+            _stepLocation.store (rev ? srcPos
+                                     : static_cast<uint8_t>((srcPos + tiedRests) % stepLen),
+                                 std::memory_order_relaxed);
         }
 
         // ── Note resolution ───────────────────────────────────────────────────
@@ -1521,9 +1532,11 @@ private:
     std::atomic<bool>      _mute { false };
     std::atomic<bool>      _reversePlay { false };
     // mirrored step-indicator run for a reversed tied section (audio thread only)
-    uint8_t                _mirrorTop  { 0 };
+    uint8_t                _mirrorBase { 0 };
+    uint8_t                _mirrorK    { 0 };
     uint8_t                _mirrorJ    { 0 };
     uint8_t                _mirrorLeft { 0 };
+    bool                   _mirrorRev  { false };
 
     // Rec state + cursor — UI and audio threads both touch them (all updates
     // are single-word atomic; the advance is guarded by _dataLock in recNote/recRest)
