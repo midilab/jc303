@@ -1258,12 +1258,18 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
 
     // ── Persist sequencer state as a child element ────────────────────────────
     auto seqXml = std::make_unique<juce::XmlElement> ("AcidSeq303");
-    seqXml->setAttribute ("stepLength",  _sequencer.getTrackLength());
-    seqXml->setAttribute ("transpose",   _sequencer.getTranspose());
+
+    // Snapshot the pattern under _dataLock: the audio thread can be writing
+    // these fields right now (MIDI rec, generate, live UI edits) while the host
+    // saves state — Ardour snapshots on every parameter change.
+    TrackData303 td;
+    _sequencer.copyTrackData (td);
+
+    seqXml->setAttribute ("stepLength",  td.stepLength);
+    seqXml->setAttribute ("transpose",   td.transpose);
     //seqXml->setAttribute ("tune",        _sequencer.getTune());
     //seqXml->setAttribute ("temperament", _sequencer.getTemperamentId());
 
-    const TrackData303& td = _sequencer.getTrackData();
     for (int i = 0; i < SEQ303_STEP_MAX; ++i)
     {
         auto stepXml = std::make_unique<juce::XmlElement> ("Step");

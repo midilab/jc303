@@ -54,7 +54,7 @@ public:
     void componentMovedOrResized (Component& component, bool wasMoved, bool wasResized)
     {
         const Font f (getLookAndFeel().getLabelFont (*this));
-        const int textWidth = f.getStringWidth(getText());
+        const int textWidth = (int) juce::TextLayout::getStringWidth(f, getText());
 
         setSize (textWidth+20, f.getHeight());
 

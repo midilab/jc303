@@ -503,7 +503,7 @@ private:
         titleLabel.setBounds(titleArea);
         auto itemRow = b.removeFromTop(lineHeight);
 
-        const int textWidth = juce::roundToInt(customFont.getStringWidth(valueLabel.getText()));
+        const int textWidth = juce::roundToInt(juce::TextLayout::getStringWidth(customFont, valueLabel.getText()));
         const auto border = valueLabel.getBorderSize();
         const int valueWidth = juce::jmin(textWidth + border.getLeftAndRight() + 2, itemRow.getWidth());
         const int rowGap2 = 6;
