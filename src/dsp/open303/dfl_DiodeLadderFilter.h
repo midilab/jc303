@@ -205,6 +205,12 @@ namespace dfl
     // a-coefficients), so it is a constant, not a runtime-derived value.
     static constexpr double HP_LP_SUBTRACT = 0.2;  // = 1/5, DC-null for the HP mix
 
+    // Static output trims so BP/HP sit near LP loudness on a saw (measured RMS
+    // sweep over cutoff/resonance): HP ran +5..9 dB hot at low/mid cutoff and
+    // clipped; BP ran 3..29 dB quiet.
+    static constexpr double HP_OUTPUT_GAIN = 0.5;  // -6 dB
+    static constexpr double BP_OUTPUT_GAIN = 2.0;  // +6 dB
+
     // Filter parameters
     double cutoff;
     double drive;
@@ -442,7 +448,7 @@ namespace dfl
     switch (responseMode)
     {
       case RESPONSE_BP:
-        out = 0.25 * (lp2 - 2.0 * lp3 + lp4);
+        out = BP_OUTPUT_GAIN * 0.25 * (lp2 - 2.0 * lp3 + lp4);
         break;
       case RESPONSE_HP:
       {
@@ -452,7 +458,7 @@ namespace dfl
         // share ~the same passband gain, so the sweep stays even in level.
         double hp = un - HP_LP_SUBTRACT * (4.0 * lp1 - 6.0 * lp2 + 4.0 * lp3 - lp4);
         double t  = std::clamp(passbandCompensation, 0.0, 1.0);
-        out = (1.0 - t) * hp + t * lp4;
+        out = (1.0 - t) * HP_OUTPUT_GAIN * hp + t * lp4;
         break;
       }
       case RESPONSE_LP:
