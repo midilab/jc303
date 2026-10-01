@@ -10,7 +10,7 @@ public:
         : juce::Button("")
     {
         imageSwitch = juce::ImageCache::getFromMemory(BinaryData::switch_png, BinaryData::switch_pngSize);
-        imageSecondary = makeBlueGlowFrame(imageSwitch, 2, 0, 1);
+        imageSecondary = makeBlueGlowFrame(imageSwitch, 2, 0, 1, juce::Colour::fromFloatRGBA(1.0f, 0.2f, 0.15f, 1.0f));
     }
 
     // Shift-click runs onShiftClick instead of toggling; the lit frame shows blue
