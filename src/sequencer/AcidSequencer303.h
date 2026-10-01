@@ -76,6 +76,7 @@ struct StepData303
     bool    tie    { false };
     bool    mute   { false };   // choked note; excludes accent
     bool    hammer { false };   // legato with instant pitch change; excludes slide
+    bool    reverse { false };  // note plays time-reversed (swell into the gate end)
 };
 
 struct NoteStackEntry303
@@ -106,6 +107,8 @@ struct Acid303Event
     uint8_t          velocity;
     int              sampleOffset;   // sample position within the current buffer
     bool             mute { false };
+    bool             reverse { false };   // effective: step flag XOR reverse playback
+    bool             hammerInto { false };  // note arrives by legato from the previously played step
 };
 
 // =============================================================================
@@ -233,6 +236,11 @@ public:
 
     bool isRunning() const { return _running.load(); }
 
+    /** Reverse playback: steps run last to first and every note's envelope is
+     *  reversed, except steps flagged reverse (reverse of reverse = forward). */
+    void setReversePlayback (bool v) { _reversePlay.store (v); }
+    bool getReversePlayback() const  { return _reversePlay.load(); }
+
     // =========================================================================
     // processBlock — called every buffer from JC303::processBlock
     // =========================================================================
@@ -341,6 +349,8 @@ public:
     void setTie    (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].tie    = v; }
     /** setMute(step, state) -- choked note; clears accent */
     void setMute   (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].mute   = v; if (v) _data.step[step].accent = false; }
+    /** setReverse(step, state) -- reversed-envelope note */
+    void setReverse(int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].reverse = v; }
     /** setHammer(step, state) -- instant-pitch legato; clears slide */
     void setHammer (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].hammer = v; if (v) _data.step[step].slide  = false; }
 
@@ -377,6 +387,8 @@ public:
     bool tieOn    (int step) const { return  _data.step[step].tie;    }
     /** muteOn(step) */
     bool muteOn   (int step) const { return  _data.step[step].mute;   }
+    /** reverseOn(step) */
+    bool reverseOn(int step) const { return  _data.step[step].reverse; }
     /** hammerOn(step) */
     bool hammerOn (int step) const { return  _data.step[step].hammer; }
 
@@ -481,6 +493,7 @@ public:
         s.tie    = false;
         s.mute   = false;
         s.hammer = false;
+        s.reverse = false;
         _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
 
@@ -510,6 +523,7 @@ public:
         s.tie    = false;
         s.mute   = false;
         s.hammer = false;
+        s.reverse = false;
         _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
 
@@ -549,6 +563,7 @@ public:
             _data.step[idx].slide  = false;
             _data.step[idx].mute   = false;
             _data.step[idx].hammer = false;
+            _data.step[idx].reverse = false;
             _data.step[idx].note   = anchorNote;
         }
     }
@@ -618,6 +633,7 @@ public:
                     _data.step[i].tie    = false;
                     _data.step[i].mute   = false;
                     _data.step[i].hammer = false;
+                    _data.step[i].reverse = false;
 
                     // Tie: only probable when previous step had a note or a tie
                     const int lastIdx = (i == 0) ? SEQ303_STEP_MAX - 1 : i - 1;
@@ -650,6 +666,7 @@ public:
                 _data.step[i].tie    = false;
                 _data.step[i].mute   = false;
                 _data.step[i].hammer = false;
+                _data.step[i].reverse = false;
             }
         }
 
@@ -876,50 +893,92 @@ private:
     {
         const uint8_t stepLen = _data.stepLength;
 
-        // Circular step position with shift
-        const uint8_t stepPos = static_cast<uint8_t>(
-            (stepTick
-             + static_cast<uint32_t>(static_cast<int32_t>(_data.shift)
-                                     + static_cast<int32_t>(stepLen) * 1024))
-            % stepLen);
+        const bool    rev  = _reversePlay.load (std::memory_order_relaxed);
+        const int32_t sh   = static_cast<int32_t>(_data.shift) + static_cast<int32_t>(stepLen) * 1024;
+
+        // Circular step position with shift (reverse playback runs last step to first)
+        const uint8_t stepPos = rev
+            ? static_cast<uint8_t>((static_cast<int32_t>(stepLen) - 1 - static_cast<int32_t>(stepTick % stepLen) + sh) % stepLen)
+            : static_cast<uint8_t>((stepTick + static_cast<uint32_t>(sh)) % stepLen);
 
         _stepLocation.store (stepPos, std::memory_order_relaxed);
 
         if (_mute) return;
 
-        const StepData303& cur = _data.step[stepPos];
-        if (cur.rest) return;
-
-        // ── Gate length in 96-PPQN ticks: slide / tie lookahead ──────────────
-        // Identical to the original engine_303 logic.
-        // _noteLengthTicks = 12 (50% of 24 ticks), _slideExtraTicks = 20.
+        // The step whose note is played; in reverse a tied run is played from its
+        // far end, starting the anchor note that holds through the run.
+        uint8_t       srcPos         = stepPos;
         int32_t       gateLength     = _noteLengthTicks;
         const uint8_t lookaheadBound = static_cast<uint8_t>(stepLen);
-        uint8_t       nextStep       = stepPos;
+        const auto    isTied = [this] (uint8_t p) { return _data.step[p].rest && _data.step[p].tie; };
 
-        for (uint8_t i = 1; i <= lookaheadBound; ++i)
+        if (! rev)
         {
-            nextStep = static_cast<uint8_t>((nextStep + 1) % lookaheadBound);
+            const StepData303& at = _data.step[stepPos];
+            if (at.rest) return;
 
-            // Slide overhang only applies to the immediate next step.  Once a
-            // tied rest has been consumed the accumulated tie gate owns the
-            // length; re-applying the slide overhang there truncates the note.
-            if ((cur.slide || cur.hammer) && i == 1 && ! _data.step[nextStep].rest)
+            // ── Gate length in 96-PPQN ticks: slide / tie lookahead ──────────
+            // Identical to the original engine_303 logic.
+            // _noteLengthTicks = 12 (50% of 24 ticks), _slideExtraTicks = 20.
+            uint8_t nextStep = stepPos;
+
+            for (uint8_t i = 1; i <= lookaheadBound; ++i)
             {
-                gateLength = _noteLengthTicks + _slideExtraTicks;
-                break;
-            }
-            else if (_data.step[nextStep].tie && _data.step[nextStep].rest)
-            {
-                // Each tied rest adds one full step (24 ticks)
-                gateLength = _noteLengthTicks
-                             + static_cast<int32_t>(i) * static_cast<int32_t>(_ticksPerStep);
-            }
-            else if (! _data.step[nextStep].rest || ! _data.step[nextStep].tie)
-            {
-                break;
+                nextStep = static_cast<uint8_t>((nextStep + 1) % lookaheadBound);
+
+                // Slide overhang only applies to the immediate next step.  Once a
+                // tied rest has been consumed the accumulated tie gate owns the
+                // length; re-applying the slide overhang there truncates the note.
+                if ((at.slide || at.hammer) && i == 1 && ! _data.step[nextStep].rest)
+                {
+                    gateLength = _noteLengthTicks + _slideExtraTicks;
+                    break;
+                }
+                else if (_data.step[nextStep].tie && _data.step[nextStep].rest)
+                {
+                    // Each tied rest adds one full step (24 ticks)
+                    gateLength = _noteLengthTicks
+                                 + static_cast<int32_t>(i) * static_cast<int32_t>(_ticksPerStep);
+                }
+                else if (! _data.step[nextStep].rest || ! _data.step[nextStep].tie)
+                {
+                    break;
+                }
             }
         }
+        else
+        {
+            const uint8_t after = static_cast<uint8_t>((stepPos + 1) % lookaheadBound);
+            const uint8_t prior = static_cast<uint8_t>((stepPos + lookaheadBound - 1) % lookaheadBound);
+
+            if (isTied (stepPos) && ! isTied (after))
+            {
+                // Played first in reverse: the far end of a tied run starts the anchor note,
+                // held through every tied rest.
+                uint8_t p = stepPos;
+                int32_t k = 0;
+                while (isTied (p) && k < lookaheadBound)
+                {
+                    p = static_cast<uint8_t>((p + lookaheadBound - 1) % lookaheadBound);
+                    ++k;
+                }
+                if (_data.step[p].rest) return;
+                srcPos     = p;
+                gateLength = _noteLengthTicks + k * static_cast<int32_t>(_ticksPerStep);
+            }
+            else if (_data.step[stepPos].rest || isTied (after))
+            {
+                return;   // plain rest, mid-run tied rest, or a note already played by its run
+            }
+            else if (! _data.step[prior].rest
+                     && (_data.step[prior].slide || _data.step[prior].hammer))
+            {
+                // legato flags sit on the forward sender, which is the next note played
+                gateLength = _noteLengthTicks + _slideExtraTicks;
+            }
+        }
+
+        const StepData303& cur = _data.step[srcPos];
 
         // A muted note is choked: shorten the plain gate (legato/tie extensions stay intact)
         if (cur.mute && gateLength == _noteLengthTicks)
@@ -949,7 +1008,10 @@ private:
                         note,
                         (cur.accent && ! cur.mute) ? SEQ303_ACCENT_VELOCITY : SEQ303_NOTE_VELOCITY,
                         sampleOffset,
-                        cur.mute });
+                        cur.mute,
+                        cur.reverse != rev,
+                        rev ? cur.hammer
+                            : _data.step[(srcPos + lookaheadBound - 1) % lookaheadBound].hammer });
                 break;
             }
         }
@@ -998,6 +1060,7 @@ private:
             _data.step[i].tie    = false;
             _data.step[i].mute   = false;
             _data.step[i].hammer = false;
+            _data.step[i].reverse = false;
         }
     }
 
@@ -1045,6 +1108,7 @@ private:
 
     // Mute — settable from any thread
     std::atomic<bool>      _mute { false };
+    std::atomic<bool>      _reversePlay { false };
 
     // Rec state + cursor — UI and audio threads both touch them (all updates
     // are single-word atomic; the advance is guarded by _dataLock in recNote/recRest)

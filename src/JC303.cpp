@@ -52,6 +52,9 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.75f),
+            std::make_unique<juce::AudioParameterBool> ("reverseGate",
+                                                        "Reverse Gate",
+                                                        false),
             // MODs parameters
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
@@ -223,6 +226,7 @@ JC303::JC303()
     decay = parameters.getRawParameterValue("decay");
     accent = parameters.getRawParameterValue("accent");
     volume = parameters.getRawParameterValue("volume");
+    reverseGate = parameters.getRawParameterValue("reverseGate");
     // MODs parameters
     switchModState = parameters.getRawParameterValue("switchModState");
     normalDecay = parameters.getRawParameterValue("normalDecay");
@@ -272,6 +276,7 @@ JC303::JC303()
     setParameter(DECAY, *decay);
     setParameter(ACCENT, *accent);
     setParameter(VOLUME, *volume);
+    setParameter(REVERSE_GATE, *reverseGate);
     setDevilMod(*switchModState);
     setParameter(NORMAL_DECAY, *normalDecay);
     setParameter(ACCENT_DECAY, *accentDecay);
@@ -310,6 +315,7 @@ JC303::JC303()
     parameters.addParameterListener("decay", this);
     parameters.addParameterListener("accent", this);
     parameters.addParameterListener("volume", this);
+    parameters.addParameterListener("reverseGate", this);
     parameters.addParameterListener("normalDecay", this);
     parameters.addParameterListener("accentDecay", this);
     parameters.addParameterListener("feedbackFilter", this);
@@ -348,7 +354,7 @@ JC303::JC303()
     _sequencer.onNoteEvent = [this] (const Acid303Event& ev)
     {
         if (_pendingCount < kPendingMax)
-            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute };
+            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.reverse, ev.hammerInto };
     };
 
     // Reset held-note tracking whenever the sequencer silences its note stack
@@ -357,7 +363,6 @@ JC303::JC303()
     {
         _heldNote         = -1;
         _lastStepHadSlide = false;
-        _lastStepHadHammer = false;
     };
 
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
@@ -375,6 +380,7 @@ JC303::~JC303()
     parameters.removeParameterListener("decay", this);
     parameters.removeParameterListener("accent", this);
     parameters.removeParameterListener("volume", this);
+    parameters.removeParameterListener("reverseGate", this);
     parameters.removeParameterListener("normalDecay", this);
     parameters.removeParameterListener("accentDecay", this);
     parameters.removeParameterListener("feedbackFilter", this);
@@ -434,6 +440,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "volume") {
         setParameter(VOLUME, newValue);
+    }
+    else if (parameterID == "reverseGate") {
+        setParameter(REVERSE_GATE, newValue);
     }
     else if (parameterID == "switchModState") {
         setDevilMod(newValue > 0.5f);
@@ -544,14 +553,12 @@ void JC303::applySeqCommands()
     case SeqCommand::Play:
         _heldNote         = -1;
         _lastStepHadSlide = false;
-        _lastStepHadHammer = false;
         _sequencer.start();
         break;
 
     case SeqCommand::Stop:
         _heldNote         = -1;
         _lastStepHadSlide = false;
-        _lastStepHadHammer = false;
         _sequencer.stop();
         break;
 
@@ -566,7 +573,6 @@ void JC303::applySeqCommands()
             open303Core.noteOn (i, 0, 0);
         _heldNote         = -1;
         _lastStepHadSlide = false;
-        _lastStepHadHammer = false;
 
         _sequencer.acidRandomize(
             static_cast<uint8_t>(*seqGenerativeFill),
@@ -632,6 +638,13 @@ void JC303::setParameter (Open303Parameters index, float value)
     case VOLUME:
         open303Core.setVolume(
             linToLin(value, 0.0, 1.0, -60.0,      0.0)
+        );
+        break;
+    case REVERSE_GATE:
+        // 0 = normal note, 1 = fully time-reversed amp/filter/accent contour (swell up then cut).
+        // Swell timing follows the Decay knob (the main envelope's time constant).
+        open303Core.setReverseGate(
+            linToLin(value, 0.0, 1.0,   0.0,      1.0)
         );
         break;
 
@@ -830,7 +843,6 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     _wasHostPlaying   = false;
     _heldNote         = -1;
     _lastStepHadSlide = false;
-    _lastStepHadHammer = false;
     _recHeldNote      = -1;
     _sustainArmed     = true;
     _recWasOn         = false;
@@ -902,7 +914,6 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             _sequencer.stop();
             _heldNote         = -1;
             _lastStepHadSlide = false;
-            _lastStepHadHammer = false;
         }
     }
     _wasHostPlaying = hostIsPlaying;
@@ -990,7 +1001,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
                 // Normal new note, or slide into a different pitch.
                 // _lastStepHadSlide was set by the previous NoteOn dispatch.
                 const int slide = _lastStepHadSlide ? 1 : 0;
-                open303Core.setNextNoteModifiers (ev.mute, _lastStepHadHammer);
+                open303Core.setNextNoteModifiers (ev.mute, ev.hammerInto, ev.reverse);
                 open303Core.noteOn (ev.note, ev.velocity, slide);
                 _heldNote = static_cast<int>(ev.note);
 
@@ -1002,7 +1013,6 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             // Save the slide flag of the step we just played so the *next*
             // NoteOn dispatch knows whether to use slide=1.
             _lastStepHadSlide = _sequencer.slideOn (_sequencer.getCurrentStep());
-            _lastStepHadHammer = _sequencer.hammerOn (_sequencer.getCurrentStep());
         }
         else // NoteOff — always forward, never drop
         {
@@ -1016,7 +1026,6 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             {
                 _heldNote         = -1;
                 _lastStepHadSlide = false;
-                _lastStepHadHammer = false;
             }
         }
     };
@@ -1156,6 +1165,13 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     const auto numSamples = buffer.getNumSamples();
 
+    // pass the host tempo to the core so the reverse-gate can snap its length prediction to the grid
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+            if (auto bpm = pos->getBpm())
+                open303Core.setReverseTempo(*bpm);
+
+
     // clear buffer
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -1259,6 +1275,7 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
         stepXml->setAttribute ("tie",    td.step[i].tie    ? 1 : 0);
         stepXml->setAttribute ("mute",   td.step[i].mute   ? 1 : 0);
         stepXml->setAttribute ("hammer", td.step[i].hammer ? 1 : 0);
+        stepXml->setAttribute ("reverse", td.step[i].reverse ? 1 : 0);
         seqXml->addChildElement (stepXml.release());
     }
 
@@ -1316,6 +1333,7 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                         _sequencer.setTie    (i, stepXml->getIntAttribute ("tie",    0) != 0);
                         _sequencer.setMute   (i, stepXml->getIntAttribute ("mute",   0) != 0);
                         _sequencer.setHammer (i, stepXml->getIntAttribute ("hammer", 0) != 0);
+                        _sequencer.setReverse(i, stepXml->getIntAttribute ("reverse", 0) != 0);
                     }
                 }
             }

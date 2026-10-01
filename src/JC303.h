@@ -22,6 +22,7 @@ enum Open303Parameters
   DECAY,
   ACCENT,
   VOLUME,
+  REVERSE_GATE,
   // MODs
   SWITCH_MOD,
   NORMAL_DECAY,
@@ -154,6 +155,8 @@ private:
         uint8_t          velocity;
         int              sampleOffset;
         bool             mute;
+        bool             reverse;
+        bool             hammerInto;
     };
     static constexpr int kPendingMax = 64;
     PendingNote  _pendingNotes[kPendingMax];
@@ -170,7 +173,6 @@ private:
     // Slide flag from the last dispatched step, carried across buffer
     // boundaries so the *receiving* step's NoteOn gets slide=1 correctly.
     bool _lastStepHadSlide { false };
-    bool _lastStepHadHammer { false };
 
     // Mute flag for sequencer (used during acidRandomize to prevent note triggering)
     std::atomic<bool> _sequencerMuted { false };
@@ -199,6 +201,7 @@ private:
     std::atomic<float>* decay = nullptr;
     std::atomic<float>* accent = nullptr;
     std::atomic<float>* volume = nullptr;
+    std::atomic<float>* reverseGate = nullptr;
     // MODs
     std::atomic<float>* switchModState = nullptr;
     std::atomic<float>* normalDecay = nullptr;

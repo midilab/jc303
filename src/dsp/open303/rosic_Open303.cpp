@@ -13,6 +13,24 @@ Open303::Open303()
   level            =   -12.0;
   levelByVel       =    12.0;
   accent           =     0.0;
+  reverseGate      =     0.0;
+  reversePhase     =     0.0;
+  reverseLength    = 44100.0;  // 1s placeholder until the first note sets it (see triggerNote)
+  reverseMeasured  =     0.0;
+  reverseHistPos   =       0;
+  reverseHistCount =       0;
+  reverseTempoBpm  =     0.0;
+  for(int i=0; i<8; i++) reverseHist[i] = 0.0;
+  reverseLastOnPhase =   0.0;
+  reverseStep      =     0.0;
+  reverseShape     =     3.5;
+  reverseDen       = exp(reverseShape) - 1.0;
+  reverseShapeMain =     3.5;
+  reverseFreqFrom  =   440.0;
+  reverseLogRatio  =     0.0;
+  reverseGlideBase =     0.0;
+  reverseInstFreq  =   440.0;
+  reverseSwellNow  =     0.0;
   slideTime        =    60.0;
   cutoff           =  1000.0;
   envUpFraction    =     2.0/3.0;
@@ -33,6 +51,9 @@ Open303::Open303()
   currentNoteMuted = false;
   nextNoteMuted    = false;
   nextNoteHammer   = false;
+  nextNoteReverse  = false;
+  currentNoteReverse = false;
+  reverseNoteMorph = 0.0;
   muteMorph        =   0.0;   // start unmuted
   muteMorphCoeff   =   0.0;   // will be set in setSampleRate
 
@@ -218,10 +239,11 @@ void Open303::setPitchBend(double newPitchBend)
 //------------------------------------------------------------------------------------------------------------
 // others:
 
-void Open303::setNextNoteModifiers(bool muted, bool hammer)
+void Open303::setNextNoteModifiers(bool muted, bool hammer, bool reversed)
 {
-  nextNoteMuted  = muted;
-  nextNoteHammer = hammer;
+  nextNoteMuted   = muted;
+  nextNoteHammer  = hammer;
+  nextNoteReverse = reversed;
 }
 
 void Open303::noteOn(int noteNumber, int velocity, double detune)
@@ -272,7 +294,10 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
     // trigger a new note, otherwise, slide to the new note:
     const bool hasAccent = velocity >= 100 && !nextNoteMuted;
     if( noteList.empty() )
+    {
       triggerNote(noteNumber, hasAccent);
+      currentNoteReverse = nextNoteReverse;   // a legato group keeps its first note's flag
+    }
     else if( nextNoteHammer )
       hammerToNote(noteNumber, hasAccent);
     else
@@ -281,6 +306,7 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
     currentNoteMuted = nextNoteMuted;
     nextNoteMuted    = false;
     nextNoteHammer   = false;
+    nextNoteReverse  = false;
 
     currentNote = noteNumber;
     currentVel  = 64;
@@ -334,11 +360,104 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   mainEnv.trigger();
   ampEnv.noteOn(true, noteNumber, 64);
   idle = false;
+
+  // fresh (non-slide) note: no reversed portamento glide
+  reverseFreqFrom  = oscFreq;
+  reverseLogRatio  = 0.0;
+  reverseGlideBase = 0.0;
+  reverseInstFreq  = oscFreq;
+  reverseSwellNow  = 0.0;
+
+  // reset the reverse-gate swell and predict its length so its peak lands at the note's end. In
+  // sequencer mode the step length is known exactly; otherwise we repeat the previous note/group's
+  // measured length (steady patterns land dead-on), falling back to a Decay-derived time.
+  reversePhase       = 0.0;
+  reverseLastOnPhase = 0.0;
+  reverseStep        = 0.0;
+  if( sequencer.getSequencerMode() != AcidSequencer::OFF && sequencer.isRunning() )
+    reverseLength = sequencer.getStepLengthInSamples();
+  else
+    reverseLength = predictReverseLength();
+  updateReverseShape();
+}
+
+double Open303::predictReverseLength()
+{
+  // first note (no history yet): fall back to a Decay-derived time
+  if( reverseHistCount == 0 )
+    return 0.001 * mainEnv.getDecayTimeConstant() * sampleRate * 2.5;
+
+  // short-biased estimate: a low percentile of recent measured lengths. Because the swell holds at
+  // its peak (reverseHoldAt in getSample), UNDER-predicting is graceful (peak lands early, then
+  // holds) while OVER-predicting starves a short note of its swell - so we deliberately lean short
+  // to keep varied patterns (e.g. a short note after a long one) from dropping out.
+  double sorted[8];
+  int n = reverseHistCount;
+  for(int i=0; i<n; i++) sorted[i] = reverseHist[i];
+  for(int i=0; i<n-1; i++)                 // tiny insertion sort (n <= 8)
+    for(int j=i+1; j<n; j++)
+      if( sorted[j] < sorted[i] ) { double t=sorted[i]; sorted[i]=sorted[j]; sorted[j]=t; }
+  double base = sorted[n/4];               // ~25th percentile
+
+  // tempo snap: quantize to the nearest 16th-note multiple (min one 16th) when the host tempo is
+  // known - acid lines are grid-locked, so this removes measurement jitter and lands the peak on
+  // the musical grid.
+  if( reverseTempoBpm > 0.0 )
+  {
+    double t16 = sampleRate * 60.0 / reverseTempoBpm / 4.0;   // one 16th note, in samples
+    if( t16 >= 1.0 )
+    {
+      double mult = floor(base / t16 + 0.5);
+      if( mult < 1.0 ) mult = 1.0;
+      base = mult * t16;
+    }
+  }
+  return base;
+}
+
+void Open303::updateReverseShape()
+{
+  if( reverseLength < 1.0 )
+    reverseLength = 1.0;
+
+  // auto-shape for a faithful reversal: the time-reverse of the forward amplitude decay e^(-t/tau)
+  // over a note of length L is the floored swell e^(K*(r-1)) with K = L/tau (see getSample). So set
+  // the swell shape from the note length divided by the amp-envelope decay time - this makes the
+  // reverse gate match an actual "played backwards" note regardless of tempo or decay setting.
+  // The upper clamp bounds the swell's head floor at e^-K (~-22 dB at K=2.5): this keeps reverse
+  // notes as loud as forward ones and guarantees a note that ends before the predicted
+  // reverseLength still rises well above silence instead of sounding "skipped".
+  double ampDecaySamples = 0.001 * ampEnv.getDecay() * sampleRate;
+  if( ampDecaySamples < 1.0 )
+    ampDecaySamples = 1.0;
+  double k = reverseLength / ampDecaySamples;
+  if( k < 0.1 ) k = 0.1;    // keep the glide normalizer (e^k - 1) well-conditioned
+  if( k > 2.5 ) k = 2.5;    // head floor >= e^-2.5: loudness/audibility guarantee
+  reverseShape = k;
+  reverseDen   = exp(k) - 1.0;   // cached normalizer for the swell
+
+  // the reversed filter/accent sweep mirrors the *main* (filter) envelope's decay, so the Decay
+  // knob shapes the reverse sweep just like it shapes the forward one. A wider clamp keeps more
+  // sweep drama; audibility is governed by the amplitude swell above, not by this one.
+  double mainDecaySamples = 0.001 * mainEnv.getDecayTimeConstant() * sampleRate;
+  if( mainDecaySamples < 1.0 )
+    mainDecaySamples = 1.0;
+  double km = reverseLength / mainDecaySamples;
+  if( km < 0.1 ) km = 0.1;
+  if( km > 4.0 ) km = 4.0;
+  reverseShapeMain = km;
 }
 
 void Open303::slideToNote(int noteNumber, bool hasAccent)
 {
   oscFreq = pitchToFreq(noteNumber, tuning);
+
+  // inverse portamento: glide from wherever the pitch currently is toward the new note, spanning the
+  // remaining swell so it arrives during the note's audible tail (see getSample). Anchoring to the
+  // current pitch and current swell keeps the glide continuous even across mid-group slides.
+  reverseFreqFrom  = reverseInstFreq;
+  reverseGlideBase = reverseSwellNow;
+  reverseLogRatio  = log(oscFreq / reverseFreqFrom);
 
   if( hasAccent )
   {
@@ -353,6 +472,28 @@ void Open303::slideToNote(int noteNumber, bool hasAccent)
     ampEnv.setRelease(normalAmpRelease);
   }
   idle = false;
+
+  extendReverseGroup();
+}
+
+void Open303::extendReverseGroup()
+{
+  // A slide extends the current note into a tied group, so the reverse swell must keep climbing
+  // toward the (still unknown) group end rather than peaking at the first note. We don't reset the
+  // phase; instead we measure the note-on spacing and project the horizon at least one step past the
+  // latest note. Only adopt the projection when we have no better prediction (first group) or when
+  // the group is outlasting the predicted length - this keeps the swell from plateauing early while
+  // preserving an accurate cross-group prediction for steady patterns.
+  double step = reversePhase - reverseLastOnPhase;
+  reverseLastOnPhase = reversePhase;
+  if( step > 0.0 )
+    reverseStep = step;
+  double projected = reversePhase + reverseStep;
+  if( reverseMeasured <= 0.0 || projected > reverseLength )
+  {
+    reverseLength = projected;
+    updateReverseShape();
+  }
 }
 
 void Open303::hammerToNote(int noteNumber, bool hasAccent)
@@ -361,6 +502,11 @@ void Open303::hammerToNote(int noteNumber, bool hasAccent)
   // Set frequency AND immediately set slew limiter state to avoid any glide
   oscFreq = pitchToFreq(noteNumber, tuning);
   pitchSlewLimiter.setState(oscFreq);  // Instant pitch change, no slew
+
+  // reverse mode: no inverse portamento either - the pitch is already at the target
+  reverseFreqFrom  = oscFreq;
+  reverseGlideBase = reverseSwellNow;
+  reverseLogRatio  = 0.0;
 
   // Handle accent (same as slideToNote)
   if( hasAccent )
@@ -376,6 +522,8 @@ void Open303::hammerToNote(int noteNumber, bool hasAccent)
     ampEnv.setRelease(normalAmpRelease);
   }
   idle = false;
+
+  extendReverseGroup();
 }
 
 void Open303::releaseNote(int noteNumber)
@@ -387,6 +535,14 @@ void Open303::releaseNote(int noteNumber)
   {
     //filterEnvelope.noteOff();
     ampEnv.noteOff();
+    // remember how long this note lasted, to predict the next note's reverse-swell length:
+    if( reversePhase > 0.0 )
+    {
+      reverseMeasured = reversePhase;
+      reverseHist[reverseHistPos] = reversePhase;   // feed the prediction history ring buffer
+      reverseHistPos = (reverseHistPos + 1) % 8;
+      if( reverseHistCount < 8 ) reverseHistCount++;
+    }
   }
   else
   {

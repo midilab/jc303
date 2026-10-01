@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "BlueGlow.h"
 
 // Small LED used to visualise the sequencer step state; clicking it selects the
 // step to edit. The image is a 3-frame vertical strip: OFF (top), ON (middle),
@@ -21,7 +22,7 @@ public:
         : buttonMode(mode)
     {
         imageLed = juce::ImageCache::getFromMemory(BinaryData::sequencer_step_selector_png, BinaryData::sequencer_step_selector_pngSize);
-        buildSecondaryImage();
+        imageSecondary = makeBlueGlowFrame(imageLed, 3, 0, 1);
         setState(0);
 
         if (labelText.isNotEmpty())
@@ -123,41 +124,6 @@ public:
     }
 
 private:
-    // Secondary frame: the OFF frame plus only the light the ON frame adds (the
-    // lit glow), recoloured blue, so the button body and edge stay untouched.
-    void buildSecondaryImage()
-    {
-        if (! imageLed.isValid())
-            return;
-
-        const int w = imageLed.getWidth();
-        const int h = imageLed.getHeight() / 3;
-        const auto off = imageLed.getClippedImage({ 0, 0, w, h });
-        const auto on  = imageLed.getClippedImage({ 0, h, w, h });
-        imageSecondary = juce::Image(juce::Image::ARGB, w, h, true);
-
-        for (int y = 0; y < h; ++y)
-        {
-            for (int x = 0; x < w; ++x)
-            {
-                const auto c0 = off.getPixelAt(x, y);
-                const auto c1 = on.getPixelAt(x, y);
-                const float added = juce::jmax(0.0f, lum(c1) - lum(c0));
-                const auto lit = juce::Colour::fromFloatRGBA(
-                    juce::jlimit(0.0f, 1.0f, c0.getFloatRed()   + added * 0.25f),
-                    juce::jlimit(0.0f, 1.0f, c0.getFloatGreen() + added * 0.55f),
-                    juce::jlimit(0.0f, 1.0f, c0.getFloatBlue()  + added * 1.0f),
-                    c1.getFloatAlpha());
-                imageSecondary.setPixelAt(x, y, lit);
-            }
-        }
-    }
-
-    static float lum(juce::Colour c)
-    {
-        return 0.299f * c.getFloatRed() + 0.587f * c.getFloatGreen() + 0.114f * c.getFloatBlue();
-    }
-
     juce::Image imageLed;
     juce::Image imageSecondary;
     std::unique_ptr<juce::Label> label;

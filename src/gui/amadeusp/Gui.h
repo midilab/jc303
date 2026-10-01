@@ -42,6 +42,9 @@ private:
     juce::Slider* decaySlider;
     juce::Slider* accentSlider;
     juce::Slider* volumeSlider;
+    // reverse gate toggle
+    SwitchButton* switchReverseButton;
+    SwitchLed* ledReverseButton;
     // MODs
     juce::Slider* normalDecaySlider;
     juce::Slider* accentDecaySlider;
@@ -71,6 +74,8 @@ private:
     std::unique_ptr<SliderAttachment> decayAttachment;
     std::unique_ptr<SliderAttachment> accentAttachment;
     std::unique_ptr<SliderAttachment> volumeAttachment;
+    // reverse gate toggle
+    std::unique_ptr<ButtonAttachment> switchReverseButtonAttachment;
     // MODs
     std::unique_ptr<SliderAttachment> normalDecayAttachment;
     std::unique_ptr<SliderAttachment> accentDecayAttachment;
