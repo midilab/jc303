@@ -321,6 +321,7 @@ private:
         bool             mute    { false };
         bool             hammer  { false };
         bool             reverse { false };
+        double           gateSamples { 0.0 };
     };
     static constexpr int kPendingMax = 64;
     PendingNote  _pendingNotes[kPendingMax];

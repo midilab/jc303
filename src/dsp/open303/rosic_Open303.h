@@ -505,9 +505,10 @@ namespace rosic
     /** Accepts note-on events (note offs are also handled here as note ons with velocity zero).
     A muted note is choked (darker, quieter, never accented); a hammer onto a held note snaps to
     the new pitch instead of sliding; a reversed note (or the legato group it starts) plays
-    time-reversed. */
+    time-reversed. gateSamples is the note's gate length when known (0 = unknown), used as the
+    reverse swell length. */
     void noteOn(int noteNumber, int velocity, double detune, bool muted = false, bool hammer = false,
-                bool reversed = false);
+                bool reversed = false, double gateSamples = 0.0);
 
     /** Turns all possibly running notes off. */
     void allNotesOff();

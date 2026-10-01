@@ -376,7 +376,8 @@ void Open303::renderBlock(double* out, int numSamples)
   }
 }
 
-void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bool hammer, bool reversed)
+void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bool hammer, bool reversed,
+                     double gateSamples)
 {
   if( sequencer.modeWasChanged() )
     allNotesOff();
@@ -428,6 +429,11 @@ void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bo
     {
       triggerNote(noteNumber, hasAccent);
       currentNoteReverse = reversed;   // a legato group keeps its first note's flag
+      if( gateSamples > 0.0 )          // exact gate length (tied sections included) beats the prediction
+      {
+        reverseLength = gateSamples;
+        updateReverseShape();
+      }
     }
     else if( hammer )
       hammerToNote(noteNumber, hasAccent);
