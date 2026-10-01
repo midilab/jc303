@@ -60,8 +60,8 @@ namespace dfl
     //---------------------------------------------------------------------------------------------
     // others:
 
-    /** Resets the LFO phase to zero. */
-    void reset();
+    /** Resets the LFO phase to the given start phase (0.0 to 1.0, wraps). Used for key-sync. */
+    void reset(double startPhase = 0.0);
 
   protected:
 

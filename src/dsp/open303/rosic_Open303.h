@@ -187,7 +187,7 @@ namespace rosic
     /** Sets the LFO rate in Hz (0.1 to 1000.0). */
     void setLfoRate(double rate) { lfo.setRate(rate); }
 
-    /** Sets the LFO depth (-1.0 to +1.0). */
+    /** Sets the LFO depth (0.0 to 1.0, unipolar). */
     void setLfoDepth(double depth) { lfoDepth = depth; }
 
     /** Sets the LFO destination (volume, cutoff). */
@@ -195,6 +195,12 @@ namespace rosic
 
     /** Enables/disables LFO processing (master on/off). */
     void setLfoOn(bool on) { lfoEnabled = on; }
+
+    /** Enables/disables resetting the LFO phase on every (non-slid) note trigger. */
+    void setLfoKeySync(bool on) { lfoKeySync = on; }
+
+    /** Sets the LFO start phase used by key-sync (0.0 to 1.0 = 0..360 degrees). */
+    void setLfoPhase(double phase) { lfoPhase = phase; }
     bool getLfoOn() const { return lfoEnabled; }
 
     //-----------------------------------------------------------------------------------------------
@@ -369,7 +375,9 @@ namespace rosic
     FilterType currentFilterType;  // currently selected filter type
 
     // LFO modulation depth
-    double lfoDepth;    // LFO depth (-1.0 to +1.0)
+    double lfoDepth;    // LFO depth (0.0 to 1.0)
+    double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
+    bool lfoKeySync = false;    // reset LFO phase on note trigger
     int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch)
     bool lfoEnabled = false;  // master LFO processing switch
 
@@ -435,17 +443,15 @@ namespace rosic
       switch (lfoDestination) {
         case 0:
             // Apply LFO filter modulation (convert to bipolar, in octaves)
-            // linToLin(lfoDepth, 0.0, 1.0, -1.0, 1.0) == lfoDepth * 2 - 1
-            lfoFilterMod = lfoValue * (lfoDepth * 2 - 1) * 2.0;  // +/- 2 octaves max
+            lfoFilterMod = lfoValue * lfoDepth * 2.0;  // +/- 2 octaves max
             break;
         case 1:
             // Apply LFO volume modulation - tremolo (convert to linear amplitude multiplier)
             volumeModFactor = 1.0 - lfoDepth + (lfoValue * lfoDepth);
             break;
         case 2:
-            // Apply LFO pitch modulation (in semitones, converted to frequency multiplier -12 to +12 semitones)
-            // linToLin(lfoDepth, 0.0, 1.0, -12.0, 12.0) == lfoDepth * 24 - 12
-            double semitones = lfoValue * (lfoDepth * 24 - 12);
+            // Apply LFO pitch modulation (in semitones, converted to frequency multiplier, +/- 12 semitones max)
+            double semitones = lfoValue * lfoDepth * 12.0;
             pitchModFactor = pow(2.0, semitones / 12.0);
             break;
       }
