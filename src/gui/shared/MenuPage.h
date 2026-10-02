@@ -41,6 +41,8 @@ public:
         juce::StringArray options;  // select type only
         float step = 0.0f;          // value type only; 0 = auto (0.01 for 0..1 floats, 1 for ints/bools)
         juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
+        juce::String hiddenWhenId;     // item is skipped while this choice/int param equals hiddenWhenIndex
+        int hiddenWhenIndex = -1;
     };
 
     struct Page
@@ -133,7 +135,10 @@ public:
             return;
         }
 
-        cursor = juce::jlimit(0, pageList.getReference(currentPage).items.size() - 1, cursor + delta);
+        const int next = nextVisibleIndex(cursor, delta < 0 ? -1 : 1);
+        if (next == cursor)
+            return;
+        cursor = next;
         pageCursor.getReference(currentPage) = cursor;
         updateDisplay();
         notifyCurrentItemChanged();
@@ -242,6 +247,13 @@ public:
     void parameterChanged(const juce::String& parameterID, float newValue) override
     {
         ignoreUnused(parameterID, newValue);
+        if (isHidden(currentItem()))
+        {
+            cursor = nextVisibleIndex(cursor, -1);
+            if (isHidden(currentItem()))
+                cursor = nextVisibleIndex(cursor, 1);
+            pageCursor.getReference(currentPage) = cursor;
+        }
         updateDisplay();
         notifyCurrentItemChanged();
     }
@@ -253,6 +265,27 @@ public:
     }
 
 private:
+    bool isHidden(const Item& item) const
+    {
+        if (item.hiddenWhenId.isEmpty())
+            return false;
+        auto* p = valueTreeState.getParameter(item.hiddenWhenId);
+        if (p == nullptr)
+            return false;
+        const int index = (int) std::lround(p->convertFrom0to1(p->getValue()));
+        return index == item.hiddenWhenIndex;
+    }
+
+    // Next visible item in the given direction; stays put when there is none.
+    int nextVisibleIndex(int from, int dir) const
+    {
+        auto& items = pageList.getReference(currentPage).items;
+        for (int i = from + dir; i >= 0 && i < items.size(); i += dir)
+            if (! isHidden(items.getReference(i)))
+                return i;
+        return from;
+    }
+
     Item& currentItem()
     {
         static Item placeholderItem;
@@ -459,6 +492,8 @@ private:
         for (int i = 0; i < page.items.size(); ++i)
         {
             auto& it = page.items.getReference(i);
+            if (isHidden(it))
+                continue;
             juce::String text = it.type == Type::placeholder ? "Soon to be implemented" : it.label;
             menu.addItem(1 + i, text, true, i == cursor);
         }
@@ -540,7 +575,7 @@ public:
         };
 
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f });
-        mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f });
+        mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f, {}, "filterType", 0 });   // no effect on TeeBee
         mod.items.add(Item { "bassComp",    "HP/BP Morph", Type::value, {}, 0.0f });
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
 
