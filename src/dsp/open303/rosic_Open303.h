@@ -201,6 +201,9 @@ namespace rosic
 
     /** Sets the LFO start phase used by key-sync (0.0 to 1.0 = 0..360 degrees). */
     void setLfoPhase(double phase) { lfoPhase = phase; }
+
+    /** Sets the LFO contour (-1.0 to +1.0): lag/slew or sag/bulge depending on waveform. */
+    void setLfoContour(double contour) { lfo.setContour(contour); }
     bool getLfoOn() const { return lfoEnabled; }
 
     //-----------------------------------------------------------------------------------------------

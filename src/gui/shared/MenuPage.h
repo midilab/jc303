@@ -531,14 +531,14 @@ public:
             "normalDecay", "accentDecay", "feedbackFilter",
             "softAttack", "slideTime", "sqrDriver",
             "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination",
-            "lfoPhase", "lfoSync"
+            "lfoPhase", "lfoSync", "lfoContour"
         };
         static const juce::String modItemLabels[] =
         {
             "Normal decay", "Accent decay", "Filter Feedback",
             "Soft attack", "Slide time", "Square driver",
             "LFO rate", "LFO depth", "LFO wave", "LFO dest",
-            "LFO phase", "LFO key sync"
+            "LFO phase", "LFO key sync", "LFO contour"
         };
 
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f });
@@ -546,7 +546,7 @@ public:
         mod.items.add(Item { "bassComp",    "Filter Bass Comp", Type::value, {}, 0.0f });
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
 
-        static constexpr uint8_t numModItems = 12;
+        static constexpr uint8_t numModItems = 13;
         for (uint8_t i = 0; i < numModItems; ++i)
             mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
 

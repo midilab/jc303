@@ -113,6 +113,11 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("lfoSync",
                                                         "LFO Key Sync",
                                                         false),
+            std::make_unique<juce::AudioParameterFloat> ("lfoContour",
+                                                        "LFO Contour",
+                                                        -1.0f,
+                                                        1.0f,
+                                                        0.0f),   // lag/slew (<0) or edge/sag shaping (>0), see dfl::LFO
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
@@ -246,6 +251,7 @@ JC303::JC303()
     lfoDestination = parameters.getRawParameterValue("lfoDestination");
     lfoPhase = parameters.getRawParameterValue("lfoPhase");
     lfoSync = parameters.getRawParameterValue("lfoSync");
+    lfoContour = parameters.getRawParameterValue("lfoContour");
     // overdrive parameters
     overdriveModelIndex = parameters.getRawParameterValue("overdriveModelIndex");
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
@@ -296,6 +302,7 @@ JC303::JC303()
     setParameter(LFO_DESTINATION, *lfoDestination);
     setParameter(LFO_PHASE, *lfoPhase);
     setParameter(LFO_SYNC, *lfoSync);
+    setParameter(LFO_CONTOUR, *lfoContour);
     // overdrive parameters
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
@@ -336,6 +343,7 @@ JC303::JC303()
     parameters.addParameterListener("lfoDestination", this);
     parameters.addParameterListener("lfoPhase", this);
     parameters.addParameterListener("lfoSync", this);
+    parameters.addParameterListener("lfoContour", this);
     // overdrive parameter listeners
     parameters.addParameterListener("overdriveLevel", this);
     parameters.addParameterListener("overdriveDryWet", this);
@@ -402,6 +410,7 @@ JC303::~JC303()
     parameters.removeParameterListener("lfoDestination", this);
     parameters.removeParameterListener("lfoPhase", this);
     parameters.removeParameterListener("lfoSync", this);
+    parameters.removeParameterListener("lfoContour", this);
     // overdrive parameter listeners
     parameters.removeParameterListener("overdriveLevel", this);
     parameters.removeParameterListener("overdriveDryWet", this);
@@ -489,6 +498,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "lfoSync") {
         setParameter(LFO_SYNC, newValue);
+    }
+    else if (parameterID == "lfoContour") {
+        setParameter(LFO_CONTOUR, newValue);
     }
     // overdrive parameter
     else if (parameterID == "overdriveLevel") {
@@ -739,6 +751,9 @@ void JC303::setParameter (Open303Parameters index, float value)
         break;
     case LFO_SYNC:
         open303Core.setLfoKeySync(value > 0.5f);
+        break;
+    case LFO_CONTOUR:
+        open303Core.setLfoContour(value);
         break;
 	}
 }
