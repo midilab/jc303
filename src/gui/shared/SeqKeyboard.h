@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "../../sequencer/ScaleMask.h"
 
 // Single-octave playable keyboard, shared across GUI themes (same pattern as
 // MenuPage.h). Pure view/controller: it owns a MidiKeyboardState and reports
@@ -60,6 +61,19 @@ public:
 
     int  getStartNote() const { return startNote; }
 
+    // Restricts which pitch classes can be played (bit n = pitch class n). Keys
+    // outside the mask are dimmed and ignore the mouse and computer keyboard; the
+    // key shown for the selected step stays lit even if it is out of scale.
+    void setAllowedMask (uint16_t mask)
+    {
+        mask &= scalemask::kAllNotes;
+        if (mask == allowedMask)
+            return;
+        allowedMask = mask;
+        keyboard.setAllowedMask (mask);
+        keyboard.repaint();
+    }
+
     // Moves the whole keyboard up/down by whole octaves. startNote is always a C
     // (multiple of 12), so the visible layout never shifts — only the octave of
     // the displayed notes changes.
@@ -116,7 +130,47 @@ private:
 
         std::function<void (const juce::MouseWheelDetails&)> onWheel;
 
+        void setAllowedMask (uint16_t mask) { allowed = mask; }
+
     private:
+        bool mouseDownOnKey (int note, const juce::MouseEvent& e) override
+        {
+            return scalemask::isPlayable (allowed, note) && juce::MidiKeyboardComponent::mouseDownOnKey (note, e);
+        }
+
+        bool mouseDraggedToKey (int note, const juce::MouseEvent& e) override
+        {
+            return scalemask::isPlayable (allowed, note) && juce::MidiKeyboardComponent::mouseDraggedToKey (note, e);
+        }
+
+        // Out-of-scale keys never show hover, and are filled neutral gray, unless
+        // held (the key shown for the selected step stays lit).
+        void drawWhiteNote (int note, juce::Graphics& g, juce::Rectangle<float> area,
+                            bool isDown, bool isOver, juce::Colour lineColour, juce::Colour textColour) override
+        {
+            const bool off = ! scalemask::isPlayable (allowed, note) && ! isDown;
+            juce::MidiKeyboardComponent::drawWhiteNote (note, g, area, isDown, isOver && ! off, lineColour, textColour);
+            if (off)
+            {
+                g.setColour (juce::Colour (0xffb0b0b0));
+                g.fillRect (area.withTrimmedRight (1.0f));
+            }
+        }
+
+        void drawBlackNote (int note, juce::Graphics& g, juce::Rectangle<float> area,
+                            bool isDown, bool isOver, juce::Colour noteFillColour) override
+        {
+            const bool off = ! scalemask::isPlayable (allowed, note) && ! isDown;
+            juce::MidiKeyboardComponent::drawBlackNote (note, g, area, isDown, isOver && ! off, noteFillColour);
+            if (off)
+            {
+                g.setColour (juce::Colour (0xff707070));
+                g.fillRect (area);
+            }
+        }
+
+        uint16_t allowed = scalemask::kAllNotes;
+
         void mouseWheelMove (const juce::MouseEvent&,
                              const juce::MouseWheelDetails& wheel) override
         {
@@ -128,7 +182,7 @@ private:
     void handleNoteOn (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override
     {
         juce::ignoreUnused (midiChannel);
-        if (! _suppressCallbacks && onNoteOn)
+        if (! _suppressCallbacks && scalemask::isPlayable (allowedMask, midiNote) && onNoteOn)
             onNoteOn (midiNote, velocity);
     }
 
@@ -148,6 +202,7 @@ private:
     juce::MidiKeyboardState keyboardState;
     Keyboard keyboard;
 
+    uint16_t allowedMask { scalemask::kAllNotes };
     int startNote { 36 };
     int shownNote = -1;
     bool _suppressCallbacks = false;

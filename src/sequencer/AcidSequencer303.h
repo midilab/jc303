@@ -40,6 +40,7 @@
 #include <random>
 
 #include "Harmonizer.h"
+#include "ScaleMask.h"
 
 // =============================================================================
 // Constants  — exact values from engine_303.h
@@ -546,6 +547,9 @@ public:
      *  @param numberOfTones      0 = full chromatic; 1–12 = snap to N equally-
      *                            spaced semitone intervals (same algorithm as
      *                            the original fix_tones[] table)
+     *  @param scaleId            0 = Chromatic (use numberOfTones); 1.. = snap down to
+     *                            scalemask::kScaleNames[scaleId], overriding numberOfTones
+     *  @param scaleRoot          0–11 root pitch class for the scale
      *  @param lowerNote          lowest MIDI note in the random pitch range
      *  @param rangeNote          range above lowerNote (exclusive upper bound)
      */
@@ -554,29 +558,13 @@ public:
                         uint8_t slideProbability,
                         uint8_t tieProbability,
                         uint8_t numberOfTones,
+                        uint8_t scaleId,
+                        uint8_t scaleRoot,
                         uint8_t lowerNote,
                         uint8_t rangeNote)
     {
-        // Build the chromatic-quantisation correction table (mirrors fix_tones[])
-        int8_t fixTones[12] = {};
-        if (numberOfTones > 0)
-        {
-            const int8_t fixMod = static_cast<int8_t>(12 / numberOfTones);
-            int8_t fixCounter   = 0;
-            for (uint8_t i = 0; i < 12; ++i)
-            {
-                if ((i % fixMod) == 0 || i == 0)
-                {
-                    fixTones[i] = 0;
-                    fixCounter  = 0;
-                }
-                else
-                {
-                    --fixCounter;
-                    fixTones[i] = fixCounter;
-                }
-            }
-        }
+        int8_t fixTones[12];
+        scalemask::buildFixTones (scalemask::allowedMask (scaleRoot, scaleId, numberOfTones), fixTones);
 
         // Clear the track: mutes, sends NoteOff for any held note (fires
         // onAllNotesOff so JC303 resets _heldNote), clears all steps, then unmutes.
@@ -616,11 +604,7 @@ public:
                 uint8_t note = static_cast<uint8_t>(
                     lowerNote + (randPercent() % noteRange));
 
-                if (numberOfTones > 0)
-                {
-                    const int fixed = static_cast<int>(note) + fixTones[note % 12];
-                    note = static_cast<uint8_t>(juce::jlimit (0, 127, fixed));
-                }
+                note = static_cast<uint8_t>(scalemask::snapNote (note, fixTones));
 
                 _data.step[i].note   = note;
                 _data.step[i].accent = (randPercent() < accentProbability);

@@ -24,7 +24,8 @@ private:
 // Generic LCD-style menu page component, shared across GUI themes.
 // Pure view/controller: reads and writes parameters through the value tree state.
 // Item types:
-//   select      - prev/next changes the selection (triggers the param), inc/dec does nothing
+//   select      - inc/dec and the value knob step through the options; prev/next moves the
+//                 cursor, except on a single-item page where it steps the selection
 //   value       - prev/next moves the cursor between items, inc/dec edits the current item's param
 //   placeholder - inert row ("Soon to be implemented")
 class MenuPage : public juce::Component,
@@ -127,7 +128,7 @@ public:
         if (item.type == Type::placeholder)
             return;
 
-        if (item.type == Type::select)
+        if (item.type == Type::select && pageList.getReference(currentPage).items.size() == 1)
         {
             changeSelection(delta);
             return;
@@ -139,13 +140,14 @@ public:
         notifyCurrentItemChanged();
     }
 
-    // Called by the theme's dec/inc buttons. No-op on select/placeholder pages.
+    // Called by the theme's dec/inc buttons. No-op on placeholder pages.
     void valueStep(float direction)
     {
         auto& item = currentItem();
-        if (item.type != Type::value)
-            return;
-        changeValue(direction);
+        if (item.type == Type::select)
+            changeSelection(direction < 0.0f ? -1 : 1);
+        else if (item.type == Type::value)
+            changeValue(direction);
     }
 
     // Called by the theme's value knob. Same 0..100 scale as the display;
@@ -153,6 +155,11 @@ public:
     void setValue(float percentage)
     {
         auto& item = currentItem();
+        if (item.type == Type::select)
+        {
+            setSelectionFromPercent(item, percentage);
+            return;
+        }
         if (item.type != Type::value)
             return;
         auto* param = valueTreeState.getParameter(item.id);
@@ -267,7 +274,7 @@ private:
         if (!onCurrentItemChanged)
             return;
         float v = -1.0f;
-        if (currentItem().type == Type::value)
+        if (currentItem().type == Type::value || currentItem().type == Type::select)
             if (auto* param = valueTreeState.getParameter(currentItem().id))
                 v = param->getValue() * 100.0f;
         onCurrentItemChanged(v);
@@ -303,6 +310,22 @@ private:
     juce::AudioParameterInt* intParam(const juce::String& id)
     {
         return dynamic_cast<juce::AudioParameterInt*>(valueTreeState.getParameter(id));
+    }
+
+    void setSelectionFromPercent(const Item& item, float percentage)
+    {
+        auto* p = intParam(item.id);
+        if (p == nullptr)
+            return;
+        const auto range = p->getRange();
+        const int idx = range.getStart() + juce::roundToInt(juce::jlimit(0.0f, 1.0f, percentage / 100.0f)
+                                                             * (range.getEnd() - range.getStart()));
+        if (idx == p->get())
+            return;
+        p->beginChangeGesture();
+        *p = idx;
+        p->endChangeGesture();
+        updateDisplay();
     }
 
     void changeSelection(int delta)
@@ -369,7 +392,9 @@ private:
             auto* p = intParam(item.id);
             if (p == nullptr || item.options.isEmpty())
                 return item.label;
-            return item.options[juce::jlimit(0, item.options.size() - 1, p->get())];
+            const auto& option = item.options[juce::jlimit(0, item.options.size() - 1, p->get())];
+            // On a page with several rows the label says what the option belongs to
+            return pageList.getReference(currentPage).items.size() > 1 ? item.label + ": " + option : option;
         }
 
         return item.label;
@@ -513,7 +538,9 @@ private:
 
     // ---- pages for this plugin (the per-page code lives here, isolated from the engine) ----
 public:
-    static juce::Array<Page> buildPages(const juce::StringArray& overdriveModelNames)
+    static juce::Array<Page> buildPages(const juce::StringArray& overdriveModelNames,
+                                           const juce::StringArray& scaleNames,
+                                           const juce::StringArray& rootNames)
     {
         juce::Array<Page> pages;
 
@@ -559,6 +586,8 @@ public:
         seq.items.add(Item { "seqTempo",     "Tempo",      Type::value, {}, 0.0f });
         seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 1.0f });
         seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 1.0f });
+        seq.items.add(Item { "seqScale",     "Scale",      Type::select, scaleNames, 0.0f });
+        seq.items.add(Item { "seqRoot",      "Root Note",  Type::select, rootNames, 0.0f });
         pages.add(seq);
 
         return pages;
