@@ -58,16 +58,16 @@ static void everyDestinationChangesTheSound()
   Setup off; off.lfoOn = false;
   std::vector<double> base = render(off);
 
-  // 0 cutoff, 1 volume, 2 pitch, 3 resonance, 4 overdrive (handled in JC303, core is untouched),
-  // 5 filter FM
-  const int audible[] = { 0, 1, 2, 3, 5 };
+  // overdrive is handled in JC303, the core is untouched
+  const int audible[] = { rosic::MOD_DEST_CUTOFF, rosic::MOD_DEST_VOLUME, rosic::MOD_DEST_PITCH,
+                          rosic::MOD_DEST_RESONANCE, rosic::MOD_DEST_FILTER_FM };
   for(int dest : audible)
   {
     Setup s; s.dest = dest;
     CHECK(maxDiff(base, render(s)) > 1e-3);
   }
 
-  Setup od; od.dest = 4;
+  Setup od; od.dest = rosic::MOD_DEST_OVERDRIVE;
   CHECK(maxDiff(base, render(od)) < 1e-12);
 }
 
@@ -75,7 +75,7 @@ static void zeroDepthIsTransparent()
 {
   Setup off; off.lfoOn = false;
   std::vector<double> base = render(off);
-  for(int dest = 0; dest <= 5; dest++)
+  for(int dest = rosic::MOD_DEST_CUTOFF; dest <= rosic::MOD_DEST_FILTER_FM; dest++)
   {
     Setup s; s.dest = dest; s.depth = 0.0;
     CHECK(maxDiff(base, render(s)) < 1e-12);
@@ -87,7 +87,7 @@ static void oneShotSettlesToBase()
   // After the one-shot finishes (rate 3 Hz -> 1/3 s) the modulated resonance must return to
   // the knob value, so the tail matches an unmodulated render.
   Setup off; off.lfoOn = false;
-  Setup s; s.dest = 3; s.oneShot = true;
+  Setup s; s.dest = rosic::MOD_DEST_RESONANCE; s.oneShot = true;
   std::vector<double> base = render(off, 44100);
   std::vector<double> mod  = render(s, 44100);
   double tail = 0.0;

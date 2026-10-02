@@ -33,18 +33,28 @@ namespace rosic
     NUM_SQUARE_MODELS
   };
 
-  /** LFO destinations (values of the lfoDestination parameter). */
-  enum LfoDestination
+  /** Modulation matrix sources. */
+  enum ModSource
   {
-    LFO_DEST_CUTOFF = 0,
-    LFO_DEST_VOLUME,
-    LFO_DEST_PITCH,
-    LFO_DEST_PULSE_WIDTH, // circuit square only
-    LFO_DEST_RESONANCE,
-    LFO_DEST_OVERDRIVE,   // applied by the host (JC303) via getLfoOverdriveMod()
-    LFO_DEST_FILTER_FM,
-    LFO_DEST_FILTER_MORPH // diode filter mode
+    MOD_SRC_OFF = 0,
+    MOD_SRC_LFO,          // bipolar (unipolar in one-shot mode)
+    MOD_SRC_ENV           // filter envelope, 0..1, boosted on accents
   };
+
+  /** Modulation matrix destinations (also the values of the lfoDestination parameter). */
+  enum ModDestination
+  {
+    MOD_DEST_CUTOFF = 0,
+    MOD_DEST_VOLUME,
+    MOD_DEST_PITCH,
+    MOD_DEST_PULSE_WIDTH, // circuit square only
+    MOD_DEST_RESONANCE,
+    MOD_DEST_OVERDRIVE,   // applied by the host (JC303) via getLfoOverdriveMod()
+    MOD_DEST_FILTER_FM,
+    MOD_DEST_FILTER_MORPH // diode filter mode (LP / BP / HP)
+  };
+
+  static const int NUM_MOD_SLOTS = 4;
 
   /**
 
@@ -106,8 +116,8 @@ namespace rosic
     /** Sets the diode filter's bass comp amount, 0..1. */
     void setPassbandCompensation(double newCompensation);
 
-    /** Sets the diode filter's response mode, 0..1: 0 = lowpass, 0.5 = bandpass, 1 = highpass. The LFO may modulate
-    it (destination 3), so the knob value is kept as the base. */
+    /** Sets the diode filter's response mode, 0..1: 0 = lowpass, 0.5 = bandpass, 1 = highpass. The mod matrix may
+    offset it (Filter Morph destination), so the knob value is kept as the base. */
     void setFilterMode(double newMode) { modeBase = newMode; }
 
     /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
@@ -265,6 +275,14 @@ namespace rosic
     /** Sets the LFO destination (volume, cutoff). */
     void setLfoDestination(double dest) { lfoDestination = dest; }
 
+    /** Configures matrix slot 1..3 (slot 0 is the LFO slot driven by setLfoDepth and
+        setLfoDestination). The amount is bipolar (-1..+1) and scaled per destination. */
+    void setModSlot(int slot, int source, int destination, double amount)
+    {
+      if( slot >= 1 && slot < NUM_MOD_SLOTS )
+        modSlots[slot] = ModSlot{ source, destination, amount };
+    }
+
     /** Enables/disables LFO processing (master on/off). */
     void setLfoOn(bool on) { lfoEnabled = on; }
 
@@ -398,6 +416,46 @@ namespace rosic
 
   protected:
 
+    struct ModSlot
+    {
+      int    source;
+      int    destination;
+      double amount;
+    };
+
+    /** Sums the effect of one matrix slot (value = source output) into the accumulators. */
+    struct ModAccum
+    {
+      double cutoffOctaves = 0.0;
+      double volumeFactor  = 1.0;
+      double pitchSemis    = 0.0;
+      double pwmDepth      = 0.0;   // largest pulse width amount; centres the width (see the oscillator)
+      double pwmNarrow     = 0.0;   // 0..1 sweep towards narrow
+      double resonance     = 0.0;   // percentage points
+      double filterFm      = 0.0;
+      double overdrive     = 0.0;
+      double filterMorph   = 0.0;   // diode filter mode offset
+      bool   pitchOn = false, resonanceOn = false, filterFmOn = false;
+
+      void add(int destination, double value, double amount)
+      {
+        switch( destination )
+        {
+        case MOD_DEST_CUTOFF:    cutoffOctaves += value * amount * 2.0;  break;   // +/- 2 octaves
+        case MOD_DEST_VOLUME:    volumeFactor  *= 1.0 - fabs(amount) + value * amount;  break;
+        case MOD_DEST_PITCH:     pitchSemis    += value * amount * 12.0; pitchOn = true;  break;
+        case MOD_DEST_PULSE_WIDTH:   // unipolar towards narrow, swinging around half the depth
+          pwmDepth   = std::max(pwmDepth, fabs(amount));
+          pwmNarrow += 0.5 * (fabs(amount) + value * amount);
+          break;
+        case MOD_DEST_RESONANCE: resonance     += value * amount * 50.0; resonanceOn = true;  break;
+        case MOD_DEST_OVERDRIVE: overdrive     += value * amount * 0.5;  break;
+        case MOD_DEST_FILTER_FM: filterFm      += value * amount * 0.5;  filterFmOn = true;  break;
+        case MOD_DEST_FILTER_MORPH: filterMorph += value * amount * 0.5;  break;   // +/- 0.5: LP -> BP or BP -> HP
+        }
+      }
+    };
+
     /** Pushes a resonance percentage (0..100) to both filters. */
     void applyResonance(double percent);
 
@@ -471,6 +529,8 @@ namespace rosic
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (0.0 to 1.0)
+    ModSlot modSlots[NUM_MOD_SLOTS] = { {MOD_SRC_OFF, 0, 0.0}, {MOD_SRC_OFF, 0, 0.0},
+                                        {MOD_SRC_OFF, 0, 0.0}, {MOD_SRC_OFF, 0, 0.0} };
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
     bool lfoOneShot = false;    // single-cycle envelope mode (implies retrigger)
@@ -480,7 +540,7 @@ namespace rosic
     bool resonanceModActive = false;  // true while the LFO is moving resonance / FM, so that
     bool fmModActive = false;         // the knob value can be restored when it stops
     int lfoDestination;   // LFO destination (see LfoDestination)
-    double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the LFO modulates it
+    double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the mod matrix offsets it
     bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;
@@ -532,77 +592,65 @@ namespace rosic
       }
     }
 
-    // LFO modulation - only process if lfoDepth is greater than zero
-    double lfoFilterMod = 0.0;
-    double volumeModFactor = 1.0;
-    double pitchModFactor = 1.0;
-    double pwmDepth = 0.0, pwmLfo = 0.0;
-    double resonanceMod = 0.0, fmMod = 0.0, overdriveMod = 0.0;
-    bool resonanceModOn = false, fmModOn = false;
-    double modeLfoAdd = 0.0;    // LFO contribution to the filter mode
+    // filter envelope, shared by the cutoff path and the modulation matrix
+    double mainEnvOut = mainEnv.getSample();
+    double rc1Out     = n1 * rc1.getSample(mainEnvOut);
+    double rc2Out     = n2 * rc2.getSample(accentGain > 0.0 ? mainEnvOut : 0.0) * accentSweepGain;
+    double envSource  = rc1Out + accentGain * rc2Out;
 
-    if (lfoEnabled && lfoDepth > 0.0)
+    // modulation matrix: slot 0 is the LFO slot (lfoDepth / lfoDestination), 1..3 are free
+    ModAccum mod;
+    if( lfoEnabled )
     {
-      // Get LFO output (0.0 to +1.0 unipolar, convert to bipolar for modulation)
-      // One-shot is an envelope: keep it unipolar so it settles back on the knob value
-      double lfoValue = lfo.getSample();
-      if( !lfoOneShot )
-        lfoValue = lfoValue * 2.0 - 1.0;  // Convert unipolar to bipolar
-
-      switch (lfoDestination) {
-        case LFO_DEST_CUTOFF:
-            // Apply LFO filter modulation (convert to bipolar, in octaves)
-            lfoFilterMod = lfoValue * lfoDepth * 2.0;  // +/- 2 octaves max
-            break;
-        case LFO_DEST_VOLUME:
-            // Apply LFO volume modulation - tremolo (convert to linear amplitude multiplier)
-            volumeModFactor = 1.0 - lfoDepth + (lfoValue * lfoDepth);
-            break;
-        case LFO_DEST_PITCH:
+      bool   lfoSampled = false;
+      double lfoValue   = 0.0;
+      for(int i = 0; i < NUM_MOD_SLOTS; i++)
+      {
+        int    source      = modSlots[i].source;
+        int    destination = modSlots[i].destination;
+        double amount      = modSlots[i].amount;
+        if( i == 0 )
         {
-            // Apply LFO pitch modulation (in semitones, converted to frequency multiplier, +/- 12 semitones max)
-            double semitones = lfoValue * lfoDepth * 12.0;
-            pitchModFactor = pow(2.0, semitones / 12.0);
-            break;
+          source      = MOD_SRC_LFO;
+          destination = (int) lfoDestination;
+          amount      = lfoDepth;
         }
-        case LFO_DEST_PULSE_WIDTH:
-            // Pulse width (circuit square only), unipolar towards narrow; applied with the pitch-tracked width below
-            pwmDepth = lfoDepth;
-            pwmLfo   = 0.5 * (lfoValue + 1.0);
-            break;
-        case LFO_DEST_RESONANCE:
-            resonanceMod = lfoValue * lfoDepth * 50.0;   // percentage points
-            resonanceModOn = true;
-            break;
-        case LFO_DEST_OVERDRIVE:
-            overdriveMod = lfoValue * lfoDepth * 0.5;
-            break;
-        case LFO_DEST_FILTER_FM:
-            fmMod = lfoValue * lfoDepth * 0.5;
-            fmModOn = true;
-            break;
-        case LFO_DEST_FILTER_MORPH:
-            // diode filter mode: +/- 0.5 around the knob at depth 1 (LP -> BP or BP -> HP)
-            modeLfoAdd = 0.5 * lfoValue * lfoDepth;
-            break;
+        if( amount == 0.0 || source == MOD_SRC_OFF )
+          continue;
+
+        double value = envSource;
+        if( source == MOD_SRC_LFO )
+        {
+          if( !lfoSampled )
+          {
+            // one-shot is an envelope: keep it unipolar so it settles back on the knob value
+            lfoValue   = lfo.getSample();
+            if( !lfoOneShot )
+              lfoValue = lfoValue * 2.0 - 1.0;
+            lfoSampled = true;
+          }
+          value = lfoValue;
+        }
+        mod.add(destination, value, amount);
       }
     }
 
-    diodeFilter.setMode(modeBase + modeLfoAdd);
-    lfoOverdriveMod = overdriveMod;
-    if( resonanceModOn || resonanceModActive )
+    diodeFilter.setMode(modeBase + mod.filterMorph);
+    lfoOverdriveMod = mod.overdrive;
+    if( mod.resonanceOn || resonanceModActive )
     {
-      applyResonance(std::max(0.0, std::min(100.0, baseResonance + resonanceMod)));
-      resonanceModActive = resonanceModOn;
+      applyResonance(std::max(0.0, std::min(100.0, baseResonance + mod.resonance)));
+      resonanceModActive = mod.resonanceOn;
     }
-    if( fmModOn || fmModActive )
+    if( mod.filterFmOn || fmModActive )
     {
-      diodeFilter.setFilterFmDepth(baseFilterFmDepth + fmMod);   // clamped by the filter
-      fmModActive = fmModOn;
+      diodeFilter.setFilterFmDepth(baseFilterFmDepth + mod.filterFm);   // clamped by the filter
+      fmModActive = mod.filterFmOn;
     }
 
     // calculate instantaneous oscillator frequency and set up the oscillator:
     // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
+    double pitchModFactor = mod.pitchOn ? pow(2.0, mod.pitchSemis / 12.0) : 1.0;
     double instFreq = pitchSlewLimiter.getSample(oscFreq) * pitchModFactor;
     oscillator.setFrequency(instFreq*pitchWheelFactor);
     oscillator.calculateIncrement();
@@ -618,26 +666,20 @@ namespace rosic
       double x  = clip(log2(instFreq*pitchWheelFactor / 32.703), -1.71, 5.93);   // octaves above C1, 10 Hz..2 kHz
       double pw = clip(58.164 + x*(-7.543 + x*(0.812 - x*0.071)), 25.0, 75.0);
       // PWM, unipolar towards narrow: depth first pulls centers above 50% down to 50% (a width and its complement
-      // sound alike, so sweeping through 50% would fold the motion over), then the LFO sweeps towards 10%
-      if( pwmDepth > 0.0 )
+      // sound alike, so sweeping through 50% would fold the motion over), then the modulation sweeps towards 10%
+      if( mod.pwmDepth > 0.0 )
       {
-        const double centre = pw - pwmDepth*std::max(pw - 50.0, 0.0);
-        pw = clip(centre - pwmDepth*pwmLfo*(centre - 10.0), 10.0, 75.0);
+        const double centre = pw - mod.pwmDepth*std::max(pw - 50.0, 0.0);
+        pw = clip(centre - mod.pwmNarrow*(centre - 10.0), 10.0, 75.0);
       }
       oscillator.setPulseWidth(pw);
     }
 
     // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
     // set up the filter:
-    double mainEnvOut = mainEnv.getSample();
-    double tmp1       = n1 * rc1.getSample(mainEnvOut);
-    double tmp2       = 0.0;
-    if( accentGain > 0.0 )
-      tmp2 = mainEnvOut;
-    tmp2 = n2 * rc2.getSample(tmp2) * accentSweepGain;
-    tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
-    tmp2 = accentGain*tmp2;
-    double instCutoff = cutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);
+    double tmp1       = envScaler * ( rc1Out - envOffset );  // seems not to work yet
+    double tmp2       = accentGain * rc2Out;
+    double instCutoff = cutoff * pow(2.0, tmp1+tmp2+mod.cutoffOctaves);
     filter.setCutoff(instCutoff);
     diodeFilter.setCutoff(instCutoff);
 
@@ -676,7 +718,7 @@ namespace rosic
     }
     tmp *= ampEnvOut;                       // amplified
     tmp *= ampScaler;
-    tmp *= volumeModFactor;                 // LFO volume modulation
+    tmp *= mod.volumeFactor;                // matrix volume modulation
 
     // find out whether we may switch ourselves off for the next call:
     idle = false;
