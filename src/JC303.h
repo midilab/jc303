@@ -225,6 +225,8 @@ private:
     std::atomic<float>* seqGenerativeSlideProbability = nullptr;
     std::atomic<float>* seqGenerativeTieProbability = nullptr;
     std::atomic<float>* numberOfTones = nullptr;
+    std::atomic<float>* seqScale = nullptr;
+    std::atomic<float>* seqRoot = nullptr;
     std::atomic<float>* lowerNote = nullptr;
     std::atomic<float>* rangeNote = nullptr;
     std::atomic<float>* seqPlayState = nullptr;
