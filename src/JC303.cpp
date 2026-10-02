@@ -121,6 +121,45 @@ JC303::JC303()
                                                         -1.0f,
                                                         1.0f,
                                                         0.0f),   // lag/slew (<0) or edge/sag shaping (>0), see dfl::LFO
+            std::make_unique<juce::AudioParameterChoice> ("modSlot2Source",
+                                                        "Mod Slot 2 Source",
+                                                        juce::StringArray{ "Off", "LFO", "Env" },
+                                                        0),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot2Dest",
+                                                        "Mod Slot 2 Destination",
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("modSlot2Amount",
+                                                        "Mod Slot 2 Amount",
+                                                        -1.0f,
+                                                        1.0f,
+                                                        0.0f),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot3Source",
+                                                        "Mod Slot 3 Source",
+                                                        juce::StringArray{ "Off", "LFO", "Env" },
+                                                        0),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot3Dest",
+                                                        "Mod Slot 3 Destination",
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("modSlot3Amount",
+                                                        "Mod Slot 3 Amount",
+                                                        -1.0f,
+                                                        1.0f,
+                                                        0.0f),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot4Source",
+                                                        "Mod Slot 4 Source",
+                                                        juce::StringArray{ "Off", "LFO", "Env" },
+                                                        0),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot4Dest",
+                                                        "Mod Slot 4 Destination",
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("modSlot4Amount",
+                                                        "Mod Slot 4 Amount",
+                                                        -1.0f,
+                                                        1.0f,
+                                                        0.0f),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
@@ -256,6 +295,15 @@ JC303::JC303()
     lfoSync = parameters.getRawParameterValue("lfoSync");
     lfoOneShot = parameters.getRawParameterValue("lfoOneShot");
     lfoContour = parameters.getRawParameterValue("lfoContour");
+    modSlotSource[0] = parameters.getRawParameterValue("modSlot2Source");
+    modSlotDest[0] = parameters.getRawParameterValue("modSlot2Dest");
+    modSlotAmount[0] = parameters.getRawParameterValue("modSlot2Amount");
+    modSlotSource[1] = parameters.getRawParameterValue("modSlot3Source");
+    modSlotDest[1] = parameters.getRawParameterValue("modSlot3Dest");
+    modSlotAmount[1] = parameters.getRawParameterValue("modSlot3Amount");
+    modSlotSource[2] = parameters.getRawParameterValue("modSlot4Source");
+    modSlotDest[2] = parameters.getRawParameterValue("modSlot4Dest");
+    modSlotAmount[2] = parameters.getRawParameterValue("modSlot4Amount");
     // overdrive parameters
     overdriveModelIndex = parameters.getRawParameterValue("overdriveModelIndex");
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
@@ -308,6 +356,8 @@ JC303::JC303()
     setParameter(LFO_SYNC, *lfoSync);
     setParameter(LFO_ONE_SHOT, *lfoOneShot);
     setParameter(LFO_CONTOUR, *lfoContour);
+    for (int i = 0; i < 3; ++i)
+        updateModSlot(i);
     // overdrive parameters
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
@@ -350,6 +400,15 @@ JC303::JC303()
     parameters.addParameterListener("lfoSync", this);
     parameters.addParameterListener("lfoOneShot", this);
     parameters.addParameterListener("lfoContour", this);
+    parameters.addParameterListener("modSlot2Source", this);
+    parameters.addParameterListener("modSlot2Dest", this);
+    parameters.addParameterListener("modSlot2Amount", this);
+    parameters.addParameterListener("modSlot3Source", this);
+    parameters.addParameterListener("modSlot3Dest", this);
+    parameters.addParameterListener("modSlot3Amount", this);
+    parameters.addParameterListener("modSlot4Source", this);
+    parameters.addParameterListener("modSlot4Dest", this);
+    parameters.addParameterListener("modSlot4Amount", this);
     // overdrive parameter listeners
     parameters.addParameterListener("overdriveLevel", this);
     parameters.addParameterListener("overdriveDryWet", this);
@@ -418,6 +477,15 @@ JC303::~JC303()
     parameters.removeParameterListener("lfoSync", this);
     parameters.removeParameterListener("lfoOneShot", this);
     parameters.removeParameterListener("lfoContour", this);
+    parameters.removeParameterListener("modSlot2Source", this);
+    parameters.removeParameterListener("modSlot2Dest", this);
+    parameters.removeParameterListener("modSlot2Amount", this);
+    parameters.removeParameterListener("modSlot3Source", this);
+    parameters.removeParameterListener("modSlot3Dest", this);
+    parameters.removeParameterListener("modSlot3Amount", this);
+    parameters.removeParameterListener("modSlot4Source", this);
+    parameters.removeParameterListener("modSlot4Dest", this);
+    parameters.removeParameterListener("modSlot4Amount", this);
     // overdrive parameter listeners
     parameters.removeParameterListener("overdriveLevel", this);
     parameters.removeParameterListener("overdriveDryWet", this);
@@ -508,6 +576,10 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "lfoOneShot") {
         setParameter(LFO_ONE_SHOT, newValue);
+    }
+    else if (parameterID.startsWith("modSlot")) {
+        // "modSlotN..." with N = 2..4 -> matrix slot N-2 of the three free slots
+        updateModSlot(parameterID.substring(7, 8).getIntValue() - 2);
     }
     else if (parameterID == "lfoContour") {
         setParameter(LFO_CONTOUR, newValue);
@@ -1195,6 +1267,14 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // DAW receives sample-accurate NoteOn/NoteOff on the plugin's MIDI output.
     // Incoming transport/clock messages are intentionally not forwarded.
     midiMessages.swapWith (midiOut);
+}
+
+void JC303::updateModSlot(int index)
+{
+    open303Core.setModSlot(index + 1,
+                           (int) *modSlotSource[index],
+                           (int) *modSlotDest[index],
+                           *modSlotAmount[index]);
 }
 
 void JC303::processBlock (juce::AudioBuffer<float>& buffer,

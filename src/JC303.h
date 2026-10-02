@@ -125,6 +125,7 @@ private:
     void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
+    void updateModSlot (int index);   // pushes free matrix slot 0..2 (UI slots 2..4) to the core
 
     // Sequencer UI→audio command channel, consumed at the top of every audio
     // buffer so play/stop/generate/clear (and the accompanying Open303 note
@@ -218,6 +219,9 @@ private:
     std::atomic<float>* lfoSync = nullptr;
     std::atomic<float>* lfoOneShot = nullptr;
     std::atomic<float>* lfoContour = nullptr;
+    std::atomic<float>* modSlotSource[3] = {};
+    std::atomic<float>* modSlotDest[3] = {};
+    std::atomic<float>* modSlotAmount[3] = {};
     // overdrive
     std::atomic<float>* overdriveModelIndex = nullptr;
     std::atomic<float>* switchOverdriveState = nullptr;
