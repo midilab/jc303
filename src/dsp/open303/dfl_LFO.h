@@ -42,6 +42,11 @@ namespace dfl
     /** Sets the waveform type (0=Triangle, 1=Saw Up, 2=Saw Down, 3=Square, 4=Random S&H, 5=Noise/Pink). */
     void setWaveform(int newWaveform);
 
+    /** Sets the contour amount (-1.0 to +1.0).
+        For square/S&H: 1-pole filter (negative=slew, positive=edge emphasis).
+        For triangle/saws/noise: power curve shaper (negative=bulge, positive=sag). */
+    void setContour(double newContour);
+
     //---------------------------------------------------------------------------------------------
     // inquiry:
 
@@ -50,6 +55,9 @@ namespace dfl
 
     /** Returns the current waveform type. */
     int getWaveform() const { return waveform; }
+
+    /** Returns the current contour amount. */
+    double getContour() const { return contour; }
 
     //---------------------------------------------------------------------------------------------
     // audio processing:
@@ -84,6 +92,12 @@ namespace dfl
     // Pink noise state (Paul Kellett algorithm)
     double pinkState[7];    // 7 octaves of pink noise state
     int pinkCounter;        // counter for pink noise updates
+
+    // Contour: pow(x, exponent) for triangle/saws/noise, 1-pole filter for square/S&H
+    double contour;            // -1.0 (bulge up) to +1.0 (sag down)
+    double contourExponent;    // exponent for pow() shaping
+    double contourFilterState; // 1-pole filter state
+    double contourFilterCoeff; // filter coefficient (0-1)
 
   };
 
@@ -139,6 +153,26 @@ namespace dfl
     phase += increment;
     if(phase >= 1.0)
       phase -= 1.0;
+
+    if(contour != 0.0)
+    {
+      if(waveform == 3 || waveform == 4)
+      {
+        double lpOut = contourFilterState + contourFilterCoeff * (output - contourFilterState);
+        contourFilterState = lpOut;
+
+        if(contour < 0.0)
+          output = lpOut;                       // lowpass: slew
+        else
+        {
+          output = 0.5 + (output - lpOut);      // highpass: edge emphasis, centered
+          if(output < 0.0) output = 0.0;
+          if(output > 1.0) output = 1.0;
+        }
+      }
+      else
+        output = pow(output, contourExponent);
+    }
 
     return output;
   }

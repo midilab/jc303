@@ -13,6 +13,10 @@ namespace dfl
     pinkCounter     = 0;
     for(int i = 0; i < 7; i++)
       pinkState[i] = 0.0;
+    contour            = 0.0;
+    contourExponent    = 1.0;
+    contourFilterState = 0.5;
+    contourFilterCoeff = 1.0;
     updateIncrement();
   }
 
@@ -57,9 +61,21 @@ namespace dfl
     }
   }
 
+  void LFO::setContour(double newContour)
+  {
+    contour = newContour < -1.0 ? -1.0 : (newContour > 1.0 ? 1.0 : newContour);
+
+    // -1 -> 0.25 (bulge), 0 -> 1 (linear), +1 -> 4 (sag)
+    contourExponent = pow(4.0, contour);
+
+    // |contour| 0 -> 1.0 (passthrough), 1 -> 0.001 (heavy slew)
+    contourFilterCoeff = pow(10.0, -3.0 * fabs(contour));
+  }
+
   void LFO::reset(double startPhase)
   {
     phase = startPhase - floor(startPhase);   // wrap into [0, 1)
+    contourFilterState = 0.5;
     if(waveform == 4)  // Random S&H
       sampleHoldValue = generateRandomValue();
   }
