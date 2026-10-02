@@ -124,6 +124,9 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("lfoSync",
                                                         "LFO Key Sync",
                                                         false),
+            std::make_unique<juce::AudioParameterBool> ("lfoOneShot",
+                                                        "LFO One Shot",
+                                                        false),
             std::make_unique<juce::AudioParameterFloat> ("lfoContour",
                                                         "LFO Contour",
                                                         -1.0f,
@@ -288,6 +291,7 @@ JC303::JC303()
     lfoDestination = parameters.getRawParameterValue("lfoDestination");
     lfoPhase = parameters.getRawParameterValue("lfoPhase");
     lfoSync = parameters.getRawParameterValue("lfoSync");
+    lfoOneShot = parameters.getRawParameterValue("lfoOneShot");
     lfoContour = parameters.getRawParameterValue("lfoContour");
     // overdrive parameters
     overdriveModelIndex = parameters.getRawParameterValue("overdriveModelIndex");
@@ -368,6 +372,7 @@ JC303::JC303()
     parameters.addParameterListener("lfoDestination", this);
     parameters.addParameterListener("lfoPhase", this);
     parameters.addParameterListener("lfoSync", this);
+    parameters.addParameterListener("lfoOneShot", this);
     parameters.addParameterListener("lfoContour", this);
     // overdrive parameter listeners
     parameters.addParameterListener("overdriveLevel", this);
@@ -441,6 +446,7 @@ JC303::~JC303()
     parameters.removeParameterListener("lfoDestination", this);
     parameters.removeParameterListener("lfoPhase", this);
     parameters.removeParameterListener("lfoSync", this);
+    parameters.removeParameterListener("lfoOneShot", this);
     parameters.removeParameterListener("lfoContour", this);
     // overdrive parameter listeners
     parameters.removeParameterListener("overdriveLevel", this);
@@ -537,6 +543,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "lfoSync" && *switchModState) {
         setParameter(LFO_SYNC, newValue);
+    }
+    else if (parameterID == "lfoOneShot" && *switchModState) {
+        setParameter(LFO_ONE_SHOT, newValue);
     }
     else if (parameterID == "lfoContour" && *switchModState) {
         setParameter(LFO_CONTOUR, newValue);
@@ -822,6 +831,9 @@ void JC303::setParameter (Open303Parameters index, float value)
     case LFO_SYNC:
         open303Core.setLfoKeySync(value > 0.5f);
         break;
+    case LFO_ONE_SHOT:
+        open303Core.setLfoOneShot(value > 0.5f);
+        break;
     case LFO_CONTOUR:
         open303Core.setLfoContour(value);
         break;
@@ -867,6 +879,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(LFO_DESTINATION, *lfoDestination);
         setParameter(LFO_PHASE, *lfoPhase);
         setParameter(LFO_SYNC, *lfoSync);
+        setParameter(LFO_ONE_SHOT, *lfoOneShot);
         setParameter(LFO_CONTOUR, *lfoContour);
         open303Core.setLfoOn(true);
         open303Core.setCircuitPulseShape(true);

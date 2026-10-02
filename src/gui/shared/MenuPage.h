@@ -618,14 +618,14 @@ public:
             "normalDecay", "accentDecay", "accentSweep", "feedbackFilter",
             "softAttack", "slideTime",
             "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination",
-            "lfoPhase", "lfoSync", "lfoContour"
+            "lfoPhase", "lfoSync", "lfoOneShot", "lfoContour"
         };
         static const juce::String modItemLabels[] =
         {
             "Normal decay", "Accent decay", "Accent sweep", "Filter Feedback",
             "Soft attack", "Slide time",
             "LFO rate", "LFO depth", "LFO wave", "LFO dest",
-            "LFO phase", "LFO key sync", "LFO contour"
+            "LFO phase", "LFO key sync", "LFO one shot", "LFO contour"
         };
 
         // every Mods-page item is greyed out and inert while the Mods switch is off

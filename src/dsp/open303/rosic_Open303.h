@@ -254,6 +254,9 @@ namespace rosic
     /** Enables/disables resetting the LFO phase on every (non-slid) note trigger. */
     void setLfoKeySync(bool on) { lfoKeySync = on; }
 
+    /** One-shot LFO: a single cycle per note (rate = envelope time); retriggers on every non-slid note. */
+    void setLfoOneShot(bool on) { lfoOneShot = on; lfo.setOneShot(on); }
+
     /** Sets the LFO start phase used by key-sync (0.0 to 1.0 = 0..360 degrees). */
     void setLfoPhase(double phase) { lfoPhase = phase; }
 
@@ -450,6 +453,7 @@ namespace rosic
     double lfoDepth;    // LFO depth (0.0 to 1.0)
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
+    bool lfoOneShot = false;    // single-cycle envelope mode (implies retrigger)
     int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width, 4=filter mode)
     double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the LFO modulates it
     bool lfoEnabled = false;  // master LFO processing switch
