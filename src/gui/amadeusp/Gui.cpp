@@ -86,6 +86,13 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         filterTypeAttachment->sendInitialUpdate();
     }
 
+    if (auto* modStateParam = valueTreeState.getParameter("switchModState"))
+    {
+        modStateAttachment = std::make_unique<juce::ParameterAttachment>(
+            *modStateParam, [this](float value) { updateModEnabled(value > 0.5f); });
+        modStateAttachment->sendInitialUpdate();
+    }
+
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
@@ -98,6 +105,18 @@ void JC303Editor::updateMorphVisibility(int filterTypeIndex)
     const bool show = (filterTypeIndex == 3 || filterTypeIndex == 4);
     bassCompSlider->setVisible(show);
     bassCompLabel.setVisible(show);
+}
+
+void JC303Editor::updateModEnabled(bool modsOn)
+{
+    // filter model and HP/BP morph stay live with mods off
+    for (auto* knob : { normalDecaySlider, accentDecaySlider, feedbackFilterSlider, softAttackSlider,
+                        slideTimeSlider, sqrDriverSlider, filterDriveSlider })
+    {
+        knob->setEnabled(modsOn);
+        knob->setAlpha(modsOn ? 1.0f : 0.4f);
+    }
+    filterDriveLabel.setAlpha(modsOn ? 1.0f : 0.4f);
 }
 
 JC303Editor::~JC303Editor()
