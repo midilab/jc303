@@ -26,14 +26,16 @@ constexpr uint16_t bits (std::initializer_list<int> degrees)
     return m;
 }
 
+// New scales are appended so saved seqScale indices keep their meaning.
 // Index 0 = Chromatic (all notes, TONES grid applies). Masks are relative to the root (degree 0).
-constexpr int kNumScaleChoices = 14;
+constexpr int kNumScaleChoices = 20;
 constexpr int kNumRoots        = 12;
 
 constexpr const char* kScaleNames[kNumScaleChoices] =
 {
     "Chromatic", "Ionian", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Aeolian",
     "Locrian", "Harm.Minor", "Mel.Minor", "Maj Pent", "Min Pent", "Blues", "Whole Tone",
+    "Dorian b2", "Lydian Aug", "Lydian Dom", "Mixolydian b6", "Locrian n2", "Altered",
 };
 
 constexpr const char* kRootNames[kNumRoots] =
@@ -57,6 +59,12 @@ constexpr uint16_t kScaleMasks[kNumScaleChoices] =
     bits ({ 0, 3, 5, 7, 10 }),        // Minor pentatonic
     bits ({ 0, 3, 5, 6, 7, 10 }),     // Blues
     bits ({ 0, 2, 4, 6, 8, 10 }),     // Whole tone
+    bits ({ 0, 1, 3, 5, 7, 9, 10 }),  // Dorian b2 (Phrygian natural 6)
+    bits ({ 0, 2, 4, 6, 8, 9, 11 }),  // Lydian augmented
+    bits ({ 0, 2, 4, 6, 7, 9, 10 }),  // Lydian dominant
+    bits ({ 0, 2, 4, 5, 7, 8, 10 }),  // Mixolydian b6
+    bits ({ 0, 2, 3, 5, 6, 8, 10 }),  // Locrian natural 2
+    bits ({ 0, 1, 3, 4, 6, 8, 10 }),  // Altered (Super Locrian)
 };
 
 constexpr uint16_t rotate (uint16_t mask, int semitones)
