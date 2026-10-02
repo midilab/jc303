@@ -40,6 +40,7 @@ enum Open303Parameters
   LFO_DESTINATION,
   LFO_PHASE,
   LFO_SYNC,
+  LFO_ONE_SHOT,
   LFO_CONTOUR,
   // Overdrive
   OVERDRIVE_SWITCH,
@@ -215,6 +216,7 @@ private:
     std::atomic<float>* lfoDestination = nullptr;
     std::atomic<float>* lfoPhase = nullptr;
     std::atomic<float>* lfoSync = nullptr;
+    std::atomic<float>* lfoOneShot = nullptr;
     std::atomic<float>* lfoContour = nullptr;
     // overdrive
     std::atomic<float>* overdriveModelIndex = nullptr;
