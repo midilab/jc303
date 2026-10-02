@@ -41,6 +41,7 @@
 #include <random>
 
 #include "Harmonizer.h"
+#include "ScaleMask.h"
 
 // =============================================================================
 // Constants  — exact values from engine_303.h
@@ -649,6 +650,9 @@ public:
      *  @param numberOfTones      0 = full chromatic; 1–12 = snap to N equally-
      *                            spaced semitone intervals (same algorithm as
      *                            the original fix_tones[] table)
+     *  @param scaleId            0 = Chromatic (use numberOfTones); 1.. = snap down to
+     *                            scalemask::kScaleNames[scaleId], overriding numberOfTones
+     *  @param scaleRoot          0–11 root pitch class for the scale
      *  @param lowerNote          lowest MIDI note in the random pitch range
      *  @param rangeNote          range above lowerNote (exclusive upper bound)
      */
@@ -657,11 +661,13 @@ public:
                         uint8_t slideProbability,
                         uint8_t tieProbability,
                         uint8_t numberOfTones,
+                        uint8_t scaleId,
+                        uint8_t scaleRoot,
                         uint8_t lowerNote,
                         uint8_t rangeNote)
     {
         int8_t fixTones[12];
-        makeFixTones (numberOfTones, fixTones);
+        makeFixTones (numberOfTones, scaleId, scaleRoot, fixTones);
 
         // Clear the track: mutes, sends NoteOff for any held note (fires
         // onAllNotesOff), clears all steps, then unmutes.
@@ -671,7 +677,7 @@ public:
             juce::SpinLock::ScopedLockType lk (_dataLock);
             for (int i = 0; i < SEQ303_STEP_MAX; ++i)
                 if (rollRhythmStep (i, fill, accentProbability, slideProbability, tieProbability))
-                    _data.step[i].note = randomNote (fixTones, numberOfTones, lowerNote, rangeNote);
+                    _data.step[i].note = randomNote (fixTones, lowerNote, rangeNote);
         }
 
         // clearTrack() already called setMute(false) — no need to unmute again.
@@ -700,10 +706,11 @@ public:
     bool canRedo()   const { return redoCount() > 0; }
 
     /** New random pitches on the note steps; rests, ties, accents and slides stay. */
-    void randomizePitches (uint8_t numberOfTones, uint8_t lowerNote, uint8_t rangeNote)
+    void randomizePitches (uint8_t numberOfTones, uint8_t scaleId, uint8_t scaleRoot,
+                           uint8_t lowerNote, uint8_t rangeNote)
     {
         int8_t fixTones[12];
-        makeFixTones (numberOfTones, fixTones);
+        makeFixTones (numberOfTones, scaleId, scaleRoot, fixTones);
 
         setMute (true);
         clearStackInternal (true);
@@ -711,7 +718,7 @@ public:
             juce::SpinLock::ScopedLockType lk (_dataLock);
             for (auto& st : _data.step)
                 if (! st.rest)
-                    st.note = randomNote (fixTones, numberOfTones, lowerNote, rangeNote);
+                    st.note = randomNote (fixTones, lowerNote, rangeNote);
         }
         setMute (false);
     }
@@ -1296,33 +1303,16 @@ private:
         return true;
     }
 
-    /** Chromatic-quantisation correction table (mirrors fix_tones[]). */
-    static void makeFixTones (uint8_t numberOfTones, int8_t (&fixTones)[12])
+    /** Snap-down table for the selected scale; Chromatic falls back to the
+     *  TONES grid, matching the original fix_tones[]. */
+    static void makeFixTones (uint8_t numberOfTones, uint8_t scaleId, uint8_t scaleRoot,
+                              int8_t (&fixTones)[12])
     {
-        std::fill (std::begin (fixTones), std::end (fixTones), int8_t { 0 });
-        if (numberOfTones == 0)
-            return;
-
-        const int8_t fixMod = static_cast<int8_t>(12 / numberOfTones);
-        int8_t fixCounter   = 0;
-        for (uint8_t i = 0; i < 12; ++i)
-        {
-            if ((i % fixMod) == 0 || i == 0)
-            {
-                fixTones[i] = 0;
-                fixCounter  = 0;
-            }
-            else
-            {
-                --fixCounter;
-                fixTones[i] = fixCounter;
-            }
-        }
+        scalemask::buildFixTones (scalemask::allowedMask (scaleRoot, scaleId, numberOfTones), fixTones);
     }
 
-    /** Random note in [lowerNote, lowerNote + rangeNote), snapped to the tone grid. */
-    uint8_t randomNote (const int8_t (&fixTones)[12], uint8_t numberOfTones,
-                        uint8_t lowerNote, uint8_t rangeNote)
+    /** Random note in [lowerNote, lowerNote + rangeNote), snapped to the scale. */
+    uint8_t randomNote (const int8_t (&fixTones)[12], uint8_t lowerNote, uint8_t rangeNote)
     {
         const uint8_t highNote = static_cast<uint8_t>(
             juce::jlimit (0, 127, static_cast<int>(lowerNote) + rangeNote));
@@ -1333,12 +1323,7 @@ private:
 
         uint8_t note = static_cast<uint8_t>(lowerNote + (randPercent() % noteRange));
 
-        if (numberOfTones > 0)
-        {
-            const int fixed = static_cast<int>(note) + fixTones[note % 12];
-            note = static_cast<uint8_t>(juce::jlimit (0, 127, fixed));
-        }
-        return note;
+        return static_cast<uint8_t>(scalemask::snapNote (note, fixTones));
     }
 
     /** Roll one step's rest / tie / accent / slide.  Returns true for a note
