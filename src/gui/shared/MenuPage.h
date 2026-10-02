@@ -43,6 +43,8 @@ public:
         juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
         juce::String hiddenWhenId;     // item is skipped while this choice/int param equals hiddenWhenIndex
         int hiddenWhenIndex = -1;
+        int shownFromIndex = 0;        // item is skipped while hiddenWhenId's choice index is below this
+        bool needsMod = false;         // greyed out and inert while the Mods switch is off
     };
 
     struct Page
@@ -78,6 +80,9 @@ public:
         valueLabel.setColour(juce::Label::textColourId, juce::Colour(0xff9bea81));
         valueLabel.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
         valueLabel.setInterceptsMouseClicks(false, false);
+
+        paramIDs.add("switchModState");
+        valueTreeState.addParameterListener("switchModState", this);
 
         for (auto& pg : pageList)
             for (auto& it : pg.items)
@@ -148,7 +153,7 @@ public:
     void valueStep(float direction)
     {
         auto& item = currentItem();
-        if (item.type != Type::value)
+        if (item.type != Type::value || ! isItemEnabled(item))
             return;
         changeValue(direction);
     }
@@ -158,7 +163,7 @@ public:
     void setValue(float percentage)
     {
         auto& item = currentItem();
-        if (item.type != Type::value)
+        if (item.type != Type::value || ! isItemEnabled(item))
             return;
         auto* param = valueTreeState.getParameter(item.id);
         if (param == nullptr)
@@ -247,6 +252,7 @@ public:
     void parameterChanged(const juce::String& parameterID, float newValue) override
     {
         ignoreUnused(parameterID, newValue);
+        refreshAssignableEnabled();
         if (isHidden(currentItem()))
         {
             cursor = nextVisibleIndex(cursor, -1);
@@ -273,7 +279,41 @@ private:
         if (p == nullptr)
             return false;
         const int index = (int) std::lround(p->convertFrom0to1(p->getValue()));
-        return index == item.hiddenWhenIndex;
+        return index == item.hiddenWhenIndex || index < item.shownFromIndex;
+    }
+
+    bool modsOn() const
+    {
+        auto* p = valueTreeState.getParameter("switchModState");
+        return p != nullptr && p->getValue() > 0.5f;
+    }
+
+    bool isItemEnabled(const Item& item) const
+    {
+        return ! item.needsMod || modsOn();
+    }
+
+    void refreshAssignableEnabled()
+    {
+        for (int i = 0; i < numAssignableSlots; ++i)
+        {
+            auto& s = assignableSlots[i];
+            const bool bound = s.attachment != nullptr;
+            const bool enabled = bound && isItemEnabledForParam(s.id);
+            if (s.slider != nullptr)
+                s.slider->setEnabled(enabled);
+            if (s.label != nullptr)
+                s.label->setAlpha(bound && ! enabled ? 0.4f : 1.0f);
+        }
+    }
+
+    bool isItemEnabledForParam(const juce::String& id) const
+    {
+        for (auto& pg : pageList)
+            for (auto& it : pg.items)
+                if (it.id == id)
+                    return isItemEnabled(it);
+        return true;
     }
 
     // Next visible item in the given direction; stays put when there is none.
@@ -326,9 +366,12 @@ private:
             s.attachment.reset(new juce::AudioProcessorValueTreeState::SliderAttachment(valueTreeState, s.id, *s.slider));
 
         if (s.slider != nullptr)
-            s.slider->setEnabled(bound);
+            s.slider->setEnabled(bound && isItemEnabledForParam(s.id));
         if (s.label != nullptr)
+        {
             s.label->setText(bound ? assignableLabel(slot) : juce::String(), juce::dontSendNotification);
+            s.label->setAlpha(bound && ! isItemEnabledForParam(s.id) ? 0.4f : 1.0f);
+        }
         if (onAssignableChanged)
             onAssignableChanged(slot);
     }
@@ -425,6 +468,10 @@ private:
             valueLabel.setText({}, juce::dontSendNotification);
         }
 
+        const float alpha = isItemEnabled(item) ? 1.0f : 0.4f;
+        itemLabel.setAlpha(alpha);
+        valueLabel.setAlpha(alpha);
+
         resized();
         itemLabel.setFont(fontToFit(itemLabel.getText(), itemLabel.getWidth()));
         valueLabel.setFont(fontToFit(valueLabel.getText(), valueLabel.getWidth()));
@@ -495,7 +542,7 @@ private:
             if (isHidden(it))
                 continue;
             juce::String text = it.type == Type::placeholder ? "Soon to be implemented" : it.label;
-            menu.addItem(1 + i, text, true, i == cursor);
+            menu.addItem(1 + i, text, isItemEnabled(it), i == cursor);
         }
         menu.setLookAndFeel(&popupLookAndFeel);
         menu.showMenuAsync(juce::PopupMenu::Options()
@@ -574,14 +621,15 @@ public:
             "LFO rate", "LFO depth", "LFO wave", "LFO dest"
         };
 
+        // filter model and HP/BP morph work with the Mods switch off; everything else needs it on
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f });
-        mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f, {}, "filterType", 0 });   // no effect on TeeBee
-        mod.items.add(Item { "bassComp",    "HP/BP Morph", Type::value, {}, 0.0f });
-        mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
+        mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        mod.items.add(Item { "bassComp",    "HP/BP Morph",      Type::value, {}, 0.0f, {}, "filterType", -1, 3 });        // Diode BP / Diode HP only
+        mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, {}, -1, 0, true });
 
         static constexpr uint8_t numModItems = 10;
         for (uint8_t i = 0; i < numModItems; ++i)
-            mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
+            mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f, {}, {}, -1, 0, true });
 
         for (auto& it : mod.items)
             if (it.id == "lfoWaveform" || it.id == "lfoDestination")

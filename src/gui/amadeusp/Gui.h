@@ -30,6 +30,8 @@ private:
     void setControlsLayout();
     // the HP/BP morph knob only means something for the Diode BP / Diode HP filter models
     void updateMorphVisibility(int filterTypeIndex);
+    // knobs that only take effect with the Mods switch on are greyed out while it is off
+    void updateModEnabled(bool modsOn);
 
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
@@ -84,6 +86,7 @@ private:
     std::unique_ptr<SliderAttachment> filterDriveAttachment;
     std::unique_ptr<SliderAttachment> bassCompAttachment;   // "bassComp" parameter = HP/BP morph
     std::unique_ptr<juce::ParameterAttachment> filterTypeAttachment;
+    std::unique_ptr<juce::ParameterAttachment> modStateAttachment;
     std::unique_ptr<ButtonAttachment> switchModButtonAttachment;
     // overdrive
     std::unique_ptr<SliderAttachment> overdriveLevelAttachment;
