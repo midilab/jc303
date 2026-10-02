@@ -10,16 +10,24 @@ DiodeLadderFilter::DiodeLadderFilter()
   driveFactor         =     1.0;
   driveMakeup         =     1.0;
   drive               =     0.0;
-  passbandCompensation =    0.0;
+  passbandCompensation =    0.0;   // HP/BP morph: pure HP/BP by default
   resonance           =     0.0;
   sampleRate          = 44100.0;
   octaveMode          =    true;  // default to TB-303 style
   responseMode        = RESPONSE_LP;
   K                   =     0.0;
+  Kcomp               =     0.0;
+  plainTrimLP         =     1.0;
+  plainTrimBPHP       =     1.0;
 
   // Filter FM (Devilfish mod)
   filterFmDepth       =     0.0;  // Default: off
   acCouplingState     =     0.0;  // AC coupling HPF state
+  feedbackHpFreq      =   115.0;  // Feedback-path HPF corner (fit to the real circuit)
+  feedbackHpAlpha     =     0.0;
+  feedbackHpGain      =     1.0;
+  feedbackHpState     =     0.0;
+  updateFeedbackHp();
 
   // Initialize coefficients
   alpha = 0.0;
@@ -47,13 +55,16 @@ void DiodeLadderFilter::setSampleRate(double newSampleRate)
 {
   if( newSampleRate > 0.0 )
     sampleRate = newSampleRate;
+  updateFeedbackHp();
   calculateCoefficients();
 }
 
 void DiodeLadderFilter::setInputDrive(double newDrive)
 {
-  drive = newDrive;
-  driveFactor = dB2amp(newDrive);
+  // Stable range: the zero-delay loop solve assumes unit input gain, so very high drive
+  // (>= 12 dB) can tip the near-critical octave loop into oscillation at high cutoff.
+  drive = std::clamp(newDrive, -12.0, 9.0);
+  driveFactor = dB2amp(drive);
   // Small-signal makeup so the drive knob is (roughly) level-neutral instead of
   // doubling as a volume boost. Full 1/driveFactor makeup over-corrects at real
   // signal levels (the oscillator hits the filter near unity, deep in the tanh's
@@ -73,4 +84,5 @@ void DiodeLadderFilter::reset()
   z3 = 0.0;
   z4 = 0.0;
   acCouplingState = 0.0;  // Reset AC coupling filter
+  feedbackHpState = 0.0;
 }

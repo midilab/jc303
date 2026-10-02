@@ -541,7 +541,7 @@ public:
 
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f });
         mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f });
-        mod.items.add(Item { "bassComp",    "Filter Bass Comp", Type::value, {}, 0.0f });
+        mod.items.add(Item { "bassComp",    "HP/BP Morph", Type::value, {}, 0.0f });
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
 
         static constexpr uint8_t numModItems = 10;

@@ -35,7 +35,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         addAndMakeVisible(label);
     }
     filterDriveLabel.setText("DRIVE", juce::dontSendNotification);
-    bassCompLabel.setText("BASS", juce::dontSendNotification);
+    bassCompLabel.setText("HP/BP MORPH", juce::dontSendNotification);
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
     addAndMakeVisible(ledModButton = createLed("switchModState"));
@@ -78,11 +78,26 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     switchOverdriveButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchOverdriveState", *switchOverdriveButton));
     
+    // show the HP/BP morph knob only for the Diode BP (3) and Diode HP (4) filter models
+    if (auto* filterTypeParam = valueTreeState.getParameter("filterType"))
+    {
+        filterTypeAttachment = std::make_unique<juce::ParameterAttachment>(
+            *filterTypeParam, [this](float value) { updateMorphVisibility((int) std::lround(value)); });
+        filterTypeAttachment->sendInitialUpdate();
+    }
+
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
     setSize (930, 363);
+}
+
+void JC303Editor::updateMorphVisibility(int filterTypeIndex)
+{
+    const bool show = (filterTypeIndex == 3 || filterTypeIndex == 4);
+    bassCompSlider->setVisible(show);
+    bassCompLabel.setVisible(show);
 }
 
 JC303Editor::~JC303Editor()
@@ -227,7 +242,8 @@ void JC303Editor::setControlsLayout()
     bassCompSlider->setBounds(bassCompLocation.first, bassCompLocation.second, sliderSmallSize, sliderSmallSize);
     const int filterDriveCentreX = filterDriveLocation.first + sliderSmallSize / 2;
     filterDriveLabel.setBounds(filterDriveCentreX - filterModLabelWidth / 2, filterDriveLocation.second - filterModLabelHeight - 1, filterModLabelWidth, filterModLabelHeight);
-    bassCompLabel.setBounds(filterDriveCentreX - filterModLabelWidth / 2, bassCompLocation.second - filterModLabelHeight - 1, filterModLabelWidth, filterModLabelHeight);
+    const int morphLabelWidth = 64;   // "HP/BP MORPH" is wider than the other mod labels
+    bassCompLabel.setBounds(filterDriveCentreX - morphLabelWidth / 2, bassCompLocation.second - filterModLabelHeight - 1, morphLabelWidth, filterModLabelHeight);
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
     ledModButton->setBounds(modLedLocation.first, modLedLocation.second, ledWidth, ledHeight);
     // overdrive

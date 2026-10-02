@@ -65,8 +65,16 @@ namespace dfl
     /** Sets the input drive in decibels. */
     void setInputDrive(double newDrive);
 
-    /** Sets the passband gain compensation amount (0.0 = none, 1.0 = full compensation). */
+    /** Sets the morph amount (0..1) for the BP and HP responses: 0 = pure bandpass / highpass,
+        1 = pure lowpass, crossfading linearly. Ignored in LP mode. (Historically the bass-comp
+        knob; the LP/BP output compensation is now a fixed constant, see FIXED_PASSBAND_COMP.) */
     void setPassbandCompensation(double newCompensation) { passbandCompensation = newCompensation; }
+
+    /** Sets the corner frequency (Hz) of the highpass in the feedback path (octave mode
+        only). The real circuit's coupling-capacitor network fits a one-pole highpass of
+        ~110-135 Hz (Stinchcombe's model; spread by component tolerance). Bleeds
+        resonance off as the cutoff falls into the bass. */
+    void setFeedbackHighpass(double newCutoff) { feedbackHpFreq = newCutoff; updateFeedbackHp(); calculateCoefficients(); }
 
     /** Sets whether the first pole is one octave above (TB-303 style ~18dB/oct slope). */
     INLINE void setOctaveMode(bool enabled)
@@ -74,6 +82,7 @@ namespace dfl
       if (enabled != octaveMode)
       {
         octaveMode = enabled;
+        feedbackHpState = 0.0;    // the loop highpass only runs in octave mode
         calculateCoefficients();  // octave mode caps the resonance (see K below)
       }
     }
@@ -143,6 +152,9 @@ namespace dfl
     double SG1, SG2, SG3, SG4;          // sigma gain coefficients
     double GAMMA;           // product of all G's
     double K;               // resonance/feedback factor
+    double Kcomp;           // drive-independent feedback (K / driveMakeup in octave mode) for the output compensation
+    double plainTrimLP;     // plain Diode amplitude trim (linear gain), see calculateCoefficients
+    double plainTrimBPHP;   // BP / HP amplitude trim (linear gain)
 
     // Scaling factors for each stage (a0 values from Pirkle)
     static constexpr double a1 = 1.0;
@@ -160,32 +172,49 @@ namespace dfl
     // levels). 0.5 keeps the level within ~+-2-3 dB across drive and resonance.
     static constexpr double DRIVE_MAKEUP_EXP = 0.5;
 
-    // Octave-mode feedback scale (fraction of the plain-diode self-oscillation
-    // point K = 17), calibrated at 1 kHz. 0.85 matches the TeeBee's resonant Q
-    // there across the whole knob range. Plain Diode ignores this and reaches K = 17.
-    static constexpr double OCTAVE_RESONANCE_CEILING = 0.85;
+    // The plain-mode knob 0..1 maps onto the old knob 0..PLAIN_KNOB_SPAN. PLAIN_SKEW_NORM = 1 - exp(-3)
+    // is the normaliser of Open303's resonance skew.
+    static constexpr double PLAIN_KNOB_SPAN = 0.8;
+    static constexpr double PLAIN_SKEW_NORM = 0.950213;
 
-    // Resonance tracking (octave only). The TeeBee's resonant bandwidth is ~constant,
-    // so its Q rises with cutoff; scale the octave feedback by (cutoff/1kHz)^exp to
-    // track it. The knee + tracking are applied to the effective resonance (before
-    // driveMakeup); drive coupling (see OCTAVE_RES_DRIVE_*) is applied here too.
-    // At high cutoff the effective resonance would exceed the octave's self-
-    // oscillation onset (~17.8), so a soft knee saturates it smoothly toward K_CEIL:
-    // transparent below K_KNEE (full resonance through the musical range), asymptoting
-    // to K_CEIL up top so the chirp bites like the TeeBee without self-oscillating.
-    static constexpr double OCTAVE_RES_TRACK_EXP = 0.22;
-    static constexpr double OCTAVE_RES_TRACK_REF = 1000.0;  // Hz where scaling = 1
-    static constexpr double OCTAVE_K_KNEE        = 14.3;    // soft-knee onset (effective)
-    static constexpr double OCTAVE_K_CEIL        = 17.5;    // asymptote, < 17.8 self-osc
+    // Plain Diode / BP / HP resonance law (see calculateCoefficients). The loop gain, in units of the
+    // self-oscillation point (~17), is rho(s) with s the remapped resonance: it reaches PLAIN_RHO_ONSET
+    // at the skewed resonance PLAIN_ONSET_S (= skew(75%) of the old knob: self-oscillation starts there,
+    // i.e. at 93.75% of the new knob) and PLAIN_RHO_MAX at full resonance (the strength these modes had
+    // at the old 4.5 dB default drive, sqrt(dB2amp(4.5)));
+    // the remapped knob tops out at skew(0.8) = 0.9569, so PLAIN_RHO_MAX itself is never reached.
+    static constexpr double PLAIN_ONSET_S   = 0.94147;
+    static constexpr double PLAIN_RHO_ONSET = 1.01;
+    static constexpr double PLAIN_RHO_MAX   = 1.295679;
 
-    // Drive->resonance coupling (octave only). By default resonance is fully drive-
-    // invariant; above the filterDrive=0.5 calibration point we let harder drive push
-    // the effective resonance further up the soft-knee toward self-oscillation. The
-    // boost is FLOORED at 1.0 at/below the reference, so lowering drive below 0.5 never
-    // weakens resonance - it only cleans up the saturation stage (which still tracks
-    // driveFactor), leaving the lower half of the knob as a pure timbre sweep.
-    // REF is the linear driveFactor at knob 0.5: dB2amp(4.5), where filterDrive 0..1
-    // maps to 0..9 dB (see FILTER_DRIVE in JC303.cpp). EXP sets the coupling strength.
+    // Octave-mode feedback law: see calculateCoefficients(). The feedback K is capped at this
+    // fraction of the diode's own (cutoff- and feedback-HP-dependent) self-oscillation threshold.
+    static constexpr double OCTAVE_K_MARGIN = 0.99;
+
+    // Low-resonance output trim (octave mode): the static baseline gain is ~1.2 dB
+    // hotter than the TeeBee at low K, so pull it down, fading to unity as K rises:
+    // gain = 1 - DEPTH * exp(-K / DECAY). Matches the TeeBee's peak level.
+    static constexpr double OCTAVE_LOWRES_TRIM_DEPTH = 0.13;
+    static constexpr double OCTAVE_LOWRES_TRIM_DECAY = 2.5;
+
+    // Fixed passband (bass) compensation applied to the LP and BP outputs: output gain
+    // (2 + FIXED_PASSBAND_COMP * Kcomp). 0.1 is the value at which the diode's level tracks
+    // the TeeBee's across resonance and cutoff (offset spread 0.28 dB); 0 would give the
+    // real circuit's larger level dip with resonance. It used to be a user knob.
+    static constexpr double FIXED_PASSBAND_COMP = 0.1;
+
+    // Static octave-mode output trim. The filter-drive default is -6 dB (the setting at which
+    // brightness and shriek match the TeeBee); at that setting, with drive-independent bass
+    // comp, the diode would otherwise be ~4.6 dB quieter than the TeeBee (full-synth mean
+    // over 96 settings, spread 0.3 dB).
+    static constexpr double OCTAVE_OUTPUT_TRIM = 1.6904;   // 10^(4.56/20)
+
+    // Drive->resonance coupling (octave only). Below the reference the resonance is fully
+    // drive-invariant (the boost is floored at 1.0, so lowering drive never weakens it - it
+    // only cleans up the saturation stage). Above the reference, harder drive pushes the
+    // effective resonance up toward the self-oscillation cap (OCTAVE_K_MARGIN * threshold).
+    // REF is the linear driveFactor at +4.5 dB: dB2amp(4.5) (filterDrive 0..1 maps to
+    // -6..+9 dB, see FILTER_DRIVE in JC303.cpp). EXP sets the coupling strength.
     static constexpr double OCTAVE_RES_DRIVE_REF = 1.6788;  // = dB2amp(4.5)
     static constexpr double OCTAVE_RES_DRIVE_EXP = 0.5;     // 0 = no coupling (invariant)
 
@@ -194,7 +223,13 @@ namespace dfl
     // computing coefficients to land the resonant peak on the nominal frequency
     // (matching the TeeBee, whose peak tracks its cutoff 1:1).
     static constexpr double CUTOFF_TUNING        = 1.41;  // 4-pole (~1/0.71)
-    static constexpr double CUTOFF_TUNING_OCTAVE = 1.33;  // octave (peak aligned to TeeBee)
+    static constexpr double CUTOFF_TUNING_OCTAVE = 1.17;  // octave (resonant peak / stopband aligned to TeeBee)
+    // Low-cutoff correction: the resonant peak sat 6-11% below the TeeBee's at 300-500 Hz with the
+    // single constant above, so the octave tuning is raised by up to +8% at 300 Hz, tapering
+    // log-linearly to nothing at 5 kHz (peak-frequency error 0.17 -> 0.03, stopband shape 0.48 -> 0.60).
+    static constexpr double OCTAVE_TUNING_LOW_BOOST = 0.08;
+    static constexpr double OCTAVE_TUNING_LOW_C0    = 300.0;
+    static constexpr double OCTAVE_TUNING_LOW_C1    = 5000.0;
 
     // Highpass DC-null factor (see RESPONSE_HP in getSample). The textbook binomial
     // highpass mix un-4lp1+6lp2-4lp3+lp4 assumes each tap is a unity-gain cascade
@@ -210,7 +245,7 @@ namespace dfl
     double drive;
     double driveFactor;
     double driveMakeup;           // precomputed 1/driveFactor^DRIVE_MAKEUP_EXP
-    double passbandCompensation;  // 0.0 = no compensation, 1.0 = full (1+K) boost
+    double passbandCompensation;  // BP/HP morph amount (0 = pure BP/HP, 1 = pure LP)
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
     bool   octaveMode;            // true = 1st pole one octave above (TB-303 style)
@@ -219,6 +254,19 @@ namespace dfl
     // Filter FM (Devilfish mod) - audio-rate cutoff modulation from input
     double filterFmDepth;                          // User parameter: 0 (off) to 1 (full)
     double acCouplingState;                        // One-pole HPF state for AC coupling
+
+    // Feedback-path highpass (octave mode): fb = HP(K * loop sum), a one-pole HP built as
+    // x - lp(x) with an Euler lowpass, so fb = fbHpGain * (raw - fbHpState), fbHpGain = 1 - a.
+    // Its instantaneous gain is folded into the zero-delay solve (no loop delay).
+    double feedbackHpFreq;
+    double feedbackHpAlpha;   // a = 1 - exp(-2*pi*fc/fs)
+    double feedbackHpGain;    // 1 - a
+    double feedbackHpState;
+    void updateFeedbackHp()
+    {
+      feedbackHpAlpha = 1.0 - exp(-2.0 * PI * feedbackHpFreq / sampleRate);
+      feedbackHpGain  = 1.0 - feedbackHpAlpha;
+    }
     static constexpr double acCouplingFreq = 20.0; // AC coupling corner frequency (Hz)
     static constexpr double filterFmScale  = 0.4;  // Scale factor for FM modulation depth
   };
@@ -255,7 +303,15 @@ namespace dfl
   {
     // Bilinear transform calculations (cutoff tuned so the resonant peak lands
     // on the nominal frequency - see CUTOFF_TUNING constants)
-    double tunedCutoff = cutoff * (octaveMode ? CUTOFF_TUNING_OCTAVE : CUTOFF_TUNING);
+    double tuning = CUTOFF_TUNING;
+    if (octaveMode)
+    {
+      double w = 1.0 - std::log(std::max(cutoff, OCTAVE_TUNING_LOW_C0) / OCTAVE_TUNING_LOW_C0)
+                       / std::log(OCTAVE_TUNING_LOW_C1 / OCTAVE_TUNING_LOW_C0);
+      w = std::min(std::max(w, 0.0), 1.0);
+      tuning = CUTOFF_TUNING_OCTAVE * (1.0 + OCTAVE_TUNING_LOW_BOOST * w);
+    }
+    double tunedCutoff = cutoff * tuning;
     double wd = 2.0 * PI * tunedCutoff;
     double T = 1.0 / sampleRate;
     double wa = (2.0 / T) * tan(wd * T / 2.0);
@@ -313,34 +369,97 @@ namespace dfl
     epsilon2 = G3;
     epsilon3 = G4;
 
-    // Feedback factor; K = 17 is the diode-ladder self-oscillation point. Plain
-    // Diode reaches it at full resonance. Octave mode is capped at
-    // OCTAVE_RESONANCE_CEILING, scaled by driveMakeup (drive-invariance: drive
-    // raises the loop's small-signal gain by driveFactor^DRIVE_MAKEUP_EXP, which
-    // driveMakeup cancels), and scaled by resonance tracking so its Q rises with
-    // cutoff like the TeeBee.
+    // Feedback factor. Plain Diode: K = 17 is the diode-ladder self-oscillation point.
+    // Octave mode follows the TeeBee instead (see the table block below); drive is applied
+    // through driveMakeup (drive-invariance: drive raises the loop's small-signal gain by
+    // driveFactor^DRIVE_MAKEUP_EXP, which driveMakeup cancels).
     if (octaveMode)
     {
-      double resTrack = pow(cutoff / OCTAVE_RES_TRACK_REF, OCTAVE_RES_TRACK_EXP);
-      // Effective resonance (no driveMakeup yet), soft-knee-limited, then converted to
-      // the actual feedback coefficient via driveMakeup. Because physical resonance =
-      // K * loop-gain = effK, the soft knee below bounds it at OCTAVE_K_CEIL regardless
-      // of drive, so the coupling below can push toward self-osc without running away.
-      double effK = 17.0 * resonance * OCTAVE_RESONANCE_CEILING * resTrack;
-      // Drive above the calibration reference pushes resonance up the knee; floored at
-      // 1.0 below it so lower drive leaves resonance at the 0.5-calibrated value.
-      effK *= pow(std::max(driveFactor, OCTAVE_RES_DRIVE_REF) / OCTAVE_RES_DRIVE_REF,
-                  OCTAVE_RES_DRIVE_EXP);
-      if (effK > OCTAVE_K_KNEE)
-      {
-        double span = OCTAVE_K_CEIL - OCTAVE_K_KNEE;
-        effK = OCTAVE_K_KNEE + span * tanh((effK - OCTAVE_K_KNEE) / span);
-      }
+      // TeeBee-parity feedback law (fitted offline, drive-0 basis, cutoff tuning 1.17 with the low-cutoff boost): the
+      // feedback K that makes the diode's resonant boost equal the TeeBee's at the same
+      // cutoff, resonance and feedback-HP setting. K = K100(cutoff, fbHP) * rho(res, cutoff),
+      // capped just below the diode's own self-oscillation threshold Kc(cutoff, fbHP).
+      static const double CG[11] = { 300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000 };
+      static const double FG[3]  = { 76.7, 122.0, 268.0 };   // diode feedback-HP nodes (Hz)
+      static const double K100T[3][11] = {
+        { 16.140, 16.750, 17.200, 17.370, 17.790, 17.890, 18.070, 18.360, 18.250, 18.360, 18.690 },
+        { 15.280, 16.200, 16.820, 17.070, 17.600, 17.810, 18.000, 18.120, 18.240, 18.550, 18.700 },
+        { 14.900, 15.260, 15.970, 16.300, 17.230, 17.630, 17.960, 18.200, 18.260, 18.710, 19.010 } };
+      static const double KCT[3][11] = {
+        { 24.770, 22.020, 20.520, 20.020, 19.050, 18.730, 18.480, 18.360, 18.360, 18.470, 18.700 },
+        { 29.430, 24.660, 22.120, 21.300, 19.680, 19.160, 18.740, 18.530, 18.480, 18.560, 18.780 },
+        { 30.000, 30.000, 27.700, 25.680, 21.810, 20.570, 19.600, 19.080, 18.860, 18.850, 19.020 } };
+      static const double RHOT[11][5] = {
+        { 0.470, 0.740, 0.880, 0.980, 1.000 },
+        { 0.444, 0.728, 0.873, 0.960, 1.000 },
+        { 0.436, 0.719, 0.870, 0.955, 1.000 },
+        { 0.456, 0.726, 0.872, 0.956, 1.000 },
+        { 0.456, 0.736, 0.877, 0.959, 1.000 },
+        { 0.473, 0.743, 0.888, 0.960, 1.000 },
+        { 0.494, 0.767, 0.897, 0.966, 1.000 },
+        { 0.526, 0.791, 0.915, 0.971, 1.000 },
+        { 0.570, 0.824, 0.929, 0.978, 1.000 },
+        { 0.605, 0.846, 0.939, 0.979, 1.000 },
+        { 0.644, 0.870, 0.954, 0.992, 1.000 }
+      };
+      static const double RS[6] = { 0.0, 0.47512, 0.73553, 0.87850, 0.95724, 1.0 };   // skew(res) at the rho nodes
+
+      double lc = std::log(std::min(std::max(cutoff, CG[0]), CG[10]));
+      int ci = 0; while (ci < 9 && std::log(CG[ci + 1]) < lc) ++ci;
+      double cf = (lc - std::log(CG[ci])) / (std::log(CG[ci + 1]) - std::log(CG[ci]));
+      double lf = std::log(std::min(std::max(feedbackHpFreq, FG[0]), FG[2]));
+      int fi = (lf < std::log(FG[1])) ? 0 : 1;
+      double ff = (lf - std::log(FG[fi])) / (std::log(FG[fi + 1]) - std::log(FG[fi]));
+      auto bil = [&](const double t[3][11]) {
+        double a = t[fi][ci] + cf * (t[fi][ci + 1] - t[fi][ci]);
+        double b = t[fi + 1][ci] + cf * (t[fi + 1][ci + 1] - t[fi + 1][ci]);
+        return a + ff * (b - a); };
+      double k100 = bil(K100T);
+      // Self-oscillation threshold for the cap below. Interpolated in cutoff and feedback-HP corner
+      // normally; when drive coupling pushes the resonance up (drive above the reference) it uses the
+      // lowest-corner column instead (interpolation error between HP nodes plus the push could
+      // otherwise cross the true threshold).
+      double kcInterp = bil(KCT);
+      double kcSafe = KCT[0][ci] + cf * (KCT[0][ci + 1] - KCT[0][ci]);
+      // rho(res) at this cutoff: piecewise-linear in the skewed resonance
+      double r[6]; r[0] = 0.0; for (int k = 0; k < 5; ++k) r[k + 1] = RHOT[ci][k] + cf * (RHOT[ci + 1][k] - RHOT[ci][k]);
+      int ri = 0; while (ri < 4 && RS[ri + 1] < resonance) ++ri;
+      double rf = (std::min(resonance, 1.0) - RS[ri]) / (RS[ri + 1] - RS[ri]);
+      double effK = k100 * (r[ri] + rf * (r[ri + 1] - r[ri]));
+      // Drive above the calibration reference pushes resonance up (floored at 1.0 below it).
+      double coupling = pow(std::max(driveFactor, OCTAVE_RES_DRIVE_REF) / OCTAVE_RES_DRIVE_REF,
+                            OCTAVE_RES_DRIVE_EXP);
+      effK *= coupling;
+      effK = std::min(effK, OCTAVE_K_MARGIN * (coupling > 1.0 ? kcSafe : kcInterp));   // stay just under self-oscillation
       K = effK * driveMakeup;
+      Kcomp = effK;   // the bass-comp and low-res trim must not depend on drive
+      plainTrimLP = plainTrimBPHP = 1.0;
     }
     else
     {
-      K = 17.0 * resonance;
+      // Plain Diode / BP / HP: the loop gain (K * driveFactor^DRIVE_MAKEUP_EXP) is 17 * rho(resonance)
+      // regardless of drive, so the drive knob changes the saturation only. rho is linear in the
+      // remapped resonance up to the onset of self-oscillation (rho = 1.01), then rises quadratically
+      // to the old default's full strength at the old resonance 100.
+      // The knob only spans 0..PLAIN_KNOB_SPAN of the old range (the top of the old range all sounded
+      // alike). resonance is skew(knob), so skew(span * knob) = (1 - (1 - c*resonance)^span) / c.
+      const double rIn = std::min(resonance, 1.0);
+      const double s = (1.0 - std::pow(1.0 - PLAIN_SKEW_NORM * rIn, PLAIN_KNOB_SPAN)) / PLAIN_SKEW_NORM;
+      const double sk = PLAIN_RHO_ONSET / PLAIN_ONSET_S;
+      const double u = std::max(0.0, (s - PLAIN_ONSET_S) / (1.0 - PLAIN_ONSET_S));
+      const double rho = sk * s + (PLAIN_RHO_MAX - sk) * u * u;
+      K = 17.0 * rho * driveMakeup;
+      Kcomp = 17.0 * s;
+      // Amplitude trim (dB) as a function of rho that matches the level these modes had at the old
+      // 4.5 dB default drive at the same loop gain: they are ~4 dB louder in the linear regime and
+      // ~4-5 dB quieter when self-oscillating at the new -6 dB default (fitted, mean over cutoffs).
+      static const double PR[9]  = { 0.0, 0.4941, 0.8092, 1.0101, 1.1018, 1.1695, 1.2199, 1.2571, 1.2957 };
+      static const double TLP[9] = { 4.40, 4.40, 3.80, 1.80, -1.50, -3.30, -3.90, -4.10, -4.30 };   // plain Diode
+      static const double TBH[9] = { 4.00, 2.60, 1.65, -0.15, -3.20, -4.55, -4.95, -5.05, -5.15 };  // BP / HP
+      int ti = 0; while (ti < 7 && PR[ti + 1] < rho) ++ti;
+      const double tf = std::min(std::max((rho - PR[ti]) / (PR[ti + 1] - PR[ti]), 0.0), 1.0);
+      plainTrimLP   = pow(10.0, (TLP[ti] + tf * (TLP[ti + 1] - TLP[ti])) / 20.0);
+      plainTrimBPHP = pow(10.0, (TBH[ti] + tf * (TBH[ti + 1] - TBH[ti])) / 20.0);
     }
   }
 
@@ -391,7 +510,16 @@ namespace dfl
     double SIGMA = SG1 * S1 + SG2 * S2 + SG3 * S3 + SG4 * S4;
 
     // Form input to the ladder (with feedback)
-    double un = (input - K * SIGMA) / (1.0 + K * GAMMA);
+    double un;
+    if (octaveMode)
+    {
+      // un = input - fbHpGain*(K*(SIGMA + GAMMA*un) - s)  =>  solve for un exactly.
+      double kg = feedbackHpGain * K;
+      un = (input - kg * SIGMA + feedbackHpGain * feedbackHpState) / (1.0 + kg * GAMMA);
+      feedbackHpState += feedbackHpAlpha * (K * (SIGMA + GAMMA * un) - feedbackHpState);
+    }
+    else
+      un = (input - K * SIGMA) / (1.0 + K * GAMMA);
 
     // Apply input nonlinearity with headroom scaling: scale down before the
     // tanh and back up after, so 0 dB drive (driveFactor == 1) stays clean
@@ -442,13 +570,18 @@ namespace dfl
     switch (responseMode)
     {
       case RESPONSE_BP:
-        out = 0.25 * (lp2 - 2.0 * lp3 + lp4);
+      {
+        // BP mode: the morph knob crossfades BP -> LP (0 = pure bandpass, 1 = pure lowpass),
+        // mirroring the HP morph below.
+        double bp = 0.25 * (lp2 - 2.0 * lp3 + lp4);
+        double t  = std::clamp(passbandCompensation, 0.0, 1.0);
+        out = (1.0 - t) * bp + t * lp4;
         break;
+      }
       case RESPONSE_HP:
       {
-        // HP mode repurposes the (bass-comp-inert) passbandCompensation knob as a
-        // HP->LP morph: 0 = pure highpass, 1 = pure lowpass, crossfading linearly.
-        // The midpoint is a notch (highs from HP + lows from LP). Both endpoints
+        // HP mode: the morph knob (passbandCompensation) crossfades HP -> LP: 0 = pure highpass,
+        // 1 = pure lowpass, linearly. The midpoint is a notch (highs from HP + lows from LP). Both endpoints
         // share ~the same passband gain, so the sweep stays even in level.
         double hp = un - HP_LP_SUBTRACT * (4.0 * lp1 - 6.0 * lp2 + 4.0 * lp3 - lp4);
         double t  = std::clamp(passbandCompensation, 0.0, 1.0);
@@ -466,7 +599,14 @@ namespace dfl
     // In HP mode the same knob is repurposed as the HP->LP morph (above), so the
     // bass-comp boost is not applied there (would double-use the control + run hot).
     double comp = (responseMode == RESPONSE_HP) ? 1.0
-                                                : (2.0 + passbandCompensation * K);
+                                                : (2.0 + FIXED_PASSBAND_COMP * Kcomp);
+    // Octave mode: keep peak level on par with the TeeBee at low resonance (see
+    // OCTAVE_LOWRES_TRIM_*). The diode may stay a little hotter in peaks than the
+    // TeeBee only in plain Diode mode, never in octave mode.
+    if (!octaveMode)
+      comp *= (responseMode == RESPONSE_LP) ? plainTrimLP : plainTrimBPHP;
+    if (octaveMode && responseMode != RESPONSE_HP)
+      comp *= OCTAVE_OUTPUT_TRIM * (1.0 - OCTAVE_LOWRES_TRIM_DEPTH * exp(-Kcomp / OCTAVE_LOWRES_TRIM_DECAY));
     return out * comp;
   }
 

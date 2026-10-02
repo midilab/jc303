@@ -103,7 +103,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch" },
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "HP/BP Morph" },
                                                         0),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
@@ -133,12 +133,12 @@ JC303::JC303()
                                                         "Filter Drive",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f),   // ~4.5 dB into the diode saturator by default
+                                                        0.0f),   // -6 dB into the diode saturator by default (parity with TeeBee and the real circuit)
             std::make_unique<juce::AudioParameterFloat> ("bassComp",
-                                                        "Bass Comp",
+                                                        "HP/BP Morph",
                                                         0.0f,
                                                         1.0f,
-                                                        0.1f),   // light passband/bass makeup by default
+                                                        0.0f),   // 0 = pure HP/BP, 1 = lowpass (Diode HP / Diode BP only)
             std::make_unique<juce::AudioParameterFloat> ("filterFm",
                                                         "Filter FM",
                                                         0.0f,
@@ -681,15 +681,15 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case FILTER_DRIVE:
-        // 0..1 -> 0..9 dB into the diode ladder's saturating input stage
-        // (matches the DB303 plugin's tuned range; the unity-makeup shaper
-        // here has no headroom scaling, so it already runs hot per-dB)
+        // 0..1 -> -6..+9 dB into the diode ladder's saturating input stage. The bottom of the
+        // range (-6 dB) is the TeeBee-parity / circuit-like setting (little saturation); turn
+        // up for grit. The ladder is only stable up to +9 dB (see setInputDrive).
         open303Core.setFilterDrive(
-            linToLin(value, 0.0, 1.0,   0.0,     9.0)
+            linToLin(value, 0.0, 1.0,  -6.0,     9.0)
         );
         break;
     case BASS_COMP:
-        // 0..1 diode-ladder passband (bass) compensation, applied directly
+        // 0..1 HP/BP -> LP morph for the Diode HP / Diode BP models (0 = pure HP/BP); parameter id kept as "bassComp"
         open303Core.setPassbandCompensation(value);
         break;
     case FILTER_FM:

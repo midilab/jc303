@@ -85,9 +85,8 @@ namespace rosic
     /** Returns the current filter type. */
     FilterType getFilterType() const { return currentFilterType; }
 
-    /** Sets the diode filter's passband (bass) compensation, 0..1. Boosts the
-    low end to offset the thinning that the diode ladder exhibits at high
-    resonance. Only affects the diode filter models. */
+    /** Sets the diode filter's HP/BP morph amount, 0..1: 0 = pure highpass / bandpass,
+    1 = pure lowpass (crossfade). Only affects the Diode HP and Diode BP models. */
     void setPassbandCompensation(double newCompensation);
 
     /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
@@ -133,7 +132,13 @@ namespace rosic
     void setPreFilterHighpass(double newCutoff) { highpass1.setCutoff(newCutoff); }
 
     /** Sets the cutoff frequency for the highpass inside the feedback loop of the main filter. */
-    void setFeedbackHighpass(double newCutoff) { filter.setFeedbackHighpassCutoff(newCutoff); }
+    void setFeedbackHighpass(double newCutoff)
+    {
+      filter.setFeedbackHighpassCutoff(newCutoff);
+      // The knob is referenced to the TeeBee's 150 Hz default; the diode follows the real
+      // circuit's network, whose best single-pole corner is ~115 Hz (same relative range).
+      diodeFilter.setFeedbackHighpass(newCutoff * (115.0 / 150.0));
+    }
 
     /** Sets the cutoff frequency for the highpass after the main filter. */
     void setPostFilterHighpass(double newCutoff) { highpass2.setCutoff(newCutoff); }
@@ -370,7 +375,8 @@ namespace rosic
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (-1.0 to +1.0)
-    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch)
+    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=HP/BP morph)
+    double morphBase = 0.0;   // HP/BP morph knob value (diode HP/BP models; 0 = pure HP/BP, 1 = LP); the LFO modulates it
     bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;
@@ -426,6 +432,7 @@ namespace rosic
     double lfoFilterMod = 0.0;
     double volumeModFactor = 1.0;
     double pitchModFactor = 1.0;
+    double morphLfoAdd = 0.0;   // LFO contribution to the morph (toward lowpass)
 
     if (lfoEnabled && lfoDepth > 0.0)
     {
@@ -443,13 +450,22 @@ namespace rosic
             volumeModFactor = 1.0 - lfoDepth + (lfoValue * lfoDepth);
             break;
         case 2:
+        {
             // Apply LFO pitch modulation (in semitones, converted to frequency multiplier -12 to +12 semitones)
             // linToLin(lfoDepth, 0.0, 1.0, -12.0, 12.0) == lfoDepth * 24 - 12
             double semitones = lfoValue * (lfoDepth * 24 - 12);
             pitchModFactor = pow(2.0, semitones / 12.0);
             break;
+        }
+        case 3:
+            // Apply LFO to the HP/BP morph (Diode HP / Diode BP): sweeps from the knob value toward
+            // lowpass (depth 1 = full sweep between the knob value and pure lowpass)
+            morphLfoAdd = (1.0 - morphBase) * lfoDepth * (1.0 - (lfoValue * 0.5 + 0.5));
+            break;
       }
     }
+
+    diodeFilter.setPassbandCompensation(morphBase + morphLfoAdd);   // HP/BP morph (LFO-modulated when destination 3)
 
     // calculate instantaneous oscillator frequency and set up the oscillator:
     // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
