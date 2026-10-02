@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 David Loewenfels
+// Public interface modeled on rosic::TeeBeeFilter (Open303, MIT, Copyright (c) 2009 Robin Schmidt).
+
 #ifndef dfl_DiodeLadderFilter_h
 #define dfl_DiodeLadderFilter_h
 
