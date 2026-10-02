@@ -114,7 +114,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width", "Filter Morph" },
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width", "Resonance", "Overdrive", "Filter FM", "Filter Morph" },
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("lfoPhase",
                                                         "LFO Phase",
@@ -1312,8 +1312,10 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // sequencer tick + MIDI handling + sample-accurate audio render
     renderMidi (buffer, midiMessages);
 
-    // GuitarML overdrive
+    // GuitarML overdrive; the LFO moves the dry/wet mix once per block
     if (*switchOverdriveState) {
+        overdriveMix.setWetMixProportion(juce::jlimit(0.0f, 1.0f,
+            *overdriveDryWet + (float) open303Core.getLfoOverdriveMod()));
         overdriveMix.pushDrySamples(buffer);
         guitarML.processAudioBlock(buffer);
         overdriveMix.mixWetSamples(buffer);

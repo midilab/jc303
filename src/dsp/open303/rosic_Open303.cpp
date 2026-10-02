@@ -128,6 +128,12 @@ void Open303::setCutoff(double newCutoff)
 
 void Open303::setResonance(double newResonance)
 {
+  baseResonance = newResonance;
+  applyResonance(newResonance);
+}
+
+void Open303::applyResonance(double newResonance)
+{
   // newResonance is a percentage (0..100). The TeeBee filter takes percent
   // directly and skews/normalizes it internally; the diode filter takes the same
   // saturating-exponential skew (see TeeBeeFilter::setResonance) as a 0..1 value

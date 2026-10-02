@@ -33,6 +33,19 @@ namespace rosic
     NUM_SQUARE_MODELS
   };
 
+  /** LFO destinations (values of the lfoDestination parameter). */
+  enum LfoDestination
+  {
+    LFO_DEST_CUTOFF = 0,
+    LFO_DEST_VOLUME,
+    LFO_DEST_PITCH,
+    LFO_DEST_PULSE_WIDTH, // circuit square only
+    LFO_DEST_RESONANCE,
+    LFO_DEST_OVERDRIVE,   // applied by the host (JC303) via getLfoOverdriveMod()
+    LFO_DEST_FILTER_FM,
+    LFO_DEST_FILTER_MORPH // diode filter mode
+  };
+
   /**
 
   This is a monophonic bass-synth that aims to emulate the sound of the famous Roland TB 303 and
@@ -99,7 +112,7 @@ namespace rosic
 
     /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input to modulate filter cutoff frequency. */
-    void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
+    void setFilterFmDepth(double depth) { baseFilterFmDepth = depth; diodeFilter.setFilterFmDepth(depth); }
 
     /** Sets the diode models' unit trim (loop-gain scale, 1 = nominal unit). */
     void setResonanceTrim(double trim) { diodeFilter.setLoopGainTrim(trim); }
@@ -110,7 +123,11 @@ namespace rosic
     void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); }
 
     /** Returns the Filter FM depth. */
-    double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
+    double getFilterFmDepth() const { return baseFilterFmDepth; }
+
+    /** Current LFO offset for the overdrive dry/wet mix (+/-0.5 at full depth, 0 when the
+        LFO is off or aimed elsewhere). Read once per block by the host. */
+    double getLfoOverdriveMod() const { return lfoOverdriveMod; }
 
     /** Sets the modulation depth of the filter's cutoff frequency by the filter-envelope generator
     (in percent). */
@@ -381,6 +398,9 @@ namespace rosic
 
   protected:
 
+    /** Pushes a resonance percentage (0..100) to both filters. */
+    void applyResonance(double percent);
+
     /** Triggers a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
     void triggerNote(int noteNumber, bool hasAccent);
@@ -454,7 +474,12 @@ namespace rosic
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
     bool lfoOneShot = false;    // single-cycle envelope mode (implies retrigger)
-    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width, 4=filter mode)
+    double baseResonance = 0.0;       // knob value (percent), LFO offsets are applied on top
+    double baseFilterFmDepth = 0.0;   // knob value, LFO offsets are applied on top
+    double lfoOverdriveMod = 0.0;
+    bool resonanceModActive = false;  // true while the LFO is moving resonance / FM, so that
+    bool fmModActive = false;         // the knob value can be restored when it stops
+    int lfoDestination;   // LFO destination (see LfoDestination)
     double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the LFO modulates it
     bool lfoEnabled = false;  // master LFO processing switch
 
@@ -512,42 +537,69 @@ namespace rosic
     double volumeModFactor = 1.0;
     double pitchModFactor = 1.0;
     double pwmDepth = 0.0, pwmLfo = 0.0;
+    double resonanceMod = 0.0, fmMod = 0.0, overdriveMod = 0.0;
+    bool resonanceModOn = false, fmModOn = false;
     double modeLfoAdd = 0.0;    // LFO contribution to the filter mode
 
     if (lfoEnabled && lfoDepth > 0.0)
     {
       // Get LFO output (0.0 to +1.0 unipolar, convert to bipolar for modulation)
-      double lfoValue = lfo.getSample() * 2.0 - 1.0;  // Convert unipolar to bipolar
+      // One-shot is an envelope: keep it unipolar so it settles back on the knob value
+      double lfoValue = lfo.getSample();
+      if( !lfoOneShot )
+        lfoValue = lfoValue * 2.0 - 1.0;  // Convert unipolar to bipolar
 
       switch (lfoDestination) {
-        case 0:
+        case LFO_DEST_CUTOFF:
             // Apply LFO filter modulation (convert to bipolar, in octaves)
             lfoFilterMod = lfoValue * lfoDepth * 2.0;  // +/- 2 octaves max
             break;
-        case 1:
+        case LFO_DEST_VOLUME:
             // Apply LFO volume modulation - tremolo (convert to linear amplitude multiplier)
             volumeModFactor = 1.0 - lfoDepth + (lfoValue * lfoDepth);
             break;
-        case 2:
+        case LFO_DEST_PITCH:
         {
             // Apply LFO pitch modulation (in semitones, converted to frequency multiplier, +/- 12 semitones max)
             double semitones = lfoValue * lfoDepth * 12.0;
             pitchModFactor = pow(2.0, semitones / 12.0);
             break;
         }
-        case 3:
+        case LFO_DEST_PULSE_WIDTH:
             // Pulse width (circuit square only), unipolar towards narrow; applied with the pitch-tracked width below
             pwmDepth = lfoDepth;
             pwmLfo   = 0.5 * (lfoValue + 1.0);
             break;
-        case 4:
-            // Apply LFO to the diode filter mode: +/- 0.5 around the knob at depth 1 (LP -> BP or BP -> HP)
+        case LFO_DEST_RESONANCE:
+            resonanceMod = lfoValue * lfoDepth * 50.0;   // percentage points
+            resonanceModOn = true;
+            break;
+        case LFO_DEST_OVERDRIVE:
+            overdriveMod = lfoValue * lfoDepth * 0.5;
+            break;
+        case LFO_DEST_FILTER_FM:
+            fmMod = lfoValue * lfoDepth * 0.5;
+            fmModOn = true;
+            break;
+        case LFO_DEST_FILTER_MORPH:
+            // diode filter mode: +/- 0.5 around the knob at depth 1 (LP -> BP or BP -> HP)
             modeLfoAdd = 0.5 * lfoValue * lfoDepth;
             break;
       }
     }
 
-    diodeFilter.setMode(modeBase + modeLfoAdd);   // LFO-modulated when destination 4
+    diodeFilter.setMode(modeBase + modeLfoAdd);
+    lfoOverdriveMod = overdriveMod;
+    if( resonanceModOn || resonanceModActive )
+    {
+      applyResonance(std::max(0.0, std::min(100.0, baseResonance + resonanceMod)));
+      resonanceModActive = resonanceModOn;
+    }
+    if( fmModOn || fmModActive )
+    {
+      diodeFilter.setFilterFmDepth(baseFilterFmDepth + fmMod);   // clamped by the filter
+      fmModActive = fmModOn;
+    }
 
     // calculate instantaneous oscillator frequency and set up the oscillator:
     // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
