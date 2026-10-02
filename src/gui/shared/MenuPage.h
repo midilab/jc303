@@ -618,14 +618,20 @@ public:
             "normalDecay", "accentDecay", "accentSweep", "feedbackFilter",
             "softAttack", "slideTime",
             "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination",
-            "lfoPhase", "lfoSync", "lfoOneShot", "lfoContour"
+            "lfoPhase", "lfoSync", "lfoOneShot", "lfoContour",
+            "modSlot2Source", "modSlot2Dest", "modSlot2Amount",
+            "modSlot3Source", "modSlot3Dest", "modSlot3Amount",
+            "modSlot4Source", "modSlot4Dest", "modSlot4Amount"
         };
         static const juce::String modItemLabels[] =
         {
             "Normal decay", "Accent decay", "Accent sweep", "Filter Feedback",
             "Soft attack", "Slide time",
             "LFO rate", "LFO depth", "LFO wave", "LFO dest",
-            "LFO phase", "LFO key sync", "LFO one shot", "LFO contour"
+            "LFO phase", "LFO key sync", "LFO one shot", "LFO contour",
+            "Mod 2 source", "Mod 2 dest", "Mod 2 amount",
+            "Mod 3 source", "Mod 3 dest", "Mod 3 amount",
+            "Mod 4 source", "Mod 4 dest", "Mod 4 amount"
         };
 
         // every Mods-page item is greyed out and inert while the Mods switch is off
@@ -646,7 +652,8 @@ public:
 
         for (auto& it : mod.items)
         {
-            if (it.id == "lfoWaveform" || it.id == "lfoDestination")
+            if (it.id == "lfoWaveform" || it.id == "lfoDestination"
+                || it.id.endsWith("Source") || it.id.endsWith("Dest"))
                 it.step = 1.0f;   // Choice params step one index at a time
             if (it.id == "accentSweep")
                 it.showParamText = true;   // shows the time constant
