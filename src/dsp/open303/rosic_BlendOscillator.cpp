@@ -13,6 +13,7 @@ BlendOscillator::BlendOscillator()
   increment            = (tableLengthDbl*freq)/sampleRate;
   phaseIndex           = 0.0;
   startIndex           = 0.0;
+  blend                = 0.0;  // pure saw
   waveTable1           = NULL;
   waveTable2           = NULL;
 

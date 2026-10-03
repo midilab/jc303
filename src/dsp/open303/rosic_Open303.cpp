@@ -24,6 +24,8 @@ Open303::Open303()
   accentAmpRelease =    50.0;
   accentGain       =     0.0;
   pitchWheelFactor =     1.0;
+  subOscGain       =     0.0;
+  subOscBlend      =     1.0;  // -1 octave
   currentNote      =    -1;
   currentVel       =     0;
   noteOffCountDown =     0;
@@ -41,6 +43,9 @@ Open303::Open303()
   oscillator.setWaveForm1(MipMappedWaveTable::SAW303);
   oscillator.setWaveTable2(&waveTable2);
   oscillator.setWaveForm2(MipMappedWaveTable::SQUARE303);
+
+  waveTable3.setWaveform(MipMappedWaveTable::SAW303);
+  subOscillator.setWaveTable(&waveTable3);
 
   //mainEnv.setNormalizeSum(true);
   mainEnv.setNormalizeSum(false);
@@ -104,6 +109,7 @@ void Open303::setSampleRate(double newSampleRate)
   highpass1.setSampleRate     (  oversampling*newSampleRate);
 
   oscillator.setSampleRate    (  oversampling*newSampleRate);
+  subOscillator.setSampleRate (  oversampling*newSampleRate);
   filter.setSampleRate        (  oversampling*newSampleRate);
   diodeFilter.setSampleRate   (  oversampling*newSampleRate);
   sampleRate = newSampleRate;
@@ -276,6 +282,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   if( idle )
   {
     oscillator.resetPhase();
+    subOscillator.resetPhase();
     filter.reset();
     diodeFilter.reset();
     highpass1.reset();
