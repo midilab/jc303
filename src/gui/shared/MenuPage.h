@@ -392,36 +392,22 @@ private:
             valueLabel.setText({}, juce::dontSendNotification);
         }
 
+        const juce::Font f = fontToFitRow(itemLabel.getText(), valueLabel.getText(), getWidth() - 8);
+        itemLabel.setFont(f);
+        valueLabel.setFont(f);
         resized();
-        itemLabel.setFont(fontToFit(itemLabel.getText(), itemLabel.getWidth()));
-        valueLabel.setFont(fontToFit(valueLabel.getText(), valueLabel.getWidth()));
         repaint();
     }
 
-// Picks the largest item font so the text never wraps beyond one line.
-    juce::Font fontToFit(const juce::String& text, int width)
+// Picks the largest font at which item label and value fit side by side on one row.
+    juce::Font fontToFitRow(const juce::String& label, const juce::String& value, int rowWidth)
     {
         juce::Font f = customFont;
-        if (width > 0)
-        {
-            float size = customFont.getHeight();
-            while (size > 9.0f && wrappedLineCount(f, text, width) > 1) // ponytail: 9pt floor, ellipsize at 9pt if still wrapping
-            {
-                size *= 0.85f;
-                f.setHeight(size);
-            }
-        }
+        const int gap = 6;
+        auto needed = [&] { return juce::TextLayout::getStringWidth(f, label) + juce::TextLayout::getStringWidth(f, value) + gap + 4; };
+        while (rowWidth > 0 && f.getHeight() > 7.0f && needed() > (float) rowWidth)
+            f.setHeight(f.getHeight() * 0.9f);
         return f;
-    }
-
-    static int wrappedLineCount(const juce::Font& font, const juce::String& text, int width)
-    {
-        juce::AttributedString as;
-        as.setWordWrap(juce::AttributedString::byWord);
-        as.append(text, font);
-        juce::TextLayout layout;
-        layout.createLayoutWithBalancedLineLengths(as, (float) width);
-        return layout.getNumLines();
     }
 
     void showItemMenu()
@@ -503,7 +489,7 @@ private:
         titleLabel.setBounds(titleArea);
         auto itemRow = b.removeFromTop(lineHeight);
 
-        const int textWidth = juce::roundToInt(juce::TextLayout::getStringWidth(customFont, valueLabel.getText()));
+        const int textWidth = juce::roundToInt(juce::TextLayout::getStringWidth(valueLabel.getFont(), valueLabel.getText()));
         const auto border = valueLabel.getBorderSize();
         const int valueWidth = juce::jmin(textWidth + border.getLeftAndRight() + 2, itemRow.getWidth());
         const int rowGap2 = 6;
