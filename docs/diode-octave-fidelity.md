@@ -494,3 +494,20 @@ alone left Diode Octave rising +2 to +3 dB at high resonance and BP/HP falling u
 - **Not done.** No listening verdict beyond the author's choice of depth 0.5 and bias 0.5 from WAV renders; no preset
   migration (saved knob positions of the drive parameter changed: old -6 + 15k dB, new -3 + 19k dB). Brightness falls with
   drive (centroid about -5% at 0 dB, -11% at +4.5 dB).
+
+### BP / HP level (merged from `bug/diode-bp-hp-level-match`)
+
+- **Static gains.** `BP_OUTPUT_GAIN` (+9 dB) and `HP_OUTPUT_GAIN` (-3 dB) on the BP and HP terms of the BP / HP -> LP
+  morph. They are targeted at a typical resonant 303 setting (resonance 50..70, cutoff 800..1500 Hz, default drive,
+  morph 0): BP / HP land at -0.0 / -0.6 dB re plain LP there (range about -3..+2). There is deliberately no correction
+  by cutoff: at low resonance and high cutoff BP / HP are 20+ dB below LP because a saw keeps most of its energy at
+  the low harmonics they remove (that is the filter's character), and a table that boosted it would raise noise.
+- **LP end of the morphs.** The output gains are applied per signal term (`lpGain`, `bandGain`, `hpGain` in
+  `getSample`), so at morph 1 Diode BP and Diode HP are exactly plain Diode LP in level (`build/morph_level`: 0.00 dB
+  deviation). Before, the HP morph skipped the bass compensation for the whole crossfade (its LP end was 11..12 dB
+  quiet, so the morph knob doubled as a volume control) and the BP LP end used the BP/HP trims instead of the LP ones
+  (up to 15 dB off at high drive and resonance). Pure LP, BP (morph 0) and HP (morph 0) are unchanged.
+- **Peaks.** Worst BP / HP peaks in a grid (cutoff 100..8000, resonance 0/50/100, env 60/100, accent, drive -3/+16) are
+  +6.3 / +6.7 dBFS at cutoff 100, resonance 100, accent, +16 dB drive; LP, Octave and TeeBee peak at +10..+12 dBFS at
+  cutoff 8000, resonance 0, env 100 with accent (pre-existing; a global accent-peak policy, not a BP / HP issue).
+
