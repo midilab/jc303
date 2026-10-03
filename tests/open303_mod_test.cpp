@@ -55,7 +55,7 @@ static void lfoSlotMatchesLegacyDepth()
     std::vector<double> legacy = render([&](rosic::Open303& s) {
       s.setLfoDepth(0.7); s.setLfoDestination(dest); });
     std::vector<double> slot = render([&](rosic::Open303& s) {
-      s.setModSlot(1, rosic::MOD_SRC_LFO, dest, 0.7); });
+      s.setModSlot(2, rosic::MOD_SRC_LFO, dest, 0.7); });
     CHECK(maxDiff(legacy, slot) < 1e-12);
   }
 }
@@ -73,9 +73,9 @@ static void slotsAddUp()
 static void negativeAmountInvertsTheLfo()
 {
   std::vector<double> pos = render([](rosic::Open303& s) {
-    s.setModSlot(1, rosic::MOD_SRC_LFO, rosic::MOD_DEST_CUTOFF, 0.6); });
+    s.setModSlot(2, rosic::MOD_SRC_LFO, rosic::MOD_DEST_CUTOFF, 0.6); });
   std::vector<double> neg = render([](rosic::Open303& s) {
-    s.setModSlot(1, rosic::MOD_SRC_LFO, rosic::MOD_DEST_CUTOFF, -0.6); });
+    s.setModSlot(2, rosic::MOD_SRC_LFO, rosic::MOD_DEST_CUTOFF, -0.6); });
   CHECK(maxDiff(pos, neg) > 1e-3);
 }
 
@@ -103,9 +103,34 @@ static void offSlotAndZeroAmountAreTransparent()
 {
   std::vector<double> base = render(none);
   CHECK(maxDiff(base, render([](rosic::Open303& s) {
-    s.setModSlot(1, rosic::MOD_SRC_OFF, rosic::MOD_DEST_CUTOFF, 1.0); })) < 1e-12);
+    s.setModSlot(2, rosic::MOD_SRC_OFF, rosic::MOD_DEST_CUTOFF, 1.0); })) < 1e-12);
   CHECK(maxDiff(base, render([](rosic::Open303& s) {
-    s.setModSlot(1, rosic::MOD_SRC_ENV, rosic::MOD_DEST_CUTOFF, 0.0); })) < 1e-12);
+    s.setModSlot(1, rosic::MOD_SRC_OFF, rosic::MOD_DEST_CUTOFF, 0.0); })) < 1e-12);
+}
+
+static void envelopeSlotIsHardwiredAndBipolar()
+{
+  // slot 1 is always the envelope, whatever source is passed
+  std::vector<double> env = render([](rosic::Open303& s) {
+    s.setModSlot(1, rosic::MOD_SRC_ENV, rosic::MOD_DEST_CUTOFF, 0.8); });
+  std::vector<double> off = render([](rosic::Open303& s) {
+    s.setModSlot(1, rosic::MOD_SRC_OFF, rosic::MOD_DEST_CUTOFF, 0.8); });
+  CHECK(maxDiff(env, off) < 1e-12);
+
+  // bipolar: positive amount pushes up while the envelope is high and below the knob value
+  // once it has decayed
+  rosic::Open303 s;
+  s.setSampleRate(44100.0);
+  s.setLfoOn(true);
+  s.setModSlot(1, rosic::MOD_SRC_ENV, rosic::MOD_DEST_OVERDRIVE, 1.0);
+  s.noteOn(45, 100, 0.0);
+  s.getSample();
+  double early = s.getLfoOverdriveMod();
+  for(int i = 0; i < 44100; i++)
+    s.getSample();
+  double late = s.getLfoOverdriveMod();
+  CHECK(early > 0.0);
+  CHECK(late < 0.0);
 }
 
 static void modsOffDisablesTheMatrix()
@@ -133,6 +158,7 @@ int main()
   negativeAmountInvertsTheLfo();
   envelopeSourceMovesEveryDestination();
   offSlotAndZeroAmountAreTransparent();
+  envelopeSlotIsHardwiredAndBipolar();
   modsOffDisablesTheMatrix();
   slotZeroIsOwnedByLegacySetters();
   if(failures == 0)

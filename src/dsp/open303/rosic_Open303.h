@@ -27,8 +27,8 @@ namespace rosic
   enum ModSource
   {
     MOD_SRC_OFF = 0,
-    MOD_SRC_LFO,          // bipolar (unipolar in one-shot mode)
-    MOD_SRC_ENV           // filter envelope, 0..1, boosted on accents
+    MOD_SRC_LFO,          // bipolar
+    MOD_SRC_ENV           // filter envelope, bipolar (envelope 0..1 mapped to -1..+1)
   };
 
   /** Modulation matrix destinations (also the values of the lfoDestination parameter). */
@@ -218,8 +218,9 @@ namespace rosic
     /** Sets the LFO destination (volume, cutoff). */
     void setLfoDestination(double dest) { lfoDestination = dest; }
 
-    /** Configures matrix slot 1..3 (slot 0 is the LFO slot driven by setLfoDepth and
-        setLfoDestination). The amount is bipolar (-1..+1) and scaled per destination. */
+    /** Configures matrix slot 1..3. Slot 0 is the LFO slot driven by setLfoDepth and
+        setLfoDestination; slot 1 is hardwired to the envelope source (its source argument is
+        ignored). The amount is bipolar (-1..+1) and scaled per destination. */
     void setModSlot(int slot, int source, int destination, double amount)
     {
       if( slot >= 1 && slot < NUM_MOD_SLOTS )
@@ -231,9 +232,6 @@ namespace rosic
 
     /** Enables/disables resetting the LFO phase on every (non-slid) note trigger. */
     void setLfoKeySync(bool on) { lfoKeySync = on; }
-
-    /** One-shot LFO: a single cycle per note (rate = envelope time); retriggers on every non-slid note. */
-    void setLfoOneShot(bool on) { lfoOneShot = on; lfo.setOneShot(on); }
 
     /** Sets the LFO start phase used by key-sync (0.0 to 1.0 = 0..360 degrees). */
     void setLfoPhase(double phase) { lfoPhase = phase; }
@@ -454,7 +452,6 @@ namespace rosic
                                         {MOD_SRC_OFF, 0, 0.0}, {MOD_SRC_OFF, 0, 0.0} };
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
-    bool lfoOneShot = false;    // single-cycle envelope mode (implies retrigger)
     double baseResonance = 0.0;       // knob value (percent), LFO offsets are applied on top
     double baseFilterFmDepth = 0.0;   // knob value, LFO offsets are applied on top
     double lfoOverdriveMod = 0.0;
@@ -518,7 +515,8 @@ namespace rosic
     double rc2Out     = n2 * rc2.getSample(accentGain > 0.0 ? mainEnvOut : 0.0);
     double envSource  = rc1Out + accentGain * rc2Out;
 
-    // modulation matrix: slot 0 is the LFO slot (lfoDepth / lfoDestination), 1..3 are free
+    // modulation matrix: slot 0 is the LFO slot (lfoDepth / lfoDestination), slot 1 the envelope
+    // slot, 2..3 are free
     ModAccum mod;
     if( lfoEnabled )
     {
@@ -535,18 +533,17 @@ namespace rosic
           destination = (int) lfoDestination;
           amount      = lfoDepth;
         }
+        else if( i == 1 )
+          source      = MOD_SRC_ENV;
         if( amount == 0.0 || source == MOD_SRC_OFF )
           continue;
 
-        double value = envSource;
+        double value = 2.0 * envSource - 1.0;
         if( source == MOD_SRC_LFO )
         {
           if( !lfoSampled )
           {
-            // one-shot is an envelope: keep it unipolar so it settles back on the knob value
-            lfoValue   = lfo.getSample();
-            if( !lfoOneShot )
-              lfoValue = lfoValue * 2.0 - 1.0;
+            lfoValue   = lfo.getSample() * 2.0 - 1.0;
             lfoSampled = true;
           }
           value = lfoValue;

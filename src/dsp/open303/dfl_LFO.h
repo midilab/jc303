@@ -50,10 +50,6 @@ namespace dfl
     //---------------------------------------------------------------------------------------------
     // inquiry:
 
-    /** One-shot mode: run a single cycle from the start phase, then hold the end value
-        until reset(). The rate then sets the envelope time (1/rate seconds). */
-    void setOneShot(bool on) { oneShot = on; }
-
     /** Returns the current LFO rate (in Hz). */
     double getRate() const { return rate; }
 
@@ -90,7 +86,6 @@ namespace dfl
     double rate;            // LFO frequency in Hz
     double phase;           // current phase (0.0 to 1.0)
     double increment;       // phase increment per sample
-    bool oneShot = false;   // single cycle then hold (envelope mode)
     int waveform;           // 0=Triangle, 1=Saw Up, 2=Saw Down, 3=Square, 4=Random, 5=Pink Noise
     double sampleHoldValue; // stored random value for S&H waveform
 
@@ -157,7 +152,7 @@ namespace dfl
     // Advance phase
     phase += increment;
     if(phase >= 1.0)
-      phase = oneShot ? 1.0 : phase - 1.0;
+      phase -= 1.0;
 
     if(contour != 0.0)
     {

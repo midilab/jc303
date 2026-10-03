@@ -20,7 +20,6 @@ struct Setup
   bool   lfoOn       = true;
   int    dest        = 0;
   double depth       = 1.0;
-  bool   oneShot     = false;
 };
 
 static std::vector<double> render(const Setup& s, int n = 22050)
@@ -35,7 +34,6 @@ static std::vector<double> render(const Setup& s, int n = 22050)
   synth.setLfoRate(3.0);
   synth.setLfoDepth(s.depth);
   synth.setLfoDestination(s.dest);
-  synth.setLfoOneShot(s.oneShot);
   synth.setLfoOn(s.lfoOn);
   synth.noteOn(45, 100, 0.0);
 
@@ -82,25 +80,10 @@ static void zeroDepthIsTransparent()
   }
 }
 
-static void oneShotSettlesToBase()
-{
-  // After the one-shot finishes (rate 3 Hz -> 1/3 s) the modulated resonance must return to
-  // the knob value, so the tail matches an unmodulated render.
-  Setup off; off.lfoOn = false;
-  Setup s; s.dest = 3; s.oneShot = true;
-  std::vector<double> base = render(off, 44100);
-  std::vector<double> mod  = render(s, 44100);
-  double tail = 0.0;
-  for(size_t i = 30000; i < base.size(); i++)
-    tail = std::fmax(tail, std::fabs(base[i] - mod[i]));
-  CHECK(tail < 1e-3);
-}
-
 int main()
 {
   everyDestinationChangesTheSound();
   zeroDepthIsTransparent();
-  oneShotSettlesToBase();
   if(failures == 0)
     std::printf("open303_lfo_test: all passed\n");
   return failures == 0 ? 0 : 1;

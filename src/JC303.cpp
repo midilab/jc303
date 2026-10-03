@@ -113,18 +113,11 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("lfoSync",
                                                         "LFO Key Sync",
                                                         false),
-            std::make_unique<juce::AudioParameterBool> ("lfoOneShot",
-                                                        "LFO One Shot",
-                                                        false),
             std::make_unique<juce::AudioParameterFloat> ("lfoContour",
                                                         "LFO Contour",
                                                         -1.0f,
                                                         1.0f,
                                                         0.0f),   // lag/slew (<0) or edge/sag shaping (>0), see dfl::LFO
-            std::make_unique<juce::AudioParameterChoice> ("modSlot2Source",
-                                                        "Mod Slot 2 Source",
-                                                        juce::StringArray{ "Off", "LFO", "Env" },
-                                                        0),
             std::make_unique<juce::AudioParameterChoice> ("modSlot2Dest",
                                                         "Mod Slot 2 Destination",
                                                         juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
@@ -293,9 +286,7 @@ JC303::JC303()
     lfoDestination = parameters.getRawParameterValue("lfoDestination");
     lfoPhase = parameters.getRawParameterValue("lfoPhase");
     lfoSync = parameters.getRawParameterValue("lfoSync");
-    lfoOneShot = parameters.getRawParameterValue("lfoOneShot");
     lfoContour = parameters.getRawParameterValue("lfoContour");
-    modSlotSource[0] = parameters.getRawParameterValue("modSlot2Source");
     modSlotDest[0] = parameters.getRawParameterValue("modSlot2Dest");
     modSlotAmount[0] = parameters.getRawParameterValue("modSlot2Amount");
     modSlotSource[1] = parameters.getRawParameterValue("modSlot3Source");
@@ -354,7 +345,6 @@ JC303::JC303()
     setParameter(LFO_DESTINATION, *lfoDestination);
     setParameter(LFO_PHASE, *lfoPhase);
     setParameter(LFO_SYNC, *lfoSync);
-    setParameter(LFO_ONE_SHOT, *lfoOneShot);
     setParameter(LFO_CONTOUR, *lfoContour);
     for (int i = 0; i < 3; ++i)
         updateModSlot(i);
@@ -398,9 +388,7 @@ JC303::JC303()
     parameters.addParameterListener("lfoDestination", this);
     parameters.addParameterListener("lfoPhase", this);
     parameters.addParameterListener("lfoSync", this);
-    parameters.addParameterListener("lfoOneShot", this);
     parameters.addParameterListener("lfoContour", this);
-    parameters.addParameterListener("modSlot2Source", this);
     parameters.addParameterListener("modSlot2Dest", this);
     parameters.addParameterListener("modSlot2Amount", this);
     parameters.addParameterListener("modSlot3Source", this);
@@ -475,9 +463,7 @@ JC303::~JC303()
     parameters.removeParameterListener("lfoDestination", this);
     parameters.removeParameterListener("lfoPhase", this);
     parameters.removeParameterListener("lfoSync", this);
-    parameters.removeParameterListener("lfoOneShot", this);
     parameters.removeParameterListener("lfoContour", this);
-    parameters.removeParameterListener("modSlot2Source", this);
     parameters.removeParameterListener("modSlot2Dest", this);
     parameters.removeParameterListener("modSlot2Amount", this);
     parameters.removeParameterListener("modSlot3Source", this);
@@ -573,9 +559,6 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "lfoSync") {
         setParameter(LFO_SYNC, newValue);
-    }
-    else if (parameterID == "lfoOneShot") {
-        setParameter(LFO_ONE_SHOT, newValue);
     }
     else if (parameterID.startsWith("modSlot")) {
         // "modSlotN..." with N = 2..4 -> matrix slot N-2 of the three free slots
@@ -833,9 +816,6 @@ void JC303::setParameter (Open303Parameters index, float value)
         break;
     case LFO_SYNC:
         open303Core.setLfoKeySync(value > 0.5f);
-        break;
-    case LFO_ONE_SHOT:
-        open303Core.setLfoOneShot(value > 0.5f);
         break;
     case LFO_CONTOUR:
         open303Core.setLfoContour(value);
@@ -1271,8 +1251,9 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
 
 void JC303::updateModSlot(int index)
 {
+    // UI slot 2 (index 0) is hardwired to the envelope source and has no source parameter
     open303Core.setModSlot(index + 1,
-                           (int) *modSlotSource[index],
+                           index == 0 ? rosic::MOD_SRC_ENV : (int) *modSlotSource[index],
                            (int) *modSlotDest[index],
                            *modSlotAmount[index]);
 }

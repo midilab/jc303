@@ -531,8 +531,8 @@ public:
             "normalDecay", "accentDecay", "feedbackFilter",
             "softAttack", "slideTime", "sqrDriver",
             "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination",
-            "lfoPhase", "lfoSync", "lfoOneShot", "lfoContour",
-            "modSlot2Source", "modSlot2Dest", "modSlot2Amount",
+            "lfoPhase", "lfoSync", "lfoContour",
+            "modSlot2Dest", "modSlot2Amount",
             "modSlot3Source", "modSlot3Dest", "modSlot3Amount",
             "modSlot4Source", "modSlot4Dest", "modSlot4Amount"
         };
@@ -541,8 +541,8 @@ public:
             "Normal decay", "Accent decay", "Filter Feedback",
             "Soft attack", "Slide time", "Square driver",
             "LFO rate", "LFO depth", "LFO wave", "LFO dest",
-            "LFO phase", "LFO key sync", "LFO one shot", "LFO contour",
-            "Mod 2 source", "Mod 2 dest", "Mod 2 amount",
+            "LFO phase", "LFO key sync", "LFO contour",
+            "Mod 2 dest", "Mod 2 amount",
             "Mod 3 source", "Mod 3 dest", "Mod 3 amount",
             "Mod 4 source", "Mod 4 dest", "Mod 4 amount"
         };
@@ -552,7 +552,7 @@ public:
         mod.items.add(Item { "bassComp",    "Filter Bass Comp", Type::value, {}, 0.0f });
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
 
-        static constexpr uint8_t numModItems = 23;
+        static constexpr uint8_t numModItems = 21;
         for (uint8_t i = 0; i < numModItems; ++i)
             mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
 

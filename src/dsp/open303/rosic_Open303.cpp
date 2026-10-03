@@ -309,7 +309,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   pitchSlewLimiter.setState(oscFreq);
   mainEnv.trigger();
   ampEnv.noteOn(true, noteNumber, 64);
-  if( lfoKeySync || lfoOneShot )
+  if( lfoKeySync )
     lfo.reset(lfoPhase);   // slid notes (slideToNote) deliberately do not retrigger the LFO
   idle = false;
 }

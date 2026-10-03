@@ -93,64 +93,8 @@ static void resetClearsFilterState()
   CHECK(lfo.getSample() < 0.6);          // same as a fresh LFO
 }
 
-static void oneShotHoldsEndValue()
-{
-  dfl::LFO down = makeLfo(2);  // saw down: 1 -> 0 over 100 samples
-  down.setOneShot(true);
-  CHECK(std::fabs(down.getSample() - 1.0) < 1e-9);
-  CHECK(down.getSample() < 1.0);
-  sampleAt(down, 150);
-  for(int i = 0; i < 300; i++)
-    CHECK(down.getSample() == 0.0);
-
-  dfl::LFO up = makeLfo(1);    // saw up holds at 1
-  up.setOneShot(true);
-  sampleAt(up, 150);
-  CHECK(up.getSample() == 1.0);
-}
-
-static void oneShotRestartsOnReset()
-{
-  dfl::LFO lfo = makeLfo(2);
-  lfo.setOneShot(true);
-  sampleAt(lfo, 200);
-  CHECK(lfo.getSample() == 0.0);
-  lfo.reset();
-  CHECK(std::fabs(lfo.getSample() - 1.0) < 1e-9);
-}
-
-static void oneShotHonoursStartPhase()
-{
-  dfl::LFO lfo = makeLfo(2);
-  lfo.setOneShot(true);
-  lfo.reset(0.5);              // half-way: finishes after 50 samples
-  CHECK(std::fabs(lfo.getSample() - 0.5) < 1e-9);
-  sampleAt(lfo, 60);
-  CHECK(lfo.getSample() == 0.0);
-}
-
-static void freeRunWrapsAgain()
-{
-  dfl::LFO lfo = makeLfo(2);
-  lfo.setOneShot(true);
-  sampleAt(lfo, 200);
-  lfo.setOneShot(false);
-  double lo = 1.0, hi = 0.0;
-  for(int i = 0; i < 200; i++)
-  {
-    double v = lfo.getSample();
-    lo = v < lo ? v : lo;
-    hi = v > hi ? v : hi;
-  }
-  CHECK(lo < 0.05 && hi > 0.95);
-}
-
 int main()
 {
-  oneShotHoldsEndValue();
-  oneShotRestartsOnReset();
-  oneShotHonoursStartPhase();
-  freeRunWrapsAgain();
   contourZeroIsLinear();
   contourClamps();
   powerCurveSagAndBulge();
