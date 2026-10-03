@@ -4,6 +4,7 @@
 #include <climits>
 #include "rosic_MidiNoteEvent.h"
 #include "rosic_BlendOscillator.h"
+#include "dfl_DualSubOscillator.h"
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
 #include "dfl_DiodeLadderFilter.h"
@@ -64,6 +65,12 @@ namespace rosic
     /** Sets up the waveform continuously between saw and square - the input should be in the range
     0...1 where 0 means pure saw and 1 means pure square. */
     void setWaveform(double newWaveform) { oscillator.setBlendFactor(newWaveform); }
+
+    /** Sets the sub oscillator gain (0.0 to 1.0). */
+    void setSubOscGain(double newGain) { subOscGain = newGain; }
+
+    /** Sets the sub oscillator blend (0.0 = -2 octaves, 1.0 = -1 octave). */
+    void setSubOscBlend(double newBlend) { subOscBlend = newBlend; }
 
     /** Sets the master tuning frequency for note A4 (usually 440 Hz). */
     void setTuning(double newTuning) { tuning = newTuning; }
@@ -294,8 +301,9 @@ namespace rosic
     //-----------------------------------------------------------------------------------------------
     // embedded objects:
 
-    MipMappedWaveTable        waveTable1, waveTable2;
+    MipMappedWaveTable        waveTable1, waveTable2, waveTable3;
     BlendOscillator           oscillator;
+    dfl::DualSubOscillator    subOscillator;
     TeeBeeFilter              filter;
     DiodeLadderFilter         diodeFilter;
     AnalogEnvelope            ampEnv;
@@ -359,6 +367,8 @@ namespace rosic
     double normalAmpRelease; // amp-env release time for non-accented notes
     double accentAmpRelease; // amp-env release time for accented notes
     double accentGain;       // between 0.0...1.0 - to scale the 3rd amp-envelope on accents
+    double subOscGain;       // sub oscillator gain (0.0 to 1.0)
+    double subOscBlend;      // sub oscillator blend (0.0 = -2 octaves, 1.0 = -1 octave)
     double pitchWheelFactor; // scale factor for oscillator frequency from pitch-wheel
     double n1, n2;           // normalizers for the RCs that are driven by the MEG
     int    currentNote;      // note which is currently played (-1 if none)
@@ -456,6 +466,8 @@ namespace rosic
     double instFreq = pitchSlewLimiter.getSample(oscFreq) * pitchModFactor;
     oscillator.setFrequency(instFreq*pitchWheelFactor);
     oscillator.calculateIncrement();
+    subOscillator.setFrequency(instFreq*pitchWheelFactor);
+    subOscillator.calculateIncrement();
 
     // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
     // set up the filter:
@@ -482,6 +494,8 @@ namespace rosic
     for(int i=1; i<=oversampling; i++)
     {
       tmp  = -oscillator.getSample();         // the raw oscillator signal
+      if( subOscGain > 0.0 )
+        tmp += subOscGain * (-subOscillator.getSample(subOscBlend));
       tmp  = highpass1.getSample(tmp);        // pre-filter highpass
       // Apply selected filter
       if(currentFilterType == FILTER_TEEBEE)
