@@ -2,7 +2,7 @@
 // feedback-HP knob position) compare the resonant boost (peak / res-0 response at the same
 // frequency), the peak frequency relative to the cutoff, and the passband level. Both filters get
 // the same cutoff parameter, as in the plugin; the diode's feedback HP is TeeBee's x 115/150.
-// usage: parity_cells [driveDb=-6] [-v]      Exit 0 if the summary scores are within the limits below.
+// usage: parity_cells [driveDb=-3] [-v]      Exit 0 if the summary scores are within the limits below.
 #include "rosic_TeeBeeFilter.h"
 #include "dfl_DiodeLadderFilter.h"
 #include <cstdio>
@@ -31,7 +31,7 @@ template <class F> static Cell cellOf(F& f, F& f0, double c)
 }
 int main(int argc, char** argv)
 {
-  double drive = -6; bool verbose = false;
+  double drive = -3; bool verbose = false;
   for (int i = 1; i < argc; i++) { if (!strcmp(argv[i], "-v")) verbose = true; else drive = atof(argv[i]); }
   const double cuts[] = { 500, 1500, 3000, 6000, 10000 }, ress[] = { 30, 60, 100 };
   const double fhs[2][2] = { { 159, 122 }, { 100, 76.7 } };   // {TeeBee, diode}: knob default, knob 1.0

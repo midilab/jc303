@@ -154,10 +154,10 @@ JC303::JC303()
                                                         juce::StringArray{ "Open303", "Circuit" },
                                                         SQUARE_OPEN303),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
-                                                        "Filter Drive",
+                                                        "Filter Saturation",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f),   // -6 dB into the diode saturator by default (parity with TeeBee and the real circuit)
+                                                        0.0f),   // -3 dB into the diode saturator by default (parity with TeeBee and the real circuit)
             std::make_unique<juce::AudioParameterFloat> ("bassComp",
                                                         "HP/BP Morph",
                                                         0.0f,
@@ -697,11 +697,12 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setPulseSag(rosic::Open303::sagForSquareDrive(value));
         break;
     case FILTER_DRIVE:
-        // 0..1 -> -6..+9 dB into the diode ladder's saturating input stage. The bottom of the
-        // range (-6 dB) is the TeeBee-parity / circuit-like setting (little saturation); turn
-        // up for grit. The ladder is only stable up to +9 dB (see setInputDrive).
+        // 0..1 -> -3..+16 dB into the diode ladder's saturating input stage. The bottom of the
+        // range (-3 dB) is the TeeBee-parity / circuit-like setting (little saturation); turn
+        // up for grit. Level is compensated across the range (see setInputDrive), so the knob is
+        // not a volume control. The ladder is stability-tested up to +16 dB.
         open303Core.setFilterDrive(
-            linToLin(value, 0.0, 1.0,  -6.0,     9.0)
+            linToLin(value, 0.0, 1.0,  -3.0,     16.0)
         );
         break;
     case BASS_COMP:
