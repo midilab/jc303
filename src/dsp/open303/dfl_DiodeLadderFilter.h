@@ -276,11 +276,13 @@ namespace dfl
     // a-coefficients), so it is a constant, not a runtime-derived value.
     static constexpr double HP_LP_SUBTRACT = 0.2;  // = 1/5, DC-null for the HP mix
 
-    // Static output trims so BP/HP sit near LP loudness on a saw (measured RMS
-    // sweep over cutoff/resonance): HP ran +5..9 dB hot at low/mid cutoff and
-    // clipped; BP ran 3..29 dB quiet.
-    static constexpr double HP_OUTPUT_GAIN = 0.5;  // -6 dB
-    static constexpr double BP_OUTPUT_GAIN = 2.0;  // +6 dB
+    // Static output trims so BP/HP sit near LP loudness on a saw: HP ran +5..9 dB hot at low/mid cutoff and
+    // clipped; BP ran 3..29 dB quiet. Targeted at a typical resonant 303 setting (resonance 50..70, cutoff
+    // 800..1500 Hz), where BP and HP then land within ~1 dB of LP (mean -0.1 / -0.6 dB). No correction by
+    // cutoff: the BP/HP-vs-LP gap at low resonance and high cutoff is the filter's character (a saw has most
+    // of its energy at the low harmonics that BP/HP remove).
+    static constexpr double HP_OUTPUT_GAIN = 0.7063;  // -3 dB
+    static constexpr double BP_OUTPUT_GAIN = 2.8251;  // +9 dB
 
     // Filter parameters
     double cutoff;
@@ -647,6 +649,15 @@ namespace dfl
     // is scaled to cancel DC, giving a real highpass whose passband gain matches LP
     // (measured within ~2%). Works in plain and octave mode; the steeper octave 1st
     // pole just shifts the corner, as it does for LP.
+    // Output gains, per signal term so that each end of a morph has the level of its pure mode:
+    //  lpGain   LP (and the LP end of the BP / HP morphs): passband (bass) compensation 2 + FIXED_PASSBAND_COMP * Kcomp
+    //           restores the LP bass droop that resonance causes; octave mode keeps its peak level on par with the
+    //           TeeBee at low resonance (OCTAVE_OUTPUT_TRIM, OCTAVE_LOWRES_TRIM_*); plain Diode uses plainTrimLP.
+    //  bandGain BP end: the same compensation with the BP/HP trim (plainTrimBPHP; octave as above).
+    //  hpGain   HP end: no bass compensation (the knob is repurposed as the HP -> LP morph), plainTrimBPHP.
+    // Each is scaled by the drive level table of its filter group (driveTrim), keeping saturation independent of them.
+    const double passbandComp = 2.0 + FIXED_PASSBAND_COMP * Kcomp;
+    const double octaveTrim = OCTAVE_OUTPUT_TRIM * (1.0 - OCTAVE_LOWRES_TRIM_DEPTH * exp(-Kcomp / OCTAVE_LOWRES_TRIM_DECAY));
     double out;
     switch (responseMode)
     {
@@ -654,9 +665,11 @@ namespace dfl
       {
         // BP mode: the morph knob crossfades BP -> LP (0 = pure bandpass, 1 = pure lowpass),
         // mirroring the HP morph below.
+        const double bandGain = passbandComp * (octaveMode ? octaveTrim : plainTrimBPHP) * driveTrim[octaveMode ? 0 : 2];
+        const double lpGain   = passbandComp * (octaveMode ? octaveTrim : plainTrimLP)   * driveTrim[octaveMode ? 0 : 1];
         double bp = BP_OUTPUT_GAIN * 0.25 * (lp2 - 2.0 * lp3 + lp4);
         double t  = std::clamp(passbandCompensation, 0.0, 1.0);
-        out = (1.0 - t) * bp + t * lp4;
+        out = (1.0 - t) * bandGain * bp + t * lpGain * lp4;
         break;
       }
       case RESPONSE_HP:
@@ -664,32 +677,19 @@ namespace dfl
         // HP mode: the morph knob (passbandCompensation) crossfades HP -> LP: 0 = pure highpass,
         // 1 = pure lowpass, linearly. The midpoint is a notch (highs from HP + lows from LP). The HP end is trimmed
         // by HP_OUTPUT_GAIN so it sits nearer the LP end in level.
+        const double hpGain = (octaveMode ? 1.0 : plainTrimBPHP) * driveTrim[octaveMode ? 0 : 2];
+        const double lpGain = passbandComp * (octaveMode ? octaveTrim : plainTrimLP) * driveTrim[octaveMode ? 0 : 1];
         double hp = un - HP_LP_SUBTRACT * (4.0 * lp1 - 6.0 * lp2 + 4.0 * lp3 - lp4);
         double t  = std::clamp(passbandCompensation, 0.0, 1.0);
-        out = (1.0 - t) * HP_OUTPUT_GAIN * hp + t * lp4;
+        out = (1.0 - t) * hpGain * HP_OUTPUT_GAIN * hp + t * lpGain * lp4;
         break;
       }
       case RESPONSE_LP:
       default:
-        out = lp4;
+        out = passbandComp * (octaveMode ? octaveTrim : plainTrimLP) * driveTrim[octaveMode ? 0 : 1] * lp4;
         break;
     }
-
-    // Apply passband (bass) gain compensation at output (keeps saturation
-    // independent of it). This restores the LP bass droop that resonance causes.
-    // In HP mode the same knob is repurposed as the HP->LP morph (above), so the
-    // bass-comp boost is not applied there (would double-use the control + run hot).
-    double comp = (responseMode == RESPONSE_HP) ? 1.0
-                                                : (2.0 + FIXED_PASSBAND_COMP * Kcomp);
-    // Octave mode: keep peak level on par with the TeeBee at low resonance (see
-    // OCTAVE_LOWRES_TRIM_*). The diode may stay a little hotter in peaks than the
-    // TeeBee only in plain Diode mode, never in octave mode.
-    if (!octaveMode)
-      comp *= (responseMode == RESPONSE_LP) ? plainTrimLP : plainTrimBPHP;
-    if (octaveMode && responseMode != RESPONSE_HP)
-      comp *= OCTAVE_OUTPUT_TRIM * (1.0 - OCTAVE_LOWRES_TRIM_DEPTH * exp(-Kcomp / OCTAVE_LOWRES_TRIM_DECAY));
-    comp *= driveTrim[octaveMode ? 0 : (responseMode == RESPONSE_LP ? 1 : 2)];
-    return out * comp;
+    return out;
   }
 
 } // end namespace dfl
