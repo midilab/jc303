@@ -19,6 +19,17 @@ namespace
                 return juce::String (x, x == std::floor (x) ? 0 : 1) + unit;
             });
     }
+
+    // -1..+1 params read -100%..+100% in the menu
+    juce::AudioParameterFloatAttributes bipolarAttributes()
+    {
+        return juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction ([] (float v, int)
+            {
+                const int pct = juce::roundToInt (v * 100.0f);
+                return (pct > 0 ? "+" : "") + juce::String (pct) + "%";
+            });
+    }
 }
 
 //==============================================================================
