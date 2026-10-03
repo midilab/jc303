@@ -87,7 +87,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuPage->setAssignableParam(0, "lfoRate");
     menuPage->setAssignableParam(1, "lfoDepth");
 
-    selectMenu(2);   // default menu page = OVD (Overdrive)
     menuPresetButton->onClick = [this] { selectMenu(0); };
     menuOverdriveButton->onClick = [this] { selectMenu(1); };
     menuModButton->onClick = [this] { selectMenu(2); };
@@ -116,6 +115,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
                 editor->menuKnob->setValue(v, juce::dontSendNotification);
         };
     }
+
+    selectMenu(2);   // default menu page; after the callback is set so the knob syncs
 
     // sequencer step toggles (note/rest editing) and click-to-select display LEDs
     for (int i = 0; i < 16; ++i)
