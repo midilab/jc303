@@ -69,6 +69,10 @@ namespace dfl
     /** Sets the input drive in decibels. */
     void setInputDrive(double newDrive);
 
+    /** Sets the shaper asymmetry, 0..1 (0 = symmetric tanh, 1 = bias SAT_BIAS_MAX). It ramps in with
+        the drive (none at or below 0 dB), so the clean / TeeBee-parity region is unaffected. */
+    void setSaturationBias(double newBias);
+
     /** Sets the morph amount (0..1) for the BP and HP responses: 0 = pure bandpass / highpass,
         1 = pure lowpass, crossfading linearly. Ignored in LP mode. (Historically the bass-comp
         knob; the LP/BP output compensation is now a fixed constant, see FIXED_PASSBAND_COMP.) */
@@ -156,7 +160,7 @@ namespace dfl
     double SG1, SG2, SG3, SG4;          // sigma gain coefficients
     double GAMMA;           // product of all G's
     double K;               // resonance/feedback factor
-    double Kcomp;           // drive-independent feedback (K / driveMakeup in octave mode) for the output compensation
+    double Kcomp;           // drive-independent feedback (K * driveLoopGain in octave mode) for the output compensation
     double plainTrimLP;     // plain Diode amplitude trim (linear gain), see calculateCoefficients
     double plainTrimBPHP;   // BP / HP amplitude trim (linear gain)
 
@@ -171,10 +175,38 @@ namespace dfl
     // the signal is actually driven. 0.5 = 6 dB headroom (matches DB303).
     static constexpr double headroomBias = 0.5;
 
-    // Exponent for the drive level-makeup (applied as 1/driveFactor^exp). 0 = no
-    // makeup (drive boosts level), 1 = full makeup (drive cuts level at real
-    // levels). 0.5 keeps the level within ~+-2-3 dB across drive and resonance.
-    static constexpr double DRIVE_MAKEUP_EXP = 0.5;
+    // Asymmetric shaper bias: the shaper is shape(a + b) - shape(b), scaled so its small-signal slope
+    // stays 1 (loop gain, resonance and stability are unchanged). b = bias knob (0..1) * SAT_BIAS_MAX,
+    // ramping from 0 at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean region and the
+    // TeeBee-parity default are untouched. Large-signal level and resonance depend on b; the level
+    // is part of the drive level tables DT below (fitted at SAT_BIAS_DEFAULT).
+    static constexpr double SAT_BIAS_MAX     = 1.0;
+    static constexpr double SAT_BIAS_TOP_DB  = 16.0;
+    static constexpr double SAT_BIAS_DEFAULT = 0.5;
+
+    // Drive level compensation (dB): output gain as a function of drive and resonance so the drive knob is not
+    // a volume control. Full-synth renders (default bias, mean over cutoff / env mod) of the level relative to the
+    // -3 dB default; the correction is target - measured, with the target rising 1 dB from 0 to +16 dB drive.
+    // Tables per filter [octave LP, plain LP, plain BP/HP]; rows: resonance knob 0/30/70/100 %, columns: drive nodes.
+    // Fitted by tools/diode-fidelity/fit_drive_trim.py (see docs/diode-octave-fidelity.md).
+    static constexpr int    DT_DRIVE_N = 6;
+    static constexpr int    DT_RES_N   = 4;
+    // Resonance nodes are in the skewed resonance the filter receives: skew(0), skew(.3), skew(.7), skew(1).
+    // The level change the bias causes (about +1.5 dB at low resonance and full drive at 0.5) is part of the drive
+    // level tables DT below, which are fitted with the default bias; a different bias shifts the level.
+
+    // Exponents for the drive level-makeup (applied as 1/driveFactor^exp). 0 = no makeup (drive
+    // boosts level), 1 = full makeup (small-signal level independent of drive). Below 0 dB the
+    // shaper is nearly linear, so the drive would only be a volume knob: cancel it fully (CLEAN).
+    // Above 0 dB the shaper compresses and drive should keep adding a little level with the grit:
+    // SAT is chosen so the level stays within about +-1.5 dB from 0 to +16 dB (see drive_level).
+    static constexpr double DRIVE_MAKEUP_EXP_CLEAN = 1.0;
+    static constexpr double DRIVE_MAKEUP_EXP_SAT   = 0.65;
+
+    // Saturation depth: above 0 dB the gain into the shaper grows (1 + SAT_DEPTH_EXTRA) times faster than the
+    // knob's dB value, so the top of the knob drives the tanh much harder. 0 = knob dB is the shaper gain.
+    // Below 0 dB nothing changes (clean region and the TeeBee-parity default are untouched).
+    static constexpr double SAT_DEPTH_EXTRA = 0.5;
 
     // The plain-mode knob 0..1 maps onto the old knob 0..PLAIN_KNOB_SPAN. PLAIN_SKEW_NORM = 1 - exp(-3)
     // is the normaliser of Open303's resonance skew.
@@ -211,14 +243,14 @@ namespace dfl
     // brightness and shriek match the TeeBee); at that setting, with drive-independent bass
     // comp, the diode would otherwise be ~4.6 dB quieter than the TeeBee (full-synth mean
     // over 96 settings, spread 0.3 dB).
-    static constexpr double OCTAVE_OUTPUT_TRIM = 1.6904;   // 10^(4.56/20)
+    static constexpr double OCTAVE_OUTPUT_TRIM = 1.2101;   // 10^(1.66/20)
 
     // Drive->resonance coupling (octave only). Below the reference the resonance is fully
     // drive-invariant (the boost is floored at 1.0, so lowering drive never weakens it - it
     // only cleans up the saturation stage). Above the reference, harder drive pushes the
     // effective resonance up toward the self-oscillation cap (OCTAVE_K_MARGIN * threshold).
     // REF is the linear driveFactor at +4.5 dB: dB2amp(4.5) (filterDrive 0..1 maps to
-    // -6..+9 dB, see FILTER_DRIVE in JC303.cpp). EXP sets the coupling strength.
+    // -3..+16 dB, see FILTER_DRIVE in JC303.cpp). EXP sets the coupling strength.
     static constexpr double OCTAVE_RES_DRIVE_REF = 1.6788;  // = dB2amp(4.5)
     static constexpr double OCTAVE_RES_DRIVE_EXP = 0.5;     // 0 = no coupling (invariant)
 
@@ -248,7 +280,14 @@ namespace dfl
     double cutoff;
     double drive;
     double driveFactor;
-    double driveMakeup;           // precomputed 1/driveFactor^DRIVE_MAKEUP_EXP
+    double driveMakeup;           // precomputed 1/driveFactor^makeup exponent (piecewise, see DRIVE_MAKEUP_EXP_*)
+    double satBiasKnob;           // bias amount, 0..1
+    double driveTrim[3];          // drive level compensation, linear, per table: [0] octave, [1] plain LP, [2] plain BP / HP
+    double satBias;               // asymmetric shaper offset in effect (knob * SAT_BIAS_MAX * drive ramp)
+    void updateSatBias();
+    double satBiasShape;          // shape(satBias)
+    double satBiasNorm;           // 1 / slope of the shaper at satBias
+    double driveLoopGain;         // driveFactor * driveMakeup: small-signal gain of the drive stage inside the loop
     double passbandCompensation;  // BP/HP morph amount (0 = pure BP/HP, 1 = pure LP)
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
@@ -375,8 +414,8 @@ namespace dfl
 
     // Feedback factor. Plain Diode: K = 17 is the diode-ladder self-oscillation point.
     // Octave mode follows the TeeBee instead (see the table block below); drive is applied
-    // through driveMakeup (drive-invariance: drive raises the loop's small-signal gain by
-    // driveFactor^DRIVE_MAKEUP_EXP, which driveMakeup cancels).
+    // through driveLoopGain (drive-invariance: K is divided by the drive stage's small-signal
+    // gain, so the loop gain does not depend on drive).
     if (octaveMode)
     {
       // TeeBee-parity feedback law (fitted offline, drive-0 basis, cutoff tuning 1.17 with the low-cutoff boost): the
@@ -435,13 +474,13 @@ namespace dfl
                             OCTAVE_RES_DRIVE_EXP);
       effK *= coupling;
       effK = std::min(effK, OCTAVE_K_MARGIN * (coupling > 1.0 ? kcSafe : kcInterp));   // stay just under self-oscillation
-      K = effK * driveMakeup;
+      K = effK / driveLoopGain;
       Kcomp = effK;   // the bass-comp and low-res trim must not depend on drive
       plainTrimLP = plainTrimBPHP = 1.0;
     }
     else
     {
-      // Plain Diode / BP / HP: the loop gain (K * driveFactor^DRIVE_MAKEUP_EXP) is 17 * rho(resonance)
+      // Plain Diode / BP / HP: the loop gain (K * driveLoopGain) is 17 * rho(resonance)
       // regardless of drive, so the drive knob changes the saturation only. rho is linear in the
       // remapped resonance up to the onset of self-oscillation (rho = 1.01), then rises quadratically
       // to the old default's full strength at the old resonance 100.
@@ -452,19 +491,50 @@ namespace dfl
       const double sk = PLAIN_RHO_ONSET / PLAIN_ONSET_S;
       const double u = std::max(0.0, (s - PLAIN_ONSET_S) / (1.0 - PLAIN_ONSET_S));
       const double rho = sk * s + (PLAIN_RHO_MAX - sk) * u * u;
-      K = 17.0 * rho * driveMakeup;
+      K = 17.0 * rho / driveLoopGain;
       Kcomp = 17.0 * s;
       // Amplitude trim (dB) as a function of rho that matches the level these modes had at the old
       // 4.5 dB default drive at the same loop gain: they are ~4 dB louder in the linear regime and
       // ~4-5 dB quieter when self-oscillating at the new -6 dB default (fitted, mean over cutoffs).
       static const double PR[9]  = { 0.0, 0.4941, 0.8092, 1.0101, 1.1018, 1.1695, 1.2199, 1.2571, 1.2957 };
-      static const double TLP[9] = { 4.40, 4.40, 3.80, 1.80, -1.50, -3.30, -3.90, -4.10, -4.30 };   // plain Diode
-      static const double TBH[9] = { 4.00, 2.60, 1.65, -0.15, -3.20, -4.55, -4.95, -5.05, -5.15 };  // BP / HP
+      static const double TLP[9] = { 1.51, 1.63, 1.72, 0.45, -2.70, -4.50, -5.10, -5.30, -5.50 };   // plain Diode
+      static const double TBH[9] = { 1.18, 0.27, 0.05, -1.05, -4.00, -5.35, -5.75, -5.85, -5.95 };  // BP / HP
       int ti = 0; while (ti < 7 && PR[ti + 1] < rho) ++ti;
       const double tf = std::min(std::max((rho - PR[ti]) / (PR[ti + 1] - PR[ti]), 0.0), 1.0);
       plainTrimLP   = pow(10.0, (TLP[ti] + tf * (TLP[ti + 1] - TLP[ti])) / 20.0);
       plainTrimBPHP = pow(10.0, (TBH[ti] + tf * (TBH[ti + 1] - TBH[ti])) / 20.0);
     }
+
+    // Drive level compensation (see DT_* above)
+    {
+      static const double DN[DT_DRIVE_N] = { -3.0, 0.0, 4.5, 9.0, 12.5, 16.0 };
+      static const double RN[DT_RES_N]   = { 0.0, 0.6245, 0.9235, 1.0 };
+      static const double DT[3][DT_RES_N][DT_DRIVE_N] = {
+        { { 0.00, 0.21, -0.53, -0.22, 0.98, 3.05 },
+          { 0.00, 0.07, -1.09, -1.45, -2.67, -4.04 },
+          { 0.00, 0.17, -1.02, -2.35, -3.65, -5.02 },
+          { 0.00, 0.30, -0.83, -2.16, -3.46, -4.83 } },
+        { { 0.00, 0.21, -0.53, -0.21, 1.00, 3.07 },
+          { 0.00, 0.12, -1.28, -2.52, -3.31, -3.72 },
+          { 0.00, 0.46, -0.18, -1.12, -2.00, -2.71 },
+          { 0.00, 1.55, 2.50, 2.30, 1.59, 0.88 } },
+        { { 0.00, 0.33, 0.34, 1.65, 3.46, 5.68 },
+          { 0.00, 0.68, 2.35, 5.55, 7.84, 9.59 },
+          { 0.00, 1.26, 3.94, 8.19, 11.75, 14.08 },
+          { 0.00, 2.22, 5.81, 9.98, 13.23, 15.81 } } };
+      int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
+      const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
+      const double rr = std::min(std::max(resonance, 0.0), 1.0);
+      int ri = 0; while (ri < DT_RES_N - 2 && RN[ri + 1] < rr) ++ri;
+      const double rf = (rr - RN[ri]) / (RN[ri + 1] - RN[ri]);
+      for (int m = 0; m < 3; ++m)
+      {
+        const double a = DT[m][ri][di]     + df * (DT[m][ri][di + 1]     - DT[m][ri][di]);
+        const double b = DT[m][ri + 1][di] + df * (DT[m][ri + 1][di + 1] - DT[m][ri + 1][di]);
+        driveTrim[m] = pow(10.0, (a + rf * (b - a)) / 20.0);
+      }
+    }
+
   }
 
   INLINE double DiodeLadderFilter::shape(double x)
@@ -517,13 +587,14 @@ namespace dfl
     double un;
     if (octaveMode)
     {
-      // un = input - fbHpGain*(K*(SIGMA + GAMMA*un) - s)  =>  solve for un exactly.
+      // un = input - fbHpGain*(K*(SIGMA + GAMMA*g*un) - s)  =>  solve for un exactly, with g the
+      // drive stage's small-signal gain (driveLoopGain) between un and the ladder input.
       double kg = feedbackHpGain * K;
-      un = (input - kg * SIGMA + feedbackHpGain * feedbackHpState) / (1.0 + kg * GAMMA);
-      feedbackHpState += feedbackHpAlpha * (K * (SIGMA + GAMMA * un) - feedbackHpState);
+      un = (input - kg * SIGMA + feedbackHpGain * feedbackHpState) / (1.0 + kg * driveLoopGain * GAMMA);
+      feedbackHpState += feedbackHpAlpha * (K * (SIGMA + GAMMA * driveLoopGain * un) - feedbackHpState);
     }
     else
-      un = (input - K * SIGMA) / (1.0 + K * GAMMA);
+      un = (input - K * SIGMA) / (1.0 + K * driveLoopGain * GAMMA);
 
     // Apply input nonlinearity with headroom scaling: scale down before the
     // tanh and back up after, so 0 dB drive (driveFactor == 1) stays clean
@@ -534,7 +605,7 @@ namespace dfl
     // acted as a loudness control. It keeps drive roughly level-neutral while the
     // tanh still saturates peaks - so drive changes timbre/resonance-compression,
     // not overall level.
-    un = shape(driveFactor * un * headroomBias) * driveMakeup / headroomBias;
+    un = (shape(driveFactor * un * headroomBias + satBias) - satBiasShape) * satBiasNorm * driveMakeup / headroomBias;
 
     // 1st stage (optionally one octave above for TB-303 style slope)
     double xin = un * gamma1 + S2 + epsilon1 * S1;
@@ -611,6 +682,7 @@ namespace dfl
       comp *= (responseMode == RESPONSE_LP) ? plainTrimLP : plainTrimBPHP;
     if (octaveMode && responseMode != RESPONSE_HP)
       comp *= OCTAVE_OUTPUT_TRIM * (1.0 - OCTAVE_LOWRES_TRIM_DEPTH * exp(-Kcomp / OCTAVE_LOWRES_TRIM_DECAY));
+    comp *= driveTrim[octaveMode ? 0 : (responseMode == RESPONSE_LP ? 1 : 2)];
     return out * comp;
   }
 
