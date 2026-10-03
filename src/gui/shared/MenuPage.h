@@ -652,11 +652,13 @@ public:
 
         for (auto& it : mod.items)
         {
+            if (it.id == "normalDecay" || it.id == "accentDecay" || it.id == "accentSweep" || it.id == "softAttack"
+                || it.id == "slideTime" || it.id == "lfoRate" || it.id == "feedbackFilter"
+                || it.id == "lfoContour" || it.id.endsWith("Amount"))
+                it.showParamText = true;   // these params format themselves with their units
             if (it.id == "lfoWaveform" || it.id == "lfoDestination"
                 || it.id.endsWith("Source") || it.id.endsWith("Dest"))
                 it.step = 1.0f;   // Choice params step one index at a time
-            if (it.id == "accentSweep")
-                it.showParamText = true;   // shows the time constant
         }
 
         pages.add(mod);
