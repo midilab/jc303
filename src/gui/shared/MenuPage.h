@@ -41,6 +41,7 @@ public:
         juce::StringArray options;  // select type only
         float step = 0.0f;          // value type only; 0 = auto (0.01 for 0..1 floats, 1 for ints/bools)
         juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
+        bool useParamText = false;     // value type only: show the parameter's own text (e.g. "250 ms") instead of 0-100
     };
 
     struct Page
@@ -353,6 +354,9 @@ private:
     {
         if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(valueTreeState.getParameter(item.id)))
             return p->choices[juce::jlimit(0, p->choices.size() - 1, p->getIndex())];
+        if (item.useParamText)
+            if (auto* p = valueTreeState.getParameter(item.id))
+                return p->getCurrentValueAsText();
         if (! item.valueNames.isEmpty())
             if (auto* p = intParam(item.id))
                 return item.valueNames[juce::jlimit(0, item.valueNames.size() - 1, p->get())];
@@ -530,13 +534,21 @@ public:
         {
             "normalDecay", "accentDecay", "feedbackFilter",
             "softAttack", "slideTime", "sqrDriver",
-            "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination"
+            "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination",
+            "lfoPhase", "lfoSync", "lfoContour",
+            "modSlot2Dest", "modSlot2Amount",
+            "modSlot3Source", "modSlot3Dest", "modSlot3Amount",
+            "modSlot4Source", "modSlot4Dest", "modSlot4Amount"
         };
         static const juce::String modItemLabels[] =
         {
             "Normal decay", "Accent decay", "Filter Feedback",
             "Soft attack", "Slide time", "Square driver",
-            "LFO rate", "LFO depth", "LFO wave", "LFO dest"
+            "LFO rate", "LFO depth", "LFO wave", "LFO dest",
+            "LFO phase", "LFO key sync", "LFO contour",
+            "Env dest", "Env amount",
+            "Mod 3 source", "Mod 3 dest", "Mod 3 amount",
+            "Mod 4 source", "Mod 4 dest", "Mod 4 amount"
         };
 
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f });
@@ -544,12 +556,19 @@ public:
         mod.items.add(Item { "bassComp",    "Filter Bass Comp", Type::value, {}, 0.0f });
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
 
-        static constexpr uint8_t numModItems = 10;
+        static constexpr uint8_t numModItems = 21;
         for (uint8_t i = 0; i < numModItems; ++i)
             mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
 
         for (auto& it : mod.items)
-            if (it.id == "lfoWaveform" || it.id == "lfoDestination")
+            if (it.id == "normalDecay" || it.id == "accentDecay" || it.id == "softAttack" || it.id == "slideTime"
+                || it.id == "lfoRate" || it.id == "feedbackFilter"
+                || it.id == "lfoContour" || it.id.endsWith("Amount"))
+                it.useParamText = true;   // these params format themselves with their units
+
+        for (auto& it : mod.items)
+            if (it.id == "lfoWaveform" || it.id == "lfoDestination"
+                || it.id.endsWith("Source") || it.id.endsWith("Dest"))
                 it.step = 1.0f;   // Choice params step one index at a time
 
         pages.add(mod);

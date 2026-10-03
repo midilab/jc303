@@ -1,6 +1,37 @@
 #include "JC303.h"
 #include GUI_THEME_HEADER
 
+namespace
+{
+    // Time mappings shared by the parameter text and setParameter, so the menu shows what you hear
+    double decayMs (double v)  { return linToLin (v, 0.0, 1.0, 30.0, 3000.0); }
+    double attackMs (double v) { return linToExp (v, 0.0, 1.0, 0.3, 3000.0); }
+    double slideMs (double v)  { return linToLin (v, 0.0, 1.0, 2.0, 360.0); }
+    double lfoRateHz (double v) { return linToExp (v, 0.0, 1.0, 0.1, 20.0); }
+    double feedbackHpfHz (double v) { return linToExp (v, 0.0, 1.0, 350.0, 100.0); }
+
+    juce::AudioParameterFloatAttributes unitAttributes (double (*toUnits) (double), const char* unit)
+    {
+        return juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction ([toUnits, unit] (float v, int)
+            {
+                const double x = std::round (toUnits (v) * 10.0) / 10.0;  // max 1 decimal place
+                return juce::String (x, x == std::floor (x) ? 0 : 1) + unit;
+            });
+    }
+
+    // -1..+1 params read -100%..+100% in the menu
+    juce::AudioParameterFloatAttributes bipolarAttributes()
+    {
+        return juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction ([] (float v, int)
+            {
+                const int pct = juce::roundToInt (v * 100.0f);
+                return (pct > 0 ? "+" : "") + juce::String (pct) + "%";
+            });
+    }
+}
+
 //==============================================================================
 JC303::JC303()
      : AudioProcessor (BusesProperties()
@@ -55,29 +86,29 @@ JC303::JC303()
             // MODs parameters
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.3f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.3f,
+                                                        unitAttributes (decayMs, " ms")),
             std::make_unique<juce::AudioParameterFloat> ("accentDecay",
                                                         "Accent Decay",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.03f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.03f,
+                                                        unitAttributes (decayMs, " ms")),
             std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
                                                         "Filt. FeedBack",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.63f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.63f,
+                                                        unitAttributes (feedbackHpfHz, " Hz")),
             std::make_unique<juce::AudioParameterFloat> ("softAttack",
                                                         "Soft Attack",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.26f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.26f,
+                                                        unitAttributes (attackMs, " ms")),
             std::make_unique<juce::AudioParameterFloat> ("slideTime",
                                                         "Slide time",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.33f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.33f,
+                                                        unitAttributes (slideMs, " ms")),
             std::make_unique<juce::AudioParameterFloat> ("sqrDriver",
                                                         "Square Driver",
                                                         0.0f,
@@ -93,9 +124,9 @@ JC303::JC303()
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("lfoRate",
                                                         "LFO Rate",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.25f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.25f,
+                                                        unitAttributes (lfoRateHz, " Hz")),
             std::make_unique<juce::AudioParameterFloat> ("lfoDepth",
                                                         "LFO Depth",
                                                         0.0f,
@@ -103,8 +134,56 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch" },
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
                                                         0),
+            std::make_unique<juce::AudioParameterFloat> ("lfoPhase",
+                                                        "LFO Phase",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // start phase on key-sync: 0..1 = 0..360 deg
+            std::make_unique<juce::AudioParameterBool> ("lfoSync",
+                                                        "LFO Key Sync",
+                                                        false),
+            std::make_unique<juce::AudioParameterFloat> ("lfoContour",
+                                                        "LFO Contour",
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,
+                                                        bipolarAttributes()),   // lag/slew (<0) or edge/sag shaping (>0), see dfl::LFO
+            std::make_unique<juce::AudioParameterChoice> ("modSlot2Dest",
+                                                        "Mod Slot 2 Destination",
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("modSlot2Amount",
+                                                        "Mod Slot 2 Amount",
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,
+                                                        bipolarAttributes()),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot3Source",
+                                                        "Mod Slot 3 Source",
+                                                        juce::StringArray{ "Off", "LFO", "Env" },
+                                                        0),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot3Dest",
+                                                        "Mod Slot 3 Destination",
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("modSlot3Amount",
+                                                        "Mod Slot 3 Amount",
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,
+                                                        bipolarAttributes()),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot4Source",
+                                                        "Mod Slot 4 Source",
+                                                        juce::StringArray{ "Off", "LFO", "Env" },
+                                                        0),
+            std::make_unique<juce::AudioParameterChoice> ("modSlot4Dest",
+                                                        "Mod Slot 4 Destination",
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("modSlot4Amount",
+                                                        "Mod Slot 4 Amount",
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,
+                                                        bipolarAttributes()),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
@@ -236,6 +315,17 @@ JC303::JC303()
     lfoRate = parameters.getRawParameterValue("lfoRate");
     lfoDepth = parameters.getRawParameterValue("lfoDepth");
     lfoDestination = parameters.getRawParameterValue("lfoDestination");
+    lfoPhase = parameters.getRawParameterValue("lfoPhase");
+    lfoSync = parameters.getRawParameterValue("lfoSync");
+    lfoContour = parameters.getRawParameterValue("lfoContour");
+    modSlotDest[0] = parameters.getRawParameterValue("modSlot2Dest");
+    modSlotAmount[0] = parameters.getRawParameterValue("modSlot2Amount");
+    modSlotSource[1] = parameters.getRawParameterValue("modSlot3Source");
+    modSlotDest[1] = parameters.getRawParameterValue("modSlot3Dest");
+    modSlotAmount[1] = parameters.getRawParameterValue("modSlot3Amount");
+    modSlotSource[2] = parameters.getRawParameterValue("modSlot4Source");
+    modSlotDest[2] = parameters.getRawParameterValue("modSlot4Dest");
+    modSlotAmount[2] = parameters.getRawParameterValue("modSlot4Amount");
     // overdrive parameters
     overdriveModelIndex = parameters.getRawParameterValue("overdriveModelIndex");
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
@@ -284,6 +374,11 @@ JC303::JC303()
     setParameter(LFO_RATE, *lfoRate);
     setParameter(LFO_DEPTH, *lfoDepth);
     setParameter(LFO_DESTINATION, *lfoDestination);
+    setParameter(LFO_PHASE, *lfoPhase);
+    setParameter(LFO_SYNC, *lfoSync);
+    setParameter(LFO_CONTOUR, *lfoContour);
+    for (int i = 0; i < 3; ++i)
+        updateModSlot(i);
     // overdrive parameters
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
@@ -322,6 +417,17 @@ JC303::JC303()
     parameters.addParameterListener("lfoRate", this);
     parameters.addParameterListener("lfoDepth", this);
     parameters.addParameterListener("lfoDestination", this);
+    parameters.addParameterListener("lfoPhase", this);
+    parameters.addParameterListener("lfoSync", this);
+    parameters.addParameterListener("lfoContour", this);
+    parameters.addParameterListener("modSlot2Dest", this);
+    parameters.addParameterListener("modSlot2Amount", this);
+    parameters.addParameterListener("modSlot3Source", this);
+    parameters.addParameterListener("modSlot3Dest", this);
+    parameters.addParameterListener("modSlot3Amount", this);
+    parameters.addParameterListener("modSlot4Source", this);
+    parameters.addParameterListener("modSlot4Dest", this);
+    parameters.addParameterListener("modSlot4Amount", this);
     // overdrive parameter listeners
     parameters.addParameterListener("overdriveLevel", this);
     parameters.addParameterListener("overdriveDryWet", this);
@@ -386,6 +492,17 @@ JC303::~JC303()
     parameters.removeParameterListener("lfoRate", this);
     parameters.removeParameterListener("lfoDepth", this);
     parameters.removeParameterListener("lfoDestination", this);
+    parameters.removeParameterListener("lfoPhase", this);
+    parameters.removeParameterListener("lfoSync", this);
+    parameters.removeParameterListener("lfoContour", this);
+    parameters.removeParameterListener("modSlot2Dest", this);
+    parameters.removeParameterListener("modSlot2Amount", this);
+    parameters.removeParameterListener("modSlot3Source", this);
+    parameters.removeParameterListener("modSlot3Dest", this);
+    parameters.removeParameterListener("modSlot3Amount", this);
+    parameters.removeParameterListener("modSlot4Source", this);
+    parameters.removeParameterListener("modSlot4Dest", this);
+    parameters.removeParameterListener("modSlot4Amount", this);
     // overdrive parameter listeners
     parameters.removeParameterListener("overdriveLevel", this);
     parameters.removeParameterListener("overdriveDryWet", this);
@@ -467,6 +584,19 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "lfoDestination") {
         setParameter(LFO_DESTINATION, newValue);
+    }
+    else if (parameterID == "lfoPhase") {
+        setParameter(LFO_PHASE, newValue);
+    }
+    else if (parameterID == "lfoSync") {
+        setParameter(LFO_SYNC, newValue);
+    }
+    else if (parameterID.startsWith("modSlot")) {
+        // "modSlotN..." with N = 2..4 -> matrix slot N-2 of the three free slots
+        updateModSlot(parameterID.substring(7, 8).getIntValue() - 2);
+    }
+    else if (parameterID == "lfoContour") {
+        setParameter(LFO_CONTOUR, newValue);
     }
     // overdrive parameter
     else if (parameterID == "overdriveLevel") {
@@ -651,29 +781,19 @@ void JC303::setParameter (Open303Parameters index, float value)
     // https://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
     //
     case NORMAL_DECAY:
-        open303Core.setAmpDecay(
-            linToLin(value, 0.0, 1.0, 30.0,      3000.0)
-        );
+        open303Core.setAmpDecay(decayMs(value));
         break;
     case ACCENT_DECAY:
-        open303Core.setAccentDecay(
-            linToLin(value, 0.0, 1.0, 30.0,      3000.0)
-        );
+        open303Core.setAccentDecay(decayMs(value));
         break;
     case FEEDBACK_HPF:
-        open303Core.setFeedbackHighpass(
-            linToExp(value, 0.0, 1.0,  350.0,    100.0)
-        );
+        open303Core.setFeedbackHighpass(feedbackHpfHz(value));
         break;
     case SOFT_ATTACK:
-        open303Core.setNormalAttack(
-            linToExp(value, 0.0, 1.0,  0.3,    3000.0)
-        );
+        open303Core.setNormalAttack(attackMs(value));
         break;
     case SLIDE_TIME:
-        open303Core.setSlideTime(
-            linToLin(value, 0.0, 1.0, 2.0, 360.0)
-        );
+        open303Core.setSlideTime(slideMs(value));
         break;
     case TANH_SHAPER_DRIVE:
         open303Core.setTanhShaperDrive(
@@ -702,15 +822,22 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setLfoWaveform((int) value);
         break;
     case LFO_RATE:
-        open303Core.setLfoRate(
-            linToExp(value, 0.0, 1.0, 0.1, 20.0)
-        );
+        open303Core.setLfoRate(lfoRateHz(value));
         break;
     case LFO_DEPTH:
         open303Core.setLfoDepth(value);
         break;
     case LFO_DESTINATION:
         open303Core.setLfoDestination((int) value);
+        break;
+    case LFO_PHASE:
+        open303Core.setLfoPhase(value);
+        break;
+    case LFO_SYNC:
+        open303Core.setLfoKeySync(value > 0.5f);
+        break;
+    case LFO_CONTOUR:
+        open303Core.setLfoContour(value);
         break;
 	}
 }
@@ -1141,6 +1268,15 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     midiMessages.swapWith (midiOut);
 }
 
+void JC303::updateModSlot(int index)
+{
+    // UI slot 2 (index 0) is hardwired to the envelope source and has no source parameter
+    open303Core.setModSlot(index + 1,
+                           index == 0 ? rosic::MOD_SRC_ENV : (int) *modSlotSource[index],
+                           (int) *modSlotDest[index],
+                           *modSlotAmount[index]);
+}
+
 void JC303::processBlock (juce::AudioBuffer<float>& buffer,
                           juce::MidiBuffer& midiMessages)
 {
@@ -1156,8 +1292,10 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // sequencer tick + MIDI handling + sample-accurate audio render
     renderMidi (buffer, midiMessages);
 
-    // GuitarML overdrive
+    // GuitarML overdrive; the LFO moves the dry/wet mix once per block
     if (*switchOverdriveState) {
+        overdriveMix.setWetMixProportion(juce::jlimit(0.0f, 1.0f,
+            *overdriveDryWet + (float) open303Core.getLfoOverdriveMod()));
         overdriveMix.pushDrySamples(buffer);
         guitarML.processAudioBlock(buffer);
         overdriveMix.mixWetSamples(buffer);

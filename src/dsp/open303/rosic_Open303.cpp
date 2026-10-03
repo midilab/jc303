@@ -117,6 +117,12 @@ void Open303::setCutoff(double newCutoff)
 
 void Open303::setResonance(double newResonance)
 {
+  baseResonance = newResonance;
+  applyResonance(newResonance);
+}
+
+void Open303::applyResonance(double newResonance)
+{
   // newResonance is a percentage (0..100). The TeeBee filter takes percent
   // directly and skews/normalizes it internally; the diode filter expects a
   // normalized, pre-skewed 0..1 value (K = 17*resonance, self-oscillation ~17).
@@ -303,6 +309,8 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   pitchSlewLimiter.setState(oscFreq);
   mainEnv.trigger();
   ampEnv.noteOn(true, noteNumber, 64);
+  if( lfoKeySync )
+    lfo.reset(lfoPhase);   // slid notes (slideToNote) deliberately do not retrigger the LFO
   idle = false;
 }
 
