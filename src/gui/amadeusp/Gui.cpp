@@ -34,7 +34,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         label->setInterceptsMouseClicks(false, false);
         addAndMakeVisible(label);
     }
-    filterDriveLabel.setText("DRIVE", juce::dontSendNotification);
+    filterDriveLabel.setText("SATURATION", juce::dontSendNotification);
     bassCompLabel.setText("HP/BP MORPH", juce::dontSendNotification);
     // on/off mod switch
     addAndMakeVisible(switchModButton = createSwitch());
@@ -260,8 +260,8 @@ void JC303Editor::setControlsLayout()
     filterDriveSlider->setBounds(filterDriveLocation.first, filterDriveLocation.second, sliderSmallSize, sliderSmallSize);
     bassCompSlider->setBounds(bassCompLocation.first, bassCompLocation.second, sliderSmallSize, sliderSmallSize);
     const int filterDriveCentreX = filterDriveLocation.first + sliderSmallSize / 2;
-    filterDriveLabel.setBounds(filterDriveCentreX - filterModLabelWidth / 2, filterDriveLocation.second - filterModLabelHeight - 1, filterModLabelWidth, filterModLabelHeight);
-    const int morphLabelWidth = 64;   // "HP/BP MORPH" is wider than the other mod labels
+    const int morphLabelWidth = 64;   // "HP/BP MORPH" and "SATURATION" are wider than the other mod labels
+    filterDriveLabel.setBounds(filterDriveCentreX - morphLabelWidth / 2, filterDriveLocation.second - filterModLabelHeight - 1, morphLabelWidth, filterModLabelHeight);
     bassCompLabel.setBounds(filterDriveCentreX - morphLabelWidth / 2, bassCompLocation.second - filterModLabelHeight - 1, morphLabelWidth, filterModLabelHeight);
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
     ledModButton->setBounds(modLedLocation.first, modLedLocation.second, ledWidth, ledHeight);

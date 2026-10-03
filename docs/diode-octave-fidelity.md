@@ -38,7 +38,7 @@ design got there and are superseded by that section.
 | `CUTOFF_TUNING_OCTAVE` 1.33 -> 1.17 | `dfl_DiodeLadderFilter.h` | Resonant peak sat 12-22% above TeeBee's; stopband and peak frequency now align |
 | Bass comp and the low-resonance trim computed from the drive-independent feedback (`Kcomp`) | `dfl_DiodeLadderFilter.h` | The bass-comp knob had a drive-dependent strength |
 | Octave output trim `OCTAVE_OUTPUT_TRIM` = +4.56 dB, low-res trim `1 - 0.13*exp(-Kcomp/2.5)` | `dfl_DiodeLadderFilter.h` | Level parity with TeeBee at the new default drive |
-| Filter drive knob maps to -6..+9 dB (was 0..9), default -6 dB (knob 0.0) | `JC303.cpp` | At -6 dB brightness and shriek match TeeBee; turn up for grit |
+| Filter Saturation knob (parameter id `filterDrive`, formerly Filter Drive) maps to -3..+16 dB (was -6..+9, originally 0..9), default -3 dB (knob 0.0) | `JC303.cpp` | At -3 dB brightness and shriek match TeeBee; turn up for grit. Below -3 dB the drive was pure gain |
 | Drive clamped to [-12, +9] dB | `dfl_DiodeLadderFilter.cpp` (`setInputDrive`) | Stability: the zero-delay solve assumes unit gain; >= 12 dB can oscillate near 20 kHz |
 | Loop-highpass state cleared on mode switch; `setFeedbackHighpass` refreshes the feedback law | `dfl_DiodeLadderFilter.h` | Avoids a stale-state step; the law depends on the corner |
 
@@ -449,3 +449,48 @@ original table set had left 24 low-cutoff, drive-9 cases marginal). Note for the
 `K` and `Kcomp`; overriding only `K` leaves the resonance-dependent output compensation out of the boost and
 inflates the solved K by ~20%. Verification: 8400-case stability sweep 0 failures (worst tail -138 dB),
 stress test clean, full-synth parity unchanged (level +0.02 dB, brightness +1.0%).
+
+## Filter Saturation: range, depth, level compensation and bias
+
+The drive knob (parameter id `filterDrive`, shown as Filter Saturation) maps to -3..+16 dB, default -3 dB. It is not a
+volume control: output level is compensated across drive and resonance. Before, the level rose +5 to +6 dB from -6 to
++9 dB at every resonance (Diode Octave; plain Diode and BP/HP differed with resonance, BP falling 4 dB at resonance 100).
+
+**Corrected claim.** An earlier version of this work reported level flatness measured with `drive_level` at resonance of
+about 0 only (the harness passed 0..1 where `setResonance` takes 0..100). With real resonance values the makeup exponents
+alone left Diode Octave rising +2 to +3 dB at high resonance and BP/HP falling up to 10 dB. The tables below fix that;
+`drive_level` now covers resonance 0/30/70/100.
+
+- **Piecewise makeup.** `DRIVE_MAKEUP_EXP_CLEAN` = 1.0 below 0 dB (the shaper is nearly linear there, so drive would only
+  be gain) and `DRIVE_MAKEUP_EXP_SAT` = 0.65 above. Continuous at 0 dB.
+- **Saturation depth.** Above 0 dB the gain into the shaper is `knob dB * (1 + SAT_DEPTH_EXTRA)` (0.5: +16 dB on the knob
+  is +24 dB into the shaper), so the top of the knob drives the `tanh` harder. Below 0 dB nothing changes, so the clean
+  region and the TeeBee-parity default are untouched. Measured effect on the filter output is modest (crest factor about
+  1 dB lower at 0.5 than at 0, about 1.5 dB at 1.0); `stability_sweep` is clean at 0.5 and 1.0.
+- **Loop gain.** `K` is divided by `driveLoopGain = driveFactor * driveMakeup`, and the zero-delay solve includes it too
+  (it assumed unit gain, exact only at or below 0 dB; above that the under-counted instantaneous feedback made the
+  loop oscillate at +16 dB, 20 kHz cutoff, resonance >= 0.97).
+- **Saturation bias.** The shaper is `shape(a + b) - shape(b)` divided by its slope at `b` (small-signal gain stays 1, so
+  loop gain, resonance and stability are unchanged), with `b = 0.5 * clamp(drive / 16, 0, 1)`: zero at and below 0 dB,
+  so the clean region and the default are untouched. Fixed at 0.5 in the plugin (`SAT_BIAS_DEFAULT`); the core still
+  has `setSaturationBias` / `Open303::setFilterBias` for the tools. A version with it as a parameter ("Saturation Bias
+  (Bite)") and its own level compensation is on the branch `backup/filter-bias-parameter`. On a saw the bias is
+  inaudible at 0.3, mostly a level and resonant-peak change at 0.5 and above; no even-harmonic emphasis is measurable
+  because the saw already has even partials.
+- **Drive level tables (`DT`).** Output gain in dB as a function of drive (nodes -3, 0, 4.5, 9, 12.5, 16) and resonance
+  (knob 0/30/70/100) for three tables: Diode Octave LP, plain Diode LP, plain BP/HP. Fitted by
+  `tools/diode-fidelity/fit_drive_trim.py` (full-synth renders at the shipped bias and depth, mean over 4 cutoffs x
+  3 env mods): correction = target - measured, target = flat, then +1 dB rising from 0 to +16 dB. The default (-3 dB)
+  row is zero, so TeeBee parity and the plain-mode trims fitted at the default are untouched. Refit the tables (with `DT`
+  zeroed) after changing the makeup, the depth, the bias, the shaper or the feedback law.
+- **Stability.** The clamp in `setInputDrive` is +16 dB, the top of `stability_sweep` (0 failures, worst tail -88 dB).
+- **Results** (`build/drive_level`, 48 settings per filter incl. resonance 0..100):
+  Diode Octave: clean region within 0.10 dB; above 0 dB within -1.2..+2.5 dB (mean +1.0 dB at +16 dB, the fitted target).
+  Plain Diode, BP and HP are much closer than before but not tight: worst case -4.8..+5.7 dB, because their level
+  jumps with resonance near self-oscillation onset and four resonance nodes cannot follow it (their limits in the test
+  are wide).
+- **Trims re-fitted** for the new default: `OCTAVE_OUTPUT_TRIM` 1.6904 -> 1.2101 and the plain trim tables lowered by the
+  measured level difference. Parity at -3 dB: level -0.01 dB (std 0.38), peak +0.69 dB, centroid -0.8%.
+- **Not done.** No listening verdict beyond the author's choice of depth 0.5 and bias 0.5 from WAV renders; no preset
+  migration (saved knob positions of the drive parameter changed: old -6 + 15k dB, new -3 + 19k dB). Brightness falls with
+  drive (centroid about -5% at 0 dB, -11% at +4.5 dB).

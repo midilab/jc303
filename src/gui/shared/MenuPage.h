@@ -623,9 +623,9 @@ public:
 
         // filter model and HP/BP morph work with the Mods switch off; everything else needs it on
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f });
-        mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "bassComp",    "HP/BP Morph",      Type::value, {}, 0.0f, {}, "filterType", -1, 3 });        // Diode BP / Diode HP only
-        mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
 
         static constexpr uint8_t numModItems = 10;
         for (uint8_t i = 0; i < numModItems; ++i)
