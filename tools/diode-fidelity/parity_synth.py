@@ -5,7 +5,7 @@ Mean over 96 settings (cutoff 400-2394 Hz, resonance 0/30/70/100, env mod 0/60/1
 diode-minus-TeeBee level, peak and spectral centroid, per drive setting; then the 'shriek' check (energy
 within +-5% of the dominant peak in the first 80 ms at resonance 100, cutoff 2394 Hz, for env mod 60/80/100).
 
-  python3 parity_synth.py [--check]      --check exits 1 unless the -6 dB (default drive) row is within
+  python3 parity_synth.py [--check]      --check exits 1 unless the -3 dB (default drive) row is within
                                          |level| < 0.5 dB (std < 0.6 dB), |centroid| < 3 %, peak < 1.5 dB."""
 import itertools, os, subprocess, sys
 import numpy as np
@@ -37,7 +37,7 @@ def main():
     for drive in (-6, -3, 0, 4.5, 9):
         d = np.array([[a - b for a, b in zip(stats(render(1, *k, drive))[:2], tb[k][:2])] + [100 * (stats(render(1, *k, drive))[2] / tb[k][2] - 1)] for k in settings])
         print(f"  drive {drive:+5.1f}: level {d[:, 0].mean():+5.2f} ({d[:, 0].std():.2f})  peak {d[:, 1].mean():+5.2f}  centroid {d[:, 2].mean():+5.1f}% (std {d[:, 2].std():.1f})")
-        if drive == -6: check = dict(level=d[:, 0].mean(), std=d[:, 0].std(), peak=d[:, 1].mean(), cen=d[:, 2].mean())
+        if drive == -3: check = dict(level=d[:, 0].mean(), std=d[:, 0].std(), peak=d[:, 1].mean(), cen=d[:, 2].mean())
     print("\nshriek energy within +-5% of the dominant peak (first 80 ms), res 100, cutoff 2394, no accent")
     for fh, lab in ((150, "knob default"), (100, "knob 1.0")):
         for env in (60, 80, 100):
