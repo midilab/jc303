@@ -1226,9 +1226,18 @@ juce::AudioProcessorEditor* JC303::createEditor()
 }
 
 //==============================================================================
+// The pattern is serialised as its own XML child; keep it out of the APVTS tree
+// so replaceState/copyState round trips don't stack stale copies.
+static void stripSequencerState (juce::ValueTree& state)
+{
+    for (auto child = state.getChildWithName ("AcidSeq303"); child.isValid(); child = state.getChildWithName ("AcidSeq303"))
+        state.removeChild (child, nullptr);
+}
+
 void JC303::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = parameters.copyState();
+    stripSequencerState (state);
     auto xml = state.createXml();
 
     // ── Persist sequencer state as a child element ────────────────────────────
@@ -1268,7 +1277,9 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
     {
         if (xmlState->hasTagName (parameters.state.getType()))
         {
-            parameters.replaceState (juce::ValueTree::fromXml (*xmlState));
+            auto newState = juce::ValueTree::fromXml (*xmlState);
+            stripSequencerState (newState);
+            parameters.replaceState (newState);
 
             // ── Restore sequencer sync state ──────────────────────────────────
             // SyncMode/StartMode/Tempo live in the APVTS params only; replaceState
@@ -1281,7 +1292,11 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                 _sequencer.setTempo((float) tp->get());
 
             // ── Restore sequencer state ───────────────────────────────────────
-            if (auto* seqXml = xmlState->getChildByName ("AcidSeq303"))
+            // Older saves accumulated one AcidSeq303 child per save; the last is the newest.
+            juce::XmlElement* seqXml = nullptr;
+            for (auto* child : xmlState->getChildWithTagNameIterator ("AcidSeq303"))
+                seqXml = child;
+            if (seqXml != nullptr)
             {
                 _sequencer.setTrackLength (static_cast<uint8_t>
                                             (seqXml->getIntAttribute ("stepLength", SEQ303_STEP_MAX)));
