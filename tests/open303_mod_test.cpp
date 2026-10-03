@@ -119,18 +119,21 @@ static void envelopeSlotIsHardwiredAndBipolar()
 
   // bipolar: positive amount pushes up while the envelope is high and below the knob value
   // once it has decayed
-  rosic::Open303 s;
-  s.setSampleRate(44100.0);
-  s.setLfoOn(true);
-  s.setModSlot(1, rosic::MOD_SRC_ENV, rosic::MOD_DEST_OVERDRIVE, 1.0);
-  s.noteOn(45, 100, 0.0);
-  s.getSample();
-  double early = s.getLfoOverdriveMod();
-  for(int i = 0; i < 44100; i++)
+  for(int slot : { 1, 2, 3 })   // free slots with the Env source are bipolar too
+  {
+    rosic::Open303 s;
+    s.setSampleRate(44100.0);
+    s.setLfoOn(true);
+    s.setModSlot(slot, rosic::MOD_SRC_ENV, rosic::MOD_DEST_OVERDRIVE, 1.0);
+    s.noteOn(45, 100, 0.0);
     s.getSample();
-  double late = s.getLfoOverdriveMod();
-  CHECK(early > 0.0);
-  CHECK(late < 0.0);
+    double early = s.getLfoOverdriveMod();
+    for(int i = 0; i < 44100; i++)
+      s.getSample();
+    double late = s.getLfoOverdriveMod();
+    CHECK(early > 0.0);
+    CHECK(late < 0.0);
+  }
 }
 
 static void modsOffDisablesTheMatrix()

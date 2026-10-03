@@ -542,7 +542,7 @@ public:
             "Soft attack", "Slide time", "Square driver",
             "LFO rate", "LFO depth", "LFO wave", "LFO dest",
             "LFO phase", "LFO key sync", "LFO contour",
-            "Env dest", "Env amt",
+            "Env dest", "Env amount",
             "Mod 3 source", "Mod 3 dest", "Mod 3 amount",
             "Mod 4 source", "Mod 4 dest", "Mod 4 amount"
         };
