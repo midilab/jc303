@@ -41,6 +41,7 @@ public:
         juce::StringArray options;  // select type only
         float step = 0.0f;          // value type only; 0 = auto (0.01 for 0..1 floats, 1 for ints/bools)
         juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
+        bool useParamText = false;     // value type only: show the parameter's own text (e.g. "250 ms") instead of 0-100
     };
 
     struct Page
@@ -353,6 +354,9 @@ private:
     {
         if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(valueTreeState.getParameter(item.id)))
             return p->choices[juce::jlimit(0, p->choices.size() - 1, p->getIndex())];
+        if (item.useParamText)
+            if (auto* p = valueTreeState.getParameter(item.id))
+                return p->getCurrentValueAsText();
         if (! item.valueNames.isEmpty())
             if (auto* p = intParam(item.id))
                 return item.valueNames[juce::jlimit(0, item.valueNames.size() - 1, p->get())];
@@ -547,6 +551,11 @@ public:
         static constexpr uint8_t numModItems = 10;
         for (uint8_t i = 0; i < numModItems; ++i)
             mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
+
+        for (auto& it : mod.items)
+            if (it.id == "normalDecay" || it.id == "accentDecay" || it.id == "softAttack" || it.id == "slideTime"
+                || it.id == "lfoRate" || it.id == "feedbackFilter")
+                it.useParamText = true;   // these params format themselves with their units
 
         for (auto& it : mod.items)
             if (it.id == "lfoWaveform" || it.id == "lfoDestination")
