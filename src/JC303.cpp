@@ -1,6 +1,37 @@
 #include "JC303.h"
 #include GUI_THEME_HEADER
 
+namespace
+{
+    // Time mappings shared by the parameter text and setParameter, so the menu shows what you hear
+    double decayMs (double v)  { return linToLin (v, 0.0, 1.0, 30.0, 3000.0); }
+    double attackMs (double v) { return linToExp (v, 0.0, 1.0, 0.3, 3000.0); }
+    double slideMs (double v)  { return linToLin (v, 0.0, 1.0, 2.0, 360.0); }
+    double lfoRateHz (double v) { return linToExp (v, 0.0, 1.0, 0.1, 20.0); }
+    double feedbackHpfHz (double v) { return linToExp (v, 0.0, 1.0, 350.0, 100.0); }
+
+    juce::AudioParameterFloatAttributes unitAttributes (double (*toUnits) (double), const char* unit)
+    {
+        return juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction ([toUnits, unit] (float v, int)
+            {
+                const double x = std::round (toUnits (v) * 10.0) / 10.0;  // max 1 decimal place
+                return juce::String (x, x == std::floor (x) ? 0 : 1) + unit;
+            });
+    }
+
+    // -1..+1 params read -100..+100 in the menu
+    juce::AudioParameterFloatAttributes bipolarAttributes()
+    {
+        return juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction ([] (float v, int)
+            {
+                const int pct = juce::roundToInt (v * 100.0f);
+                return (pct > 0 ? "+" : "") + juce::String (pct);
+            });
+    }
+}
+
 //==============================================================================
 JC303::JC303()
      : AudioProcessor (BusesProperties()
@@ -55,29 +86,29 @@ JC303::JC303()
             // MODs parameters
             std::make_unique<juce::AudioParameterFloat> ("normalDecay",
                                                         "Normal Decay",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.3f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.3f,
+                                                        unitAttributes (decayMs, " ms")),
             std::make_unique<juce::AudioParameterFloat> ("accentDecay",
                                                         "Accent Decay",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.03f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.03f,
+                                                        unitAttributes (decayMs, " ms")),
             std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
                                                         "Filt. FeedBack",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.63f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.63f,
+                                                        unitAttributes (feedbackHpfHz, " Hz")),
             std::make_unique<juce::AudioParameterFloat> ("softAttack",
                                                         "Soft Attack",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.26f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.26f,
+                                                        unitAttributes (attackMs, " ms")),
             std::make_unique<juce::AudioParameterFloat> ("slideTime",
                                                         "Slide time",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.33f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.33f,
+                                                        unitAttributes (slideMs, " ms")),
             std::make_unique<juce::AudioParameterFloat> ("sqrDriver",
                                                         "Square Driver",
                                                         0.0f,
@@ -93,9 +124,9 @@ JC303::JC303()
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("lfoRate",
                                                         "LFO Rate",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.25f),
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.25f,
+                                                        unitAttributes (lfoRateHz, " Hz")),
             std::make_unique<juce::AudioParameterFloat> ("lfoDepth",
                                                         "LFO Depth",
                                                         0.0f,
@@ -115,18 +146,18 @@ JC303::JC303()
                                                         false),
             std::make_unique<juce::AudioParameterFloat> ("lfoContour",
                                                         "LFO Contour",
-                                                        -1.0f,
-                                                        1.0f,
-                                                        0.0f),   // lag/slew (<0) or edge/sag shaping (>0), see dfl::LFO
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,
+                                                        bipolarAttributes()),   // lag/slew (<0) or edge/sag shaping (>0), see dfl::LFO
             std::make_unique<juce::AudioParameterChoice> ("modSlot2Dest",
                                                         "Mod Slot 2 Destination",
                                                         juce::StringArray{ "Cutoff", "Volume", "Pitch", "Resonance", "Overdrive", "Filter FM" },
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("modSlot2Amount",
                                                         "Mod Slot 2 Amount",
-                                                        -1.0f,
-                                                        1.0f,
-                                                        0.0f),
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,
+                                                        bipolarAttributes()),
             std::make_unique<juce::AudioParameterChoice> ("modSlot3Source",
                                                         "Mod Slot 3 Source",
                                                         juce::StringArray{ "Off", "LFO", "Env" },
@@ -137,9 +168,9 @@ JC303::JC303()
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("modSlot3Amount",
                                                         "Mod Slot 3 Amount",
-                                                        -1.0f,
-                                                        1.0f,
-                                                        0.0f),
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,
+                                                        bipolarAttributes()),
             std::make_unique<juce::AudioParameterChoice> ("modSlot4Source",
                                                         "Mod Slot 4 Source",
                                                         juce::StringArray{ "Off", "LFO", "Env" },
@@ -150,9 +181,9 @@ JC303::JC303()
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("modSlot4Amount",
                                                         "Mod Slot 4 Amount",
-                                                        -1.0f,
-                                                        1.0f,
-                                                        0.0f),
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,
+                                                        bipolarAttributes()),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
                                                         "Overdrive Model Index",
@@ -750,29 +781,19 @@ void JC303::setParameter (Open303Parameters index, float value)
     // https://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
     //
     case NORMAL_DECAY:
-        open303Core.setAmpDecay(
-            linToLin(value, 0.0, 1.0, 30.0,      3000.0)
-        );
+        open303Core.setAmpDecay(decayMs(value));
         break;
     case ACCENT_DECAY:
-        open303Core.setAccentDecay(
-            linToLin(value, 0.0, 1.0, 30.0,      3000.0)
-        );
+        open303Core.setAccentDecay(decayMs(value));
         break;
     case FEEDBACK_HPF:
-        open303Core.setFeedbackHighpass(
-            linToExp(value, 0.0, 1.0,  350.0,    100.0)
-        );
+        open303Core.setFeedbackHighpass(feedbackHpfHz(value));
         break;
     case SOFT_ATTACK:
-        open303Core.setNormalAttack(
-            linToExp(value, 0.0, 1.0,  0.3,    3000.0)
-        );
+        open303Core.setNormalAttack(attackMs(value));
         break;
     case SLIDE_TIME:
-        open303Core.setSlideTime(
-            linToLin(value, 0.0, 1.0, 2.0, 360.0)
-        );
+        open303Core.setSlideTime(slideMs(value));
         break;
     case TANH_SHAPER_DRIVE:
         open303Core.setTanhShaperDrive(
@@ -801,9 +822,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setLfoWaveform((int) value);
         break;
     case LFO_RATE:
-        open303Core.setLfoRate(
-            linToExp(value, 0.0, 1.0, 0.1, 20.0)
-        );
+        open303Core.setLfoRate(lfoRateHz(value));
         break;
     case LFO_DEPTH:
         open303Core.setLfoDepth(value);
