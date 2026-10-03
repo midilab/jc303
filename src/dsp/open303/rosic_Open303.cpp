@@ -163,7 +163,9 @@ void Open303::setFilterDrive(double newDriveDb)
 
 void Open303::setPassbandCompensation(double newCompensation)
 {
-  // Diode-ladder-only: TeeBee has no passband compensation.
+  // Diode HP / Diode BP morph amount (the diode-ladder only; the TeeBee has none). The LFO
+  // may modulate it per sample (see getSample), so keep the knob value as the base.
+  morphBase = newCompensation;
   diodeFilter.setPassbandCompensation(newCompensation);
 }
 

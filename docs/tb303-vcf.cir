@@ -1,0 +1,86 @@
+* TB-303 VCF - nominal SPICE netlist (ngspice)
+* Reconstructed from the Roland TB-303 service-manual VCF page and Stinchcombe's analysis
+* (https://www.timstinchcombe.co.uk/index.php?pge=diode and ?pge=diode2). See docs/diode-octave-fidelity.md.
+*
+* Parameters you will want to change:
+*   RVt/RVb : resonance pot position a (0..1). Currently a=0.5; RVt=(1-a)*50k, RVb=a*50k.
+*   Itail   : filter tail current. 21uA ~ effective cutoff 1150 Hz; cutoff scales ~linearly with Itail.
+*   Vin     : AC=1 for small-signal; for transients replace with SIN()/PULSE().
+* Known assumptions / guesses (unverified against a physical board):
+*   - Q22a/Q22b base tied to collector (diode-like top pair).
+*   - C27/C25 tap the two top rung nodes (L0/R0) differentially.
+*   - Q19 base is driven from c21a (this gives positive feedback; c21b gives negative feedback).
+*   - Generic NPN model for every transistor; the exponential converter (Q9-Q11) is replaced by an ideal tail current.
+* Node names are case-insensitive in SPICE: do not use nb and nB for different nodes.
+* TB-303 VCF  a=0.5 If=2.1e-05
+.model QN NPN (IS=1e-14 BF=300 VAF=80 RB=30 RE=1 CJE=2p CJC=1p TF=0.3n)
+V12 vdd 0 DC 12
+V5  v5  0 DC 5.3333
+R95 vdd vcc 100
+C28 vcc 0 47u
+* ladder top bias + top pair (diode-connected pair, common bias)
+R115 vcc nb 10k
+C30  nb 0 10u
+Q22a nb nb L0 QN
+Q22b nb nb R0 QN
+* ladder: diode-connected NPNs, caps between arms
+Q16 L0 L0 L1 QN
+Q23 R0 R0 R1 QN
+Q14 L1 L1 L2 QN
+Q17 R1 R1 R2 QN
+Q13 L2 L2 L3 QN
+Q15 R2 R2 R3 QN
+C26 L0 R0 33n
+C24 L1 R1 33n
+C19 L2 R2 33n
+C18 L3 R3 18n
+* input pair Q12 + tail current (replaces the exponential converter)
+Q12a L3 inL tail QN
+Q12b R3 inR tail QN
+Itail tail 0 DC 2.1e-05
+* input bias / coupling
+R17 v5 nin 2.2k
+C16 nin 0 10u
+R19 nin inL 2.2k
+R16 nin inR 2.2k
+C15 inL src 1u
+R20 src in 220k
+* output diff pair Q21 (taps the two top rung nodes), tail Q20, bias
+C27 L0 b21a 0.1u
+C25 R0 b21b 0.1u
+R113 b21a nbq 100k
+R114 b21b nbq 100k
+R9  v5 nbq 10k
+C29 nbq 0 1u
+R6  nbq nt 10k
+R7  nt 0 10k
+Q20 e21 nt e20 QN
+R8  e20 0 2.2k
+Q21a c21a b21a e21 QN
+Q21b c21b b21b e21 QN
+R1  vcc c21a 22k
+R2  vcc c21b 22k
+Q19 vcc c21a e19 QN
+R96 e19 0 10k
+C14 e19 vout 1u
+* resonance pot (linear, wiper position a), loaded by C6/R11/Q18
+RVt vout wip {(1-0.5)*50k + 1}
+RVb wip 0 {0.5*50k + 1}
+C6  wip qb0 1u
+R11 qb0 qb 2.2k
+Q18 vcc qb e18 QN
+R12 qb qbias 100k
+R13 v5 qbias 100k
+C7  qbias 0 1u
+R14 e18 0 10k
+C8  e18 fbr 1u
+R15 fbr inR 10k
+.nodeset v(nb)=11.5 v(L0)=10.95 v(R0)=10.95 v(L1)=10.4 v(R1)=10.4 v(L2)=9.85 v(R2)=9.85 v(L3)=9.3 v(R3)=9.3 v(tail)=4.7 v(inL)=5.3 v(inR)=5.3
+Vin in 0 DC 0 AC 1
+.ac dec 60 1 20000
+.control
+run
+wrdata tb303_vcf_ac.dat vdb(vout) vp(vout)
+quit
+.endc
+.end

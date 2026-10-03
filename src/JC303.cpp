@@ -103,7 +103,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch" },
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "HP/BP Morph" },
                                                         0),
             // overdrive
             std::make_unique<juce::AudioParameterInt> ("overdriveModelIndex",
@@ -130,15 +130,15 @@ JC303::JC303()
                                                         juce::StringArray{ "TeeBee", "Diode Octave", "Diode", "Diode BP", "Diode HP" },
                                                         FILTER_TEEBEE),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
-                                                        "Filter Drive",
+                                                        "Filter Saturation",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f),   // ~4.5 dB into the diode saturator by default
+                                                        0.0f),   // -3 dB into the diode saturator by default (parity with TeeBee and the real circuit)
             std::make_unique<juce::AudioParameterFloat> ("bassComp",
-                                                        "Bass Comp",
+                                                        "HP/BP Morph",
                                                         0.0f,
                                                         1.0f,
-                                                        0.1f),   // light passband/bass makeup by default
+                                                        0.0f),   // 0 = pure HP/BP, 1 = lowpass (Diode HP / Diode BP only)
             std::make_unique<juce::AudioParameterFloat> ("filterFm",
                                                         "Filter FM",
                                                         0.0f,
@@ -290,9 +290,7 @@ JC303::JC303()
     setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
     if (*switchModState)
     {
-        open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
         setParameter(FILTER_DRIVE, *filterDrive);
-        setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
     }
 
@@ -478,13 +476,13 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "overdriveModelIndex") {
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
     }
-    else if (parameterID == "filterType" && *switchModState) {
+    else if (parameterID == "filterType") {
         open303Core.setFilterType(static_cast<FilterType>((int) newValue));
     }
     else if (parameterID == "filterDrive" && *switchModState) {
         setParameter(FILTER_DRIVE, newValue);
     }
-    else if (parameterID == "bassComp" && *switchModState) {
+    else if (parameterID == "bassComp") {
         setParameter(BASS_COMP, newValue);
     }
     else if (parameterID == "filterFm" && *switchModState) {
@@ -681,15 +679,16 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case FILTER_DRIVE:
-        // 0..1 -> 0..9 dB into the diode ladder's saturating input stage
-        // (matches the DB303 plugin's tuned range; the unity-makeup shaper
-        // here has no headroom scaling, so it already runs hot per-dB)
+        // 0..1 -> -3..+16 dB into the diode ladder's saturating input stage. The bottom of the
+        // range (-3 dB) is the TeeBee-parity / circuit-like setting (little saturation); turn
+        // up for grit. Level is compensated across the range (see setInputDrive), so the knob is
+        // not a volume control. The ladder is stability-tested up to +16 dB.
         open303Core.setFilterDrive(
-            linToLin(value, 0.0, 1.0,   0.0,     9.0)
+            linToLin(value, 0.0, 1.0,  -3.0,     16.0)
         );
         break;
     case BASS_COMP:
-        // 0..1 diode-ladder passband (bass) compensation, applied directly
+        // 0..1 HP/BP -> LP morph for the Diode HP / Diode BP models (0 = pure HP/BP); parameter id kept as "bassComp"
         open303Core.setPassbandCompensation(value);
         break;
     case FILTER_FM:
@@ -718,6 +717,10 @@ void JC303::setParameter (Open303Parameters index, float value)
 // toogle/restore 303 original and mod modes
 void JC303::setDevilMod(bool mode)
 {
+    // filter model and HP/BP morph are available with mods on or off
+    open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
+    setParameter(BASS_COMP, *bassComp);
+
     if (mode == true) {
         decayMin = 30.0;
         decayMax = 3000.0;
@@ -727,13 +730,12 @@ void JC303::setDevilMod(bool mode)
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(SLIDE_TIME, *slideTime);
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
-        open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
         setParameter(FILTER_DRIVE, *filterDrive);
-        setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
         open303Core.setLfoOn(true);
     } else if (mode == false) {
-        open303Core.setFilterType(FILTER_TEEBEE);
+        setParameter(FILTER_DRIVE, 0.0f);
+        setParameter(FILTER_FM, 0.0f);
         open303Core.setLfoOn(false);
         decayMin = 200.0;
         decayMax = 2000.0;
