@@ -276,6 +276,12 @@ namespace dfl
     // a-coefficients), so it is a constant, not a runtime-derived value.
     static constexpr double HP_LP_SUBTRACT = 0.2;  // = 1/5, DC-null for the HP mix
 
+    // Static output trims so BP/HP sit near LP loudness on a saw (measured RMS
+    // sweep over cutoff/resonance): HP ran +5..9 dB hot at low/mid cutoff and
+    // clipped; BP ran 3..29 dB quiet.
+    static constexpr double HP_OUTPUT_GAIN = 0.5;  // -6 dB
+    static constexpr double BP_OUTPUT_GAIN = 2.0;  // +6 dB
+
     // Filter parameters
     double cutoff;
     double drive;
@@ -648,7 +654,7 @@ namespace dfl
       {
         // BP mode: the morph knob crossfades BP -> LP (0 = pure bandpass, 1 = pure lowpass),
         // mirroring the HP morph below.
-        double bp = 0.25 * (lp2 - 2.0 * lp3 + lp4);
+        double bp = BP_OUTPUT_GAIN * 0.25 * (lp2 - 2.0 * lp3 + lp4);
         double t  = std::clamp(passbandCompensation, 0.0, 1.0);
         out = (1.0 - t) * bp + t * lp4;
         break;
@@ -656,11 +662,11 @@ namespace dfl
       case RESPONSE_HP:
       {
         // HP mode: the morph knob (passbandCompensation) crossfades HP -> LP: 0 = pure highpass,
-        // 1 = pure lowpass, linearly. The midpoint is a notch (highs from HP + lows from LP). Both endpoints
-        // share ~the same passband gain, so the sweep stays even in level.
+        // 1 = pure lowpass, linearly. The midpoint is a notch (highs from HP + lows from LP). The HP end is trimmed
+        // by HP_OUTPUT_GAIN so it sits nearer the LP end in level.
         double hp = un - HP_LP_SUBTRACT * (4.0 * lp1 - 6.0 * lp2 + 4.0 * lp3 - lp4);
         double t  = std::clamp(passbandCompensation, 0.0, 1.0);
-        out = (1.0 - t) * hp + t * lp4;
+        out = (1.0 - t) * HP_OUTPUT_GAIN * hp + t * lp4;
         break;
       }
       case RESPONSE_LP:
