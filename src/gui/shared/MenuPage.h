@@ -543,6 +543,8 @@ public:
         mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f });
         mod.items.add(Item { "bassComp",    "Filter Bass Comp", Type::value, {}, 0.0f });
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
+        mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f });
+        mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f });
 
         static constexpr uint8_t numModItems = 10;
         for (uint8_t i = 0; i < numModItems; ++i)
