@@ -219,7 +219,17 @@ JC303::JC303()
                                                         false),
             std::make_unique<juce::AudioParameterBool> ("seqClear",
                                                         "Seq Clear",
-                                                        false)
+                                                        false),
+            std::make_unique<juce::AudioParameterFloat> ("subOscGain",
+                                                        "Sub Osc",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),
+            std::make_unique<juce::AudioParameterFloat> ("subOscBlend",
+                                                        "Sub Octave -2/-1",
+                                                        0.0f,    // -2 octaves (25% pulse)
+                                                        1.0f,    // -1 octave (square)
+                                                        1.0f)
         })
 {
     // assign a pointer to use it around for each parameter
@@ -272,6 +282,8 @@ JC303::JC303()
     seqPlayState = parameters.getRawParameterValue("seqPlayState");
     seqGenerate = parameters.getRawParameterValue("seqGenerate");
     seqClear = parameters.getRawParameterValue("seqClear");
+    subOscGain = parameters.getRawParameterValue("subOscGain");
+    subOscBlend = parameters.getRawParameterValue("subOscBlend");
 
     // force initial user values(some hosts migth not do it using value tree state)
     setParameter(WAVEFORM, *waveForm);
@@ -307,6 +319,8 @@ JC303::JC303()
         setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
     }
+    setParameter(SUB_OSC_GAIN, *subOscGain);
+    setParameter(SUB_OSC_BLEND, *subOscBlend);
 
     // presets and overdrive models
     setupDataDirectories();
@@ -354,6 +368,8 @@ JC303::JC303()
     parameters.addParameterListener("seqSyncMode", this);
     parameters.addParameterListener("seqStartMode", this);
     parameters.addParameterListener("seqTempo", this);
+    parameters.addParameterListener("subOscGain", this);
+    parameters.addParameterListener("subOscBlend", this);
 
     // ── Sequencer callback ────────────────────────────────────────────────────
     // Runs on the audio thread. Stores each event into _pendingNotes[] so
@@ -420,6 +436,8 @@ JC303::~JC303()
     parameters.removeParameterListener("seqSyncMode", this);
     parameters.removeParameterListener("seqStartMode", this);
     parameters.removeParameterListener("seqTempo", this);
+    parameters.removeParameterListener("subOscGain", this);
+    parameters.removeParameterListener("subOscBlend", this);
 }
 
 // Parameter change callback
@@ -547,6 +565,12 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "seqTempo") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
             _sequencer.setTempo((float) p->get());
+    }
+    else if (parameterID == "subOscGain") {
+        setParameter(SUB_OSC_GAIN, newValue);
+    }
+    else if (parameterID == "subOscBlend") {
+        setParameter(SUB_OSC_BLEND, newValue);
     }
 }
 
@@ -733,6 +757,14 @@ void JC303::setParameter (Open303Parameters index, float value)
         break;
     case LFO_DESTINATION:
         open303Core.setLfoDestination((int) value);
+        break;
+    // sub oscillator
+    case SUB_OSC_GAIN:
+        open303Core.setSubOscGain(value);
+        break;
+    case SUB_OSC_BLEND:
+        // 0 = -2 octaves (25% pulse), 1 = -1 octave (square)
+        open303Core.setSubOscBlend(value);
         break;
     case LFO_PHASE:
         open303Core.setLfoPhase(value);

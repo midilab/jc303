@@ -45,6 +45,9 @@ enum Open303Parameters
   OVERDRIVE_LEVEL,
   OVERDRIVE_DRY_WET,
   OVERDRIVE_MODEL_INDEX,
+  // Sub oscillator
+  SUB_OSC_GAIN,
+  SUB_OSC_BLEND,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -239,6 +242,9 @@ private:
     std::atomic<float>* seqSyncMode = nullptr;
     std::atomic<float>* seqStartMode = nullptr;
     std::atomic<float>* seqTempo = nullptr;
+    // Sub oscillator
+    std::atomic<float>* subOscGain = nullptr;
+    std::atomic<float>* subOscBlend = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;
