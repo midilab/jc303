@@ -25,6 +25,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void timerCallback() override;
+    bool keyPressed (const juce::KeyPress&) override;
     void updateKeyboardForSelectedStep();
     void selectStepFromSelector(int step);
 

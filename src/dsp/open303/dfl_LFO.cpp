@@ -57,9 +57,9 @@ namespace dfl
     }
   }
 
-  void LFO::reset()
+  void LFO::reset(double startPhase)
   {
-    phase = 0.0;
+    phase = startPhase - floor(startPhase);   // wrap into [0, 1)
     if(waveform == 4)  // Random S&H
       sampleHoldValue = generateRandomValue();
   }
