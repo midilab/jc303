@@ -749,10 +749,6 @@ void JC303::setParameter (Open303Parameters index, float value)
 // toogle/restore 303 original and mod modes
 void JC303::setDevilMod(bool mode)
 {
-    // filter model and HP/BP morph are available with mods on or off
-    open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
-    setParameter(BASS_COMP, *bassComp);
-
     if (mode == true) {
         decayMin = 30.0;
         decayMax = 3000.0;
@@ -765,8 +761,10 @@ void JC303::setDevilMod(bool mode)
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(SLIDE_TIME, *slideTime);
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
+        open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
         open303Core.setSquareModel(static_cast<SquareModel>((int) *squareModel));
         setParameter(FILTER_DRIVE, *filterDrive);
+        setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
@@ -779,9 +777,8 @@ void JC303::setDevilMod(bool mode)
         open303Core.setLfoOn(true);
         open303Core.setCircuitPulseShape(true);
     } else if (mode == false) {
+        open303Core.setFilterType(FILTER_TEEBEE);
         open303Core.setSquareModel(SQUARE_OPEN303);
-        setParameter(FILTER_DRIVE, 0.0f);
-        setParameter(FILTER_FM, 0.0f);
         open303Core.setLfoOn(false);   // hard-gates LFO; its internal values are never read while off
         open303Core.setCircuitPulseShape(false);   // moot here: Mods off is the Open303 square
         decayMin = 200.0;

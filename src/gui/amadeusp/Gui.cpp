@@ -111,14 +111,14 @@ void JC303Editor::updateMorphVisibility(int filterTypeIndex)
 
 void JC303Editor::updateModEnabled(bool modsOn)
 {
-    // filter model and HP/BP morph stay live with mods off
     for (auto* knob : { normalDecaySlider, accentDecaySlider, feedbackFilterSlider, softAttackSlider,
-                        slideTimeSlider, sqrDriverSlider, filterDriveSlider })
+                        slideTimeSlider, sqrDriverSlider, filterDriveSlider, bassCompSlider })
     {
         knob->setEnabled(modsOn);
         knob->setAlpha(modsOn ? 1.0f : 0.4f);
     }
     filterDriveLabel.setAlpha(modsOn ? 1.0f : 0.4f);
+    bassCompLabel.setAlpha(modsOn ? 1.0f : 0.4f);
 }
 
 JC303Editor::~JC303Editor()
