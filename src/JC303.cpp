@@ -294,33 +294,14 @@ JC303::JC303()
     setParameter(DECAY, *decay);
     setParameter(ACCENT, *accent);
     setParameter(VOLUME, *volume);
+    // MOD/LFO/sub-osc values are applied only through setDevilMod so a mod-off
+    // startup never overwrites the restored core defaults (they are all loaded
+    // from the params inside setDevilMod(true)).
     setDevilMod(*switchModState);
-    setParameter(NORMAL_DECAY, *normalDecay);
-    setParameter(ACCENT_DECAY, *accentDecay);
-    setParameter(FEEDBACK_HPF, *feedbackFilter);
-    setParameter(SOFT_ATTACK, *softAttack);
-    setParameter(SLIDE_TIME, *slideTime);
-    setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
-    // LFO parameters
-    setParameter(LFO_WAVEFORM, *lfoWaveform);
-    setParameter(LFO_RATE, *lfoRate);
-    setParameter(LFO_DEPTH, *lfoDepth);
-    setParameter(LFO_DESTINATION, *lfoDestination);
-    setParameter(LFO_PHASE, *lfoPhase);
-    setParameter(LFO_SYNC, *lfoSync);
     // overdrive parameters
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
     setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
-    if (*switchModState)
-    {
-        open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
-        setParameter(FILTER_DRIVE, *filterDrive);
-        setParameter(BASS_COMP, *bassComp);
-        setParameter(FILTER_FM, *filterFm);
-    }
-    setParameter(SUB_OSC_GAIN, *subOscGain);
-    setParameter(SUB_OSC_BLEND, *subOscBlend);
 
     // presets and overdrive models
     setupDataDirectories();
@@ -489,23 +470,23 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "sqrDriver" && *switchModState) {
         setParameter(TANH_SHAPER_DRIVE, newValue);
     }
-    // LFO parameters
-    else if (parameterID == "lfoWaveform") {
+    // LFO parameters (MOD-menu values: only apply while mod is active)
+    else if (parameterID == "lfoWaveform" && *switchModState) {
         setParameter(LFO_WAVEFORM, newValue);
     }
-    else if (parameterID == "lfoRate") {
+    else if (parameterID == "lfoRate" && *switchModState) {
         setParameter(LFO_RATE, newValue);
     }
-    else if (parameterID == "lfoDepth") {
+    else if (parameterID == "lfoDepth" && *switchModState) {
         setParameter(LFO_DEPTH, newValue);
     }
-    else if (parameterID == "lfoDestination") {
+    else if (parameterID == "lfoDestination" && *switchModState) {
         setParameter(LFO_DESTINATION, newValue);
     }
-    else if (parameterID == "lfoPhase") {
+    else if (parameterID == "lfoPhase" && *switchModState) {
         setParameter(LFO_PHASE, newValue);
     }
-    else if (parameterID == "lfoSync") {
+    else if (parameterID == "lfoSync" && *switchModState) {
         setParameter(LFO_SYNC, newValue);
     }
     // overdrive parameter
@@ -566,10 +547,10 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
             _sequencer.setTempo((float) p->get());
     }
-    else if (parameterID == "subOscGain") {
+    else if (parameterID == "subOscGain" && *switchModState) {
         setParameter(SUB_OSC_GAIN, newValue);
     }
-    else if (parameterID == "subOscBlend") {
+    else if (parameterID == "subOscBlend" && *switchModState) {
         setParameter(SUB_OSC_BLEND, newValue);
     }
 }
@@ -782,6 +763,8 @@ void JC303::setDevilMod(bool mode)
     if (mode == true) {
         decayMin = 30.0;
         decayMax = 3000.0;
+        // main DECAY knob re-maps into the mod range right away
+        setParameter(DECAY, *decay);
         setParameter(NORMAL_DECAY, *normalDecay);
         setParameter(ACCENT_DECAY, *accentDecay);
         setParameter(FEEDBACK_HPF, *feedbackFilter);
@@ -792,18 +775,28 @@ void JC303::setDevilMod(bool mode)
         setParameter(FILTER_DRIVE, *filterDrive);
         setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
+        setParameter(SUB_OSC_GAIN, *subOscGain);
+        setParameter(SUB_OSC_BLEND, *subOscBlend);
+        setParameter(LFO_WAVEFORM, *lfoWaveform);
+        setParameter(LFO_RATE, *lfoRate);
+        setParameter(LFO_DEPTH, *lfoDepth);
+        setParameter(LFO_DESTINATION, *lfoDestination);
+        setParameter(LFO_PHASE, *lfoPhase);
+        setParameter(LFO_SYNC, *lfoSync);
         open303Core.setLfoOn(true);
     } else if (mode == false) {
         open303Core.setFilterType(FILTER_TEEBEE);
-        open303Core.setLfoOn(false);
+        open303Core.setLfoOn(false);   // hard-gates LFO; its internal values are never read while off
         decayMin = 200.0;
         decayMax = 2000.0;
+        setParameter(DECAY, *decay);   // main DECAY knob re-maps into the core range right away
         open303Core.setAmpDecay(1230.0);
         open303Core.setAccentDecay(200.0);
         open303Core.setFeedbackHighpass(150.0);
         open303Core.setNormalAttack(3.0);
         open303Core.setSlideTime(60.0);
         open303Core.setTanhShaperDrive(36.9);
+        open303Core.setSubOscGain(0.0); // core default; blend is irrelevant at gain 0
     }
 }
 
