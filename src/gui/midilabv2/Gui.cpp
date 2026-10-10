@@ -294,6 +294,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
+    setWantsKeyboardFocus(true);
     setSize (930, 540);
     startTimer(30);
 }
@@ -301,6 +302,21 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 JC303Editor::~JC303Editor()
 {
     stopTimer();
+}
+
+bool JC303Editor::keyPressed (const juce::KeyPress& key)
+{
+    if (key != juce::KeyPress::spaceKey)
+        return false;
+
+    // In a plugin host, space belongs to the host transport unless we run our own clock.
+    const bool standalone = processorRef.wrapperType == juce::AudioProcessor::wrapperType_Standalone;
+    if (! standalone && static_cast<int>(*valueTreeState.getRawParameterValue("seqSyncMode")) != 0)
+        return false;
+
+    if (auto* playParam = valueTreeState.getParameter("seqPlayState"))
+        playParam->setValueNotifyingHost(valueTreeState.getRawParameterValue("seqPlayState")->load() > 0.5f ? 0.0f : 1.0f);
+    return true;
 }
 
 //==============================================================================
