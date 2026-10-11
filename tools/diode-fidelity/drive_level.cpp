@@ -1,4 +1,4 @@
-// Drive-knob level check for Diode / BP / HP: the drive control must not act as a volume knob.
+// Drive-knob level check for the diode filter in LP / BP / HP mode: the drive control must not act as a volume knob.
 // Full-synth saw note per setting (cutoff x resonance x env mod); RMS over the first 0.25 s relative to the
 // drive floor (-3 dB, the bottom of the knob).
 //   -3..0 dB (clean region): level within +-FLAT_DB of the floor
@@ -11,15 +11,15 @@
 #include <cstring>
 #include <vector>
 static const double SR = 44100.0;
-// Per filter type (indexed by dfl::FilterType): clean-region deviation, fall and rise above 0 dB
+// Per mode (LP, BP, HP): clean-region deviation, fall and rise above 0 dB
 // (dB, over 48 settings incl. resonance 0..100). The means follow the fitted target closely; the worst settings
 // spread further because the level varies with resonance and cutoff more finely than the 4 x 6 tables resolve.
-static const double FLAT_DB[4]      = { 0, 0.5, 1.0, 1.0 };
-static const double FALL_DB[4]      = { 0, 2.5, 3.0, 3.5 };
-static const double MAX_RISE_DB[4]  = { 0, 3.5, 6.0, 5.5 };
-static double rmsDb(dfl::FilterType ft, double cutoff, double res, double env, double drive)
+static const double FLAT_DB[3]      = { 0.5, 1.0, 1.0 };
+static const double FALL_DB[3]      = { 2.5, 3.0, 3.5 };
+static const double MAX_RISE_DB[3]  = { 3.5, 6.0, 5.5 };
+static double rmsDb(double mode, double cutoff, double res, double env, double drive)
 {
-  rosic::Open303 s; s.setSampleRate(SR); s.setFilterType(ft); s.setCutoff(cutoff);
+  rosic::Open303 s; s.setSampleRate(SR); s.setFilterType(dfl::FILTER_DIODE); s.setFilterMode(mode); s.setCutoff(cutoff);
   s.setResonance(res); s.setEnvMod(env); s.setDecay(400.0); s.setAccent(80.0); s.setVolume(-12.0);
   s.setFilterDrive(drive); s.setPassbandCompensation(0.0); s.setWaveform(0.0);
   s.noteOn(45, 64, 0.0);
@@ -30,10 +30,11 @@ static double rmsDb(dfl::FilterType ft, double cutoff, double res, double env, d
 int main(int argc, char** argv)
 {
   bool verbose = argc > 1 && !strcmp(argv[1], "-v");
-  const char* names[] = { "TeeBee", "Diode", "Diode BP", "Diode HP" };
+  const char* names[] = { "Diode LP", "Diode BP", "Diode HP" };
+  const double modes[] = { 0.0, 0.5, 1.0 };
   const double drives[] = { -3.0, -1.5, 0.0, 3.0, 4.5, 6.0, 9.0, 16.0 };
   int bad = 0;
-  for (dfl::FilterType ft : { dfl::FILTER_DIODE, dfl::FILTER_DIODE_BP, dfl::FILTER_DIODE_HP })
+  for (int ft = 0; ft < 3; ft++)
   {
     double worstFlat = 0.0, worstLow = 0.0, worstRise = -99.0, meanRise = 0.0; int n = 0;
     std::vector<double> mean(8, 0.0);
@@ -41,10 +42,10 @@ int main(int argc, char** argv)
       for (double res : { 0.0, 30.0, 70.0, 100.0 })
         for (double env : { 0.0, 60.0, 100.0 })
         {
-          double base = rmsDb(ft, cutoff, res, env, drives[0]);
+          double base = rmsDb(modes[ft], cutoff, res, env, drives[0]);
           for (int d = 0; d < 8; d++)
           {
-            double rel = rmsDb(ft, cutoff, res, env, drives[d]) - base; mean[d] += rel;
+            double rel = rmsDb(modes[ft], cutoff, res, env, drives[d]) - base; mean[d] += rel;
             if (drives[d] <= 0.0) worstFlat = fmax(worstFlat, fabs(rel));
             else worstLow = fmin(worstLow, rel);
             if (drives[d] > 0.0) worstRise = fmax(worstRise, rel);

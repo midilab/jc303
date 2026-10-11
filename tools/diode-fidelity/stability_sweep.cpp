@@ -3,7 +3,7 @@
 // after 1.5 s must be below -60 dB re the early ring, or, for a slow subsonic ring, not growing over 6 s). Covers the feedback law at
 // resonance 0.97/0.99/1.0 over cutoff 200-20000 Hz, the Filter Feedback corners the plugin can set (57.5-268 Hz, whose
 // knob scales the dominant pole of the coupling network), and the drive range (setInputDrive clamps to [-12, +16] dB).
-// The response mode only re-mixes the ladder taps, so the LP loop covers BP / HP too.
+// The response mode only re-mixes the ladder taps, so the loop covers every mode.
 // Exit code 0 = every case decays.
 #include "dfl_DiodeLadderFilter.h"
 #include <cstdio>
@@ -13,7 +13,7 @@ static const double SR = 4.0 * 44100.0;   // the plugin runs the filter at 4x ov
 
 static bool growing(D& d, double c, double fh, double drive, double res)
 {
-  d.setSampleRate(SR); d.setResponseMode(D::RESPONSE_LP);
+  d.setSampleRate(SR);
   d.setInputDrive(drive); d.setPassbandCompensation(0.0);
   d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(res); d.reset();
   d.getSample(1e-9);
@@ -38,7 +38,7 @@ int main()
         double c = 200 * pow(100.0, i / 39.0);
         for (double res : { 0.97, 0.99, 1.0 })
         {
-          D d; d.setSampleRate(SR); d.setResponseMode(D::RESPONSE_LP);
+          D d; d.setSampleRate(SR);
           d.setInputDrive(drive); d.setPassbandCompensation(0.0);
           d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(res); d.reset();
           d.getSample(1e-3);

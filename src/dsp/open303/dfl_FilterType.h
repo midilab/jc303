@@ -11,9 +11,7 @@ namespace dfl
   enum FilterType
   {
     FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
-    FILTER_DIODE,           // Diode ladder calibrated to a SPICE model of the real circuit
-    FILTER_DIODE_BP,        // Diode, bandpass response
-    FILTER_DIODE_HP,        // Diode, highpass response
+    FILTER_DIODE,           // Diode ladder calibrated to a SPICE model of the real circuit, LP / BP / HP mode morph
     NUM_FILTER_TYPES
   };
 }

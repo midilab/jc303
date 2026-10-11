@@ -1,7 +1,7 @@
 # Diode filter fidelity tools
 
-JUCE-free harnesses for the Diode / BP / HP filters (`src/dsp/open303/dfl_DiodeLadderFilter.*`):
-stability, stress, drive and morph levels, the offline solver behind the feedback law, and a SPICE reference of the
+JUCE-free harnesses for the diode filter (LP / BP / HP mode morph) (`src/dsp/open303/dfl_DiodeLadderFilter.*`):
+stability, stress, drive and mode levels, the offline solver behind the feedback law, and a SPICE reference of the
 real TB-303 filter. Background and results: [`docs/diode-octave-fidelity.md`](../../docs/diode-octave-fidelity.md).
 
 Run these after any change to the diode filter, the cutoff tuning, the feedback highpass, the drive range or
@@ -22,11 +22,11 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 | Tool | What it checks | Run time | Pass criteria (exit code 0) |
 |---|---|---|---|
 | `build/stability_sweep` | Impulse-decay test at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 9 Filter Feedback corners (57.5-268 Hz), 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 10800 cases | ~10 min | every case decays below -60 dB, or (a slow subsonic ring) does not grow over 6 s; prints the worst tail |
-| `build/stress_test` | Full synth, Diode (Res Trim 0.85 / 1 / 1.15, full bass comp) and pure BP / HP (Res Trim 1.15) x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100: 450 runs | ~10 s | no non-finite sample, tail after gate-off < -100 dB, peak < 20 |
-| `build/drive_level [-v]` | Drive knob is not a volume control (48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-type limits (Diode -2.5..+3.5 dB, BP / HP wider) | ~1 min | every filter type within limits |
-| `build/morph_level` | BP / HP morph: at morph 1 the Diode BP and Diode HP types match Diode LP in level (full synth, 4 cutoffs x 4 resonances x 2 env mods x 3 drives); also prints pure BP / HP vs Diode | ~10 s | worst deviation <= 0.5 dB |
+| `build/stress_test` | Full synth, Diode at Res Trim 0.85 / 1 / 1.15 (LP) and 1.15 at mode 0.25 / 0.5 / 0.75 / 1, full bass comp, x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100: 630 runs | ~15 s | no non-finite sample, tail after gate-off < -100 dB, peak < 20 |
+| `build/drive_level [-v]` | Drive knob is not a volume control (48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-mode limits (LP -2.5..+3.5 dB, BP / HP wider) | ~1 min | every filter type within limits |
+| `build/mode_level` | Mode morph: level of mode 0.25 / 0.5 / 0.75 / 1 vs LP (full synth, resonance 50..70, cutoff 800..1500); small-signal shape over 21 mode steps (no dip deeper than 3 dB below its 1/3-octave neighbours, i.e. no notch); BP / HP slopes | ~6 s | level within 1.5 dB, no notch, HP >= 30 dB down at cutoff / 8, BP >= 12 dB at cutoff / 8 and x 8 |
 | `fit_drive_trim.py` | Fits the drive level tables `DT` (run with `DT` zeroed; paste the printed arrays) | ~1 min | helper |
-| `build/render_note` | Renders one note to raw float32 on stdout (`render_note <filterType> <cutoff> <res> <env> <decayMs> <accent> <gateOffSec> <totalSec> <driveDb> <morph> <midiNote> [fbHpHz] [bias] [resTrim]`) | - | helper |
+| `build/render_note` | Renders one note to raw float32 on stdout (`render_note <filterType> <cutoff> <res> <env> <decayMs> <accent> <gateOffSec> <totalSec> <driveDb> <bassComp> <midiNote> [fbHpHz] [bias] [resTrim] [mode]`) | - | helper |
 | `gen_native_tables.py` + `spice/native_targets.py` + `build/native_solver` | Re-solves the Diode tables (`KNT`, `KNC`) against SPICE; run after changing the ladder, `CUTOFF_TUNING`, the coupling network or the netlist | ~3 min | prints C++ arrays |
 | `build/native_output [-v]` | Diode's output network (`dfl_TB303OutputNetwork.h`) against SPICE, ladder top to jack, 5 resonance-pot positions x 7 frequencies (10 Hz-1 kHz), levels re pot 0 | ~1 s | within 0.5 dB (1 dB below 20 Hz) |
 | `spice/` | ngspice reference of the real filter (see below) | seconds each | see the scripts |
@@ -34,13 +34,13 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 ### Expected results (current tree, drive -3 dB)
 
 - stability sweep: 0 failures of 10800 (930 slow but decaying)
-- stress test: 0 failures of 450, worst tail about -287 dB, worst peak 5.4
+- stress test: 0 failures of 630, worst tail about -278 dB, worst peak 11.3 (HP at Res Trim 1.15)
 - native output: 0 of 35 points out of tolerance, worst 0.54 dB
-- drive level: Diode clean region 0.14 dB, +16 dB mean +1.0 dB (worst setting -2.4 / +3.1 dB)
-- morph level: morph 1 matches Diode LP exactly; pure BP -0.5 dB, pure HP -0.6 dB vs Diode at resonance 50..70
+- drive level: LP clean region 0.14 dB, +16 dB mean +1.0 dB (worst setting -2.4 / +3.1 dB); BP / HP within limits
+- mode level: 0.25 / 0.5 / 0.75 / 1 at -1.3 / 0.0 / -1.2 / 0.0 dB vs LP; worst dip 0.27 dB; HP 70 dB down at cutoff / 8
 
 ```sh
-cd tools/diode-fidelity && ./build.sh && for t in stability_sweep stress_test native_output drive_level morph_level; do ./build/$t || echo "FAILED: $t"; done
+cd tools/diode-fidelity && ./build.sh && for t in stability_sweep stress_test native_output drive_level mode_level; do ./build/$t || echo "FAILED: $t"; done
 ```
 
 ## When the tables must be regenerated
