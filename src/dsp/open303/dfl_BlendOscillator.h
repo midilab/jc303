@@ -150,12 +150,12 @@ namespace dfl
     // rise starts (level 0.02, ENV_LEAD of the duty before the 50% crossing, about 1.5% of the cycle: the saw crossing
     // the transistor's soft threshold) to the falling 50% crossing, at points (i / (ENV_COLS - 1))^2 of it, so the
     // envelope draws the rising edge itself and the band-limited step under it is only 0.02 high. The falling edge
-    // (the saw reset, under 1 us in the circuit) is the band-limited step. The pulse's other segment is saturated and
-    // flat, so the envelope only switches mid-way through it.
-    static constexpr int ENV_ROWS = 15, ENV_COLS = 48;
-    static constexpr double ENV_FREQ[ENV_ROWS] = { 10, 15, 22, 27.5, 32.7032, 41.2, 49, 55, 65.4064, 82.4, 98, 130.81, 196, 261.63, 523.25 };
-    static constexpr double ENV_LEAD[ENV_ROWS] = { 0.0456, 0.0264, 0.0237, 0.0249, 0.0262, 0.0282, 0.0294, 0.0302, 0.0313, 0.0324, 0.0330, 0.0337, 0.0348, 0.0362, 0.0433 };
-    static constexpr double ENV_EDGE_END[ENV_ROWS] = { 0.0453, 0.0548, 0.0652, 0.0652, 0.0765, 0.0765, 0.0887, 0.0887, 0.0765, 0.0652, 0.0548, 0.0548, 0.0548, 0.0548, 0.0652 };
+    // (the saw reset, under 1 us in the circuit) is the band-limited step. Between the nodes the envelope is linear
+    // in time, and every node corner gets a polyBLAMP, so the drawn edge stays alias-free even where it is shorter
+    // than a sample (see drawnEnvelope).
+    static constexpr int ENV_ROWS = 17, ENV_COLS = 48;
+    static constexpr double ENV_FREQ[ENV_ROWS] = { 10, 15, 22, 27.5, 32.7032, 41.2, 49, 55, 65.4064, 82.4, 98, 130.81, 196, 261.63, 523.25, 1000, 2000 };
+    static constexpr double ENV_LEAD[ENV_ROWS] = { 0.0456, 0.0264, 0.0237, 0.0249, 0.0262, 0.0282, 0.0294, 0.0302, 0.0313, 0.0324, 0.0330, 0.0337, 0.0348, 0.0362, 0.0433, 0.0556, 0.0723 };
     static constexpr double ENV_TABLE[ENV_ROWS][ENV_COLS] = {
       { 0.020, 0.023, 0.035, 0.066, 0.129, 0.207, 0.259, 0.288, 0.308, 0.325, 0.339, 0.351, 0.361, 0.370, 0.378, 0.386, 0.394, 0.402, 0.411, 0.420, 0.429, 0.439, 0.449, 0.459, 0.471, 0.482, 0.494, 0.507, 0.520, 0.534, 0.548, 0.562, 0.577, 0.592, 0.608, 0.625, 0.642, 0.659, 0.673, 0.657, 0.637, 0.621, 0.609, 0.599, 0.592, 0.586, 0.581, 0.576 },
       { 0.020, 0.022, 0.032, 0.057, 0.111, 0.202, 0.290, 0.344, 0.375, 0.397, 0.417, 0.434, 0.449, 0.463, 0.475, 0.486, 0.496, 0.505, 0.515, 0.524, 0.533, 0.542, 0.552, 0.562, 0.573, 0.583, 0.595, 0.606, 0.618, 0.631, 0.644, 0.657, 0.671, 0.686, 0.700, 0.715, 0.724, 0.706, 0.685, 0.666, 0.650, 0.636, 0.624, 0.614, 0.605, 0.598, 0.591, 0.586 },
@@ -171,25 +171,19 @@ namespace dfl
       { 0.020, 0.021, 0.025, 0.032, 0.047, 0.075, 0.127, 0.224, 0.387, 0.621, 0.890, 0.981, 0.983, 0.983, 0.982, 0.980, 0.977, 0.975, 0.972, 0.969, 0.966, 0.962, 0.959, 0.955, 0.951, 0.947, 0.943, 0.938, 0.934, 0.929, 0.924, 0.919, 0.914, 0.909, 0.904, 0.898, 0.893, 0.887, 0.882, 0.876, 0.870, 0.864, 0.858, 0.852, 0.846, 0.840, 0.834, 0.828 },
       { 0.020, 0.021, 0.025, 0.032, 0.045, 0.070, 0.118, 0.205, 0.357, 0.591, 0.886, 0.974, 0.977, 0.978, 0.978, 0.977, 0.976, 0.975, 0.973, 0.971, 0.969, 0.967, 0.965, 0.962, 0.960, 0.957, 0.954, 0.951, 0.948, 0.945, 0.942, 0.938, 0.935, 0.931, 0.928, 0.924, 0.920, 0.916, 0.912, 0.908, 0.904, 0.900, 0.896, 0.891, 0.887, 0.882, 0.878, 0.873 },
       { 0.020, 0.021, 0.024, 0.031, 0.044, 0.067, 0.110, 0.190, 0.330, 0.551, 0.846, 0.978, 0.981, 0.982, 0.983, 0.983, 0.982, 0.981, 0.980, 0.979, 0.978, 0.976, 0.975, 0.973, 0.971, 0.969, 0.967, 0.965, 0.962, 0.960, 0.958, 0.955, 0.952, 0.950, 0.947, 0.944, 0.941, 0.938, 0.935, 0.932, 0.929, 0.925, 0.922, 0.919, 0.915, 0.912, 0.908, 0.904 },
-      { 0.020, 0.021, 0.024, 0.029, 0.039, 0.057, 0.088, 0.143, 0.237, 0.390, 0.617, 0.902, 1.011, 1.013, 1.015, 1.016, 1.017, 1.017, 1.017, 1.017, 1.017, 1.017, 1.016, 1.015, 1.015, 1.014, 1.013, 1.012, 1.011, 1.010, 1.009, 1.007, 1.006, 1.005, 1.003, 1.002, 1.000, 0.999, 0.997, 0.995, 0.994, 0.992, 0.990, 0.988, 0.986, 0.984, 0.982, 0.980 } };
+      { 0.020, 0.021, 0.024, 0.029, 0.039, 0.057, 0.088, 0.143, 0.237, 0.390, 0.617, 0.902, 1.011, 1.013, 1.015, 1.016, 1.017, 1.017, 1.017, 1.017, 1.017, 1.017, 1.016, 1.015, 1.015, 1.014, 1.013, 1.012, 1.011, 1.010, 1.009, 1.007, 1.006, 1.005, 1.003, 1.002, 1.000, 0.999, 0.997, 0.995, 0.994, 0.992, 0.990, 0.988, 0.986, 0.984, 0.982, 0.980 },
+      { 0.020, 0.021, 0.023, 0.028, 0.035, 0.048, 0.069, 0.103, 0.160, 0.250, 0.386, 0.579, 0.822, 1.051, 1.055, 1.057, 1.059, 1.060, 1.060, 1.061, 1.061, 1.062, 1.062, 1.062, 1.062, 1.062, 1.061, 1.061, 1.061, 1.060, 1.060, 1.059, 1.059, 1.058, 1.058, 1.057, 1.056, 1.055, 1.055, 1.054, 1.053, 1.052, 1.051, 1.050, 1.049, 1.048, 1.047, 1.045 },
+      { 0.020, 0.020, 0.022, 0.026, 0.032, 0.041, 0.056, 0.079, 0.114, 0.168, 0.248, 0.361, 0.515, 0.708, 0.928, 1.091, 1.093, 1.094, 1.095, 1.096, 1.097, 1.098, 1.098, 1.099, 1.099, 1.099, 1.099, 1.100, 1.100, 1.100, 1.100, 1.100, 1.100, 1.099, 1.099, 1.099, 1.099, 1.099, 1.098, 1.098, 1.098, 1.097, 1.097, 1.096, 1.096, 1.095, 1.095, 1.092 } };
     static constexpr double SAW_TABLE_RESET = 0.5;   // phase (0..1) of the saw table's reset
     bool   circuitPulseShape = true;
     int    envRow = 0;            // ENV_FREQ row below the current frequency (set in calculateIncrement)
     double envRowFrac = 0.0;      // interpolation weight towards envRow + 1
     double envLead = 0.0;         // ENV_LEAD at the current frequency
-    double envEdgeEnd = 0.0;      // ENV_EDGE_END at the current frequency
-    double drawnEdgeWeight = 1.0; // 1 = drawn rising edge, 0 = band-limited step (see getSample)
-    static constexpr double DRAWN_EDGE_FULL = 65.4064;   // C2
-    static constexpr double DRAWN_EDGE_NONE = 130.81;    // C3
-    struct PulseState
-    {
-      double envGain = 1.0;       // envelope value in effect
-      double base = 0.0;          // the pulse's other (flat) level, sampled mid-segment
-    };
-    PulseState flatState, drawnState, stepState;
     INLINE double pulseEnvelope(double extPos) const;
-    INLINE double shapedPulse(double saw1, int tableNumber, double phaseShiftSamples, double pw, bool drawnEdge,
-                              PulseState& st) const;
+    INLINE double envNode(int i) const;
+    INLINE double drawnEnvelope(double extPos, double dp, double flatLen) const;
+    static INLINE double blampResidual(double t);
+    INLINE double shapedPulse(double saw1, int tableNumber, double phaseShiftSamples, double pw) const;
 
   };
 
@@ -220,12 +214,9 @@ namespace dfl
     envRow     = r;
     envRowFrac = std::log(f/ENV_FREQ[r]) / std::log(ENV_FREQ[r+1]/ENV_FREQ[r]);
     envLead    = ENV_LEAD[r] + envRowFrac*(ENV_LEAD[r+1]-ENV_LEAD[r]);
-    envEdgeEnd = ENV_EDGE_END[r] + envRowFrac*(ENV_EDGE_END[r+1]-ENV_EDGE_END[r]);
-    drawnEdgeWeight = std::min(std::max(std::log(DRAWN_EDGE_NONE/freq) / std::log(DRAWN_EDGE_NONE/DRAWN_EDGE_FULL), 0.0), 1.0);
   }
 
-  INLINE double BlendOscillator::shapedPulse(double saw1, int tableNumber, double phaseShiftSamples, double pw,
-                                             bool drawnEdge, PulseState& st) const
+  INLINE double BlendOscillator::shapedPulse(double saw1, int tableNumber, double phaseShiftSamples, double pw) const
   {
     double phase2 = phaseIndex + pw*tableLengthDbl + phaseShiftSamples;
     while( phase2 >= tableLengthDbl )
@@ -236,8 +227,9 @@ namespace dfl
     const double saw2      = waveTable1->getValueLinear(intIndex2, phase2 - (double) intIndex2, tableNumber);
 
     // The saw table is linear (slope 2 per cycle), so saw2 - saw1 is a band-limited step between two constant
-    // levels: 2*pw - 2 outside the wrapped segment and 2*pw inside it. Shaping that step with the tanh directly
-    // hard-clips its Gibbs ripple and aliases (-31..-40 dB below 20 kHz at 4x); instead take the tanh of the two
+    // levels: 2*pw outside the wrapped segment and 2*pw - 2 inside it (saw1 is just before the reset, saw2 just
+    // after). Shaping that step with the tanh directly hard-clips its Gibbs ripple and aliases (-31..-40 dB below
+    // 20 kHz at 4x); instead take the tanh of the two
     // levels and crossfade between them with the band-limited step, which keeps the same levels and no aliasing.
     // Negated to match the original 303 square-wave polarity.
     const double rawLo   = 2.0*pw - 2.0;
@@ -252,33 +244,101 @@ namespace dfl
     double q = (phaseIndex + phaseShiftSamples) / tableLengthDbl + SAW_TABLE_RESET;
     q -= std::floor(q);
     const double segStart = 1.0 - pw;
-    if( q >= segStart )
-    {
-      const double segPos = (q - segStart) / pw;
-      // drawn edge: the segment is the extended one; step edge: it starts at the 50% crossing, so map into the
-      // extended table and hold the envelope over the circuit's (fast) rising edge
-      const double extPos = drawnEdge ? segPos : std::max((envLead + segPos) / (1.0 + envLead), envEdgeEnd);
-      st.envGain = pulseEnvelope(extPos);
-    }
-    else if( q >= 0.25*segStart && q < 0.75*segStart )
-    {
-      // switch in the middle of the flat segment, well away from both band-limited edges
-      st.envGain = pulseEnvelope(drawnEdge ? 0.0 : envEdgeEnd);
-      st.base    = pulse;
-    }
-    return st.base + (pulse - st.base) * st.envGain;
+    // the segment is the extended one (it starts ENV_LEAD early, where the circuit's rise begins); the envelope is
+    // evaluated every sample as a function of the unwrapped segment position, with band-limited corners (see
+    // drawnEnvelope); outside the segment the table's end values hold, so only the corner residuals reach into the
+    // flat segment
+    const double flatLen = segStart / pw;   // the flat segment's length in extended-segment units
+    double p = (q - segStart) / pw;
+    if( p < -0.5*flatLen )
+      p += 1.0/pw;
+    const double envGain = drawnEnvelope(p, increment / (tableLengthDbl*pw), flatLen);
+    // the pulse's level outside the segment is levelHi exactly (inside the segment saw2 - saw1 = 2*pw - 2, so the
+    // pulse sits at levelLo there); sampling it from the band-limited pulse would freeze a little of the Gibbs ripple
+    // at an arbitrary fractional time, a small hard step every cycle
+    return levelHi + (pulse - levelHi) * envGain;
   }
 
+  INLINE double BlendOscillator::envNode(int i) const
+  {
+    return ENV_TABLE[envRow][i] + envRowFrac*(ENV_TABLE[envRow+1][i] - ENV_TABLE[envRow][i]);
+  }
+
+  // The envelope is piecewise linear in segment position between the table nodes at (i/(N-1))^2, so in time it is a
+  // chain of straight ramps whose only non-band-limited features are the slope changes (corners) at the nodes.
   INLINE double BlendOscillator::pulseEnvelope(double extPos) const
   {
-    const double x  = std::sqrt(std::min(std::max(extPos, 0.0), 1.0)) * (ENV_COLS-1);   // points at (i/(N-1))^2
-    const int    c  = std::min((int) x, ENV_COLS-2);
-    const double cf = x - c;
-    const double* a = ENV_TABLE[envRow];
-    const double* b = ENV_TABLE[envRow+1];
-    const double lo = a[c] + cf*(a[c+1]-a[c]);
-    const double hi = b[c] + cf*(b[c+1]-b[c]);
-    return lo + envRowFrac*(hi-lo);
+    const double N1 = ENV_COLS-1;
+    const double p  = std::min(std::max(extPos, 0.0), 1.0);
+    const double xs = std::sqrt(p)*N1;
+    const int    i  = std::min((int) xs, ENV_COLS-2);
+    const double y0 = envNode(i);
+    const double p0 = (i/N1)*(i/N1), p1 = ((i+1)/N1)*((i+1)/N1);
+    return y0 + (p - p0)/(p1 - p0) * (envNode(i+1) - y0);
+  }
+
+  // 4-point polyBLAMP residual (cubic B-spline kernel): band-limited unit-slope-change corner minus the naive one,
+  // t = samples since the corner. r(t) = (2-|t|)^5/120 for 1 <= |t| < 2, 7/30 - |t|/2 + t^2/3 - t^4/12 + |t|^5/40 for |t| < 1.
+  static constexpr double BLAMP_BEFORE = 2.0, BLAMP_AFTER = 2.0;   // support of the residual around the corner
+  INLINE double BlendOscillator::blampResidual(double t)
+  {
+    const double a = std::fabs(t);
+    if( a >= 2.0 )
+      return 0.0;
+    if( a >= 1.0 )
+    {
+      const double b = 2.0 - a, b2 = b*b;
+      return b2*b2*b * (1.0/120.0);
+    }
+    const double a2 = a*a;
+    return 7.0/30.0 + a*(-0.5 + a2*(-1.0/12.0*a + a2*(1.0/40.0))) + a2*(1.0/3.0);
+  }
+
+  // Envelope at extended-segment position extPos (may run a little below 0 or above 1 around the segment ends, where
+  // the end nodes' values hold) with each node corner replaced by its band-limited version: the slope change at
+  // node i (in level per sample: node-to-node chord slopes times dp, the position advanced per sample) times the
+  // BLAMP residual at the corner's fractional sample time. This makes the rising edge alias-free at any pitch, even
+  // when it is shorter than a sample, because every corner lands at its exact fractional time.
+  INLINE double BlendOscillator::drawnEnvelope(double extPos, double dp, double flatLen) const
+  {
+    const double N1 = ENV_COLS-1;
+    double env;
+    if( extPos >= 0.0 && extPos <= 1.0 )
+      env = pulseEnvelope(extPos);
+    else
+    {
+      // Flat segment (the band-limited step is ~0 here, but not exactly: Gibbs ripple and the saw table's two
+      // slightly different half-slopes leak through). The envelope must not jump from the table's end value back to
+      // its start value, so glide between them with a smoothstep over the part of the flat segment that lies
+      // beyond the corner residuals' reach of the last and first node (the corner model holds a zero slope there).
+      const double x  = extPos > 0.5 ? (extPos - 1.0)/flatLen : 1.0 + extPos/flatLen;   // 0..1 across the flat segment
+      const double xa = std::max(0.25, BLAMP_AFTER*dp/flatLen), xb = std::min(0.75, 1.0 - BLAMP_BEFORE*dp/flatLen);
+      const double u  = xb > xa ? std::min(std::max((x - xa)/(xb - xa), 0.0), 1.0) : (x < 0.5 ? 0.0 : 1.0);
+      const double w  = u*u*(3.0 - 2.0*u);
+      const double yEnd = envNode(ENV_COLS-1), yStart = envNode(0);
+      env = yEnd + (yStart - yEnd)*w;
+    }
+    const double lo = extPos - BLAMP_AFTER*dp, hi = extPos + BLAMP_BEFORE*dp;
+    if( hi <= 0.0 || lo >= 1.0 )
+      return env;
+    const int i0 = lo <= 0.0 ? 0 : (int) std::ceil(std::sqrt(lo)*N1);
+    const int i1 = hi >= 1.0 ? ENV_COLS-1 : (int) (std::sqrt(hi)*N1);
+    // chord slope (level per unit position) into node i0; zero before node 0 and after the last node
+    double yPrev = envNode(std::max(i0-1, 0)), yCur = envNode(i0);
+    double pPrev = ((i0-1)/N1)*((i0-1)/N1), pCur = (i0/N1)*(i0/N1);
+    double slopeIn = i0 > 0 ? (yCur - yPrev)/(pCur - pPrev) : 0.0;
+    for( int i = i0; i <= i1; i++ )
+    {
+      double slopeOut = 0.0, yNext = yCur, pNext = pCur;
+      if( i < ENV_COLS-1 )
+      {
+        yNext = envNode(i+1); pNext = ((i+1)/N1)*((i+1)/N1);
+        slopeOut = (yNext - yCur)/(pNext - pCur);
+      }
+      env += (slopeOut - slopeIn)*dp * blampResidual((extPos - pCur)/dp);
+      slopeIn = slopeOut; yCur = yNext; pCur = pNext;
+    }
+    return env;
   }
 
   INLINE double BlendOscillator::getSample()
@@ -311,23 +371,10 @@ namespace dfl
     if( blend > 0.0 )
     {
       const double phaseShiftSamples = squarePhaseShift * tableLengthDbl / 360.0;
-      double pulse;
-      if( !circuitPulseShape )
-        pulse = shapedPulse(saw1, tableNumber, phaseShiftSamples, pulseWidth, false, flatState);
-      else
-      {
-        // bottom octaves: the envelope draws the circuit's slow rising edge (the wrapped segment starts ENV_LEAD early,
-        // where the rise begins, so the band-limited step under it is only 0.02 high); upper octaves: the circuit's
-        // edge is faster than the band limit, so the band-limited step forms it and the envelope holds over it. A
-        // drawn edge only a few samples long aliases (-49 dB at 1 kHz), so crossfade by pitch, log-linear from
-        // DRAWN_EDGE_FULL to DRAWN_EDGE_NONE.
-        const double wd = drawnEdgeWeight;
-        pulse = 0.0;
-        if( wd > 0.0 )
-          pulse += wd * shapedPulse(saw1, tableNumber, phaseShiftSamples, std::min(pulseWidth*(1.0 + envLead), 0.95), true, drawnState);
-        if( wd < 1.0 )
-          pulse += (1.0 - wd) * shapedPulse(saw1, tableNumber, phaseShiftSamples, pulseWidth, false, stepState);
-      }
+      // with the circuit envelope the wrapped segment starts ENV_LEAD earlier, where the circuit's rise begins; the
+      // envelope then reaches the 50% level at the nominal pulse width, so the duty is unchanged
+      const double pw    = circuitPulseShape ? std::min(pulseWidth*(1.0 + envLead), 0.95) : pulseWidth;
+      const double pulse = shapedPulse(saw1, tableNumber, phaseShiftSamples, pw);
       out2 = blend * pulse * 0.5;  // 0.5 to match the original square level
     }
     else
