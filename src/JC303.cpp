@@ -20,6 +20,13 @@ namespace
             });
     }
 
+    // order matches rosic::ModDestination
+    juce::StringArray modDestinationNames()
+    {
+        return { "Cutoff", "Volume", "Pitch", "Pulse Width", "Resonance", "Overdrive", "Filter FM",
+                 "Env Mod", "Decay", "Accent", "Waveform", "LFO Rate", "LFO Depth", "Filter Morph" };
+    }
+
     // -1..+1 params read -100%..+100% in the menu
     juce::AudioParameterFloatAttributes bipolarAttributes()
     {
@@ -145,7 +152,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width", "Resonance", "Overdrive", "Filter FM", "Filter Morph" },
+                                                        modDestinationNames(),
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("lfoPhase",
                                                         "LFO Phase",
@@ -162,7 +169,7 @@ JC303::JC303()
                                                         0.0f),   // lag/slew (<0) or edge/sag shaping (>0), see dfl::LFO
             std::make_unique<juce::AudioParameterChoice> ("modSlot2Dest",
                                                         "Mod Slot 2 Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width", "Resonance", "Overdrive", "Filter FM" },
+                                                        modDestinationNames(),
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("modSlot2Amount",
                                                         "Mod Slot 2 Amount",
@@ -175,7 +182,7 @@ JC303::JC303()
                                                         0),
             std::make_unique<juce::AudioParameterChoice> ("modSlot3Dest",
                                                         "Mod Slot 3 Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width", "Resonance", "Overdrive", "Filter FM" },
+                                                        modDestinationNames(),
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("modSlot3Amount",
                                                         "Mod Slot 3 Amount",
@@ -188,7 +195,7 @@ JC303::JC303()
                                                         0),
             std::make_unique<juce::AudioParameterChoice> ("modSlot4Dest",
                                                         "Mod Slot 4 Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width", "Resonance", "Overdrive", "Filter FM" },
+                                                        modDestinationNames(),
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("modSlot4Amount",
                                                         "Mod Slot 4 Amount",
