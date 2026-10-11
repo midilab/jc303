@@ -8,6 +8,7 @@
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
 #include "dfl_DiodeLadderFilter.h"
+#include "dfl_FilterType.h"
 #include "dfl_TB303OutputNetwork.h"
 #include "rosic_AnalogEnvelope.h"
 #include "rosic_DecayEnvelope.h"
@@ -24,16 +25,6 @@ namespace rosic
 {
   // Import dfl classes
   using dfl::DiodeLadderFilter;
-
-  /** Filter types available for selection. */
-  enum FilterType
-  {
-    FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
-    FILTER_DIODE,           // Diode ladder calibrated to a SPICE model of the real circuit
-    FILTER_DIODE_BP,        // Diode, bandpass response
-    FILTER_DIODE_HP,        // Diode, highpass response
-    NUM_FILTER_TYPES
-  };
 
   enum SquareModel
   {
@@ -89,7 +80,7 @@ namespace rosic
     void setResonance(double newResonance);
 
     /** Sets the filter type. */
-    void setFilterType(FilterType newType);
+    void setFilterType(dfl::FilterType newType);
 
     /** Sets the filter input drive in decibels. Pushes the signal into the
     diode ladder's saturating nonlinearity for overdrive character. The TeeBee
@@ -97,7 +88,7 @@ namespace rosic
     void setFilterDrive(double newDriveDb);
 
     /** Returns the current filter type. */
-    FilterType getFilterType() const { return currentFilterType; }
+    dfl::FilterType getFilterType() const { return currentFilterType; }
 
     /** Sets the diode filter's HP/BP morph amount, 0..1: 0 = pure highpass / bandpass,
     1 = pure lowpass (crossfade), for Diode HP and Diode BP; the bass comp amount for Diode. */
@@ -442,7 +433,7 @@ namespace rosic
     int    noteOffCountDown; // a countdown variable till next note-off in sequencer mode
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
-    FilterType currentFilterType;  // currently selected filter type
+    dfl::FilterType currentFilterType;  // currently selected filter type
     double feedbackHighpass = 150.0;   // Filter Feedback knob in TeeBee Hz
     // The diode models' corner at the knob's end: the coupling pole C27/C25 into Q21 at 46 Hz, Q21 beta about 500 (the
     // 2SC1583's datasheet minimum). Higher betas make the network's ~7 Hz mode motorboat at high resonance (SPICE:
@@ -604,7 +595,7 @@ namespace rosic
         tmp += subOscGain * (-subOscillator.getSample(subOscBlend));
       tmp  = highpass1.getSample(tmp);        // pre-filter highpass
       // Apply selected filter
-      if(currentFilterType == FILTER_TEEBEE)
+      if(currentFilterType == dfl::FILTER_TEEBEE)
         tmp = filter.getSample(tmp);
       else
         tmp = diodeFilter.getSample(tmp);
@@ -614,7 +605,7 @@ namespace rosic
 
     // these filters may actually operate without oversampling (but only if we reset them in
     // triggerNote - avoid clicks)
-    if(currentFilterType != FILTER_TEEBEE)
+    if(currentFilterType != dfl::FILTER_TEEBEE)
       tmp = outputNetwork.getSample(tmp);
     else
     {

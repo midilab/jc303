@@ -7,13 +7,13 @@
 #include <cmath>
 int main()
 {
-  struct Case { rosic::FilterType type; double trim, morph; const char* name; };
+  struct Case { dfl::FilterType type; double trim, morph; const char* name; };
   const Case cases[] = {
-    { rosic::FILTER_DIODE, 1.0,  1.0, "Diode" },
-    { rosic::FILTER_DIODE, 0.85, 1.0, "Diode trim 0.85" },
-    { rosic::FILTER_DIODE, 1.15, 1.0, "Diode trim 1.15" },
-    { rosic::FILTER_DIODE_BP,     1.15, 0.0, "BP trim 1.15" },
-    { rosic::FILTER_DIODE_HP,     1.15, 0.0, "HP trim 1.15" } };
+    { dfl::FILTER_DIODE,    1.0,  1.0, "Diode" },
+    { dfl::FILTER_DIODE,    0.85, 1.0, "Diode trim 0.85" },
+    { dfl::FILTER_DIODE,    1.15, 1.0, "Diode trim 1.15" },
+    { dfl::FILTER_DIODE_BP, 1.15, 0.0, "BP trim 1.15" },
+    { dfl::FILTER_DIODE_HP, 1.15, 0.0, "HP trim 1.15" } };
   int bad = 0, n = 0; double worstTail = -400, worstPeak = 0;
   for (const Case& c : cases)
     for (double drive : { -3.0, 0.0, 4.5, 9.0, 16.0 })

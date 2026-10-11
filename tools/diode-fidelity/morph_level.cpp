@@ -8,7 +8,7 @@
 #include <cmath>
 #include <cstdio>
 static const double SR = 44100.0, LIMIT_DB = 0.5;
-static double rmsDb(rosic::FilterType ft, double cutoff, double res, double env, double drive, double morph)
+static double rmsDb(dfl::FilterType ft, double cutoff, double res, double env, double drive, double morph)
 {
   rosic::Open303 s; s.setSampleRate(SR); s.setFilterType(ft); s.setCutoff(cutoff);
   s.setResonance(res); s.setEnvMod(env); s.setDecay(400.0); s.setAccent(80.0); s.setVolume(-12.0);
@@ -21,16 +21,16 @@ static double rmsDb(rosic::FilterType ft, double cutoff, double res, double env,
 int main()
 {
   int bad = 0;
-  for (rosic::FilterType ft : { rosic::FILTER_DIODE_BP, rosic::FILTER_DIODE_HP })
+  for (dfl::FilterType ft : { dfl::FILTER_DIODE_BP, dfl::FILTER_DIODE_HP })
   {
-    const char* name = ft == rosic::FILTER_DIODE_BP ? "Diode BP" : "Diode HP";
+    const char* name = ft == dfl::FILTER_DIODE_BP ? "Diode BP" : "Diode HP";
     double worst = 0.0, mean = 0.0; int n = 0;
     for (double cutoff : { 400.0, 800.0, 1500.0, 2394.0 })
       for (double res : { 0.0, 30.0, 70.0, 100.0 })
         for (double env : { 0.0, 60.0 })
           for (double drive : { -3.0, 4.5, 16.0 })
           {
-            double d = rmsDb(ft, cutoff, res, env, drive, 1.0) - rmsDb(rosic::FILTER_DIODE, cutoff, res, env, drive, 0.0);
+            double d = rmsDb(ft, cutoff, res, env, drive, 1.0) - rmsDb(dfl::FILTER_DIODE, cutoff, res, env, drive, 0.0);
             worst = fmax(worst, fabs(d)); mean += d; n++;
           }
     bool ok = worst <= LIMIT_DB;
@@ -38,7 +38,7 @@ int main()
     for (double cutoff : { 800.0, 1100.0, 1500.0 })
       for (double res : { 50.0, 60.0, 70.0 })
         for (double env : { 0.0, 60.0 })
-        { pure += rmsDb(ft, cutoff, res, env, -3.0, 0.0) - rmsDb(rosic::FILTER_DIODE, cutoff, res, env, -3.0, 0.0); np++; }
+        { pure += rmsDb(ft, cutoff, res, env, -3.0, 0.0) - rmsDb(dfl::FILTER_DIODE, cutoff, res, env, -3.0, 0.0); np++; }
     printf("%-9s morph 0 vs Diode at resonance 50..70, cutoff 800..1500: mean %+.2f dB\n", name, pure / np);
     printf("%-9s morph 1 vs Diode: mean %+.2f dB, worst |dev| %.2f dB (limit %.1f)  %s\n", name, mean / n, worst, LIMIT_DB, ok ? "ok" : "FAIL");
     if (!ok) bad++;
