@@ -49,8 +49,10 @@ cd tools/diode-fidelity && ./build.sh && for t in stability_sweep stress_test na
 
 ## Character controls
 
-Filter Bite / Clip / Sharpness / Warmth (`DiodeLadderFilter::setBite` etc.; the Mods menu; 0 = the circuit), each a
-part of the circuit and realised the same way in the netlist (`spice/tb303_vcf.py`'s `bite` / `sharp` / `warm`):
+`DiodeLadderFilter::setBite` / `setClipThreshold` / `setSharpness` / `setWarmth` (0 / 0.5 / 0.5 / 0 = the circuit), each
+a part of the circuit and realised the same way in the netlist (`spice/tb303_vcf.py`'s `bite` / `sharp` / `warm`). Only
+Filter Bite is in the Mods menu: by ear the others did little or duplicated existing controls (Clip is Saturation in
+disguise, the model being homogeneous; Sharpness acts much like Res Trim; Warmth only once Saturation drives Q21).
 
 | Control | The filter | The netlist |
 |---|---|---|
