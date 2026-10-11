@@ -114,7 +114,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch" },
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width" },
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("lfoPhase",
                                                         "LFO Phase",
