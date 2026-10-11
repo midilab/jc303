@@ -89,6 +89,12 @@ namespace dfl
       calculateCoefficients();
     }
 
+    /** Hi-Fi (the default): every diode pair passes its tanh (If tanh(dv / 2Vt)), solved per sample (stepHiFi).
+        Off: only Q12 and Q21 saturate, around the linear ladder's zero-delay solve. Hi-Fi matches SPICE's large-signal
+        response far more closely for about 6 % more CPU per voice; the small-signal response is the same. */
+    void setHiFi(bool on) { hiFi = on; calculateCoefficients(); }
+    bool getHiFi() const { return hiFi; }
+
     /** Sets the Filter FM depth (0 to 1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input signal to modulate filter cutoff frequency. */
     void setFilterFmDepth(double depth) { filterFmDepth = std::max(0.0, std::min(1.0, depth)); }
@@ -181,7 +187,7 @@ namespace dfl
     // Drive level compensation (dB): output gain as a function of drive and resonance so the drive knob is not
     // a volume control. Full-synth renders (default bias, mean over cutoff / env mod) of the level relative to the
     // -3 dB default; the correction is target - measured, with the target rising 1 dB from 0 to +16 dB drive.
-    // Tables per response [LP, BP / HP]; rows: resonance knob 0/30/70/100 %, columns: drive nodes.
+    // Tables per quality [Standard, Hi-Fi] and response [LP, BP / HP]; rows: resonance knob 0/30/70/100 %, columns: drive nodes.
     // Fitted by tools/diode-fidelity/fit_drive_trim.py (see docs/diode-octave-fidelity.md).
     static constexpr int    DT_DRIVE_N = 6;
     static constexpr int    DT_RES_N   = 4;
@@ -282,6 +288,24 @@ namespace dfl
     double q21(double u)      { return shape(headroomBias * u) / headroomBias; }
     double q21Slope(double u) { const double t = shape(headroomBias * u); return 1.0 - t * t; }
     double outCouplingState = 0.0;  // the output's own C27 / C25 coupling (the mode mix differs from the loop's lp4)
+    bool   hiFi = true;
+    double yPrev[4] = {}, yPrev2[4] = {};   // the last two ladder solutions (Hi-Fi's Newton predictor)
+
+    // tanh(x) as x P(x^2) / Q(x^2), max error 5.8e-8 on |x| <= 9 (clamped beyond): one division (Hi-Fi)
+    static double tanhRational(double x)
+    {
+      x = std::clamp(x, -9.0, 9.0);
+      const double u = x * x;
+      const double P = 1.0 + u * (0.13390869692152904 + u * (0.0035073068980147394 + u * (2.0803216419499262e-05 + u * 1.3626260335743109e-08)));
+      const double Q = 1.0 + u * (0.46724189029648822 + u * (0.025921489787934984 + u * (0.00033048538750465151 + u * 7.8871635569881668e-07)));
+      return x * P / Q;
+    }
+    INLINE void stepHiFi(double vIn, double fmMod, double& un, double* lp, double& q21Residual);
+    // Hi-Fi's mode morph: the p^k tap mixes need the linear ladder's relations, which the diodes break at high drive
+    // (node voltages swing far past the linear case). A linear ladder driven open-loop by the same Q12 current
+    // supplies the p^1..p^4 terms; the LP term stays the Hi-Fi ladder's own output.
+    double shadowZ[4] = {}, shadowLoadState = 0.0;
+    INLINE void stepShadow(double un, double fmMod, double* lp, double& w);
     double netA[NET_N] = {};      // feedback network: TPT one-pole coefficients g / (1 + g)
     double netState[NET_N] = {};
     double shelfRatio = 1.0;      // NET_SHELF_ZERO / shelf pole
@@ -433,15 +457,25 @@ namespace dfl
     {
       static const double DN[DT_DRIVE_N] = { -3.0, 0.0, 4.5, 9.0, 12.5, 16.0 };
       static const double RN[DT_RES_N]   = { 0.0, 0.6245, 0.9235, 1.0 };
-      static const double DT[2][DT_RES_N][DT_DRIVE_N] = {
-        { { 0.00, 0.29, -0.25, 1.03, 3.22, 5.94 },
-          { 0.00, 0.05, -1.75, -3.38, -4.21, -3.55 },
-          { 0.00, 0.09, -1.52, -3.16, -4.47, -5.49 },
-          { 0.00, 0.45, -0.29, -1.52, -2.79, -4.03 } },
-        { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
-          { 0.00, 0.62, 2.03, 4.24, 5.81, 8.42 },
-          { 0.00, 0.77, 2.79, 5.82, 7.74, 9.58 },
-          { 0.00, 1.25, 3.97, 7.36, 8.72, 9.39 } } };
+      static const double DT[2][2][DT_RES_N][DT_DRIVE_N] = {
+        // Standard
+        { { { 0.00, 0.29, -0.25, 1.03, 3.22, 5.94 },
+            { 0.00, 0.05, -1.75, -3.38, -4.21, -3.55 },
+            { 0.00, 0.09, -1.52, -3.16, -4.47, -5.49 },
+            { 0.00, 0.45, -0.29, -1.52, -2.79, -4.03 } },
+          { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
+            { 0.00, 0.62, 2.03, 4.24, 5.81, 8.42 },
+            { 0.00, 0.77, 2.79, 5.82, 7.74, 9.58 },
+            { 0.00, 1.25, 3.97, 7.36, 8.72, 9.39 } } },
+        // Hi-Fi
+        { { { 0.00, 0.22, -0.67, 0.61, 3.65, 7.71 },
+            { 0.00, 0.05, -1.77, -3.44, -3.82, -0.22 },
+            { 0.00, 0.09, -1.53, -3.18, -4.34, -1.87 },
+            { 0.00, 0.44, -0.29, -1.52, -2.89, -2.37 } },
+          { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
+            { 0.00, 0.61, 2.03, 4.30, 5.65, 8.18 },
+            { 0.00, 0.76, 2.74, 5.70, 7.19, 7.37 },
+            { 0.00, 1.23, 3.90, 7.06, 6.91, 9.43 } } } };
       int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
       const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
       const double rr = std::min(std::max(resonance, 0.0), 1.0);
@@ -449,8 +483,9 @@ namespace dfl
       const double rf = (rr - RN[ri]) / (RN[ri + 1] - RN[ri]);
       for (int m = 0; m < 2; ++m)
       {
-        const double a = DT[m][ri][di]     + df * (DT[m][ri][di + 1]     - DT[m][ri][di]);
-        const double b = DT[m][ri + 1][di] + df * (DT[m][ri + 1][di + 1] - DT[m][ri + 1][di]);
+        const auto& T = DT[hiFi ? 1 : 0];
+        const double a = T[m][ri][di]     + df * (T[m][ri][di + 1]     - T[m][ri][di]);
+        const double b = T[m][ri + 1][di] + df * (T[m][ri + 1][di + 1] - T[m][ri + 1][di]);
         driveTrim[m] = pow(10.0, (a + rf * (b - a)) / 20.0);
       }
     }
@@ -489,6 +524,105 @@ namespace dfl
     }
   }
 
+  INLINE void DiodeLadderFilter::stepHiFi(double vIn, double fmMod, double& un, double* lp, double& q21Residual)
+  {
+    // Every diode pair passes If tanh(dv / 2Vt): with T(x) = tanh(h x) / h (h = headroomBias, the 2 Vt scale of the
+    // input pair), the stages (TPT, y = z + g F) are
+    //   F1 = un - T(y1 - y2),  F2 = 0.5 (T(y1 - y2) - T(y2 - y3)),  F3 = 0.5 (T(y2 - y3) - T(y3 - y4)),
+    //   F4 = 0.5 (T(y3 - y4) - T(y4)) - kappa rho (y4 - w)          (Q22 above the top rung; the Q21 load, w implicit)
+    // with un = Q12(vIn - K (netG Q21(u0) + netS)), u0 = c0 (y4 - s0). Linearised it is the standard ladder exactly.
+    // Two Newton steps from a linear extrapolation of the last two solutions, the 4x4 Jacobian (tridiagonal plus the
+    // feedback corner) by Cramer's rule: within -90 dB of a converged solve on stress tests, SPICE large-signal
+    // response within 0.04 dB / 0.02 % THD rms at the 303's level.
+    const double h = headroomBias;
+    const double g = alpha / (1.0 - alpha) * fmMod;
+    const double aL = loadA, sw = loadState, lamA = loadKR * (1.0 - aL), lamW = lamA * sw;
+    const double c0 = 1.0 - netA[0], s0 = netState[0];
+    double netG = 1.0, netS = 0.0;
+    for (int i = 1; i < NET_N; ++i)
+    {
+      const double a = netA[i], c = 1.0 - a;
+      const double gx = (i < NET_N - 1) ? c : c + shelfRatio * a;
+      const double gs = (i < NET_N - 1) ? -c : (shelfRatio - 1.0) * c;
+      netG *= gx;
+      netS = gx * netS + gs * netState[i];
+    }
+    const double KG = K * netG, z[4] = { z1, z2, z3, z4 };
+    double y[4];
+    for (int k = 0; k < 4; ++k) y[k] = 2.0 * yPrev[k] - yPrev2[k];
+    for (int it = 0; it < 2; ++it)
+    {
+      const double u0 = c0 * (y[3] - s0);
+      const double tq = tanhRational(h * u0), Qv = tq / h, Qd = 1.0 - tq * tq;
+      const double tv = tanhRational(h * (vIn - KG * Qv - K * netS) + satBias);
+      un = (tv - satBiasShape) * satBiasNorm / h;
+      const double dun = (1.0 - tv * tv) * satBiasNorm * (-KG * Qd * c0);
+      const double t12 = tanhRational(h * (y[0] - y[1])), t23 = tanhRational(h * (y[1] - y[2]));
+      const double t34 = tanhRational(h * (y[2] - y[3])), t4 = tanhRational(h * y[3]);
+      const double T12 = t12 / h, T23 = t23 / h, T34 = t34 / h, T4 = t4 / h;
+      const double d12 = 1.0 - t12 * t12, d23 = 1.0 - t23 * t23, d34 = 1.0 - t34 * t34, d4 = 1.0 - t4 * t4;
+      const double b0 = -(y[0] - z[0] - g * (un - T12));
+      const double b1 = -(y[1] - z[1] - g * 0.5 * (T12 - T23));
+      const double b2 = -(y[2] - z[2] - g * 0.5 * (T23 - T34));
+      const double b3 = -(y[3] - z[3] - g * (0.5 * (T34 - T4) - lamA * y[3] + lamW));
+      // Jacobian I - g dF/dy
+      const double a00 = 1.0 + g * d12, a01 = -g * d12, a03 = -g * dun;
+      const double a10 = -0.5 * g * d12, a11 = 1.0 + 0.5 * g * (d12 + d23), a12 = -0.5 * g * d23;
+      const double a21 = -0.5 * g * d23, a22 = 1.0 + 0.5 * g * (d23 + d34), a23 = -0.5 * g * d34;
+      const double a32 = -0.5 * g * d34, a33 = 1.0 + 0.5 * g * (d34 + d4) + g * lamA;
+      // Cramer's rule on the sparse pattern
+      const double D2 = a00 * a11 - a01 * a10, P = a22 * a33 - a23 * a32;
+      const double det = D2 * P - a00 * a12 * a21 * a33 - a03 * a10 * a21 * a32;
+      const double E = D2 * b2 - a00 * a21 * b1 + a10 * a21 * b0;
+      const double M32 = D2 * a23 + a03 * a10 * a21, M33 = D2 * a22 - a00 * a12 * a21;
+      const double F1 = b1 * P - a12 * (a33 * b2 - a23 * b3);
+      const double N3 = b3 * M33 - a32 * E;
+      const double N2 = a33 * E - b3 * M32;
+      const double N1 = a00 * F1 - a10 * (b0 * P + a03 * (a32 * b2 - a22 * b3));
+      const double N0 = b0 * (a11 * P - a12 * a21 * a33) - a01 * F1
+                      - a03 * (a21 * a32 * b1 - a11 * (a32 * b2 - a22 * b3) - a12 * a21 * b3);
+      const double r = 1.0 / det;
+      y[0] += N0 * r; y[1] += N1 * r; y[2] += N2 * r; y[3] += N3 * r;
+    }
+    z1 = 2.0 * y[0] - z1; z2 = 2.0 * y[1] - z2; z3 = 2.0 * y[2] - z3; z4 = 2.0 * y[3] - z4;
+    for (int k = 0; k < 4; ++k) lp[k] = y[k];
+
+    // advance the coupling network (Q21 after section 0) and the load lowpass
+    double x = y[3];
+    for (int i = 0; i < NET_N; ++i)
+    {
+      const double v = (x - netState[i]) * netA[i];
+      const double lpn = v + netState[i];
+      netState[i] = lpn + v;
+      x = (i < NET_N - 1) ? x - lpn : x - lpn + shelfRatio * lpn;
+      if (i == 0) { const double q = tanhRational(h * x) / h; q21Residual = q - x; x = q; }
+    }
+    loadW = aL * y[3] + (1.0 - aL) * sw;
+    loadState = 2.0 * loadW - sw;
+  }
+
+  INLINE void DiodeLadderFilter::stepShadow(double un, double fmMod, double* y, double& w)
+  {
+    // the linear ladder (TPT, y = z + g F) for a known un: tridiagonal, Thomas algorithm
+    const double g = alpha / (1.0 - alpha) * fmMod, aL = loadA, lamA = loadKR * (1.0 - aL);
+    const double lo[4] = { 0.0, -0.5 * g, -0.5 * g, -0.5 * g };
+    const double di[4] = { 1.0 + g, 1.0 + g, 1.0 + g, 1.0 + g + g * lamA };
+    const double up[4] = { -g, -0.5 * g, -0.5 * g, 0.0 };
+    double rhs[4] = { shadowZ[0] + g * un, shadowZ[1], shadowZ[2], shadowZ[3] + g * lamA * shadowLoadState };
+    double c[4], d[4];
+    c[0] = up[0] / di[0]; d[0] = rhs[0] / di[0];
+    for (int k = 1; k < 4; ++k)
+    {
+      const double m = di[k] - lo[k] * c[k - 1];
+      c[k] = up[k] / m; d[k] = (rhs[k] - lo[k] * d[k - 1]) / m;
+    }
+    y[3] = d[3];
+    for (int k = 2; k >= 0; --k) y[k] = d[k] - c[k] * y[k + 1];
+    for (int k = 0; k < 4; ++k) shadowZ[k] = 2.0 * y[k] - shadowZ[k];
+    w = aL * y[3] + (1.0 - aL) * shadowLoadState;
+    shadowLoadState = 2.0 * w - shadowLoadState;
+  }
+
   INLINE double DiodeLadderFilter::shape(double x)
   {
     // Soft clipping - tanh approximation
@@ -525,78 +659,89 @@ namespace dfl
 
     double alphaFM  = alpha  * fmMod;
 
-    // Calculate feedback signals (S4 -> S3 -> S2 -> S1)
-    double S4 = beta4 * (z4 + loadSGain * loadState);
-    double S3 = beta3 * (z3 + S4 * delta3);
-    double S2 = beta2 * (z2 + S3 * delta2);
-    double S1 = beta1 * (z1 + S2 * delta1);
-
-    // SIGMA - weighted sum of feedback signals
-    double SIGMA = SG1 * S1 + SG2 * S2 + SG3 * S3 + SG4 * S4;
-
-    // Form input to the ladder (with feedback). The coupling network is linear apart from Q21, the tanh after its
-    // section 0 (u0, C27 / C25). With x = SIGMA + GAMMA un the ladder output estimate, a linear first pass gives u0;
-    // Q21 is linearised about it, so the solve for un stays exact for small signals, then the cascade advances.
-    const double c0 = 1.0 - netA[0];
-    double netG = 1.0, netS = 0.0;   // sections 1.. : y = netG * q + netS
-    for (int i = 1; i < NET_N; ++i)
-    {
-      const double a = netA[i], c = 1.0 - a;
-      const double gx = (i < NET_N - 1) ? c : c + shelfRatio * a;   // highpass, or (s+z)/(s+p) shelf
-      const double gs = (i < NET_N - 1) ? -c : (shelfRatio - 1.0) * c;
-      netG *= gx;
-      netS = gx * netS + gs * netState[i];
-    }
     const double vIn = driveFactor * input;   // the drive is the VCO level into Q12; the feedback is not scaled
-    const double unLin = (vIn - K * (netG * c0 * (SIGMA - netState[0]) + netS)) / (1.0 + K * netG * c0 * GAMMA);
-    const double u0e = c0 * (SIGMA + GAMMA * unLin - netState[0]);
-    const double qd = q21Slope(u0e);
-    const double fbA = netG * (q21(u0e) + qd * (c0 * (SIGMA - netState[0]) - u0e)) + netS;
-    const double fbB = netG * qd * c0 * GAMMA;
-    double un = (vIn - K * fbA) / (1.0 + K * fbB);
-    double x = SIGMA + GAMMA * un;
-    double q21Residual = 0.0;
-    for (int i = 0; i < NET_N; ++i)
+    double un, lp1, lp2, lp3, lp4, q21Residual = 0.0;
+    if (hiFi)
     {
-      const double v = (x - netState[i]) * netA[i];
-      const double lp = v + netState[i];
-      netState[i] = lp + v;
-      x = (i < NET_N - 1) ? x - lp : x - lp + shelfRatio * lp;
-      if (i == 0) { const double q = q21(x); q21Residual = q - x; x = q; }
+      double lp[4];
+      stepHiFi(vIn, fmMod, un, lp, q21Residual);
+      lp1 = lp[0]; lp2 = lp[1]; lp3 = lp[2]; lp4 = lp[3];
     }
+    else
+    {
+      // Calculate feedback signals (S4 -> S3 -> S2 -> S1)
+      double S4 = beta4 * (z4 + loadSGain * loadState);
+      double S3 = beta3 * (z3 + S4 * delta3);
+      double S2 = beta2 * (z2 + S3 * delta2);
+      double S1 = beta1 * (z1 + S2 * delta1);
 
-    // Q12, the input pair: a tanh with headroom scaling (0 dB drive = the real 303's level, see setInputDrive) and
-    // the optional asymmetry, normalised to slope 1. The level makeup is applied at the output.
-    un = (shape(un * headroomBias + satBias) - satBiasShape) * satBiasNorm / headroomBias;
+      // SIGMA - weighted sum of feedback signals
+      double SIGMA = SG1 * S1 + SG2 * S2 + SG3 * S3 + SG4 * S4;
 
-    // 1st stage
-    double xin = un * gamma1 + S2 + epsilon1 * S1;
-    double v = (a1 * xin - z1) * alphaFM;
-    double lp1 = v + z1;
-    z1 = lp1 + v;
+      // Form input to the ladder (with feedback). The coupling network is linear apart from Q21, the tanh after its
+      // section 0 (u0, C27 / C25). With x = SIGMA + GAMMA un the ladder output estimate, a linear first pass gives u0;
+      // Q21 is linearised about it, so the solve for un stays exact for small signals, then the cascade advances.
+      const double c0 = 1.0 - netA[0];
+      double netG = 1.0, netS = 0.0;   // sections 1.. : y = netG * q + netS
+      for (int i = 1; i < NET_N; ++i)
+      {
+        const double a = netA[i], c = 1.0 - a;
+        const double gx = (i < NET_N - 1) ? c : c + shelfRatio * a;   // highpass, or (s+z)/(s+p) shelf
+        const double gs = (i < NET_N - 1) ? -c : (shelfRatio - 1.0) * c;
+        netG *= gx;
+        netS = gx * netS + gs * netState[i];
+      }
+      const double unLin = (vIn - K * (netG * c0 * (SIGMA - netState[0]) + netS)) / (1.0 + K * netG * c0 * GAMMA);
+      const double u0e = c0 * (SIGMA + GAMMA * unLin - netState[0]);
+      const double qd = q21Slope(u0e);
+      const double fbA = netG * (q21(u0e) + qd * (c0 * (SIGMA - netState[0]) - u0e)) + netS;
+      const double fbB = netG * qd * c0 * GAMMA;
+      un = (vIn - K * fbA) / (1.0 + K * fbB);
+      double x = SIGMA + GAMMA * un;
+      for (int i = 0; i < NET_N; ++i)
+      {
+        const double v = (x - netState[i]) * netA[i];
+        const double lp = v + netState[i];
+        netState[i] = lp + v;
+        x = (i < NET_N - 1) ? x - lp : x - lp + shelfRatio * lp;
+        if (i == 0) { const double q = q21(x); q21Residual = q - x; x = q; }
+      }
 
-    // 2nd stage
-    xin = lp1 * gamma2 + S3 + epsilon2 * S2;
-    v = (a2 * xin - z2) * alphaFM;
-    double lp2 = v + z2;
-    z2 = lp2 + v;
+      // Q12, the input pair: a tanh with headroom scaling (0 dB drive = the real 303's level, see setInputDrive) and
+      // the optional asymmetry, normalised to slope 1. The level makeup is applied at the output.
+      un = (shape(un * headroomBias + satBias) - satBiasShape) * satBiasNorm / headroomBias;
 
-    // 3rd stage
-    xin = lp2 * gamma3 + S4 + epsilon3 * S3;
-    v = (a3 * xin - z3) * alphaFM;
-    double lp3 = v + z3;
-    z3 = lp3 + v;
+      // 1st stage
+      double xin = un * gamma1 + S2 + epsilon1 * S1;
+      double v = (a1 * xin - z1) * alphaFM;
+      lp1 = v + z1;
+      z1 = lp1 + v;
 
-    // 4th stage
-    // (with the load lowpass at this sample's lp4; exact without Filter FM)
-    loadW = loadA * (G4 * lp3 + S4) + (1.0 - loadA) * loadState;
-    v = ((a4 * lp3 + loadKR * loadW) / (1.0 + loadKR) - z4) * alpha4 * fmMod;
-    double lp4 = v + z4;
-    z4 = lp4 + v;
+      // 2nd stage
+      xin = lp1 * gamma2 + S3 + epsilon2 * S2;
+      v = (a2 * xin - z2) * alphaFM;
+      lp2 = v + z2;
+      z2 = lp2 + v;
 
-    // Q21 load lowpass
-    loadW = loadA * lp4 + (1.0 - loadA) * loadState;
-    loadState = 2.0 * loadW - loadState;
+      // 3rd stage
+      xin = lp2 * gamma3 + S4 + epsilon3 * S3;
+      v = (a3 * xin - z3) * alphaFM;
+      lp3 = v + z3;
+      z3 = lp3 + v;
+
+      // 4th stage
+      // (with the load lowpass at this sample's lp4; exact without Filter FM)
+      loadW = loadA * (G4 * lp3 + S4) + (1.0 - loadA) * loadState;
+      v = ((a4 * lp3 + loadKR * loadW) / (1.0 + loadKR) - z4) * alpha4 * fmMod;
+      lp4 = v + z4;
+      z4 = lp4 + v;
+
+      // Q21 load lowpass
+      loadW = loadA * lp4 + (1.0 - loadA) * loadState;
+      loadState = 2.0 * loadW - loadState;
+    }
+    for (int k = 0; k < 4; ++k) yPrev2[k] = yPrev[k];
+    yPrev[0] = lp1; yPrev[1] = lp2; yPrev[2] = lp3; yPrev[3] = lp4;
 
     // Multimode output: the mode morphs LP -> BP -> HP along numerators with only real zeros, so no notch appears
     // on the way (a linear crossfade of 1 and p^2 has zeros on the frequency axis). With t the position within a
@@ -605,8 +750,19 @@ namespace dfl
     //   BP -> HP:  p^2 ((1 - t) c1 + t c2 p)^2 = (1-t)^2 c1^2 * p^2 + 2 t (1-t) c1 c2 * p^3 + t^2 c2^2 * p^4
     // Each p^k is a tap mix (tapMix, tapW). Bass comp: below cutoff the loop's passband gain is about 1 / (1 + K), so
     // (1 + K)^amount restores that fraction (in dB) of the resonance bass loss in the LP term; 0 = the real circuit.
-    const double taps[5] = { un, lp1, lp2, lp3, lp4 };
-    auto pk = [&](int k) { const double* w = tapMix[k]; return w[0] * taps[0] + w[1] * taps[1] + w[2] * taps[2] + w[3] * taps[3] + w[4] * taps[4] - tapW[k] * loadW; };
+    double taps[5] = { un, lp1, lp2, lp3, lp4 }, tapLoadW = loadW;
+    if (hiFi)
+    {
+      double ys[4];
+      stepShadow(un, fmMod, ys, tapLoadW);
+      for (int k = 0; k < 4; ++k) taps[k + 1] = ys[k];
+    }
+    auto pk = [&](int k)
+    {
+      if (k == 0) return lp4;   // the LP term is the ladder's own output (Hi-Fi: the nonlinear one)
+      const double* w = tapMix[k];
+      return w[0] * taps[0] + w[1] * taps[1] + w[2] * taps[2] + w[3] * taps[3] + w[4] * taps[4] - tapW[k] * tapLoadW;
+    };
     const double bassComp = BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
     const double gLP = driveMakeup * driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0);
     double lpWeight = 1.0;   // the LP term's share of the mix (Q21's distortion follows it)

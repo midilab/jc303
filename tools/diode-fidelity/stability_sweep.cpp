@@ -8,13 +8,15 @@
 #include "dfl_DiodeLadderFilter.h"
 #include <cstdio>
 #include <cmath>
+#include <string>
 using D = dfl::DiodeLadderFilter;
 static const double SR = 4.0 * 44100.0;   // the plugin runs the filter at 4x oversampling
+static bool HIFI = true;                   // --standard: the Standard quality
 
 static bool growing(D& d, double c, double fh, double drive, double res)
 {
   d.setSampleRate(SR);
-  d.setInputDrive(drive); d.setPassbandCompensation(0.0);
+  d.setHiFi(HIFI); d.setInputDrive(drive); d.setPassbandCompensation(0.0);
   d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(res); d.reset();
   d.getSample(1e-9);
   int N = (int)(SR * 6.0); double early = 0, late = 0;
@@ -28,8 +30,9 @@ static bool growing(D& d, double c, double fh, double drive, double res)
   return late >= early || late >= 1e-7;
 }
 
-int main()
+int main(int argc, char** argv)
 {
+  HIFI = !(argc > 1 && std::string(argv[1]) == "--standard");
   int n = 0, bad = 0, slow = 0; double worst = -400, worstC = 0, worstF = 0, worstD = 0;
   for (double fh : { 57.5, 65.0, 76.7, 90.0, 100.0, 122.0, 160.0, 200.0, 268.0 })
     for (double drive : { -12.0, -9.0, -6.0, -3.0, 0.0, 4.5, 9.0, 12.0, 14.0, 16.0 })
@@ -38,7 +41,7 @@ int main()
         double c = 200 * pow(100.0, i / 39.0);
         for (double res : { 0.97, 0.99, 1.0 })
         {
-          D d; d.setSampleRate(SR);
+          D d; d.setSampleRate(SR); d.setHiFi(HIFI);
           d.setInputDrive(drive); d.setPassbandCompensation(0.0);
           d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(res); d.reset();
           d.getSample(1e-3);
@@ -58,6 +61,6 @@ int main()
           if (rel > worst) { worst = rel; worstC = c; worstF = fh; worstD = drive; }
         }
       }
-  printf("stability sweep: %d cases, %d failing (not below -60 dB and growing), %d slow but decaying; worst tail %.0f dB (cutoff %.0f, fh %.1f, drive %.1f)\n", n, bad, slow, worst, worstC, worstF, worstD);
+  printf("stability sweep (%s): %d cases, %d failing (not below -60 dB and growing), %d slow but decaying; worst tail %.0f dB (cutoff %.0f, fh %.1f, drive %.1f)\n", HIFI ? "Hi-Fi" : "Standard", n, bad, slow, worst, worstC, worstF, worstD);
   return bad ? 1 : 0;
 }

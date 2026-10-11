@@ -17,13 +17,14 @@ int main()
     { 1.15, 0.75, "mode 0.75 trim 1.15" },
     { 1.15, 1.0,  "HP trim 1.15" } };
   int bad = 0, n = 0; double worstTail = -400, worstPeak = 0;
+  for (int q = 0; q < 2; q++)
   for (const Case& c : cases)
     for (double drive : { -3.0, 0.0, 4.5, 9.0, 16.0 })
       for (double cut : { 314.0, 1200.0, 2394.0 })
         for (double env : { 0.0, 60.0, 100.0 })
           for (double fm : { 0.0, 1.0 })
           {
-            rosic::Open303 s; s.setSampleRate(44100); s.setFilterType(dfl::FILTER_DIODE); s.setResonanceTrim(c.trim); s.setFilterMode(c.mode);
+            rosic::Open303 s; s.setSampleRate(44100); s.setFilterType(dfl::FILTER_DIODE); s.setResonanceTrim(c.trim); s.setFilterMode(c.mode); s.setFilterHiFi(q != 0);
             s.setCutoff(cut); s.setResonance(100); s.setEnvMod(env); s.setDecay(400); s.setAccent(100);
             s.setVolume(-12); s.setFilterDrive(drive); s.setPassbandCompensation(1.0); s.setFilterFmDepth(fm); s.setWaveform(0.0);
             s.noteOn(36, 127, 0.0);
@@ -36,7 +37,7 @@ int main()
               peak = fmax(peak, fabs(y)); if (i > N - 4410) tail = fmax(tail, fabs(y));
             }
             n++; double t = 20 * log10(tail + 1e-300);
-            if (!finite || t > -100 || peak > 20) { bad++; printf("  FAIL %s drive %.1f cutoff %.0f env %.0f fm %.0f: finite=%d tail %.0f dB peak %.2f\n", c.name, drive, cut, env, fm, (int)finite, t, peak); }
+            if (!finite || t > -100 || peak > 20) { bad++; printf("  FAIL %s %s drive %.1f cutoff %.0f env %.0f fm %.0f: finite=%d tail %.0f dB peak %.2f\n", q ? "Hi-Fi" : "Standard", c.name, drive, cut, env, fm, (int)finite, t, peak); }
             worstTail = fmax(worstTail, t); worstPeak = fmax(worstPeak, peak);
           }
   printf("stress test: %d runs, %d failures; worst tail %.0f dB, worst peak %.2f\n", n, bad, worstTail, worstPeak);
