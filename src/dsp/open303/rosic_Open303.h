@@ -439,6 +439,10 @@ namespace rosic
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     dfl::FilterType currentFilterType;  // currently selected filter type
     double feedbackHighpass = 150.0;   // Filter Feedback knob in TeeBee Hz
+    // Level per filter model, after the filter chain, so the models sit at equal loudness at resonance 0 (saw, mean
+    // over C2 / C3 / C4 and cutoff 400 / 1000 / 2500 Hz, env mod 60; tools/diode-fidelity/model_level). Level matching
+    // between models lives here rather than in the filters, which stay at their own (circuit) level.
+    static constexpr double FILTER_LEVEL[dfl::NUM_FILTER_TYPES] = { 1.0, 2.401 };   // TeeBee, Spicy (+7.6 dB)
     // The diode models' corner at the knob's end: the coupling pole C27/C25 into Q21 at 46 Hz, Q21 beta about 500 (the
     // 2SC1583's datasheet minimum). Higher betas make the network's ~7 Hz mode motorboat at high resonance (SPICE:
     // beta 800 at full pot), so the knob stops here. The pole is 578.1 rad/s x corner / 115.
@@ -622,6 +626,7 @@ namespace rosic
       tmp  = highpass2.getSample(tmp);
       tmp = notch.getSample(tmp);
     }
+    tmp *= FILTER_LEVEL[currentFilterType]; // level match between filter models
     tmp *= ampEnvOut;                       // amplified
     tmp *= ampScaler;
     tmp *= volumeModFactor;                 // LFO volume modulation

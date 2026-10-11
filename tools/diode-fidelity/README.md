@@ -25,6 +25,7 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 | `build/stress_test` | Full synth, Diode at Res Trim 0.85 / 1 / 1.15 (LP) and 1.15 at mode 0.25 / 0.5 / 0.75 / 1, full bass comp, x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100: 630 runs | ~15 s | no non-finite sample, tail after gate-off < -100 dB, peak < 20 |
 | `build/drive_level [-v]` | Drive knob is not a volume control (48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-mode limits (LP -2.5..+3.5 dB, BP / HP wider) | ~1 min | every filter type within limits |
 | `build/mode_level` | Mode morph: level of mode 0.25 / 0.5 / 0.75 / 1 vs LP (full synth, resonance 50..70, cutoff 800..1500); small-signal shape over 21 mode steps (no dip deeper than 3 dB below its 1/3-octave neighbours, i.e. no notch); BP / HP slopes | ~6 s | level within 1.5 dB, no notch, HP >= 30 dB down at cutoff / 8, BP >= 12 dB at cutoff / 8 and x 8 |
+| `build/model_level` | Global level between filter models (`Open303::FILTER_LEVEL`): Spicy vs TeeBee at resonance 0 (saw, C2 / C3 / C4 x cutoff 400 / 1000 / 2500) | ~2 s | within 0.25 dB |
 | `fit_drive_trim.py` | Fits the drive level tables `DT` (run with `DT` zeroed; paste the printed arrays) | ~1 min | helper |
 | `build/render_note` | Renders one note to raw float32 on stdout (`render_note <filterType> <cutoff> <res> <env> <decayMs> <accent> <gateOffSec> <totalSec> <driveDb> <bassComp> <midiNote> [fbHpHz] [bias] [resTrim] [mode]`) | - | helper |
 | `gen_native_tables.py` + `spice/native_targets.py` + `build/native_solver` | Re-solves the Diode tables (`KNT`, `KNC`) against SPICE; run after changing the ladder, `CUTOFF_TUNING`, the coupling network or the netlist | ~3 min | prints C++ arrays |
@@ -34,13 +35,14 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 ### Expected results (current tree, drive -3 dB)
 
 - stability sweep: 0 failures of 10800 (699 slow but decaying)
-- stress test: 0 failures of 630, worst tail about -275 dB, worst peak 14.0
+- stress test: 0 failures of 630, worst tail about -274 dB, worst peak 15.5
 - native output: 0 of 35 points out of tolerance, worst 0.54 dB
 - drive level: LP clean region 0.19 dB, +16 dB mean +1.3 dB (worst setting -2.1 / +3.4 dB); BP / HP within limits
+- model level: Spicy vs TeeBee 0.00 dB at resonance 0 (+2.3 dB at 50 and 100; only resonance 0 is matched)
 - mode level: 0.25 / 0.5 / 0.75 / 1 at -1.3 / 0.0 / -1.2 / 0.0 dB vs LP; worst dip 0.14 dB; HP 82 dB down at cutoff / 8
 
 ```sh
-cd tools/diode-fidelity && ./build.sh && for t in stability_sweep stress_test native_output drive_level mode_level; do ./build/$t || echo "FAILED: $t"; done
+cd tools/diode-fidelity && ./build.sh && for t in stability_sweep stress_test native_output drive_level mode_level model_level; do ./build/$t || echo "FAILED: $t"; done
 ```
 
 ## When the tables must be regenerated
