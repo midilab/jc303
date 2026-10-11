@@ -724,9 +724,12 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case TANH_SHAPER_DRIVE:
+        // one knob, two meanings: edge drive of the classic square (TeeBee filter) and waveshaper sag of the
+        // pitch-tracked pulse (diode filters); the default 0.25 is the measured circuit (sag 1), 1.0 doubles it
         open303Core.setTanhShaperDrive(
             linToLin(value, 0.0, 1.0,   25.0,     80.0)
         );
+        open303Core.setPulseSag(value <= 0.25 ? value * 4.0 : 1.0 + (value - 0.25) / 0.75);
         break;
     case FILTER_DRIVE:
         // 0..1 -> 0..9 dB into the diode ladder's saturating input stage
@@ -810,7 +813,7 @@ void JC303::setDevilMod(bool mode)
     } else if (mode == false) {
         open303Core.setFilterType(FILTER_TEEBEE);
         open303Core.setLfoOn(false);   // hard-gates LFO; its internal values are never read while off
-        open303Core.setCircuitPulseShape(false);   // flat-topped square; the pitch-tracked pulse width still applies
+        open303Core.setCircuitPulseShape(false);   // moot here: the TeeBee filter selects the classic square
         decayMin = 200.0;
         decayMax = 2000.0;
         setParameter(DECAY, *decay);   // main DECAY knob re-maps into the core range right away

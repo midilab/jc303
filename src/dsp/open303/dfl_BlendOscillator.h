@@ -24,8 +24,9 @@ namespace dfl
   wavetable. Instead it is synthesised at audio rate by subtracting two phase-offset copies of the
   saw table and applying a tanh shaper - so the pulse width becomes a continuous, per-sample
   parameter (setPulseWidth no longer regenerates any wavetable via FFT). This is what lets the
-  pulse width track pitch the way the original TB-303 does. Only the saw table (waveTable1) is
-  used; the second wavetable of the original class has been removed.
+  pulse width track pitch the way the original TB-303 does. With setClassicSquare(true) the pulse
+  is instead read from a second, pre-rendered wavetable (Open303's SQUARE303) exactly as the
+  original class did, with a fixed pulse width.
 
   */
 
@@ -60,6 +61,13 @@ namespace dfl
     the same waveform for different synth-voices multiple times in the memory. */
     void setWaveTable1(MipMappedWaveTable* newWaveTable1);
 
+    /** Sets the pre-rendered square table read in classic mode (see setClassicSquare). */
+    void setWaveTable2(MipMappedWaveTable* newWaveTable2) { waveTable2 = newWaveTable2; }
+
+    /** Classic mode reads the pulse from waveTable2 exactly like the original rosic::BlendOscillator: fixed pulse
+    width, tanh drive/offset/phase shift baked into the table. Otherwise the pulse is synthesised from the saw. */
+    void setClassicSquare(bool enabled) { classicSquare = enabled; }
+
     /** Sets the blend/mix factor between saw and pulse. The value is expected between 0...1 where 0
     means saw only, 1 means pulse only - in between there will be a linear blend between the two. */
     void setBlendFactor(double newBlendFactor) { blend = newBlendFactor; }
@@ -83,6 +91,11 @@ namespace dfl
     /** Enables the TB-303 waveshaper envelope on the pulse (on by default): the collector-high segment follows the
     circuit's shape instead of a flat top (see ENV_TABLE). */
     void setCircuitPulseShape(bool enabled) { circuitPulseShape = enabled; }
+
+    /** Scales the waveshaper envelope (with setCircuitPulseShape on): 0 = flat top, 1 = the circuit, up to 2 =
+    exaggerated (each envelope node v becomes v^2 at 2: slower rise, deeper sag). The table nodes are scaled, so the
+    drawn envelope stays piecewise linear and its corners stay band-limited. */
+    void setPulseSag(double newSag) { pulseSag = std::min(std::max(newSag, 0.0), 2.0); }
 
     /** Sets the phase increment from outside. */
     INLINE void setIncrement(double newIncrement) { increment = newIncrement; }
@@ -141,6 +154,9 @@ namespace dfl
     double squarePhaseShift;  // phase shift of pulse relative to saw (degrees)
 
     MipMappedWaveTable *waveTable1; // the saw table both saws are read from
+    MipMappedWaveTable *waveTable2 = nullptr; // the pre-rendered square read in classic mode
+    bool   classicSquare = false;
+    double pulseSag = 1.0;
 
     // TB-303 waveshaper (Q8) envelope. The real square is not flat-topped: in the bottom octave the collector rises
     // slowly after the edge, and at every pitch the top slopes down as the saw keeps falling (the transistor is not
@@ -236,7 +252,7 @@ namespace dfl
     const double levelLo = -rosic::tanhApprox(tanhDrive*rawLo + tanhOffset);
     const double levelHi = -rosic::tanhApprox(tanhDrive*(rawLo + 2.0) + tanhOffset);
     double pulse = levelLo + 0.5*(saw2 - saw1 - rawLo)*(levelHi - levelLo);
-    if( !circuitPulseShape )
+    if( !circuitPulseShape || pulseSag <= 0.0 )
       return pulse;
 
     // the collector-high segment runs from the second read's reset to the first read's (the saw reset, as in the
@@ -261,7 +277,12 @@ namespace dfl
 
   INLINE double BlendOscillator::envNode(int i) const
   {
-    return ENV_TABLE[envRow][i] + envRowFrac*(ENV_TABLE[envRow+1][i] - ENV_TABLE[envRow][i]);
+    const double v = ENV_TABLE[envRow][i] + envRowFrac*(ENV_TABLE[envRow+1][i] - ENV_TABLE[envRow][i]);
+    if( pulseSag == 1.0 )
+      return v;
+    if( pulseSag < 1.0 )
+      return 1.0 + pulseSag*(v - 1.0);
+    return v * (1.0 + (pulseSag - 1.0)*(v - 1.0));   // v^2 at a sag of 2
   }
 
   // The envelope is piecewise linear in segment position between the table nodes at (i/(N-1))^2, so in time it is a
@@ -366,6 +387,14 @@ namespace dfl
     double saw1 = waveTable1->getValueLinear(intIndex, frac, tableNumber);
     out1 = (1.0-blend) * saw1;
 
+    if( classicSquare && waveTable2 != NULL )
+    {
+      out2  = blend * waveTable2->getValueLinear(intIndex, frac, tableNumber);
+      out2 *= 0.5;
+      phaseIndex += increment;
+      return out1 + out2;
+    }
+
     // pulse component: synthesise from a second, phase-shifted read of the same saw table and
     // shape it with a tanh - this is what makes the pulse width a continuous, per-sample value.
     if( blend > 0.0 )
@@ -373,7 +402,8 @@ namespace dfl
       const double phaseShiftSamples = squarePhaseShift * tableLengthDbl / 360.0;
       // with the circuit envelope the wrapped segment starts ENV_LEAD earlier, where the circuit's rise begins; the
       // envelope then reaches the 50% level at the nominal pulse width, so the duty is unchanged
-      const double pw    = circuitPulseShape ? std::min(pulseWidth*(1.0 + envLead), 0.95) : pulseWidth;
+      const bool   shaped = circuitPulseShape && pulseSag > 0.0;
+      const double pw     = shaped ? std::min(pulseWidth*(1.0 + envLead*std::min(pulseSag, 1.0)), 0.95) : pulseWidth;
       const double pulse = shapedPulse(saw1, tableNumber, phaseShiftSamples, pw);
       out2 = blend * pulse * 0.5;  // 0.5 to match the original square level
     }

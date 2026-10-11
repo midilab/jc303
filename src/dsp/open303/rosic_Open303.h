@@ -126,19 +126,22 @@ namespace rosic
     and 100% of the full volume. In the normal 303, this parameter was fixed to zero. */
     void setAmpSustain(double newAmpSustain) { ampEnv.setSustainInDecibels(newAmpSustain); }
 
-    /** Sets the drive (in dB) for the tanh-shaper that forms the 303-square waveform. Routed to the
-    oscillator's audio-rate pulse shaper (the square is now synthesised, not read from a table). */
+    /** Sets the drive (in dB) for the tanh-shaper that forms the 303-square waveform (the classic square used
+    with the TeeBee filter; the pitch-tracked pulse is fully saturated at any drive). */
     void setTanhShaperDrive(double newDrive)
-    { oscillator.setTanhShaperDrive(newDrive); }
+    { waveTable2.setTanhShaperDriveFor303Square(newDrive); oscillator.setTanhShaperDrive(newDrive); }
 
     /** Switches the TB-303 waveshaper envelope on the square (slow rise in the bottom octaves, sloped top, level
     change with pitch; see dfl::BlendOscillator::ENV_TABLE). Off by default; the pitch-tracked pulse width applies
     either way. */
     void setCircuitPulseShape(bool on) { oscillator.setCircuitPulseShape(on); }
 
+    /** Scales the waveshaper envelope: 0 = flat top, 1 = the circuit (default), 2 = exaggerated. */
+    void setPulseSag(double newSag) { oscillator.setPulseSag(newSag); }
+
     /** Sets the offset (raw value) for the tanh-shaper that forms the 303-square waveform. */
     void setTanhShaperOffset(double newOffset)
-    { oscillator.setTanhShaperOffset(newOffset); }
+    { waveTable2.setTanhShaperOffsetFor303Square(newOffset); oscillator.setTanhShaperOffset(newOffset); }
 
     /** Sets the cutoff frequency for the highpass before the main filter. */
     void setPreFilterHighpass(double newCutoff) { highpass1.setCutoff(newCutoff); }
@@ -151,7 +154,7 @@ namespace rosic
 
     /** Sets the phase shift of tanh-shaped square wave with respect to the saw-wave (in degrees)
     - this is important when the two are mixed. */
-    void setSquarePhaseShift(double newShift) { oscillator.setSquarePhaseShift(newShift); }
+    void setSquarePhaseShift(double newShift) { waveTable2.set303SquarePhaseShift(newShift); }
 
     /** Sets the slide-time (in ms). The TB-303 had a slide time of 60 ms. */
     void setSlideTime(double newSlideTime);
@@ -257,12 +260,12 @@ namespace rosic
     /** Returns the drive (in dB) for the tanh-shaper for 303-square waveform - internal parameter,
     to be scrapped eventually. */
     double getTanhShaperDrive() const
-    { return oscillator.getTanhShaperDrive(); }
+    { return waveTable2.getTanhShaperDriveFor303Square(); }
 
     /** Returns the offset (as raw value for the tanh-shaper for 303-square waveform - internal
     parameter, to be scrapped eventually. */
     double getTanhShaperOffset() const
-    { return oscillator.getTanhShaperOffset(); }
+    { return waveTable2.getTanhShaperOffsetFor303Square(); }
 
     /** Returns the cutoff frequency for the highpass before the main filter. */
     double getPreFilterHighpass() const { return highpass1.getCutoff(); }
@@ -276,7 +279,7 @@ namespace rosic
 
     /** Returns the phase shift of tanh-shaped square wave with respect to the saw-wave (in degrees)
     - this is important when the two are mixed. */
-    double getSquarePhaseShift() const { return oscillator.getSquarePhaseShift(); }
+    double getSquarePhaseShift() const { return waveTable2.get303SquarePhaseShift(); }
 
     /** Returns the slide-time (in ms). */
     double getSlideTime() const { return slideTime; }
@@ -317,7 +320,7 @@ namespace rosic
     //-----------------------------------------------------------------------------------------------
     // embedded objects:
 
-    MipMappedWaveTable        waveTable1, waveTable3;
+    MipMappedWaveTable        waveTable1, waveTable2, waveTable3;
     dfl::BlendOscillator      oscillator;
     dfl::DualSubOscillator    subOscillator;
     TeeBeeFilter              filter;
