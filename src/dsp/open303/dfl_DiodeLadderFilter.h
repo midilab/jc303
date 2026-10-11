@@ -319,6 +319,8 @@ namespace dfl
     bool   tensionEnvelope = true;   // the envelope version is Tension (the rung I-V version stays behind the switch for now)
     static constexpr double TENSION_ENV_GAIN = 2.8;   // log stage-rate change at full tension and a rung at its limit
     static constexpr double TENSION_ENV_MS   = 2.0;   // envelope time constant
+    static constexpr double TENSION_G_MAX    = 3.077683537175253;   // tan(0.4 pi): a stage's rate stays below 0.4 fs
+    // (0.45 fs still left marginal rings at the top cutoffs, stiff and loud; 0.4 fs: none, worst tail -67 dB)
     double envA = 0.0, envE[4] = {};
     double yPrev[4] = {}, yPrev2[4] = {};   // the last two ladder solutions (Hi-Fi's Newton predictor)
 
@@ -593,7 +595,8 @@ namespace dfl
     // per-stage rates (the envelope tension; 1 otherwise)
     double gk[4] = { g, g, g, g };
     if (tensionEnvelope && tension != 0.0)
-      for (int k = 0; k < 4; ++k) gk[k] = g * std::exp(tension * TENSION_ENV_GAIN * envE[k]);
+      for (int k = 0; k < 4; ++k)   // capped below Nyquist: stiff and loud near the top of the range ran away
+        gk[k] = std::min(g * std::exp(tension * TENSION_ENV_GAIN * envE[k]), std::max(g, TENSION_G_MAX));
     for (int it = 0; it < 2; ++it)
     {
       const double u0 = c0 * (y[3] - s0);
