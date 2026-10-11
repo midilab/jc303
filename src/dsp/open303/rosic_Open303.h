@@ -104,6 +104,9 @@ namespace rosic
     /** Sets the diode models' unit trim (loop-gain scale, 1 = nominal unit). */
     void setResonanceTrim(double trim) { diodeFilter.setLoopGainTrim(trim); }
 
+    /** Diode filter quality: Hi-Fi (the default) solves every diode pair's tanh per sample (DiodeLadderFilter::setHiFi). */
+    void setFilterHiFi(bool on) { diodeFilter.setHiFi(on); }
+
     /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB). The plugin
      *  keeps the default (the backup branch backup/filter-bias-parameter exposes it as a parameter); this is for the
      *  fidelity tools. */

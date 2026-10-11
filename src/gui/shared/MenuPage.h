@@ -632,6 +632,7 @@ public:
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "filterMorph", "Filter Morph",     Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // LP / BP / HP; no effect on TeeBee
         mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        mod.items.add(Item { "filterQuality", "Filter Quality", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee

@@ -727,3 +727,46 @@ level, and level matching between filter models is a global stage, `Open303::FIL
 chain. One static gain per model (TeeBee 1.0, Spicy 2.401 = +7.6 dB) puts the models at equal loudness at resonance 0
 (saw, mean over C2 / C3 / C4 and cutoff 400 / 1000 / 2500, env mod 60; `build/model_level`). Above that Spicy is about
 2.3 dB louder (resonance 50 and 100). Bass Comp defaults to 0 (the circuit); its range is unchanged.
+
+## Large-signal fidelity: drive scale, Q21, per-stage diodes (Hi-Fi)
+
+**Drive scale.** The VCO schematic shows the saw at Q28's buffer swinging 12 V to 5.5 V (6.5 Vpp). Through R62 220k
+into 2.2k (1/101) that puts +-32 mV on Q12, a tanh argument of 0.62 at the peaks. Spicy reaches 0.62 at +0.4 dB
+drive, so the Saturation default is now 0 dB (it was -3 dB, about 3.5 dB cleaner than the hardware). The drive now
+scales only the VCO input into Q12; the feedback is unscaled, so the loop gain no longer depends on drive, and the
+level makeup moved to the output. `DT` refitted.
+
+**SPICE large-signal targets** (`spice/large_targets.py`, 144 points: cutoff 500 / 1350 / 3000 Hz x pot 0 / 0.6 / 0.9
+x notes 55 Hz-1.76 kHz x input -6 / 0 / +6 dB around the real level; compression and THD at the ladder top and at
+vout). With the old input-only tanh, the ladder top was within 0.17 dB / 0.38 pts rms at the real level but
+systematically wrong in shape: low notes relative to the cutoff compress less and distort more in SPICE (1350 Hz
+cutoff, 55 Hz: SPICE -0.33 dB / 2.78 %, input tanh -0.78 / 2.02). That is the translinear cancellation (the diode
+pairs' artanh undoes Q12's tanh at DC). At vout, Q21 adds another 1-1.6 pts of THD at low notes: it is an
+undegenerated differential pair at the same 2Vt scale. The earlier ablation that found Q21 "not the limiter" is right
+about compression, but Q21 does add distortion.
+
+**Q21.** A tanh after network section 0 (C27 / C25), in the loop and in the output. The filter now applies the
+coupling itself (its output passes Q21), and `TB303OutputNetwork` skips its Q21 stage in Open303
+(`setCouplingInFilter`). In the Standard path Q21 is linearised about a first-pass estimate inside the zero-delay
+solve, so the small-signal response stays exact.
+
+**Per-stage diodes (Hi-Fi, the default).** Each diode pair passes If tanh(dv / 2Vt): in the filter's units
+T(x) = tanh(h x) / h, h = 0.5, the same scale as Q12. T has slope 1 at 0, so the small-signal response and `KNT` /
+`KNC` are unchanged. Errors against SPICE's ladder top, rms: 0.04 dB / 0.02 pts at the real level (input tanh 0.17 /
+0.38), 0.06 / 0.06 at +6 dB (0.44 / 1.05). Against vout, with Q21: 0.07 / 0.11 and 0.11 / 0.31 (input tanh + Q21:
+0.20 / 0.43 and 0.45 / 1.52). Nothing was fitted.
+
+Solver (`stepHiFi`): two fixed Newton steps from a linear extrapolation of the last two solutions, the Jacobian
+(tridiagonal plus the Q12 feedback corner) by Cramer's rule, and a rational tanh (x P(x^2) / Q(x^2), 5.8e-8 on
+|x| <= 9). The first prototype (full 4x4 elimination with pivoting, std::tanh, three iterations) cost about 4x the
+filter; this one is +8 % on the filter and +6 % on the whole voice, and stays within -90 dB of a converged solve on
+stress signals (tanh arguments to 50, K 20 % past threshold, audio-rate cutoff sweeps).
+
+The BP / HP morph's tap mixes rely on the linear ladder's relations; at +16 dB drive the diodes' node voltages
+swing far past the linear case and HP came out 60 dB too loud. Hi-Fi now runs a linear shadow ladder (Thomas
+algorithm) driven open-loop by the same Q12 current for the p^1..p^4 terms, and keeps its own output for the LP term.
+
+The Filter Quality switch (Mods menu, Spicy only) selects Standard. `DT` has one set per quality. At +16 dB Hi-Fi LP's
+level spreads with cutoff (low cutoff, no env mod -4.6 dB; high cutoff, full env mod +5.0 dB) because the diodes'
+compression depends on cutoff and the tables do not; `drive_level` allows that for Hi-Fi LP only. Up to +9 dB Hi-Fi
+tracks Standard within 0.5 dB.
