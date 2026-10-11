@@ -1,7 +1,7 @@
-// BP / HP morph level check: at morph 1 the Diode BP and Diode HP types must be the Diode Native lowpass without bass
+// BP / HP morph level check: at morph 1 the Diode BP and Diode HP types must be the Diode lowpass without bass
 // comp (same level), so the morph knob does not double as a volume control at its LP end. Full-synth saw note per
-// setting (cutoff x resonance x env mod x drive); RMS over the first 0.25 s, Diode BP / HP minus Diode Native (dB).
-// Also prints the pure BP / HP (morph 0) level against Native at the typical resonant setting the static output gains
+// setting (cutoff x resonance x env mod x drive); RMS over the first 0.25 s, Diode BP / HP minus Diode (dB).
+// Also prints the pure BP / HP (morph 0) level against Diode LP at the typical resonant setting the static output gains
 // target (resonance 50..70, cutoff 800..1500 Hz).
 // usage: morph_level      Exit 0 if every morph-1 setting is within LIMIT_DB.
 #include "rosic_Open303.h"
@@ -30,7 +30,7 @@ int main()
         for (double env : { 0.0, 60.0 })
           for (double drive : { -3.0, 4.5, 16.0 })
           {
-            double d = rmsDb(ft, cutoff, res, env, drive, 1.0) - rmsDb(rosic::FILTER_DIODE_NATIVE, cutoff, res, env, drive, 0.0);
+            double d = rmsDb(ft, cutoff, res, env, drive, 1.0) - rmsDb(rosic::FILTER_DIODE, cutoff, res, env, drive, 0.0);
             worst = fmax(worst, fabs(d)); mean += d; n++;
           }
     bool ok = worst <= LIMIT_DB;
@@ -38,9 +38,9 @@ int main()
     for (double cutoff : { 800.0, 1100.0, 1500.0 })
       for (double res : { 50.0, 60.0, 70.0 })
         for (double env : { 0.0, 60.0 })
-        { pure += rmsDb(ft, cutoff, res, env, -3.0, 0.0) - rmsDb(rosic::FILTER_DIODE_NATIVE, cutoff, res, env, -3.0, 0.0); np++; }
-    printf("%-9s morph 0 vs Diode Native at resonance 50..70, cutoff 800..1500: mean %+.2f dB\n", name, pure / np);
-    printf("%-9s morph 1 vs Diode Native: mean %+.2f dB, worst |dev| %.2f dB (limit %.1f)  %s\n", name, mean / n, worst, LIMIT_DB, ok ? "ok" : "FAIL");
+        { pure += rmsDb(ft, cutoff, res, env, -3.0, 0.0) - rmsDb(rosic::FILTER_DIODE, cutoff, res, env, -3.0, 0.0); np++; }
+    printf("%-9s morph 0 vs Diode at resonance 50..70, cutoff 800..1500: mean %+.2f dB\n", name, pure / np);
+    printf("%-9s morph 1 vs Diode: mean %+.2f dB, worst |dev| %.2f dB (limit %.1f)  %s\n", name, mean / n, worst, LIMIT_DB, ok ? "ok" : "FAIL");
     if (!ok) bad++;
   }
   return bad ? 1 : 0;

@@ -1,4 +1,4 @@
-// Checks dfl::TB303OutputNetwork (Diode Native's output path: Q21 coupling, C14, the VCA's two-tap input with the
+// Checks dfl::TB303OutputNetwork (The diode filter's output path: Q21 coupling, C14, the VCA's two-tap input with the
 // resonance-pot wiper, and the VCA/mixer/line-out coupling) against SPICE: tb303_vca.py's chained netlist, ladder top
 // (L0 - R0) -> output jack, Q21 BF = 200 (Stinchcombe's network, coupling pole 578.1 rad/s). Levels are relative to
 // pot 0 at 1 kHz, so the table checks the wiper's level makeup as well as the bass corner.
@@ -57,13 +57,13 @@ int main(int argc, char** argv)
   }
   printf("native_output: %d of 35 points out of tolerance, worst %.2f dB\n", fails, worst);
 
-  // Filter Feedback knob (TeeBee Hz, 350 at knob 0 .. 100 at knob 1): Native's coupling pole spans 214 Hz down to 46 Hz
+  // Filter Feedback knob (TeeBee Hz, 350 at knob 0 .. 100 at knob 1): the coupling pole spans 214 Hz down to 46 Hz
   // (Q21 beta about 500), unchanged up to the TeeBee 150 Hz point; the same for every diode type.
   struct Case { rosic::FilterType type; double knobHz, expectHz; };
   const Case cases[] = {
-    { rosic::FILTER_DIODE_NATIVE, 350.0, 578.1 / (2.0 * M_PI) * 350.0 / 150.0 },
-    { rosic::FILTER_DIODE_NATIVE, 150.0, 578.1 / (2.0 * M_PI) },
-    { rosic::FILTER_DIODE_NATIVE, 100.0, 46.0 },
+    { rosic::FILTER_DIODE, 350.0, 578.1 / (2.0 * M_PI) * 350.0 / 150.0 },
+    { rosic::FILTER_DIODE, 150.0, 578.1 / (2.0 * M_PI) },
+    { rosic::FILTER_DIODE, 100.0, 46.0 },
     { rosic::FILTER_DIODE_HP, 100.0, 46.0 } };
   int knobFails = 0;
   for (const Case& k : cases)
@@ -71,7 +71,7 @@ int main(int argc, char** argv)
     rosic::Open303 s;
     s.setFilterType(k.type);
     s.setFeedbackHighpass(k.knobHz);
-    const double got = s.diodeFilter.getNativeCouplingPoleHz();
+    const double got = s.diodeFilter.getCouplingPoleHz();
     if (std::fabs(got / k.expectHz - 1.0) > 0.01) { ++knobFails; printf("  knob %g Hz: got %.2f, expected %.2f\n", k.knobHz, got, k.expectHz); }
   }
   printf("native_output: Filter Feedback knob mapping, %d failures\n", knobFails);

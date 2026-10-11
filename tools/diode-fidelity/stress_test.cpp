@@ -1,5 +1,5 @@
 // Full-synth stress test: every diode filter type x drive x cutoff x env-mod x Devilfish FM,
-// at maximum resonance with accent 100, full bass comp (Native) or pure BP / HP, and the Res Trim extremes. Fails on any non-finite sample,
+// at maximum resonance with accent 100, full bass comp (Diode) or pure BP / HP, and the Res Trim extremes. Fails on any non-finite sample,
 // on a sustained tail after gate-off (> -100 dB), or an absurd peak (> 20).
 #include "rosic_Open303.h"
 #include <cstdio>
@@ -9,9 +9,9 @@ int main()
 {
   struct Case { rosic::FilterType type; double trim, morph; const char* name; };
   const Case cases[] = {
-    { rosic::FILTER_DIODE_NATIVE, 1.0,  1.0, "Native" },
-    { rosic::FILTER_DIODE_NATIVE, 0.85, 1.0, "Native trim 0.85" },
-    { rosic::FILTER_DIODE_NATIVE, 1.15, 1.0, "Native trim 1.15" },
+    { rosic::FILTER_DIODE, 1.0,  1.0, "Diode" },
+    { rosic::FILTER_DIODE, 0.85, 1.0, "Diode trim 0.85" },
+    { rosic::FILTER_DIODE, 1.15, 1.0, "Diode trim 1.15" },
     { rosic::FILTER_DIODE_BP,     1.15, 0.0, "BP trim 1.15" },
     { rosic::FILTER_DIODE_HP,     1.15, 0.0, "HP trim 1.15" } };
   int bad = 0, n = 0; double worstTail = -400, worstPeak = 0;

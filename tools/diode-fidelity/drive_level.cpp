@@ -1,4 +1,4 @@
-// Drive-knob level check for Diode Native / BP / HP: the drive control must not act as a volume knob.
+// Drive-knob level check for Diode / BP / HP: the drive control must not act as a volume knob.
 // Full-synth saw note per setting (cutoff x resonance x env mod); RMS over the first 0.25 s relative to the
 // drive floor (-3 dB, the bottom of the knob).
 //   -3..0 dB (clean region): level within +-FLAT_DB of the floor
@@ -30,10 +30,10 @@ static double rmsDb(rosic::FilterType ft, double cutoff, double res, double env,
 int main(int argc, char** argv)
 {
   bool verbose = argc > 1 && !strcmp(argv[1], "-v");
-  const char* names[] = { "TeeBee", "Diode Native", "Diode BP", "Diode HP" };
+  const char* names[] = { "TeeBee", "Diode", "Diode BP", "Diode HP" };
   const double drives[] = { -3.0, -1.5, 0.0, 3.0, 4.5, 6.0, 9.0, 16.0 };
   int bad = 0;
-  for (rosic::FilterType ft : { rosic::FILTER_DIODE_NATIVE, rosic::FILTER_DIODE_BP, rosic::FILTER_DIODE_HP })
+  for (rosic::FilterType ft : { rosic::FILTER_DIODE, rosic::FILTER_DIODE_BP, rosic::FILTER_DIODE_HP })
   {
     double worstFlat = 0.0, worstLow = 0.0, worstRise = -99.0, meanRise = 0.0; int n = 0;
     std::vector<double> mean(8, 0.0);
