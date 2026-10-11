@@ -22,12 +22,12 @@ def main():
     run = lambda c: subprocess.run([BIN, str(c)], input=curves, capture_output=True, text=True).stdout
     with ThreadPoolExecutor(jobs) as ex: outs = dict(zip(CUTS, ex.map(run, CUTS)))
     for c in CUTS: print("// " + outs[c].strip(), file=sys.stderr)
-    kc = [[float(re.search(r"K_crit ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)", outs[c])[h + 1]) for c in CUTS] for h in range(4)]
+    kc = [[float(re.search(r"K_crit ([\d.]+) ([\d.]+) ([\d.]+)", outs[c])[h + 1]) for c in CUTS] for h in range(3)]
     k = [[0.0] + [float(x) for x in re.findall(r"a[\d.]+: K ([\d.]+)", outs[c])] for c in CUTS]
     f = lambda row: ", ".join("0" if x == 0 else f"{x:.3f}" for x in row)
     print("      static const double KNT[11][7] = {")
     print(",\n".join("        { " + f(r) + " }" for r in k) + " };")
-    print("      static const double KNC[4][11] = {")
+    print("      static const double KNC[3][11] = {")
     print(",\n".join("        { " + f(r) + " }" for r in kc) + " };")
 
 if __name__ == "__main__":

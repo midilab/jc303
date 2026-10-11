@@ -1,6 +1,6 @@
 // Offline solver for the Diode Native feedback law (dfl_DiodeLadderFilter.h, calculateCoefficients, KNT / KNC).
-// For one cutoff it finds the self-oscillation threshold K_crit (impulse growth test) at the four Filter Feedback
-// nodes (31.25 / 60 / 115 / 268 Hz: knob 1.0 in Native / between / default / knob 0) and, for each pot position at the default,
+// For one cutoff it finds the self-oscillation threshold K_crit (impulse growth test) at the three Filter Feedback
+// nodes (57.5 / 115 / 268 Hz: knob 1.0 in Native / default / knob 0) and, for each pot position at the default,
 // the K whose response ratio |H_K| / |H_0| over 0.4..2.4 x cutoff best matches the SPICE model of the real VCF
 // (least squares in dB, with the resonant boost weighted 4x; coarse scan, then golden section). Input lines from spice/native_targets.py (gen_native_tables.py runs both):
 //   cutoff pot boost peakHz r_0 .. r_24      (r_j at f_j = 0.4 c * 6^(j/24))
@@ -53,9 +53,9 @@ int main(int argc, char** argv)
 {
   double c = atof(argv[1]); std::vector<Tgt> T; std::string line;
   while (std::getline(std::cin, line)) { std::istringstream is(line); double cc; Tgt t; is >> cc >> t.pot >> t.boost >> t.peakHz; for (double& x : t.r) is >> x; if (fabs(cc - c) < 0.5) T.push_back(t); }
-  double KcF[4]; const double FH[4] = { 31.247, 60.0, 115.0, 268.0 };
-  for (int h = 0; h < 4; h++) { double lo = 10, hi = 60; for (int i = 0; i < 15; i++) { double m = 0.5 * (lo + hi); if (stable(c, m, FH[h])) lo = m; else hi = m; } KcF[h] = lo; }
-  const double Kc = KcF[2], Kmax = 0.99 * Kc;
+  double KcF[3]; const double FH[3] = { 57.5, 115.0, 268.0 };
+  for (int h = 0; h < 3; h++) { double lo = 10, hi = 60; for (int i = 0; i < 15; i++) { double m = 0.5 * (lo + hi); if (stable(c, m, FH[h])) lo = m; else hi = m; } KcF[h] = lo; }
+  const double Kc = KcF[1], Kmax = 0.99 * Kc;
   double fj[NJ]; for (int j = 0; j < NJ; j++) fj[j] = 0.4 * c * pow(6.0, j / double(NJ - 1));
   D d0; mk(d0, c, 0.0); double h0[NJ]; for (int j = 0; j < NJ; j++) h0[j] = mag(d0, fj[j]);
   auto err = [&](const Tgt& t, double K, double* bOut) {
@@ -65,7 +65,7 @@ int main(int argc, char** argv)
     double b = best - mag(d0, bf); if (bOut) *bOut = b;
     return e / NJ + 4.0 * pow(b - t.boost, 2);
   };
-  printf("cut %6.0f | K_crit %.3f %.3f %.3f %.3f |", c, KcF[0], KcF[1], KcF[2], KcF[3]);
+  printf("cut %6.0f | K_crit %.3f %.3f %.3f |", c, KcF[0], KcF[1], KcF[2]);
   for (auto& t : T)
   {
     // coarse scan first (the error is not unimodal at low pot positions), then golden-section around the best

@@ -552,8 +552,9 @@ notes and `spice/tb303_vca.py`:
   in the output path too, so the network takes it from the Filter Feedback knob. The corner depends on beta (200:
   90 Hz, 300: 66, 500: 46, 800: 35, 1500: 26); the 2SC1583's hFE is at least 500 per its datasheet, so real units are
   probably below the 92 Hz default. In Native the knob's upper half (past the TeeBee 150 Hz point) therefore runs
-  exponentially down to a 25 Hz pole (beta about 1500) instead of 61 Hz (`Open303::setFeedbackHighpass`,
-  `NATIVE_FEEDBACK_MIN`); the lower half and the other filter types are unchanged.
+  exponentially down to a 46 Hz pole (beta about 500) instead of 61 Hz (`Open303::setFeedbackHighpass`,
+  `NATIVE_FEEDBACK_MIN`); the lower half and the other filter types are unchanged. It stops there because higher
+  betas motorboat (below).
 - C14 into the resonance pot, 3.2-4.0 Hz.
 - The VCA input (IC15 pin 3) sums R121 220k + C21 10n from the filter output and R122 100k + C22 10n from the pot
   wiper, into 2.2k. The wiper tap's gain follows the loaded divider (50k pot, about 96k on the wiper) and reaches 2.17x
@@ -563,18 +564,20 @@ notes and `spice/tb303_vca.py`:
 **High-beta Q21 and motorboating.** A lower coupling pole strengthens the network's ~7 Hz mode. SPICE transients
 (kick, full VCF, If 70 uA) show it growing at full pot for beta 800 and from pot 0.9 for beta 1500 (6-7 Hz;
 Stinchcombe saw 8 Hz on a clone); beta 500 rings but decays. Native's network matches SPICE at every beta (the
-scaled F(s) is within 0.7 dB of the netlist's loop from 5 Hz up), and its growth threshold agrees (pole 25 Hz:
+scaled F(s) is within 0.7 dB of the netlist's loop from 5 Hz up) and so does its growth threshold (pole 25 Hz:
 K 13-18 depending on cutoff; SPICE beta 1500 is stable at pot 0.8, K 13.1, and grows at 0.9, K 15.3).
-- The threshold table `KNC` now has four Filter Feedback nodes (31.25 / 60 / 115 / 268) and is solved with a growth
-  test (tiny kick, late window against an earlier one). The old test (-60 dB within 1.2 s) mistook the slow but
-  stable 7 Hz ring for oscillation; at 115 and 268 the two agree within 1 %.
-- At Res Trim 1 the cap (0.98 x threshold) holds, so at the knob's end full-pot resonance is lower (boost at
-  8 kHz: 33 dB at the default, 34 dB at a 48 Hz pole, 21 dB at 36 Hz, 13 dB at 25 Hz): a stock-trim unit there
-  rings subsonically for seconds instead of oscillating.
-- Above trim 1 the cap rises and a high-beta unit motorboats. The ladder output swing grows over about 5 s (0.3 to
-  4.7, steady saw, drive -6 dB; drive +6 dB limits it to 0.8). The output network removes most of it (the 7 Hz and
-  its low harmonics sit below the VCA input's 72 Hz corner and the output coupling), so at the jack a 16th-note line
-  at resonance 100 changes by at most about 2 dB of slow drift.
+
+A 25 Hz knob end was tried and dropped. At Res Trim 1 the oscillation cap held but took the shriek with it (boost at
+8 kHz 33 dB -> 13 dB, because the ~7 Hz mode's threshold falls below the full-pot K); above trim 1 the unit
+motorboated. The output network hides most of that at the jack (at most about 2 dB of slow drift on a 16th-note
+line), and with the VCA-input coupling bypassed it became a 7 Hz throb about 24 dB over the line that did not sound
+good. At the 46 Hz end (beta 500) there is no growth at trim 1.15 at any cutoff (300 Hz-12 kHz, drive -6 / +6), the
+cap stays above the full-pot K (no resonance lost at trim 1), and a hot trim self-oscillates in the audio band as
+before.
+
+The threshold table `KNC` is solved with a growth test (tiny kick, late window against an earlier one) at 57.5 /
+115 / 268. The old test (-60 dB within 1.2 s) mistook the slow but stable 7 Hz ring for oscillation; at 115 and 268
+the two agree within 1 %.
 
 `build/native_output` checks it against SPICE (ladder top to jack, 5 pot positions, 10 Hz-1 kHz, levels re pot 0):
 worst 0.54 dB (10 Hz, full pot), within 0.25 dB from 20 Hz.
