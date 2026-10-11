@@ -27,23 +27,13 @@ namespace dfl
    *
    * The 1st pole sits one octave above (TB-303 style ~18 dB/oct), with the real circuit's feedback
    * coupling network and resonance-pot law, calibrated to a SPICE model of the TB-303 VCF (see calculateCoefficients).
-   * The BP / HP responses mix the same ladder's stage taps.
+   * The mode morph (LP -> BP -> HP) mixes the ladder's stage taps (see getSample).
    */
 
   class DiodeLadderFilter
   {
 
   public:
-
-    /** Filter response mode. The ladder's per-stage lowpass taps are mixed
-        (Oberheim style) to synthesise band- and high-pass responses from the
-        same 4-pole core - identical coefficients to rosic::TeeBeeFilter. */
-    enum ResponseMode
-    {
-      RESPONSE_LP = 0,  // lowpass - the ladder output
-      RESPONSE_BP,      // bandpass
-      RESPONSE_HP       // highpass
-    };
 
     //---------------------------------------------------------------------------------------------
     // construction/destruction:
@@ -73,9 +63,12 @@ namespace dfl
         the drive (none at or below 0 dB), so the clean region is unaffected. */
     void setSaturationBias(double newBias);
 
-    /** Sets the morph amount (0..1) for the BP and HP responses: 0 = pure bandpass / highpass,
-        1 = pure lowpass, crossfading linearly. In the LP response it is the bass comp amount (see getSample). */
+    /** Sets the bass comp amount (0..1): restores part of the passband loss that resonance causes (see getSample). */
     void setPassbandCompensation(double newCompensation) { passbandCompensation = newCompensation; }
+
+    /** Sets the response mode, 0..1: 0 = lowpass, 0.5 = bandpass, 1 = highpass, morphing without notches in between
+        (see getSample). Cheap, so it may change per sample. */
+    void setMode(double newMode) { mode = std::clamp(newMode, 0.0, 1.0); }
 
     /** Sets the Filter Feedback corner (Hz): the real circuit's coupling network fits a one-pole highpass of
         ~115 Hz, and the knob scales the network's dominant pole by newCutoff / 115 (see NET_POLE). Bleeds
@@ -90,10 +83,6 @@ namespace dfl
       loopGainTrim = std::clamp(newTrim, TRIM_MIN, TRIM_MAX);
       calculateCoefficients();
     }
-
-    /** Sets the response mode (LP/BP/HP). This only re-mixes the ladder's stage
-        outputs, so it needs no coefficient recalculation. @see ResponseMode */
-    INLINE void setResponseMode(int newMode) { responseMode = newMode; }
 
     /** Sets the Filter FM depth (0 to 1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input signal to modulate filter cutoff frequency. */
@@ -124,8 +113,8 @@ namespace dfl
     /** Returns the passband gain compensation amount (0.0 = none, 1.0 = full compensation). */
     double getPassbandCompensation() const { return passbandCompensation; }
 
-    /** Returns the current response mode (LP/BP/HP). @see ResponseMode */
-    int getResponseMode() const { return responseMode; }
+    /** Returns the response mode, 0..1 (LP / BP / HP). */
+    double getMode() const { return mode; }
 
     //---------------------------------------------------------------------------------------------
     // audio processing:
@@ -208,20 +197,24 @@ namespace dfl
     // RES_SKEW_NORM = 1 - exp(-3) is the normaliser of Open303's resonance skew.
     static constexpr double RES_SKEW_NORM = 0.950213;
 
-    // Highpass DC-null factor (see RESPONSE_HP in getSample). The textbook binomial
-    // highpass mix un-4lp1+6lp2-4lp3+lp4 assumes each tap is a unity-gain cascade
-    // power (lp_i = un*G^i); this Pirkle diode ladder's a2..a4 = 0.5 stage scaling
-    // breaks that, so the low end fails to cancel and leaks a large (~+11 dB) boost.
-    // Scaling the lowpass-reconstruction term by this factor nulls the DC exactly.
-    // It is fixed by the a-coefficients (every stage has unity gain at DC), so it is a constant.
-    static constexpr double HP_LP_SUBTRACT = 0.2;  // = 1/5, DC-null for the HP mix
+    // Tap mixes with a pure p^k numerator, p = s / wc (see getSample). With unit stages the ladder's taps from its
+    // input un are N_k(p) / D0(p): lp4 -> 1, lp3 -> 2 + 2p, lp2 -> 3 + 8p + 4p^2, lp1 -> 4 + 20p + 24p^2 + 8p^3,
+    // un -> D0 = 1 + 14p + 30p^2 + 20p^3 + 4p^4 (stage k > 1 takes 0.5 (y[k-1] + y[k+1]), stage 1 takes un + y2 with its
+    // pole an octave up). The basis is triangular, so these weights (on un, lp1..lp4) give p^0..p^4 exactly; the
+    // global feedback and the coupling network only change the shared denominator.
+    static constexpr double TAP_MIX[5][5] = {
+      { 0.0,   0.0,    0.0,    0.0,  1.0   },   // 1      lowpass
+      { 0.0,   0.0,    0.0,    0.5, -1.0   },   // p
+      { 0.0,   0.0,    0.25,  -1.0,  1.25  },   // p^2    bandpass
+      { 0.0,   0.125, -0.75,   1.75, -1.75 },   // p^3
+      { 0.25, -0.625,  1.875, -3.0,  2.625 } }; // p^4    highpass
 
-    // Static BP / HP output gains (on top of OUTPUT_GAIN for BP) so they sit near LP loudness on a saw at a
-    // typical resonant 303 setting (resonance 50..70, cutoff 800..1500 Hz: BP -0.5 dB, HP -0.6 dB, see morph_level).
-    // No correction by cutoff: the BP/HP-vs-LP gap at low resonance and high cutoff is the filter's character (a saw
-    // has most of its energy at the low harmonics that BP/HP remove).
-    static constexpr double HP_OUTPUT_GAIN = 0.7063;
-    static constexpr double BP_OUTPUT_GAIN = 2.8251;
+    // Static BP / HP output gains (on top of OUTPUT_GAIN) so the pure modes sit near LP loudness on a saw at a typical
+    // resonant 303 setting (resonance 50..70, cutoff 800..1500 Hz, see mode_level). No correction by cutoff: the
+    // BP/HP-vs-LP gap at low resonance and high cutoff is the filter's character (a saw has most of its energy at the
+    // low harmonics that BP/HP remove).
+    static constexpr double BP_GAIN = 5.636;   // +15.0 dB
+    static constexpr double HP_GAIN = 4.009;   // +12.1 dB (the p^4 mix has passband 1/4)
 
     // Filter parameters
     double cutoff;
@@ -235,10 +228,10 @@ namespace dfl
     double satBiasShape;          // shape(satBias)
     double satBiasNorm;           // 1 / slope of the shaper at satBias
     double driveLoopGain;         // driveFactor * driveMakeup: small-signal gain of the drive stage inside the loop
-    double passbandCompensation;  // LP: bass comp amount; BP/HP: morph amount (0 = pure BP/HP, 1 = pure LP)
+    double passbandCompensation;  // bass comp amount, 0..1
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
-    int    responseMode;          // LP/BP/HP output mixing (@see ResponseMode)
+    double mode = 0.0;            // response mode, 0 = LP, 0.5 = BP, 1 = HP
 
     // Filter FM (Devilfish mod) - audio-rate cutoff modulation from input
     double filterFmDepth;                          // User parameter: 0 (off) to 1 (full)
@@ -437,10 +430,10 @@ namespace dfl
           { 0.00, 0.08, -1.54, -2.97, -4.00, -4.56 },
           { 0.00, 0.12, -1.32, -2.72, -3.91, -5.08 },
           { 0.00, 0.50, -0.04, -1.00, -2.13, -3.36 } },
-        { { 0.00, 0.36, 0.51, 2.08, 4.07, 6.33 },
-          { 0.00, 0.45, 1.01, 2.22, 2.83, 3.92 },
-          { 0.00, 0.61, 1.85, 4.09, 5.25, 5.79 },
-          { 0.00, 1.22, 3.61, 6.70, 7.72, 7.17 } } };
+        { { 0.00, 0.44, 0.98, 2.91, 5.19, 7.81 },
+          { 0.00, 0.69, 2.49, 5.14, 6.58, 8.29 },
+          { 0.00, 0.80, 2.94, 6.17, 8.15, 9.59 },
+          { 0.00, 1.27, 4.03, 7.47, 8.61, 8.00 } } };
       int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
       const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
       const double rr = std::min(std::max(resonance, 0.0), 1.0);
@@ -557,45 +550,30 @@ namespace dfl
     double lp4 = v + z4;
     z4 = lp4 + v;
 
-    // Oberheim multi-mode output: mix the ladder's per-stage lowpass taps to
-    // synthesise band- and high-pass responses from the same core.
-    //   LP:  lp4
-    //   BP:  lp2 - 2*lp3 + lp4      (0.25 scale)
-    //   HP:  un - 0.2*(4*lp1 - 6*lp2 + 4*lp3 - lp4)
-    // where `un` is the (shaped) signal entering the ladder - the y0 term. The HP
-    // uses the DC-null factor HP_LP_SUBTRACT (see there): the plain binomial mix
-    // leaks the low end in this diode topology, so the lowpass-reconstruction term
-    // is scaled to cancel DC.
-    // In BP / HP the knob (passbandCompensation) crossfades to LP: 0 = pure bandpass / highpass, 1 = pure lowpass
-    // (the HP midpoint is a notch). The LP end has the LP level without bass comp, so each end of a morph has the
-    // level of its pure mode. Each term is scaled by the drive level table of its response (driveTrim).
-    const double lpGain = OUTPUT_GAIN * driveTrim[0];
+    // Multimode output: the mode morphs LP -> BP -> HP along numerators with only real zeros, so no notch appears
+    // on the way (a linear crossfade of 1 and p^2 has zeros on the frequency axis). With t the position within a
+    // half and c0, c1, c2 the square roots of the LP / BP / HP output gains:
+    //   LP -> BP:  ((1 - t) c0 + t c1 p)^2     = (1-t)^2 c0^2 * 1   + 2 t (1-t) c0 c1 * p   + t^2 c1^2 * p^2
+    //   BP -> HP:  p^2 ((1 - t) c1 + t c2 p)^2 = (1-t)^2 c1^2 * p^2 + 2 t (1-t) c1 c2 * p^3 + t^2 c2^2 * p^4
+    // Each p^k is a fixed tap mix (TAP_MIX). Bass comp: below cutoff the loop's passband gain is about 1 / (1 + K), so
+    // (1 + K)^amount restores that fraction (in dB) of the resonance bass loss in the LP term; 0 = the real circuit.
+    const double taps[5] = { un, lp1, lp2, lp3, lp4 };
+    auto pk = [&](int k) { const double* w = TAP_MIX[k]; return w[0] * taps[0] + w[1] * taps[1] + w[2] * taps[2] + w[3] * taps[3] + w[4] * taps[4]; };
+    const double bassComp = BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
+    const double gLP = OUTPUT_GAIN * driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0);
     double out;
-    switch (responseMode)
+    if (mode <= 0.0)
+      out = gLP * lp4;
+    else
     {
-      case RESPONSE_BP:
-      {
-        double bp = OUTPUT_GAIN * BP_OUTPUT_GAIN * 0.25 * (lp2 - 2.0 * lp3 + lp4);
-        double t  = std::clamp(passbandCompensation, 0.0, 1.0);
-        out = (1.0 - t) * driveTrim[1] * bp + t * lpGain * lp4;
-        break;
-      }
-      case RESPONSE_HP:
-      {
-        double hp = HP_OUTPUT_GAIN * (un - HP_LP_SUBTRACT * (4.0 * lp1 - 6.0 * lp2 + 4.0 * lp3 - lp4));
-        double t  = std::clamp(passbandCompensation, 0.0, 1.0);
-        out = (1.0 - t) * driveTrim[1] * hp + t * lpGain * lp4;
-        break;
-      }
-      case RESPONSE_LP:
-      default:
-      {
-        // Bass comp: below cutoff the loop's passband gain is about 1 / (1 + K), so (1 + K)^amount restores that
-        // fraction (in dB) of the resonance bass loss; 0 = the real circuit, and nothing changes at resonance 0.
-        const double bassComp = BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
-        out = lpGain * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0) * lp4;
-        break;
-      }
+      const double gBP = OUTPUT_GAIN * BP_GAIN * driveTrim[1];
+      const double lo = mode < 0.5 ? std::sqrt(gLP) : std::sqrt(gBP);
+      const double hi = mode < 0.5 ? std::sqrt(gBP) : std::sqrt(OUTPUT_GAIN * HP_GAIN * driveTrim[1]);
+      const int k = mode < 0.5 ? 0 : 2;
+      const double t = mode < 0.5 ? 2.0 * mode : 2.0 * mode - 1.0;
+      const double a = (1.0 - t) * lo, b = t * hi;
+      // the weights sum to (1-t)^2 + t^2 (0.5 at the midpoint); normalising keeps the in-between level up
+      out = (a * a * pk(k) + 2.0 * a * b * pk(k + 1) + b * b * pk(k + 2)) / ((1.0 - t) * (1.0 - t) + t * t);
     }
     return out;
   }

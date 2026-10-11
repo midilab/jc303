@@ -20,10 +20,9 @@ DiodeLadderFilter::DiodeLadderFilter()
   satBiasShape        =     0.0;
   satBiasNorm         =     1.0;
   drive               =     0.0;
-  passbandCompensation =    0.0;   // no bass comp; HP/BP morph: pure HP/BP
+  passbandCompensation =    0.0;   // no bass comp
   resonance           =     0.0;
   sampleRate          = 44100.0;
-  responseMode        = RESPONSE_LP;
   K                   =     0.0;
 
   // Filter FM (Devilfish mod)
