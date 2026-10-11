@@ -152,13 +152,6 @@ void Open303::setResonance(double newResonance)
 void Open303::setFilterType(dfl::FilterType newType)
 {
   currentFilterType = newType;
-
-  int response = DiodeLadderFilter::RESPONSE_LP;
-  if(newType == dfl::FILTER_DIODE_BP)
-    response = DiodeLadderFilter::RESPONSE_BP;
-  else if(newType == dfl::FILTER_DIODE_HP)
-    response = DiodeLadderFilter::RESPONSE_HP;
-  diodeFilter.setResponseMode(response);
 }
 
 void Open303::setFilterDrive(double newDriveDb)
@@ -172,9 +165,7 @@ void Open303::setFilterDrive(double newDriveDb)
 
 void Open303::setPassbandCompensation(double newCompensation)
 {
-  // Diode HP / Diode BP morph amount, Diode bass comp (the diode-ladder only; the TeeBee has none). The LFO
-  // may modulate it per sample (see getSample), so keep the knob value as the base.
-  morphBase = newCompensation;
+  // Diode bass comp (the TeeBee has none)
   diodeFilter.setPassbandCompensation(newCompensation);
 }
 

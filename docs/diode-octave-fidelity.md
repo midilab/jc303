@@ -9,12 +9,13 @@ ngspice reference of the real circuit). Nothing here has been verified by ear or
 physical TB-303. See [Not done](#not-done).
 
 > **Diode Octave and plain Diode have been removed.** Diode Native (calibrated to the SPICE model of the real
-> circuit, see "Diode Native" below) is the only diode core and is now called just "Diode" (`FILTER_DIODE`); Diode
-> BP and Diode HP mix its ladder taps and share its feedback network, resonance law, Res Trim and output network.
-> The filter model choices are now TeeBee, Diode, Diode BP, Diode HP (indices 0-3; a preset saved with the old index
-> 2, plain Diode, loads as Diode BP). The
-> TeeBee-parity tables (`K100T`, `KCT`, `RHOT`), their solver and the parity harnesses are gone, and the drive level
-> tables were refit for Native (LP and BP / HP). The rest of this document is the history of the Diode Octave work.
+> circuit, see "Diode Native" below) is the only diode core and is now called just "Diode" (`FILTER_DIODE`). The
+> filter model choices are TeeBee and Diode. The separate Diode BP / Diode HP types are replaced by a Filter Mode
+> knob (0 = LP, 0.5 = BP, 1 = HP) that mixes the ladder taps into exact p^k numerators and morphs between them
+> without notches (`TAP_MIX` and getSample in `dfl_DiodeLadderFilter.h`, checked by `tools/diode-fidelity/mode_level`).
+> Bass Comp is a separate knob again. The TeeBee-parity tables (`K100T`, `KCT`, `RHOT`), their solver and the parity
+> harnesses are gone, and the drive level tables were refit (LP, BP / HP). The rest of this document is the history
+> of the Diode Octave work.
 
 ## Summary
 

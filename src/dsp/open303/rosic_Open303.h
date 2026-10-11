@@ -91,9 +91,12 @@ namespace rosic
     /** Returns the current filter type. */
     dfl::FilterType getFilterType() const { return currentFilterType; }
 
-    /** Sets the diode filter's HP/BP morph amount, 0..1: 0 = pure highpass / bandpass,
-    1 = pure lowpass (crossfade), for Diode HP and Diode BP; the bass comp amount for Diode. */
+    /** Sets the diode filter's bass comp amount, 0..1. */
     void setPassbandCompensation(double newCompensation);
+
+    /** Sets the diode filter's response mode, 0..1: 0 = lowpass, 0.5 = bandpass, 1 = highpass. The LFO may modulate
+    it (destination 3), so the knob value is kept as the base. */
+    void setFilterMode(double newMode) { modeBase = newMode; }
 
     /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input to modulate filter cutoff frequency. */
@@ -449,8 +452,8 @@ namespace rosic
     double lfoDepth;    // LFO depth (0.0 to 1.0)
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
-    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width, 4=HP/BP morph)
-    double morphBase = 0.0;   // HP/BP morph knob value (diode HP/BP models; 0 = pure HP/BP, 1 = LP); the LFO modulates it
+    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width, 4=filter mode)
+    double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the LFO modulates it
     bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;
@@ -509,7 +512,7 @@ namespace rosic
     double volumeModFactor = 1.0;
     double pitchModFactor = 1.0;
     double pwmDepth = 0.0, pwmLfo = 0.0;
-    double morphLfoAdd = 0.0;   // LFO contribution to the morph (toward lowpass)
+    double modeLfoAdd = 0.0;    // LFO contribution to the filter mode
 
     if (lfoEnabled && lfoDepth > 0.0)
     {
@@ -538,14 +541,13 @@ namespace rosic
             pwmLfo   = 0.5 * (lfoValue + 1.0);
             break;
         case 4:
-            // Apply LFO to the HP/BP morph (Diode HP / Diode BP): sweeps from the knob value toward
-            // lowpass (depth 1 = full sweep between the knob value and pure lowpass)
-            morphLfoAdd = (1.0 - morphBase) * lfoDepth * (1.0 - (lfoValue * 0.5 + 0.5));
+            // Apply LFO to the diode filter mode: +/- 0.5 around the knob at depth 1 (LP -> BP or BP -> HP)
+            modeLfoAdd = 0.5 * lfoValue * lfoDepth;
             break;
       }
     }
 
-    diodeFilter.setPassbandCompensation(morphBase + morphLfoAdd);   // HP/BP morph (LFO-modulated when destination 3)
+    diodeFilter.setMode(modeBase + modeLfoAdd);   // LFO-modulated when destination 3
 
     // calculate instantaneous oscillator frequency and set up the oscillator. The portamento slew
     // runs in the log-frequency domain (glide log(freq), then exponentiate back to Hz) so the slide

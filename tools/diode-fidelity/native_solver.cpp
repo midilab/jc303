@@ -29,7 +29,7 @@ static double mag(D& f, double fr, double amp = 1e-4, double settle = 0.25)
 }
 static void mk(D& d, double c, double K, double fh = 115.0)
 {
-  d.setSampleRate(SR); d.setResponseMode(D::RESPONSE_LP); d.setInputDrive(0.0);
+  d.setSampleRate(SR); d.setInputDrive(0.0);
   d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(0.0);
   d.K = K; d.reset();
 }
