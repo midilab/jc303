@@ -13,7 +13,7 @@ int main(int argc, char** argv)
   int ft = atoi(argv[1]); double cutoff = atof(argv[2]), res = atof(argv[3]), envMod = atof(argv[4]), decay = atof(argv[5]);
   int accent = atoi(argv[6]); double offSec = atof(argv[7]), totSec = atof(argv[8]), drive = atof(argv[9]), morph = atof(argv[10]); int note = atoi(argv[11]);
   const double sr = 44100.0;
-  rosic::Open303 s; s.setSampleRate(sr); s.setFilterType((rosic::FilterType)ft); s.setCutoff(cutoff); s.setResonance(res);
+  rosic::Open303 s; s.setSampleRate(sr); s.setFilterType((dfl::FilterType)ft); s.setCutoff(cutoff); s.setResonance(res);
   s.setEnvMod(envMod); s.setDecay(decay); s.setAccent(80.0); s.setVolume(-12.0); s.setFilterDrive(drive);
   s.setPassbandCompensation(morph); s.setWaveform(0.0);
   if (argc > 12 && atof(argv[12]) > 0.0) s.setFeedbackHighpass(atof(argv[12]));

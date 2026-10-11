@@ -59,12 +59,12 @@ int main(int argc, char** argv)
 
   // Filter Feedback knob (TeeBee Hz, 350 at knob 0 .. 100 at knob 1): the coupling pole spans 214 Hz down to 46 Hz
   // (Q21 beta about 500), unchanged up to the TeeBee 150 Hz point; the same for every diode type.
-  struct Case { rosic::FilterType type; double knobHz, expectHz; };
+  struct Case { dfl::FilterType type; double knobHz, expectHz; };
   const Case cases[] = {
-    { rosic::FILTER_DIODE, 350.0, 578.1 / (2.0 * M_PI) * 350.0 / 150.0 },
-    { rosic::FILTER_DIODE, 150.0, 578.1 / (2.0 * M_PI) },
-    { rosic::FILTER_DIODE, 100.0, 46.0 },
-    { rosic::FILTER_DIODE_HP, 100.0, 46.0 } };
+    { dfl::FILTER_DIODE, 350.0, 578.1 / (2.0 * M_PI) * 350.0 / 150.0 },
+    { dfl::FILTER_DIODE, 150.0, 578.1 / (2.0 * M_PI) },
+    { dfl::FILTER_DIODE, 100.0, 46.0 },
+    { dfl::FILTER_DIODE_HP, 100.0, 46.0 } };
   int knobFails = 0;
   for (const Case& k : cases)
   {
