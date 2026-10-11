@@ -166,12 +166,18 @@ namespace rosic
     {
       accentAttack = newAccentAttack;
       rc2.setTimeConstant(accentAttack);
+      updateAccentSweepGain();
     }
+
+    /** Sets the accent sweep (in milliseconds): the time constant of the accent capacitor (rc2), the Devil Fish
+    "Sweep Speed". The stock 15 ms charges and drains within a step, so accents stand alone; slower settings
+    keep charge between accents, so a run of accents climbs higher each time. */
+    void setAccentSweep(double newSweep) { setAccentAttack(newSweep); }
 
     /** Sets the filter envelope's decay time for accented notes (in milliseconds).
     Devil Fish provides range of 30...3000 ms for this parameter. On the normal 303, this
     parameter was fixed to 200 ms.  */
-    void setAccentDecay(double newAccentDecay) { accentDecay = newAccentDecay; }
+    void setAccentDecay(double newAccentDecay) { accentDecay = newAccentDecay; updateAccentSweepGain(); }
 
     /** Sets the amplitudes envelope's decay time (in milliseconds). Devil Fish provides range of
     16...3000 ms for this parameter. On the normal 303, this parameter was fixed to
@@ -347,6 +353,10 @@ namespace rosic
     main envelope generator. */
     void updateNormalizer1();
 
+    /** Scales rc2 so a lone accent peaks as high as with the stock 15 ms capacitor, whatever the sweep: a slow
+    sweep then builds up across consecutive accents instead of just making every accent weaker. */
+    void updateAccentSweepGain();
+
     /** Updates the normalizer n2 according to the time-constant of rc2 and the decay-time of the
     main envelope generator. */
     void updateNormalizer2();
@@ -373,6 +383,7 @@ namespace rosic
     double normalAmpRelease; // amp-env release time for non-accented notes
     double accentAmpRelease; // amp-env release time for accented notes
     double accentGain;       // between 0.0...1.0 - to scale the 3rd amp-envelope on accents
+    double accentSweepGain = 1.0; // rc2 peak makeup for the accent sweep, 1 at the stock 15 ms
     double subOscGain;       // sub oscillator gain (0.0 to 1.0)
     double subOscBlend;      // sub oscillator blend (0.0 = -2 octaves, 1.0 = -1 octave)
     double pitchWheelFactor; // scale factor for oscillator frequency from pitch-wheel
@@ -482,7 +493,7 @@ namespace rosic
     double tmp2       = 0.0;
     if( accentGain > 0.0 )
       tmp2 = mainEnvOut;
-    tmp2 = n2 * rc2.getSample(tmp2);
+    tmp2 = n2 * rc2.getSample(tmp2) * accentSweepGain;
     tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
     tmp2 = accentGain*tmp2;
     double instCutoff = cutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);

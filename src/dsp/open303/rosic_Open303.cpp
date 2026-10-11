@@ -113,6 +113,7 @@ void Open303::setSampleRate(double newSampleRate)
   filter.setSampleRate        (  oversampling*newSampleRate);
   diodeFilter.setSampleRate   (  oversampling*newSampleRate);
   sampleRate = newSampleRate;
+  updateAccentSweepGain();
 }
 
 void Open303::setCutoff(double newCutoff)
@@ -398,6 +399,17 @@ void Open303::updateNormalizer1()
   n1 = LeakyIntegrator::getNormalizer(mainEnv.getDecayTimeConstant(), rc1.getTimeConstant(),
     sampleRate);
   n1 = 1.0; // test
+}
+
+void Open303::updateAccentSweepGain()
+{
+  const double stock = 15.0;
+  const double sweep = rc2.getTimeConstant();
+  if( sweep == stock )
+    accentSweepGain = 1.0;
+  else
+    accentSweepGain = LeakyIntegrator::getNormalizer(accentDecay, sweep, sampleRate)
+                    / LeakyIntegrator::getNormalizer(accentDecay, stock, sampleRate);
 }
 
 void Open303::updateNormalizer2()
