@@ -533,7 +533,8 @@ A sixth filter model, **Diode Native**, is the octave ladder calibrated to the S
 | Cutoff | `CUTOFF_TUNING_OCTAVE` 1.17 + low-cutoff boost, fitted to TeeBee's peak | `NATIVE_TUNING` 1.2003, derived: the cutoff parameter is the core's 180-degree point (1.18921 x its corner), so the max-resonance peak lands near the cutoff at high cutoff; at low cutoff the coupling network moves it, as in the circuit |
 | Feedback network | One-pole highpass at 115 Hz | Stinchcombe's full coupling network (four highpasses and a shelf, poles 1.2-92 Hz), solved inside the zero-delay loop; the Filter Feedback knob scales its dominant 92 Hz pole |
 | Resonance knob | Open303's skewed taper into K tables fitted to TeeBee's boost | The knob is the real pot's rotation (linear 50k, loaded); `KNT` (cutoff x pot) solved so the response matches SPICE |
-| Output level | Compensation rising with resonance, fitted to TeeBee | Static gain (res-0 level = TeeBee); no compensation, so the passband drops with resonance as in the circuit |
+| Output level | Compensation rising with resonance, fitted to TeeBee | Static gain (res-0 level = TeeBee above the bass); the output network's wiper tap makes up about half the resonance passband loss, as in the circuit |
+| Output path | Open303's allpass 14 Hz, highpass 24 Hz, notch 7.5 Hz | `TB303OutputNetwork`: Q21 coupling (the feedback network's dominant pole), C14, the VCA's two-tap input (filter output and resonance-pot wiper), three subsonic VCA / mixer / line-out poles |
 | Self-oscillation | No (capped at 0.99 x threshold) | No (the circuit does not; capped at 0.98 x threshold, `KNC` at three Filter Feedback nodes) |
 
 **Calibration** (`tools/diode-fidelity/gen_native_tables.py`): `spice/native_targets.py` runs the netlist for 11
@@ -542,15 +543,34 @@ finds the K whose DSP response fits it (least squares in dB, boost weighted 4x).
 Held-out check (20 cutoff / pot pairs off the table nodes): boost within 0.42 dB rms (mean +0.13, worst 1.5 dB at
 400 Hz / pot 0.3, where there is no peak), peak frequency within about 3 %.
 
-**Level.** Full synth, saw: resonance 0 is within 0.2 dB of TeeBee. From resonance 0 to 100 the level falls 14-21
-dB (TeeBee 7-12 dB), ending 7-9 dB below TeeBee. SPICE gives a 16-19 dB passband drop for the bare VCF, so this is
-the circuit; whether real units sound this thin after the VCA has not been checked against recordings.
+**Output network** (`src/dsp/open303/dfl_TB303OutputNetwork.h`, used by Open303 for Native only, in place of the
+allpass / highpass2 / notch chain; the pre-filter highpass stays). From the ladder top to the jack, from the service
+notes and `spice/tb303_vca.py`:
+
+- C27/C25 (0.1u) into the Q21 bases. With Q21's input impedance this is Stinchcombe's dominant 578.1 rad/s (92 Hz)
+  feedback-network pole: the netlist reproduces his whole F(s) within 0.6 dB (5 Hz-1 kHz) at Q21 beta 200. It sits
+  in the output path too, so the network takes it from the Filter Feedback knob. The corner depends on beta (200:
+  90 Hz, 300: 66, 500: 46, 800: 35, 1500: 26); the 2SC1583's hFE is at least 500 per its datasheet, so real units are
+  probably below the 92 Hz default, which the knob range (61-214 Hz) does not reach.
+- C14 into the resonance pot, 3.2-4.0 Hz.
+- The VCA input (IC15 pin 3) sums R121 220k + C21 10n from the filter output and R122 100k + C22 10n from the pot
+  wiper, into 2.2k. The wiper tap's gain follows the loaded divider (50k pot, about 96k on the wiper) and reaches 2.17x
+  tap A at full pot, +10 dB; its corner is 140-156 Hz, so the bass corner rises with resonance.
+- VCA, mixer and line out: poles at 1.25, 4.75 and 8.25 Hz (fit to SPICE within 0.04 dB / 0.4 degrees, 2 Hz-2 kHz).
+
+`build/native_output` checks it against SPICE (ladder top to jack, 5 pot positions, 10 Hz-1 kHz, levels re pot 0):
+worst 0.54 dB (10 Hz, full pot), within 0.25 dB from 20 Hz.
+
+**Level.** Full synth, saw, C2, vs TeeBee: resonance 0 is 3.9 dB quieter (the network's heavier bass cut; C4 is
+within 0.6 dB). With bass comp 0 (the circuit), resonance 60-100 sits 1.4-2.7 dB below TeeBee: the ladder's passband
+falls 16-19 dB with resonance as in SPICE, and the wiper tap gives about half of it back. Before the output network
+the level fell 14-21 dB and ended 7-9 dB below TeeBee.
 
 **Bass Comp** (the `bassComp` parameter, which is HP/BP Morph in Diode BP / HP; labelled "Bass Comp" in Native and
 still an LFO destination): output gain `(1 + K)^amount`, which restores that fraction (in dB) of the passband loss
-and is exactly 1 at resonance 0. The knob spans amount 0..0.5 (`NATIVE_BASS_COMP_MAX`). Full synth vs TeeBee at
-resonance 60-100: amount 0 is 4-8 dB quieter, about 0.25 (knob 0.5) matches within 1 dB, 0.5 is 2-6 dB louder.
-Amount 1 (flat passband) would be 15-17 dB louder because the resonant peak rises with the passband.
+and is exactly 1 at resonance 0. The knob spans amount 0..0.2 (`NATIVE_BASS_COMP_MAX`; 0.5 before the output
+network's wiper tap). Full synth vs TeeBee at resonance 60-100: amount 0 is 1.4-2.7 dB quieter, 0.1 (knob 0.5)
+matches within 1.1 dB, 0.2 is 1.7-3.6 dB louder.
 
 **Robustness.** Stability sweep (now Octave and Native, 16800 cases): all decay. A dense 20 x 20 check of the cap
 (Filter Feedback corner x cutoff) gave a worst K / threshold of 0.9956 at 0.99 margin (between the 1 and 2 kHz

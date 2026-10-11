@@ -111,6 +111,7 @@ void Open303::setSampleRate(double newSampleRate)
   highpass2.setSampleRate     (         newSampleRate);
   allpass.setSampleRate       (         newSampleRate);
   notch.setSampleRate         (         newSampleRate);
+  outputNetwork.setSampleRate (         newSampleRate);
 
   highpass1.setSampleRate     (  oversampling*newSampleRate);
 
@@ -153,6 +154,7 @@ void Open303::setResonance(double newResonance)
   // sweeps up more smoothly and stacks higher on rapid successive accents.
   resonanceSkewed = skewedResonance;
   setAccentAttack(accentAttack);
+  outputNetwork.setPot(diodeFilter.getNativePot());
 }
 
 void Open303::setFilterType(FilterType newType)
@@ -317,6 +319,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
     highpass2.reset();
     allpass.reset();
     notch.reset();
+    outputNetwork.reset();
     antiAliasFilter.reset();
     ampDeClicker.reset();
   }

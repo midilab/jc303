@@ -8,6 +8,7 @@
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
 #include "dfl_DiodeLadderFilter.h"
+#include "dfl_TB303OutputNetwork.h"
 #include "rosic_AnalogEnvelope.h"
 #include "rosic_DecayEnvelope.h"
 #include "rosic_LeakyIntegrator.h"
@@ -183,6 +184,7 @@ namespace rosic
       // The knob is referenced to the TeeBee's 150 Hz default; the diode follows the real
       // circuit's network, whose best single-pole corner is ~115 Hz (same relative range).
       diodeFilter.setFeedbackHighpass(newCutoff * (115.0 / 150.0));
+      outputNetwork.setCouplingPole(diodeFilter.getNativeCouplingPoleHz());
     }
 
     /** Sets the cutoff frequency for the highpass after the main filter. */
@@ -363,6 +365,7 @@ namespace rosic
     dfl::DualSubOscillator    subOscillator;
     TeeBeeFilter              filter;
     DiodeLadderFilter         diodeFilter;
+    dfl::TB303OutputNetwork   outputNetwork;   // Diode Native's output path, instead of allpass / highpass2 / notch
     AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
     LeakyIntegrator           pitchSlewLimiter;
@@ -614,9 +617,14 @@ namespace rosic
 
     // these filters may actually operate without oversampling (but only if we reset them in
     // triggerNote - avoid clicks)
-    tmp  = allpass.getSample(tmp);
-    tmp  = highpass2.getSample(tmp);
-    tmp = notch.getSample(tmp);
+    if(currentFilterType == FILTER_DIODE_NATIVE)
+      tmp = outputNetwork.getSample(tmp);
+    else
+    {
+      tmp  = allpass.getSample(tmp);
+      tmp  = highpass2.getSample(tmp);
+      tmp = notch.getSample(tmp);
+    }
     tmp *= ampEnvOut;                       // amplified
     tmp *= ampScaler;
     tmp *= volumeModFactor;                 // LFO volume modulation
