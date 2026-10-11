@@ -111,6 +111,7 @@ void Open303::setSampleRate(double newSampleRate)
   allpass.setSampleRate       (         newSampleRate);
   notch.setSampleRate         (         newSampleRate);
   outputNetwork.setSampleRate (         newSampleRate);
+  outputNetwork.setCouplingInFilter(true);   // the diode filter applies C27 / C25 and Q21 at the oversampled rate
 
   highpass1.setSampleRate     (  oversampling*newSampleRate);
   diodeInputCoupling.setSampleRate(oversampling*newSampleRate);

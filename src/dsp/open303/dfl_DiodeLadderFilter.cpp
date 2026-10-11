@@ -13,7 +13,6 @@ DiodeLadderFilter::DiodeLadderFilter()
   cutoff              =  1000.0;
   driveFactor         =     1.0;
   driveMakeup         =     1.0;
-  driveLoopGain       =     1.0;
   satBiasKnob         = SAT_BIAS_DEFAULT;
   driveTrim[0] = driveTrim[1] = 1.0;
   satBias             =     0.0;
@@ -61,7 +60,7 @@ void DiodeLadderFilter::setSampleRate(double newSampleRate)
 void DiodeLadderFilter::setInputDrive(double newDrive)
 {
   // Stable range: verified by stability_sweep up to +16 dB (impulse tails below -60 dB at every
-  // cutoff / feedback-HP / resonance; the loop gain is drive-compensated, see driveLoopGain).
+  // cutoff / feedback-HP / resonance; the drive scales only the input, so the loop gain does not depend on it).
   drive = std::clamp(newDrive, -12.0, 16.0);
   driveFactor = dB2amp(drive > 0.0 ? drive * (1.0 + SAT_DEPTH_EXTRA) : drive);
   // Level makeup so the drive knob is not a volume control: full below 0 dB (the shaper is nearly
@@ -69,9 +68,8 @@ void DiodeLadderFilter::setInputDrive(double newDrive)
   // the grit). Continuous at 0 dB. See DRIVE_MAKEUP_EXP_*.
   const double makeupExp = (driveFactor < 1.0) ? DRIVE_MAKEUP_EXP_CLEAN : DRIVE_MAKEUP_EXP_SAT;
   driveMakeup = 1.0 / pow(driveFactor, makeupExp);
-  driveLoopGain = driveFactor * driveMakeup;
   updateSatBias();
-  calculateCoefficients();  // feedback is scaled by driveLoopGain
+  calculateCoefficients();
 }
 
 
@@ -101,6 +99,7 @@ void DiodeLadderFilter::reset()
   z4 = 0.0;
   loadState = 0.0;
   loadW = 0.0;
+  outCouplingState = 0.0;
   acCouplingState = 0.0;  // Reset AC coupling filter
   for (double& st : netState) st = 0.0;
 }
