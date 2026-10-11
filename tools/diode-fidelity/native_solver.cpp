@@ -1,6 +1,6 @@
-// Offline solver for the Diode Native feedback law (dfl_DiodeLadderFilter.h, calculateCoefficients, KNT / KNC).
+// Offline solver for the Diode feedback law (dfl_DiodeLadderFilter.h, calculateCoefficients, KNT / KNC).
 // For one cutoff it finds the self-oscillation threshold K_crit (impulse growth test) at the three Filter Feedback
-// nodes (57.5 / 115 / 268 Hz: knob 1.0 in Native / default / knob 0) and, for each pot position at the default,
+// nodes (57.5 / 115 / 268 Hz: knob 1.0 / default / knob 0) and, for each pot position at the default,
 // the K whose response ratio |H_K| / |H_0| over 0.4..2.4 x cutoff best matches the SPICE model of the real VCF
 // (least squares in dB, with the resonant boost weighted 4x; coarse scan, then golden section). Input lines from spice/native_targets.py (gen_native_tables.py runs both):
 //   cutoff pot boost peakHz r_0 .. r_24      (r_j at f_j = 0.4 c * 6^(j/24))

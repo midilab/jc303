@@ -3,7 +3,7 @@
 #include "Gui.h"
 
 // Compact prev/next selector for the "filterType" AudioParameterChoice
-// (TeeBee / Diode Native / Diode BP / Diode HP). Mirrors OverdriveModelSelect, but sized
+// (TeeBee / Diode / Diode BP / Diode HP). Mirrors OverdriveModelSelect, but sized
 // to overlay inside the MODIFICATIONS label cell.
 class FilterModelSelect : public juce::Component,
                           public juce::AudioProcessorValueTreeState::Listener
