@@ -188,7 +188,7 @@ namespace dfl
     // a volume control. Full-synth renders (default bias, mean over cutoff / env mod) of the level relative to the
     // -3 dB default; the correction is target - measured, with the target rising 1 dB from 0 to +16 dB drive.
     // Tables per quality [Standard, Hi-Fi] and response [LP, BP / HP]; rows: resonance knob 0/30/70/100 %, columns: drive nodes.
-    // Fitted by tools/diode-fidelity/fit_drive_trim.py (see docs/diode-octave-fidelity.md).
+    // Fitted by tools/diode-fidelity/fit_drive_trim.py (see docs/diode-fidelity.md).
     static constexpr int    DT_DRIVE_N = 6;
     static constexpr int    DT_RES_N   = 4;
 

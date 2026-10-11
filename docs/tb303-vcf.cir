@@ -1,6 +1,6 @@
 * TB-303 VCF - nominal SPICE netlist (ngspice)
 * Reconstructed from the Roland TB-303 service-manual VCF page and Stinchcombe's analysis
-* (https://www.timstinchcombe.co.uk/index.php?pge=diode and ?pge=diode2). See docs/diode-octave-fidelity.md.
+* (https://www.timstinchcombe.co.uk/index.php?pge=diode and ?pge=diode2). See docs/diode-fidelity.md.
 *
 * Parameters you will want to change:
 *   RVt/RVb : resonance pot position a (0..1). Currently a=0.5; RVt=(1-a)*50k, RVb=a*50k.

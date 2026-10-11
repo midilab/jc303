@@ -2,7 +2,7 @@
 
 JUCE-free harnesses for the diode filter (LP / BP / HP mode morph) (`src/dsp/open303/dfl_DiodeLadderFilter.*`):
 stability, stress, drive and mode levels, the offline solver behind the feedback law, and a SPICE reference of the
-real TB-303 filter. Background and results: [`docs/diode-octave-fidelity.md`](../../docs/diode-octave-fidelity.md).
+real TB-303 filter. Background and results: [`docs/diode-fidelity.md`](../../docs/diode-fidelity.md).
 
 Run these after any change to the diode filter, the cutoff tuning, the feedback highpass, the drive range or
 `Open303` routing. Everything below was run clean on the current tree (see "Expected results").
