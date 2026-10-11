@@ -243,6 +243,75 @@ static void accentDestinationLeavesUnaccentedNotesAlone()
   CHECK(maxDiff(base, mod) < 1e-12);
 }
 
+static std::vector<double> renderNote(int note, int velocity, const Config& config, int n = 8192)
+{
+  rosic::Open303 s;
+  s.setSampleRate(44100.0);
+  s.setLfoOn(true);
+  config(s);
+  s.noteOn(note, velocity, 0.0);
+  std::vector<double> out(n);
+  for(double& x : out)
+    x = s.getSample();
+  return out;
+}
+
+static void accentSourceIsAGateOnAccentedNotes()
+{
+  Config mod = [](rosic::Open303& s) {
+    s.setModSlot(2, rosic::MOD_SRC_ACCENT, rosic::MOD_DEST_PITCH, 1.0); };
+  // unaccented: gate is 0, nothing moves
+  CHECK(maxDiff(renderNote(45, 64, none), renderNote(45, 64, mod)) < 1e-12);
+  // accented: works even with the accent knob at zero
+  CHECK(maxDiff(renderNote(45, 100, none), renderNote(45, 100, mod)) > 1e-3);
+}
+
+static void keytrackIsZeroAtTheCenterNote()
+{
+  Config mod = [](rosic::Open303& s) {
+    s.setModSlot(2, rosic::MOD_SRC_KEYTRACK, rosic::MOD_DEST_CUTOFF, 1.0); };
+  CHECK(maxDiff(renderNote(48, 64, none), renderNote(48, 64, mod)) < 1e-9);
+  CHECK(maxDiff(renderNote(60, 64, none), renderNote(60, 64, mod)) > 1e-3);
+}
+
+static void randomSourceChangesPerNoteAndIsRepeatable()
+{
+  auto run = [](bool modulate) {
+    rosic::Open303 s;
+    s.setSampleRate(44100.0);
+    s.setLfoOn(true);
+    if( modulate )
+      s.setModSlot(2, rosic::MOD_SRC_RANDOM, rosic::MOD_DEST_PITCH, 1.0);
+    std::vector<double> out;
+    for(int n = 0; n < 4; n++)
+    {
+      s.noteOn(45, 64, 0.0);
+      for(int i = 0; i < 4000; i++)
+        out.push_back(s.getSample());
+      s.noteOn(45, 0, 0.0);
+    }
+    return out;
+  };
+  std::vector<double> a = run(true), b = run(true);
+  CHECK(maxDiff(a, b) < 1e-12);
+  CHECK(maxDiff(a, run(false)) > 1e-3);
+
+  rosic::Open303 s;
+  s.setSampleRate(44100.0);
+  double first = 0.0;
+  bool changed = false;
+  for(int n = 0; n < 16; n++)
+  {
+    s.noteOn(45, 64, 0.0);
+    double v = s.getRandomModValue();
+    CHECK(v >= -1.0 && v <= 1.0);
+    if( n == 0 ) first = v;
+    else if( v != first ) changed = true;
+    s.noteOn(45, 0, 0.0);
+  }
+  CHECK(changed);
+}
+
 int main()
 {
   lfoSlotMatchesLegacyDepth();
@@ -257,6 +326,9 @@ int main()
   lfoDepthDestinationCanOpenAClosedLfo();
   knobValuesAreRestoredWhenModulationStops();
   accentDestinationLeavesUnaccentedNotesAlone();
+  accentSourceIsAGateOnAccentedNotes();
+  keytrackIsZeroAtTheCenterNote();
+  randomSourceChangesPerNoteAndIsRepeatable();
   if(failures == 0)
     std::printf("open303_mod_test: all passed\n");
   return failures == 0 ? 0 : 1;

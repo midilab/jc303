@@ -118,6 +118,7 @@ void Open303::setSampleRate(double newSampleRate)
   diodeFilter.setSampleRate   (  oversampling*newSampleRate);
   sampleRate = newSampleRate;
   updateAccentSweepGain();
+  accentGateCoeff = exp(-1.0 / (0.001 * newSampleRate));   // 1 ms
 }
 
 void Open303::setCutoff(double newCutoff)
@@ -288,6 +289,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   }
 
   noteAccented = hasAccent;
+  drawRandomModValue();
   currentDecay = hasAccent ? accentDecay : normalDecay;
   if( hasAccent )
   {
@@ -316,6 +318,7 @@ void Open303::slideToNote(int noteNumber, bool hasAccent)
   oscFreq = pitchToFreq(noteNumber, tuning);
 
   noteAccented = hasAccent;
+  drawRandomModValue();
   currentDecay = hasAccent ? accentDecay : normalDecay;
   if( hasAccent )
   {

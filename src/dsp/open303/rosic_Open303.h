@@ -38,7 +38,10 @@ namespace rosic
   {
     MOD_SRC_OFF = 0,
     MOD_SRC_LFO,          // bipolar
-    MOD_SRC_ENV           // filter envelope, bipolar (envelope 0..1 mapped to -1..+1)
+    MOD_SRC_ENV,          // filter envelope, bipolar (envelope 0..1 mapped to -1..+1)
+    MOD_SRC_ACCENT,       // accent gate, 0 or 1 (smoothed over ~1 ms)
+    MOD_SRC_KEYTRACK,     // pitch around MIDI note 48, -1..+1 over +/-2 octaves, follows slides
+    MOD_SRC_RANDOM        // new bipolar value on every note (triggered or slid)
   };
 
   /** Modulation matrix destinations (also the values of the lfoDestination parameter). */
@@ -331,6 +334,9 @@ namespace rosic
     generator (in percent). */
     double getEnvMod() const { return envMod; }
 
+    /** Returns the current value of the random modulation source (-1..+1). */
+    double getRandomModValue() const { return randomModValue; }
+
     /** Returns the filter envelope's decay time for non-accented notes (in milliseconds). */
     double getDecay() const { return normalDecay; }
 
@@ -481,6 +487,15 @@ namespace rosic
       }
     };
 
+    /** Draws a new value for the random source (xorshift, so renders are repeatable). */
+    void drawRandomModValue()
+    {
+      randomState ^= randomState << 13;
+      randomState ^= randomState >> 17;
+      randomState ^= randomState << 5;
+      randomModValue = randomState * (2.0 / 4294967295.0) - 1.0;
+    }
+
     /** Pushes a resonance percentage (0..100) to both filters. */
     void applyResonance(double percent);
 
@@ -566,6 +581,10 @@ namespace rosic
     double baseLfoRate = 1.0;         // Hz, knob value
     double currentDecay = 1000.0;     // decay of the sounding note (normal or accent decay)
     bool noteAccented = false;
+    double accentGateSmoothed = 0.0;  // accent source, follows noteAccented
+    double accentGateCoeff = 0.0;
+    double randomModValue = 0.0;      // random source, redrawn per note
+    unsigned int randomState = 0x9E3779B9u;
     bool resonanceModActive = false;  // true while the matrix is moving a knob, so that the knob
     bool fmModActive = false;         // value can be restored when it stops
     bool envModModActive = false;
@@ -632,13 +651,17 @@ namespace rosic
     double rc2Out     = n2 * rc2.getSample(accentGain > 0.0 || accentModActive ? mainEnvOut : 0.0) * accentSweepGain;
     double envSource  = rc1Out + accentGain * rc2Out;
 
+    accentGateSmoothed = (noteAccented ? 1.0 : 0.0)
+                         + accentGateCoeff * (accentGateSmoothed - (noteAccented ? 1.0 : 0.0));
+    double slewedFreq = pitchSlewLimiter.getSample(oscFreq);
+
     // modulation matrix: slot 0 is the LFO slot (lfoDepth / lfoDestination), slot 1 the envelope
     // slot, 2..3 are free. Slot 0 runs last so the other slots can modulate its depth.
     ModAccum mod;
     if( lfoEnabled )
     {
-      bool   lfoSampled = false;
-      double lfoValue   = 0.0;
+      bool   lfoSampled = false, keySampled = false;
+      double lfoValue   = 0.0, keyValue = 0.0;
       for(int k = 1; k <= NUM_MOD_SLOTS; k++)
       {
         int    i           = k % NUM_MOD_SLOTS;
@@ -667,6 +690,20 @@ namespace rosic
             lfoSampled = true;
           }
           value = lfoValue;
+        }
+        else if( source == MOD_SRC_ACCENT )
+          value = accentGateSmoothed;
+        else if( source == MOD_SRC_RANDOM )
+          value = randomModValue;
+        else if( source == MOD_SRC_KEYTRACK )
+        {
+          if( !keySampled )
+          {
+            keyValue   = log2(slewedFreq / pitchToFreq(48.0, tuning)) / 2.0;
+            keyValue   = std::max(-1.0, std::min(1.0, keyValue));
+            keySampled = true;
+          }
+          value = keyValue;
         }
         mod.add(destination, value, amount);
       }
@@ -712,7 +749,7 @@ namespace rosic
     // calculate instantaneous oscillator frequency and set up the oscillator:
     // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
     double pitchModFactor = mod.pitchOn ? pow(2.0, mod.pitchSemis / 12.0) : 1.0;
-    double instFreq = pitchSlewLimiter.getSample(oscFreq) * pitchModFactor;
+    double instFreq = slewedFreq * pitchModFactor;
     oscillator.setFrequency(instFreq*pitchWheelFactor);
     oscillator.calculateIncrement();
     subOscillator.setFrequency(instFreq*pitchWheelFactor);
