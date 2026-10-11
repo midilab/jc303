@@ -1,6 +1,6 @@
 // Offline solver for the Diode Native feedback law (dfl_DiodeLadderFilter.h, calculateCoefficients, KNT / KNC).
-// For one cutoff it finds the self-oscillation threshold K_crit (impulse growth test) at the three Filter Feedback
-// nodes (76.7 / 115 / 268 Hz, i.e. knob 1.0 / default / 0) and, for each pot position at the default,
+// For one cutoff it finds the self-oscillation threshold K_crit (impulse growth test) at the four Filter Feedback
+// nodes (31.25 / 60 / 115 / 268 Hz: knob 1.0 in Native / between / default / knob 0) and, for each pot position at the default,
 // the K whose response ratio |H_K| / |H_0| over 0.4..2.4 x cutoff best matches the SPICE model of the real VCF
 // (least squares in dB, with the resonant boost weighted 4x; coarse scan, then golden section). Input lines from spice/native_targets.py (gen_native_tables.py runs both):
 //   cutoff pot boost peakHz r_0 .. r_24      (r_j at f_j = 0.4 c * 6^(j/24))
@@ -33,20 +33,29 @@ static void mk(D& d, double c, double K, double fh = 115.0)
   d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(0.0);
   d.K = K; d.Kcomp = K; d.reset();
 }
+// Not growing: the ring at 5-6 s is below the one at 2-3 s. The kick is tiny so the loop stays linear (a growing mode
+// would otherwise level off in the input tanh). A decay criterion is wrong here: with a low Filter Feedback corner the
+// coupling network's ~7 Hz mode stays stable up to a much higher K but rings for seconds near its threshold.
 static bool stable(double c, double K, double fh)
 {
-  D d; mk(d, c, K, fh); d.getSample(1e-3); int N = (int)(SR * 1.2); double pk = 0, tail = 0;
-  for (int i = 0; i < N; i++) { double y = fabs(d.getSample(0.0)); if (i < (int)(SR * 0.3)) pk = fmax(pk, y); if (i > N - (int)(SR * 0.1)) tail = fmax(tail, y); }
-  return tail < pk * 1e-3;
+  D d; mk(d, c, K, fh); d.getSample(1e-9); int N = (int)(SR * 6.0); double early = 0, late = 0;
+  for (int i = 0; i < N; i++)
+  {
+    double y = fabs(d.getSample(0.0));
+    if (!std::isfinite(y)) return false;
+    if (i > (int)(SR * 2.0) && i < (int)(SR * 3.0)) early = fmax(early, y);
+    if (i > (int)(SR * 5.0)) late = fmax(late, y);
+  }
+  return late < early && late < 1e-7;
 }
 struct Tgt { double pot, boost, peakHz; double r[NJ]; };
 int main(int argc, char** argv)
 {
   double c = atof(argv[1]); std::vector<Tgt> T; std::string line;
   while (std::getline(std::cin, line)) { std::istringstream is(line); double cc; Tgt t; is >> cc >> t.pot >> t.boost >> t.peakHz; for (double& x : t.r) is >> x; if (fabs(cc - c) < 0.5) T.push_back(t); }
-  double KcF[3]; const double FH[3] = { 76.7, 115.0, 268.0 };
-  for (int h = 0; h < 3; h++) { double lo = 10, hi = 60; for (int i = 0; i < 15; i++) { double m = 0.5 * (lo + hi); if (stable(c, m, FH[h])) lo = m; else hi = m; } KcF[h] = lo; }
-  const double Kc = KcF[1], Kmax = 0.99 * Kc;
+  double KcF[4]; const double FH[4] = { 31.247, 60.0, 115.0, 268.0 };
+  for (int h = 0; h < 4; h++) { double lo = 10, hi = 60; for (int i = 0; i < 15; i++) { double m = 0.5 * (lo + hi); if (stable(c, m, FH[h])) lo = m; else hi = m; } KcF[h] = lo; }
+  const double Kc = KcF[2], Kmax = 0.99 * Kc;
   double fj[NJ]; for (int j = 0; j < NJ; j++) fj[j] = 0.4 * c * pow(6.0, j / double(NJ - 1));
   D d0; mk(d0, c, 0.0); double h0[NJ]; for (int j = 0; j < NJ; j++) h0[j] = mag(d0, fj[j]);
   auto err = [&](const Tgt& t, double K, double* bOut) {
@@ -56,7 +65,7 @@ int main(int argc, char** argv)
     double b = best - mag(d0, bf); if (bOut) *bOut = b;
     return e / NJ + 4.0 * pow(b - t.boost, 2);
   };
-  printf("cut %6.0f | K_crit %.3f %.3f %.3f |", c, KcF[0], KcF[1], KcF[2]);
+  printf("cut %6.0f | K_crit %.3f %.3f %.3f %.3f |", c, KcF[0], KcF[1], KcF[2], KcF[3]);
   for (auto& t : T)
   {
     // coarse scan first (the error is not unimodal at low pot positions), then golden-section around the best

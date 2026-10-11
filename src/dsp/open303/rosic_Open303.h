@@ -180,10 +180,16 @@ namespace rosic
     /** Sets the cutoff frequency for the highpass inside the feedback loop of the main filter. */
     void setFeedbackHighpass(double newCutoff)
     {
+      feedbackHighpass = newCutoff;
       filter.setFeedbackHighpassCutoff(newCutoff);
       // The knob is referenced to the TeeBee's 150 Hz default; the diode follows the real
       // circuit's network, whose best single-pole corner is ~115 Hz (same relative range).
-      diodeFilter.setFeedbackHighpass(newCutoff * (115.0 / 150.0));
+      double diodeCutoff = newCutoff * (115.0 / 150.0);
+      // Diode Native: past the TeeBee 150 Hz point the corner runs exponentially down to NATIVE_FEEDBACK_MIN at
+      // the knob's end (100 Hz) instead of 76.7, so the coupling pole reaches the realistic Q21 betas.
+      if(currentFilterType == FILTER_DIODE_NATIVE && newCutoff < 150.0)
+        diodeCutoff = 115.0 * pow(NATIVE_FEEDBACK_MIN / 115.0, log(150.0 / newCutoff) / log(150.0 / 100.0));
+      diodeFilter.setFeedbackHighpass(diodeCutoff);
       outputNetwork.setCouplingPole(diodeFilter.getNativeCouplingPoleHz());
     }
 
@@ -444,6 +450,10 @@ namespace rosic
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     FilterType currentFilterType;  // currently selected filter type
+    double feedbackHighpass = 150.0;   // Filter Feedback knob in TeeBee Hz, kept to re-map on a filter-type change
+    // Diode Native's corner at the knob's end: the coupling pole C27/C25 into Q21 at 25 Hz, Q21 beta about 1500
+    // (the 2SC1583's hFE is at least 500: 46 Hz). The pole is 578.1 rad/s x corner / 115.
+    static constexpr double NATIVE_FEEDBACK_MIN = 25.0 * 2.0 * 3.14159265358979 * 115.0 / 578.1;
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (0.0 to 1.0)
