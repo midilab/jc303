@@ -416,7 +416,7 @@ namespace rosic
     double lfoDepth;    // LFO depth (0.0 to 1.0)
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
-    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch)
+    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width)
     bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;
@@ -472,6 +472,7 @@ namespace rosic
     double lfoFilterMod = 0.0;
     double volumeModFactor = 1.0;
     double pitchModFactor = 1.0;
+    double pwmDepth = 0.0, pwmLfo = 0.0;
 
     if (lfoEnabled && lfoDepth > 0.0)
     {
@@ -488,9 +489,16 @@ namespace rosic
             volumeModFactor = 1.0 - lfoDepth + (lfoValue * lfoDepth);
             break;
         case 2:
+        {
             // Apply LFO pitch modulation (in semitones, converted to frequency multiplier, +/- 12 semitones max)
             double semitones = lfoValue * lfoDepth * 12.0;
             pitchModFactor = pow(2.0, semitones / 12.0);
+            break;
+        }
+        case 3:
+            // Pulse width (circuit square only), unipolar towards narrow; applied with the pitch-tracked width below
+            pwmDepth = lfoDepth;
+            pwmLfo   = 0.5 * (lfoValue + 1.0);
             break;
       }
     }
@@ -510,8 +518,15 @@ namespace rosic
     // clamped to that range so the cubic cannot run away under pitch bend or LFO.
     {
       double x  = clip(log2(instFreq*pitchWheelFactor / 32.703), -1.71, 5.93);   // octaves above C1, 10 Hz..2 kHz
-      double pw = 58.164 + x*(-7.543 + x*(0.812 - x*0.071));
-      oscillator.setPulseWidth(clip(pw, 25.0, 75.0));
+      double pw = clip(58.164 + x*(-7.543 + x*(0.812 - x*0.071)), 25.0, 75.0);
+      // PWM, unipolar towards narrow: depth first pulls centers above 50% down to 50% (a width and its complement
+      // sound alike, so sweeping through 50% would fold the motion over), then the LFO sweeps towards 10%
+      if( pwmDepth > 0.0 )
+      {
+        const double centre = pw - pwmDepth*std::max(pw - 50.0, 0.0);
+        pw = clip(centre - pwmDepth*pwmLfo*(centre - 10.0), 10.0, 75.0);
+      }
+      oscillator.setPulseWidth(pw);
     }
 
     // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
