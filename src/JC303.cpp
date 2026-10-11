@@ -188,6 +188,28 @@ JC303::JC303()
                                                         0.0f,    // Hi-Fi diode rungs: 0 = the circuit, - floppy, + stiff
                                                         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                                                             [] (float v, int) { return signedPercent (bipolarDetent (v)); })),
+            // diode character controls (0 = the circuit; checked against the SPICE netlist, tools/diode-fidelity)
+            std::make_unique<juce::AudioParameterFloat> ("filterBite",
+                                                        "Filter Bite",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // Diode: Q12 / Q21 mismatch (a lopsided ladder and resonance)
+            std::make_unique<juce::AudioParameterFloat> ("filterClip",
+                                                        "Filter Clip",
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,    // Diode: where the whole ladder saturates, - early, + late
+                                                        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                            [] (float v, int) { return signedPercent (bipolarDetent (v)); })),
+            std::make_unique<juce::AudioParameterFloat> ("filterSharpness",
+                                                        "Filter Sharpness",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // Diode: Q12's knee, 0 = the circuit's tanh, 1 = degenerated (hard)
+            std::make_unique<juce::AudioParameterFloat> ("filterWarmth",
+                                                        "Filter Warmth",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // Diode: Q21 driven harder (grit in the loop and the output)
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -308,6 +330,10 @@ JC303::JC303()
     resTrim = parameters.getRawParameterValue("resTrim");
     filterQuality = parameters.getRawParameterValue("filterQuality");
     filterTension = parameters.getRawParameterValue("filterTension");
+    filterBite = parameters.getRawParameterValue("filterBite");
+    filterClip = parameters.getRawParameterValue("filterClip");
+    filterSharpness = parameters.getRawParameterValue("filterSharpness");
+    filterWarmth = parameters.getRawParameterValue("filterWarmth");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -388,6 +414,10 @@ JC303::JC303()
     parameters.addParameterListener("resTrim", this);
     parameters.addParameterListener("filterQuality", this);
     parameters.addParameterListener("filterTension", this);
+    parameters.addParameterListener("filterBite", this);
+    parameters.addParameterListener("filterClip", this);
+    parameters.addParameterListener("filterSharpness", this);
+    parameters.addParameterListener("filterWarmth", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -462,6 +492,10 @@ JC303::~JC303()
     parameters.removeParameterListener("resTrim", this);
     parameters.removeParameterListener("filterQuality", this);
     parameters.removeParameterListener("filterTension", this);
+    parameters.removeParameterListener("filterBite", this);
+    parameters.removeParameterListener("filterClip", this);
+    parameters.removeParameterListener("filterSharpness", this);
+    parameters.removeParameterListener("filterWarmth", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -760,6 +794,22 @@ void JC303::setParameter (Open303Parameters index, float value)
         // -1..1 with a centre detent: how the Hi-Fi ladder's resonance moves with level (0 = the circuit's diodes)
         open303Core.setFilterTension(bipolarDetent(value));
         break;
+    case FILTER_BITE:
+        // 0..1: Q12 / Q21 saturation-current mismatch (DiodeLadderFilter::setBite)
+        open303Core.setFilterBite(value);
+        break;
+    case FILTER_CLIP:
+        // -1..1 with a centre detent: every junction's Vt, 0.5x .. 2x (DiodeLadderFilter::setClipThreshold, 0.5 = the circuit)
+        open303Core.setFilterClip(0.5 + 0.5 * bipolarDetent(value));
+        break;
+    case FILTER_SHARPNESS:
+        // 0..1: Q12's emitter degeneration (DiodeLadderFilter::setSharpness above 0.5; 0.5 = the circuit)
+        open303Core.setFilterSharpness(0.5 + 0.5 * value);
+        break;
+    case FILTER_WARMTH:
+        // 0..1: Q21 driven up to 4x harder (DiodeLadderFilter::setWarmth)
+        open303Core.setFilterWarmth(value);
+        break;
 
     // LFO parameters
     case LFO_WAVEFORM:
@@ -817,6 +867,10 @@ void JC303::setDevilMod(bool mode)
         setParameter(RES_TRIM, *resTrim);
         setParameter(FILTER_QUALITY, *filterQuality);
         setParameter(FILTER_TENSION, *filterTension);
+        setParameter(FILTER_BITE, *filterBite);
+        setParameter(FILTER_CLIP, *filterClip);
+        setParameter(FILTER_SHARPNESS, *filterSharpness);
+        setParameter(FILTER_WARMTH, *filterWarmth);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
         setParameter(LFO_WAVEFORM, *lfoWaveform);

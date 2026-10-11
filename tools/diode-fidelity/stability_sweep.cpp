@@ -4,10 +4,11 @@
 // resonance 0.97/0.99/1.0 over cutoff 200-20000 Hz, the Filter Feedback corners the plugin can set (57.5-268 Hz, whose
 // knob scales the dominant pole of the coupling network), and the drive range (setInputDrive clamps to [-12, +16] dB).
 // The response mode only re-mixes the ladder taps, so the loop covers every mode.
-// usage: stability_sweep [--standard] [--tension T] [--kick A]
+// usage: stability_sweep [--standard] [--tension T] [--rungs] [--kick A] [--bite B] [--clip C] [--sharp S] [--warm W]
 //   --tension: the Hi-Fi rungs' tension (-1..1, default 0). --kick: a 20 ms sine burst of amplitude A at the cutoff
 //   instead of the 1e-3 impulse, so the rungs ring loud (the tension acts only on large signals); a tail within 20 dB of
-//   the peak then fails too.
+//   the peak then fails too. --rungs: the tension reshapes the rungs' I-V curve instead of the envelope (the default).
+//   --bite / --clip / --sharp / --warm: the character controls (default 0 / 0.5 / 0.5 / 0).
 // Exit code 0 = every case decays.
 #include "dfl_DiodeLadderFilter.h"
 #include <cstdio>
@@ -18,11 +19,18 @@ using D = dfl::DiodeLadderFilter;
 static const double SR = 4.0 * 44100.0;   // the plugin runs the filter at 4x oversampling
 static bool HIFI = true;                   // --standard: the Standard quality
 static double TENSION = 0.0, KICK = 0.0;
+static double BITE = 0.0, CLIP = 0.5, SHARP = 0.5, WARM = 0.0;   // character controls
+static bool RUNGS = false;   // --rungs: the I-V tension
+static void character(D& d)
+{
+  d.setTensionEnvelope(!RUNGS); d.setTension(TENSION);
+  d.setBite(BITE); d.setClipThreshold(CLIP); d.setSharpness(SHARP); d.setWarmth(WARM);
+}
 
 static bool growing(D& d, double c, double fh, double drive, double res)
 {
   d.setSampleRate(SR);
-  d.setHiFi(HIFI); d.setTension(TENSION); d.setInputDrive(drive); d.setPassbandCompensation(0.0);
+  d.setHiFi(HIFI); d.setTension(TENSION); character(d); d.setInputDrive(drive); d.setPassbandCompensation(0.0);
   d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(res); d.reset();
   d.getSample(1e-9);
   int N = (int)(SR * 6.0); double early = 0, late = 0;
@@ -33,7 +41,9 @@ static bool growing(D& d, double c, double fh, double drive, double res)
     if (k > (int)(SR * 2.0) && k < (int)(SR * 3.0)) early = fmax(early, y);
     if (k > (int)(SR * 5.0)) late = fmax(late, y);
   }
-  return late >= early || late >= 1e-7;
+  // growing: later above earlier, unless both are at the rounding floor (Bite's DC operating point leaves ~1e-14 of
+  // rounding noise in the output, flat, which would otherwise read as not decaying)
+  return (late >= early && late > 1e-12) || late >= 1e-7;
 }
 
 int main(int argc, char** argv)
@@ -44,6 +54,11 @@ int main(int argc, char** argv)
     if (a == "--standard") HIFI = false;
     else if (a == "--tension" && i + 1 < argc) TENSION = atof(argv[++i]);
     else if (a == "--kick" && i + 1 < argc) KICK = atof(argv[++i]);
+    else if (a == "--rungs") RUNGS = true;
+    else if (a == "--bite" && i + 1 < argc) BITE = atof(argv[++i]);
+    else if (a == "--clip" && i + 1 < argc) CLIP = atof(argv[++i]);
+    else if (a == "--sharp" && i + 1 < argc) SHARP = atof(argv[++i]);
+    else if (a == "--warm" && i + 1 < argc) WARM = atof(argv[++i]);
   }
   int n = 0, bad = 0, slow = 0; double worst = -400, worstC = 0, worstF = 0, worstD = 0;
   for (double fh : { 57.5, 65.0, 76.7, 90.0, 100.0, 122.0, 160.0, 200.0, 268.0 })
@@ -53,7 +68,7 @@ int main(int argc, char** argv)
         double c = 200 * pow(100.0, i / 39.0);
         for (double res : { 0.97, 0.99, 1.0 })
         {
-          D d; d.setSampleRate(SR); d.setHiFi(HIFI); d.setTension(TENSION);
+          D d; d.setSampleRate(SR); d.setHiFi(HIFI); d.setTension(TENSION); character(d);
           d.setInputDrive(drive); d.setPassbandCompensation(0.0);
           d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(res); d.reset();
           const int burst = KICK > 0.0 ? (int)(0.02 * SR) : 1;
@@ -76,6 +91,6 @@ int main(int argc, char** argv)
           if (rel > worst) { worst = rel; worstC = c; worstF = fh; worstD = drive; }
         }
       }
-  printf("stability sweep (%s, tension %g, kick %g): %d cases, %d failing (not below -60 dB and growing), %d slow but decaying; worst tail %.0f dB (cutoff %.0f, fh %.1f, drive %.1f)\n", HIFI ? "Hi-Fi" : "Standard", TENSION, KICK, n, bad, slow, worst, worstC, worstF, worstD);
+  printf("stability sweep (%s, tension %g %s, kick %g): %d cases, %d failing (not below -60 dB and growing), %d slow but decaying; worst tail %.0f dB (cutoff %.0f, fh %.1f, drive %.1f)\n", HIFI ? "Hi-Fi" : "Standard", TENSION, RUNGS ? "rungs" : "envelope", KICK, n, bad, slow, worst, worstC, worstF, worstD);
   return bad ? 1 : 0;
 }

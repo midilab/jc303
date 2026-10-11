@@ -21,7 +21,7 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 
 | Tool | What it checks | Run time | Pass criteria (exit code 0) |
 |---|---|---|---|
-| `build/stability_sweep [--standard] [--tension T] [--kick A]` | Impulse-decay test (Hi-Fi, or Standard with `--standard`; `--kick 3`: a loud 20 ms burst at the cutoff instead of the impulse, for large-signal latch-ups; `--tension`: Hi-Fi rung tension) at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 9 Filter Feedback corners (57.5-268 Hz), 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 10800 cases | ~10 min | every case decays below -60 dB, or (a slow subsonic ring) does not grow over 6 s; after a loud kick, nothing still within 20 dB of its peak; prints the worst tail |
+| `build/stability_sweep [--standard] [--tension T] [--kick A] [--bite B] [--clip C] [--sharp S] [--warm W]` | Impulse-decay test (Hi-Fi, or Standard with `--standard`; `--kick 3`: a loud 20 ms burst at the cutoff instead of the impulse, for large-signal latch-ups; `--tension`: Hi-Fi rung tension) at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 9 Filter Feedback corners (57.5-268 Hz), 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 10800 cases | ~10 min | every case decays below -60 dB, or (a slow subsonic ring) does not grow over 6 s; after a loud kick, nothing still within 20 dB of its peak; prints the worst tail |
 | `build/stress_test` | Full synth, both qualities, Diode at Res Trim 0.85 / 1 / 1.15 (LP) and 1.15 at mode 0.25 / 0.5 / 0.75 / 1, full bass comp, x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100, Hi-Fi at tension -1 / 0 / 1: 2520 runs | ~2 min | no non-finite sample, tail after gate-off < -100 dB, peak < 24 |
 | `build/drive_level [-v]` | Drive knob is not a volume control (both qualities, 48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-mode limits (LP -3.0..+3.5 dB, Hi-Fi LP -5.0..+5.5 dB, BP / HP wider) | ~1 min | every filter type within limits |
 | `build/mode_level` | Mode morph: level of mode 0.25 / 0.5 / 0.75 / 1 vs LP (full synth, resonance 50..70, cutoff 800..1500); small-signal shape over 21 mode steps (no dip deeper than 3 dB below its 1/3-octave neighbours, i.e. no notch); BP / HP slopes | ~6 s | level within 1.5 dB, no notch, HP >= 30 dB down at cutoff / 8, BP >= 12 dB at cutoff / 8 and x 8 |
@@ -46,6 +46,29 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 ```sh
 cd tools/diode-fidelity && ./build.sh && for t in stability_sweep stress_test native_output drive_level mode_level model_level large_signal; do ./build/$t || echo "FAILED: $t"; done
 ```
+
+## Character controls
+
+Filter Bite / Clip / Sharpness / Warmth (`DiodeLadderFilter::setBite` etc.; the Mods menu; 0 = the circuit), each a
+part of the circuit and realised the same way in the netlist (`spice/tb303_vcf.py`'s `bite` / `sharp` / `warm`):
+
+| Control | The filter | The netlist |
+|---|---|---|
+| Bite | Q12's and Q21's saturation-current mismatch. Rung and Q22 mismatches self-centre at DC (every rung carries the same current), so the ladder's asymmetry comes from Q12, whose offset pushes a DC current through every rung (a lopsided ladder and resonance), and from Q21, whose offset its base currents through R113 / R114 mostly cancel (X0 + 5.8 tanh X0 = offset) | Q12a / Q21a IS x e^(0.4 bite) / e^(-0.5 bite) |
+| Clip | every junction's Vt x 0.5..2 (the rungs through Tension's scale too), currents scaled to hold the cutoff and gains: the model is homogeneous, so y(x; clip) = s y(x / s), the whole ladder's saturation against the clean passband | none needed: `build/character identity` checks the identity (Tension -1 / 0 / 1, both qualities) |
+| Sharpness | Q12's emitters degenerated (RE If / 2 Vt up to 4, the gain renormalised): linear, then a hard knee (a bipolar pair cannot get softer: raising its Vt and renormalising at its dividers cancels) | Q12 emitter resistors, the input and the feedback raised by 1 + rho |
+| Warmth | Q21 driven up to 4 x harder, its output scaled back | Q21 NF = 1 / w, BF x w (input impedance kept), R1 / R2 / w |
+
+None raises any element's slope above its rest value, so none can push the loop gain past the symmetric circuit's
+(the latch-up mechanism, see docs/diode-fidelity.md). `reset()` settles onto Bite's DC operating point (no step).
+
+- `spice/character.py` (`build/character` renders): at cutoff 1350, pot 0 / 0.6 / 0.9, 110 / 440 Hz, 3.25 / 6.5 V, each
+  control at its extremes is within 0.56 dB of compression, 0.7 THD points and 0.3 H2 points of SPICE (the circuit
+  itself: 0.26 dB / 0.58 / 0.08); all four at once within 0.49 dB / 0.49 / 2.2.
+- Stability (`stability_sweep --kick 3`, both qualities, Tension -1 / 0 / 1, each control at its extremes and all at
+  once): see the expected results above.
+- Also: Standard quality's filter FM scaled alpha = g / (1 + g) by up to 1.5, which exceeds 1 near Nyquist and ran
+  away (found at 1 x); it now scales g, as Hi-Fi does (without FM the path is unchanged, bit for bit).
 
 ## When the tables must be regenerated
 
