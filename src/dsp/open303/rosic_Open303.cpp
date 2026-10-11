@@ -161,7 +161,8 @@ void Open303::setFilterType(FilterType newType)
 
   // Octave mode (steeper 1st pole) applies only to the plain-LP Diode Octave
   // model. The BP/HP response modes are plain-diode only.
-  diodeFilter.setOctaveMode(newType == FILTER_DIODE_OCTAVE);
+  diodeFilter.setOctaveMode(newType == FILTER_DIODE_OCTAVE || newType == FILTER_DIODE_NATIVE);
+  diodeFilter.setNativeMode(newType == FILTER_DIODE_NATIVE);
 
   int response = DiodeLadderFilter::RESPONSE_LP;
   if(newType == FILTER_DIODE_BP)
