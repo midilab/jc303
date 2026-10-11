@@ -223,9 +223,17 @@ def big_caps(net):
 
 def proposed_post(f, a=0.0, fs=44100.0):
     """Proposed replacement for allpass*highpass2*notch: three one-pole HPs (Open303's HIGHPASS form).
-    88 Hz + 55 Hz * resonance-pot position (the VCA input taps vout via 220k/10n and the pot wiper via 100k/10n),
-    plus two at 9.7 Hz (VCF output coupling, C38/C59/C56 and the line-out load). Fit in 10 Hz - 20 kHz."""
-    return o3_hp(f, 88.0 + 55.0 * a, fs) * o3_hp(f, 9.7, fs) * o3_hp(f, 9.7, fs)
+    57 Hz + 40 Hz * resonance-pot position (VCA input taps plus the VCF output coupling C27/C25 into the Q21 bases),
+    plus two at 7.4 Hz (C38/C59/C56 and the line-out load). Fitted at Q21 BF=800 in 20 Hz - 20 kHz; the main corner
+    moves with Q21 beta (BF 300: 88 Hz, 500: 67 Hz, 1200: 49 Hz) because Q21's base impedance loads C27/C25."""
+    return o3_hp(f, 57.0 + 40.0 * a, fs) * o3_hp(f, 7.4, fs) * o3_hp(f, 7.4, fs)
+
+
+def with_q21_bf(net, bf):
+    """Give the VCF output pair Q21 (2SC1583, hFE >= 500 per datasheet) its own beta; the shared QN card has 300."""
+    for q in ("Q21a c21a b21a e21", "Q21b c21b b21b e21"):
+        net = net.replace(q + " QN", q + " QH")
+    return net.replace(".option", f".model QH NPN (IS=1e-14 BF={bf} VAF=80 RB=30 RE=1 CJE=2p CJC=1p TF=0.3n)\n.option", 1)
 
 
 def norm(f, H, fref=1000.0):
@@ -270,6 +278,8 @@ def main():
     ap.add_argument("--thd", action="store_true", help="transient THD at the VCA")
     ap.add_argument("--rload", type=float, default=47e3)
     ap.add_argument("--vol", type=float, default=1.0)
+    ap.add_argument("--bf21", type=float, default=800.0,
+                    help="Q21 beta for the whole-chain run (2SC1583 hFE >= 500; the corner below 100 Hz depends on it)")
     ap.add_argument("--If", type=float, default=400e-6,
                     help="VCF tail current for the chained run (~4 kHz cutoff; >=500uA the netlist's bias collapses)")
     args = ap.parse_args()
@@ -307,7 +317,7 @@ def main():
 
     # 2) whole chain, coupling only: (VCF in -> vout with real caps) / (same with every coupling/bypass
     #    electrolytic at 1 F) isolates the VCF's own coupling network from its lowpass; times vout -> jack.
-    vcfn = vcf_netlist(a=0.0, If=args.If, extra=OPTS)
+    vcfn = with_q21_bf(vcf_netlist(a=0.0, If=args.If, extra=OPTS), args.bf21)
     fc, (vi, vo) = ac(vcfn, ["in", "vout"], 1, 20e3)
     _, (vi2, vo2) = ac(big_caps(vcfn), ["in", "vout"], 1, 20e3)
     hc = norm(fc, (vo / vi) / (vo2 / vi2))
@@ -316,7 +326,7 @@ def main():
     whole = hc * hv
     o3w = norm(fc, o3_pre(fc) * o3_post(fc))
     prop = norm(fc, o3_pre(fc) * proposed_post(fc, 0.0))
-    print(f"\n== whole chain, coupling only (a=0, If={args.If*1e6:.0f}uA), normalised at 1 kHz ==")
+    print(f"\n== whole chain, coupling only (a=0, If={args.If*1e6:.0f}uA, Q21 BF={args.bf21:g}), normalised at 1 kHz ==")
     table(fc, [hc, whole, o3w, prop], ["SPICE VCF coupl.", "SPICE VCF+VCA", "Open303 hp1*post", "proposed"])
     for name, H in (("Open303", o3w), ("proposed", prop)):
         e, e10 = err(fc, H, whole), err(fc, H, whole, 10)
