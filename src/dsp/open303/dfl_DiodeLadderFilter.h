@@ -316,7 +316,7 @@ namespace dfl
     static constexpr double TENSION_SCALE_MAX = 8.0;   // rungScale^2 at tension +-1, re the diode
     static constexpr double TENSION_STIFF_MAX = 3.0;   // tension 1: a rung's conductance rises to 1 + this when loud
     double tension = 0.0, rungScale = headroomBias, rungMix = 1.0;
-    bool   tensionEnvelope = false;
+    bool   tensionEnvelope = true;   // the envelope version is Tension (the rung I-V version stays behind the switch for now)
     static constexpr double TENSION_ENV_GAIN = 2.8;   // log stage-rate change at full tension and a rung at its limit
     static constexpr double TENSION_ENV_MS   = 2.0;   // envelope time constant
     double envA = 0.0, envE[4] = {};
