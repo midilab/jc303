@@ -165,7 +165,7 @@ namespace rosic
     void setTanhShaperOffset(double newOffset)
     { waveTable2.setTanhShaperOffsetFor303Square(newOffset); }
 
-    /** Sets the cutoff frequency for the highpass before the main filter. */
+    /** Sets the cutoff frequency for the highpass before the TeeBee filter (the diode models use the circuit's input coupling). */
     void setPreFilterHighpass(double newCutoff) { highpass1.setCutoff(newCutoff); }
 
     /** Sets the cutoff frequency for the highpass inside the feedback loop of the main filter. */
@@ -173,13 +173,13 @@ namespace rosic
     {
       feedbackHighpass = newCutoff;
       filter.setFeedbackHighpassCutoff(newCutoff);
-      // The knob is referenced to the TeeBee's 150 Hz default; the diode follows the real
-      // circuit's network, whose best single-pole corner is ~115 Hz (same relative range).
-      double diodeCutoff = newCutoff * (115.0 / 150.0);
-      // Past the TeeBee 150 Hz point the corner runs exponentially down to DIODE_FEEDBACK_MIN at the knob's end
-      // (100 Hz) instead of 76.7, so the coupling pole reaches the realistic Q21 betas.
-      if(newCutoff < 150.0)
-        diodeCutoff = 115.0 * pow(DIODE_FEEDBACK_MIN / 115.0, log(150.0 / newCutoff) / log(150.0 / 100.0));
+      // The knob is referenced to the TeeBee's 150 Hz default, where the diode sits at its default Q21 beta (300).
+      // From there the corner runs exponentially to DIODE_FEEDBACK_MAX at the knob's start (350 Hz) and to
+      // DIODE_FEEDBACK_MIN at its end (100 Hz).
+      const double def = DiodeLadderFilter::FEEDBACK_DEFAULT;
+      double diodeCutoff = newCutoff >= 150.0
+        ? def * pow(DIODE_FEEDBACK_MAX / def, log(newCutoff / 150.0) / log(350.0 / 150.0))
+        : def * pow(DIODE_FEEDBACK_MIN / def, log(150.0 / newCutoff) / log(150.0 / 100.0));
       diodeFilter.setFeedbackHighpass(diodeCutoff);
       outputNetwork.setCouplingPole(diodeFilter.getCouplingPoleHz());
     }
@@ -368,6 +368,7 @@ namespace rosic
     BiquadFilter              ampDeClicker;
     LeakyIntegrator           rc1, rc2;
     OnePoleFilter             highpass1, highpass2, allpass;
+    OnePoleFilter             diodeInputCoupling;   // the diode models' VCF input coupling, instead of highpass1
     BiquadFilter              notch;
     EllipticQuarterBandFilter antiAliasFilter;
     AcidSequencer             sequencer;
@@ -442,6 +443,8 @@ namespace rosic
     // 2SC1583's datasheet minimum). Higher betas make the network's ~7 Hz mode motorboat at high resonance (SPICE:
     // beta 800 at full pot), so the knob stops here. The pole is 578.1 rad/s x corner / 115.
     static constexpr double DIODE_FEEDBACK_MIN = 46.0 * 2.0 * 3.14159265358979 * 115.0 / 578.1;
+    // ... and at the knob's start: coupling pole 214 Hz (Q21 beta about 70).
+    static constexpr double DIODE_FEEDBACK_MAX = 350.0 * 115.0 / 150.0;
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (0.0 to 1.0)
@@ -595,12 +598,16 @@ namespace rosic
       tmp  = -oscillator.getSample();         // the raw oscillator signal
       if( subOscGain > 0.0 )
         tmp += subOscGain * (-subOscillator.getSample(subOscBlend));
-      tmp  = highpass1.getSample(tmp);        // pre-filter highpass
-      // Apply selected filter
       if(currentFilterType == dfl::FILTER_TEEBEE)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
         tmp = filter.getSample(tmp);
+      }
       else
+      {
+        tmp = diodeInputCoupling.getSample(tmp);
         tmp = diodeFilter.getSample(tmp);
+      }
       tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
 
     }

@@ -68,6 +68,7 @@ Open303::Open303()
   rc2.setTimeConstant(15.0);
 
   highpass1.setMode(OnePoleFilter::HIGHPASS);
+  diodeInputCoupling.setMode(OnePoleFilter::HIGHPASS);
   highpass2.setMode(OnePoleFilter::HIGHPASS);
   allpass.setMode(OnePoleFilter::ALLPASS);
   notch.setMode(BiquadFilter::BANDREJECT);
@@ -78,12 +79,13 @@ Open303::Open303()
   oscillator.setPulseWidth(50.0);
   oscillator.setCircuitPulseShape(false);   // flat-topped square unless switched on (JC303: the Mods switch)
   highpass1.setCutoff(44.486);
+  diodeInputCoupling.setCutoff(1.0 / (2.0 * PI * 1e-6 * 222.2e3));   // C17 1u into R62 220k + R70 2.2k: 0.72 Hz
   highpass2.setCutoff(24.167);
   allpass.setCutoff(14.008);
   notch.setFrequency(7.5164);
   notch.setBandwidth(4.7);
 
-  filter.setFeedbackHighpassCutoff(150.0);
+  setFeedbackHighpass(feedbackHighpass);   // also sets the diode corner and the output network's coupling pole
 }
 
 Open303::~Open303()
@@ -111,6 +113,7 @@ void Open303::setSampleRate(double newSampleRate)
   outputNetwork.setSampleRate (         newSampleRate);
 
   highpass1.setSampleRate     (  oversampling*newSampleRate);
+  diodeInputCoupling.setSampleRate(oversampling*newSampleRate);
 
   oscillator.setSampleRate    (  oversampling*newSampleRate);
   subOscillator.setSampleRate (  oversampling*newSampleRate);
@@ -273,6 +276,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
     filter.reset();
     diodeFilter.reset();
     highpass1.reset();
+    diodeInputCoupling.reset();
     highpass2.reset();
     allpass.reset();
     notch.reset();

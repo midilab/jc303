@@ -58,11 +58,11 @@ int main(int argc, char** argv)
   printf("native_output: %d of 35 points out of tolerance, worst %.2f dB\n", fails, worst);
 
   // Filter Feedback knob (TeeBee Hz, 350 at knob 0 .. 100 at knob 1): the coupling pole spans 214 Hz down to 46 Hz
-  // (Q21 beta about 500), unchanged up to the TeeBee 150 Hz point.
+  // (Q21 beta about 500), through 63.2 Hz (beta 300, SPICE) at the TeeBee 150 Hz default.
   struct Case { dfl::FilterType type; double knobHz, expectHz; };
   const Case cases[] = {
     { dfl::FILTER_DIODE, 350.0, 578.1 / (2.0 * M_PI) * 350.0 / 150.0 },
-    { dfl::FILTER_DIODE, 150.0, 578.1 / (2.0 * M_PI) },
+    { dfl::FILTER_DIODE, 150.0, 63.2 },
     { dfl::FILTER_DIODE, 100.0, 46.0 } };
   int knobFails = 0;
   for (const Case& k : cases)
