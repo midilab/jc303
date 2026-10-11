@@ -39,6 +39,10 @@ enum Open303Parameters
   RES_TRIM,
   FILTER_QUALITY,
   FILTER_TENSION,
+  FILTER_BITE,
+  FILTER_CLIP,
+  FILTER_SHARPNESS,
+  FILTER_WARMTH,
   // LFO
   LFO_WAVEFORM,
   LFO_RATE,
@@ -256,6 +260,10 @@ private:
     std::atomic<float>* resTrim = nullptr;
     std::atomic<float>* filterQuality = nullptr;
     std::atomic<float>* filterTension = nullptr;
+    std::atomic<float>* filterBite = nullptr;
+    std::atomic<float>* filterClip = nullptr;
+    std::atomic<float>* filterSharpness = nullptr;
+    std::atomic<float>* filterWarmth = nullptr;
     // generative sequencer
     std::atomic<float>* seqGenerativeFill = nullptr;
     std::atomic<float>* seqGenerativeAccentProbability = nullptr;
