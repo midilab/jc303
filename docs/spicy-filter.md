@@ -10,7 +10,7 @@ model of the feedback coupling network and his reading of the circuit are the fo
 
 Code: `src/dsp/open303/dfl_DiodeLadderFilter.h`, `dfl_TB303OutputNetwork.h`, `rosic_Open303.h`. Tools and the
 SPICE reference: `tools/diode-fidelity/`. Netlist: `docs/tb303-vcf.cir`. Development log:
-`docs/diode-octave-fidelity.md`.
+`docs/diode-fidelity.md`.
 
 ## The circuit
 
@@ -403,4 +403,4 @@ At full pot every cutoff is within 0.03 to 0.79 dB rms. From 20 to 600 Hz, the r
 - Roland TB-303 service notes (VCF, VCA and VCO schematic)
 - Robin Schmidt, Open303 (`rosic_TeeBeeFilter.h`), and the KVR Audio forum TB-303 filter thread by mystran and kunn
   that its TB_303 mode is based on
-- This repository: `docs/tb303-vcf.cir`, `tools/diode-fidelity/`, `docs/diode-octave-fidelity.md`
+- This repository: `docs/tb303-vcf.cir`, `tools/diode-fidelity/`, `docs/diode-fidelity.md`

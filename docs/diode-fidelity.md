@@ -1,4 +1,10 @@
-# Diode Octave filter: circuit fidelity notes
+# Diode filter: circuit fidelity notes
+
+> **Naming.** The filter was first called "Diode Octave", after a reading of the half-value bottom
+> capacitor (C18, 18 nF against 33 nF) as an octave-up first pole. That reading was wrong: C18's node sees one
+> diode pair instead of two, so all four stage poles are equal (see "Equal stage poles, measured corner, prewarp
+> at cutoff" below and "The octave-pole myth" in `docs/spicy-filter.md`). The name stays below only where it
+> refers to that earlier model.
 
 This documents the investigation behind the Diode Octave filter changes on branch
 `fix/diode-resonance-gain-tracking` (commits `f291278` and `1e08509`): why the filter
