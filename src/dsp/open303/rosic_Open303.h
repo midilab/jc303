@@ -139,6 +139,17 @@ namespace rosic
     /** Scales the waveshaper envelope: 0 = flat top, 1 = the circuit (default), 2 = exaggerated. */
     void setPulseSag(double newSag) { oscillator.setPulseSag(newSag); }
 
+    /** Maps a 0..1 square-drive knob to the pulse sag, in the TeeBee drive's direction (up = cleaner square):
+    2 at 0, linear to the circuit (1) at the default 0.25, then ((1-k)/0.75)^1.5 to flat at 1. The power spreads
+    the spectral change evenly; most of it happens between a slight sag and flat. */
+    static double sagForSquareDrive(double knob)
+    {
+      if( knob <= 0.25 )
+        return 2.0 - 4.0*knob;
+      const double u = (1.0 - knob) / 0.75;
+      return u*std::sqrt(u);
+    }
+
     /** Sets the offset (raw value) for the tanh-shaper that forms the 303-square waveform. */
     void setTanhShaperOffset(double newOffset)
     { waveTable2.setTanhShaperOffsetFor303Square(newOffset); oscillator.setTanhShaperOffset(newOffset); }
