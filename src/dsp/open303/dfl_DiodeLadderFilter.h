@@ -25,8 +25,9 @@ namespace dfl
    * 4-pole diode ladder filter based on Will Pirkle's analysis.
    * http://www.willpirkle.com/Downloads/AN-6DiodeLadderFilter.pdf
    *
-   * The 1st pole sits one octave above (TB-303 style ~18 dB/oct), with the real circuit's feedback
-   * coupling network and resonance-pot law, calibrated to a SPICE model of the TB-303 VCF (see calculateCoefficients).
+   * Four equal stage poles: the TB-303's half-value bottom cap (C18) sees only one diode pair, so its pole matches the
+   * others, and the stages' coupling spreads the poles (about 18 dB/oct from 2 to 4 x cutoff). With the real circuit's
+   * feedback coupling network and resonance-pot law, calibrated to a SPICE model of the TB-303 VCF (see calculateCoefficients).
    * The mode morph (LP -> BP -> HP) mixes the ladder's stage taps (see getSample).
    */
 
@@ -147,7 +148,6 @@ namespace dfl
 
     // Coefficients for the diode ladder topology
     double alpha;           // g / (1 + g) - the one-pole alpha
-    double alpha2;          // one octave above, for 1st stage
     double G1, G2, G3, G4;  // "Big G" coefficients
     double beta1, beta2, beta3, beta4;   // feedback beta coefficients
     double delta1, delta2, delta3;       // delta coefficients
@@ -203,22 +203,22 @@ namespace dfl
 
     // Tap mixes with a pure p^k numerator, p = s / wc (see getSample). With unit stages the ladder's taps from its
     // input un are N_k(p) / D0(p): lp4 -> 1, lp3 -> 2 + 2p, lp2 -> 3 + 8p + 4p^2, lp1 -> 4 + 20p + 24p^2 + 8p^3,
-    // un -> D0 = 1 + 14p + 30p^2 + 20p^3 + 4p^4 (stage k > 1 takes 0.5 (y[k-1] + y[k+1]), stage 1 takes un + y2 with its
-    // pole an octave up). The basis is triangular, so these weights (on un, lp1..lp4) give p^0..p^4 exactly; the
-    // global feedback and the coupling network only change the shared denominator.
+    // un -> D0 = 1 + 16p + 40p^2 + 32p^3 + 8p^4 (stage k > 1 takes 0.5 (y[k-1] + y[k+1]), stage 1 takes un + y2). The
+    // basis is triangular, so these weights (on un, lp1..lp4) give p^0..p^4 exactly; the global feedback and the
+    // coupling network only change the shared denominator.
     static constexpr double TAP_MIX[5][5] = {
       { 0.0,   0.0,    0.0,    0.0,  1.0   },   // 1      lowpass
       { 0.0,   0.0,    0.0,    0.5, -1.0   },   // p
       { 0.0,   0.0,    0.25,  -1.0,  1.25  },   // p^2    bandpass
       { 0.0,   0.125, -0.75,   1.75, -1.75 },   // p^3
-      { 0.25, -0.625,  1.875, -3.0,  2.625 } }; // p^4    highpass
+      { 0.125, -0.5,   1.75,  -3.0,  2.625 } }; // p^4    highpass
 
     // Static BP / HP output gains (on top of OUTPUT_GAIN) so the pure modes sit near LP loudness on a saw at a typical
     // resonant 303 setting (resonance 50..70, cutoff 800..1500 Hz, see mode_level). No correction by cutoff: the
     // BP/HP-vs-LP gap at low resonance and high cutoff is the filter's character (a saw has most of its energy at the
     // low harmonics that BP/HP remove).
-    static constexpr double BP_GAIN = 6.015;   // +15.6 dB
-    static constexpr double HP_GAIN = 4.311;   // +12.7 dB (the p^4 mix has passband 1/4)
+    static constexpr double BP_GAIN = 8.545;   // +18.6 dB
+    static constexpr double HP_GAIN = 8.711;   // +18.8 dB (the p^4 mix has passband 1/8)
 
     // Filter parameters
     double cutoff;
@@ -251,23 +251,23 @@ namespace dfl
     static constexpr int    NET_N = 5;
     static constexpr double NET_POLE[NET_N] = { 578.1, 97.5, 20.0, 7.41, 38.5 };
     static constexpr double NET_SHELF_ZERO  = 46.5;   // zero of the last section
-    // Cutoff: the cutoff parameter is the circuit's ladder-core 180-degree frequency, 1.18921 x its
+    // Cutoff: the cutoff parameter is the circuit's ladder-core 180-degree frequency, 2^(1/4) x its
     // corner wc (Stinchcombe's core polynomial s^4 + 6.727 s^3 + 14.142 s^2 + 9.514 s + 1), the frequency the
-    // resonant peak approaches at high cutoff. The Pirkle ladder's corner is 0.7006 x its cutoff coefficient
-    // (fitted to the core polynomial, 0.4 dB / 3 degrees up to 8x cutoff), so tuning = 1 / (1.18921 * 0.7006).
-    static constexpr double CUTOFF_TUNING = 1.2003;
+    // resonant peak approaches at high cutoff. The equal-stage ladder's D0 (see TAP_MIX) is exactly that polynomial
+    // with the stage rate at 2^(3/4) wc, so tuning = 2^(3/4) / 2^(1/4).
+    static constexpr double CUTOFF_TUNING = 1.41421356237;
     // Output gain: static, chosen so the resonance-0 level equals the TeeBee's above the bass. The output
     // network (TB303OutputNetwork, in Open303) cuts more bass than Open303's chain, so low notes are quieter (C2 about
-    // -1.9 dB). Like the real circuit the ladder's passband drops as resonance rises; the network's wiper tap makes up
+    // -2.0 dB). Like the real circuit the ladder's passband drops as resonance rises; the network's wiper tap makes up
     // about half of it.
-    static constexpr double OUTPUT_GAIN = 2.1056;
+    static constexpr double OUTPUT_GAIN = 2.0482;
     // Oscillation cap, as a fraction of the interpolated threshold KNC. 0.98 rather than 0.99: between the
     // 1 and 2 kHz nodes at Filter Feedback 1.0 the threshold sags below the interpolation (K / threshold reached
     // 0.9956 at 0.99 on a dense 20 x 20 check); it binds only near that knob extreme.
     static constexpr double K_MARGIN = 0.98;
     // Bass comp knob range (amount at knob 1.0). Full-synth level vs the TeeBee at resonance 60..100
     // (mean of cutoff 400 / 1000 / 2500, env mod 60, C2), with the output network's resonance-pot wiper tap already
-    // making up about half the loss: amount 0 is 1.0-1.9 dB quieter, 0.06 (knob 0.5) matches within 0.5 dB.
+    // making up about half the loss: amount 0 is 0.8-1.6 dB quieter, 0.06 (knob 0.5) matches within 0.7 dB.
     static constexpr double BASS_COMP_MAX = 0.12;
     // Unit trim range: about the 5th..95th percentile of the per-unit loop-gain scale in the component
     // tolerance Monte Carlo (x0.85..x1.16 at 500 Hz, x0.90..x1.12 above). At x1.15 a unit at full pot sits up to
@@ -314,12 +314,9 @@ namespace dfl
 
   INLINE void DiodeLadderFilter::calculateCoefficients()
   {
-    // Bilinear transform calculations (cutoff tuned to the circuit's ladder core, see CUTOFF_TUNING)
-    double tunedCutoff = cutoff * CUTOFF_TUNING;
-    double wd = 2.0 * PI * tunedCutoff;
-    double T = 1.0 / sampleRate;
-    double wa = (2.0 / T) * tan(wd * T / 2.0);
-    double gCoeff = wa * T / 2.0;
+    // Bilinear transform, prewarped at the cutoff (the resonant peak) rather than the stage rate, so the peak
+    // frequency does not depend on the sample rate (stage rate tuned to the circuit's ladder core, see CUTOFF_TUNING)
+    double gCoeff = CUTOFF_TUNING * tan(PI * cutoff / sampleRate);
     double gp1 = 1.0 + gCoeff;
 
     // Calculate "Big G" coefficients (feedback path gains)
@@ -339,18 +336,6 @@ namespace dfl
 
     // One-pole alpha coefficient
     alpha = gCoeff / gp1;
-
-    // Alpha for 1st stage (one octave above, like TB-303). The octave-up pole
-    // reaches Nyquist at half the cutoff the other poles do, so at very high
-    // cutoff (and low sample rates) its prewarp argument can exceed pi/2, where
-    // tan() goes negative and the stage becomes unstable. Clamp the argument to a
-    // safe fraction of Nyquist - only engages at extreme cutoff, no effect
-    // otherwise.
-    const double MAX_POLE_ARG = 1.4;   // < pi/2 (1.5708)
-    double octArg = std::clamp(2*wd * T / 2.0, 0.0, MAX_POLE_ARG);
-    double wa2 = (2.0 / T) * tan(octArg);
-    double g2 = wa2 * T / 2.0;
-    alpha2 = g2 / (1.0 + g2);
 
     // Beta coefficients
     beta1 = 1.0 / (gp1 - gCoeff * G2);
@@ -377,7 +362,7 @@ namespace dfl
     // small-signal gain, so the loop gain does not depend on drive).
     // The resonance knob is the real pot's rotation (linear 50k, loaded), so undo Open303's skew.
     // The loop gain K(pot, cutoff) is solved offline so the resonant boost equals the SPICE model of the real VCF
-    // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 1.1 dB rms over the curves);
+    // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 0.38 dB rms over the curves);
     // KNC is the measured self-oscillation threshold (growth test, native_solver) at the Filter Feedback nodes
     // 57.5 / 79 / 268 Hz (knob 1.0 / default / 0; Open303 maps the knob). The knob stops at Q21 beta about 500:
     // beyond it the coupling network's ~7 Hz mode motorboats at high resonance (SPICE: beta 800 at full pot).
@@ -391,21 +376,21 @@ namespace dfl
     static const double CN[11] = { 300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000 };
     static const double AN[7]  = { 0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0 };
     static const double KNT[11][7] = {
-      { 0, 3.279, 5.459, 7.854, 10.819, 12.441, 14.261 },
-      { 0, 3.433, 5.923, 8.627, 11.552, 13.316, 15.507 },
-      { 0, 3.871, 6.044, 8.711, 11.991, 14.039, 16.256 },
-      { 0, 3.644, 5.879, 8.857, 12.380, 14.277, 16.625 },
-      { 0, 3.746, 6.127, 9.206, 12.812, 14.841, 17.289 },
-      { 0, 3.771, 6.228, 9.349, 12.893, 15.059, 17.518 },
-      { 0, 3.690, 6.243, 9.450, 13.036, 15.209, 17.698 },
-      { 0, 3.612, 6.344, 9.376, 13.135, 15.231, 17.809 },
-      { 0, 3.379, 6.245, 9.412, 13.088, 15.250, 17.880 },
-      { 0, 3.064, 6.163, 9.351, 13.042, 15.306, 17.927 },
-      { 0, 2.672, 6.212, 9.315, 13.080, 15.377, 18.040 } };
+      { 0, 1.792, 5.296, 6.818, 8.805, 10.246, 12.166 },
+      { 0, 2.231, 5.305, 7.388, 10.229, 11.767, 13.749 },
+      { 0, 2.554, 5.490, 7.917, 10.948, 12.850, 14.894 },
+      { 0, 2.699, 5.374, 8.165, 11.321, 13.185, 15.355 },
+      { 0, 2.960, 5.747, 8.601, 11.927, 13.921, 16.178 },
+      { 0, 3.068, 5.857, 8.732, 12.165, 14.164, 16.468 },
+      { 0, 3.034, 5.929, 8.835, 12.323, 14.321, 16.685 },
+      { 0, 2.998, 5.891, 8.887, 12.350, 14.367, 16.759 },
+      { 0, 2.897, 5.888, 8.915, 12.322, 14.340, 16.686 },
+      { 0, 2.756, 5.849, 8.838, 12.259, 14.264, 16.559 },
+      { 0, 2.582, 5.761, 8.747, 12.164, 14.180, 16.487 } };
     static const double KNC[3][11] = {
-      { 24.030, 21.548, 20.204, 19.763, 18.896, 18.612, 18.397, 18.305, 18.324, 18.449, 18.705 },
-      { 25.781, 22.538, 20.802, 20.236, 19.126, 18.765, 18.488, 18.362, 18.362, 18.476, 18.728 },
-      { 43.817, 32.250, 26.466, 24.656, 21.223, 20.136, 19.296, 18.859, 18.688, 18.719, 18.920 } };
+      { 22.498, 20.220, 18.984, 18.580, 17.782, 17.520, 17.310, 17.193, 17.127, 17.094, 17.074 },
+      { 24.107, 21.130, 19.534, 19.015, 17.994, 17.660, 17.393, 17.245, 17.161, 17.120, 17.094 },
+      { 40.699, 30.059, 24.740, 23.077, 19.920, 18.919, 18.136, 17.703, 17.462, 17.341, 17.269 } };
     const double pot = getResonancePot();
     double lc = std::log(std::clamp(cutoff, CN[0], CN[10]));
     int ci = 0; while (ci < 9 && std::log(CN[ci + 1]) < lc) ++ci;
@@ -486,7 +471,6 @@ namespace dfl
     }
 
     double alphaFM  = alpha  * fmMod;
-    double alpha2FM = alpha2 * fmMod;
 
     // Calculate feedback signals (S4 -> S3 -> S2 -> S1)
     double S4 = beta4 * z4;
@@ -530,9 +514,9 @@ namespace dfl
     // not overall level.
     un = (shape(driveFactor * un * headroomBias + satBias) - satBiasShape) * satBiasNorm * driveMakeup / headroomBias;
 
-    // 1st stage (one octave above, TB-303 style slope)
+    // 1st stage
     double xin = un * gamma1 + S2 + epsilon1 * S1;
-    double v = (a1 * xin - z1) * alpha2FM;
+    double v = (a1 * xin - z1) * alphaFM;
     double lp1 = v + z1;
     z1 = lp1 + v;
 

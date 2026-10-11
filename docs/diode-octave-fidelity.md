@@ -657,3 +657,34 @@ C18 the bottom pole is about 0.92x the others, not 2x).
 -4.2), C4 +0.0 (was -0.3), so `OUTPUT_GAIN` is unchanged. Bass Comp `BASS_COMP_MAX` 0.2 -> 0.12 keeps knob 0.5 at
 TeeBee level at C2 (resonance 60 / 80 / 100: -0.2 / -0.5 / +0.5 dB). `BP_GAIN` / `HP_GAIN` +0.6 dB each keep the
 pure modes at LP level (mode_level: -1.3 / 0.0 / -1.2 / 0.0 dB).
+
+## Equal stage poles, measured corner, prewarp at cutoff
+
+**Equal stage poles.** The ladder's first stage ran an octave up (`alpha2`), read as the effect of the half-value C18.
+But the bottom node sits on Q12's collectors (a current source) and sees one diode pair where the others see two, so
+its pole is g / C18 = 0.92 x 2g / C: equal to the others, not an octave up. With all four stages equal the ladder is
+exactly Stinchcombe's core polynomial: D0 = 8p^4 + 32p^3 + 40p^2 + 16p + 1 with p = 2^(-3/4) x gives x^4 + 6.727x^3 +
+14.142x^2 + 9.514x + 1, so `CUTOFF_TUNING` = 2^(3/4) / 2^(1/4) = sqrt(2) (K = 0 response within 0.15 dB of the
+polynomial, a constant offset, 0.1-8 x cutoff; the octave-up ladder was 0.45 dB / 3 degrees off). The ~18 dB/oct comes
+from the coupled stages spreading the poles (0.13, 1.04, 2.33, 3.24 x wc): -12.5 dB/oct from 1-2 x cutoff, -17.5 from
+2-4 x, -21.4 from 4-8 x, reaching -24 only far above. The p^4 (HP) tap mix row changes (passband 1/8, was 1/4); the
+others do not.
+
+**Measured corner.** `native_targets.py` set the ladder current from a constant 52.05 Hz/uA. Fitting Stinchcombe's
+polynomial to the netlist's resonance-0 response (0.25-4 x wc, shape within 0.14 dB rms) gives 61.4 Hz/uA at 4 uA,
+55.6 at 21, 54.5 at 60 and 53.6 at 400, so the targets sat 3-18 % above their nominal cutoffs and the DSP's peak
+looked 3-5 % low. `If_for` now interpolates the measured table (`WC_UA`, `WC_PER_UA`).
+
+**Prewarp at cutoff.** The bilinear transform was prewarped at the stage rate (sqrt(2) x cutoff), so the resonant
+peak, which sits at the cutoff, moved with the sample rate at high cutoff. It is now prewarped at the cutoff. Full-pot
+boost and peak at 176.4 / 192 / 384 / 768 kHz: identical within 0.1 dB and 0.1 % at 1, 8, 12 and 16 kHz (16 kHz was
+33.0-41.1 dB before).
+
+**Fit.** `KNT` / `KNC` re-solved: 0.38 dB rms over all 66 curves, worst 1.34 (was 0.83 / 2.94 before this review);
+full pot within 0.12-0.76 dB rms at every cutoff. `KNC` tends to 17.0 at high cutoff, the core polynomial's
+threshold. Below the band, ratio |H_pot| / |H_0| minus SPICE at pot 1.0: 1 kHz within 0.51 dB from 20 to 600 Hz;
+300 Hz +1.78 / +0.66 / -0.11 / -0.60 dB at 20 / 45 / 100 / 200 Hz.
+
+**Levels.** `OUTPUT_GAIN` 2.1056 -> 2.0482 (C4 at resonance 0 equals TeeBee; C2 -2.0 dB), `BP_GAIN` +18.6 dB and
+`HP_GAIN` +18.8 dB (mode_level -1.3 / 0.0 / -1.2 / 0.0 dB vs LP). Bass Comp knob 0.5 at C2, resonance 60 / 80 / 100:
++0.1 / -0.2 / +0.7 dB vs TeeBee.
