@@ -451,9 +451,10 @@ namespace rosic
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     FilterType currentFilterType;  // currently selected filter type
     double feedbackHighpass = 150.0;   // Filter Feedback knob in TeeBee Hz, kept to re-map on a filter-type change
-    // Diode Native's corner at the knob's end: the coupling pole C27/C25 into Q21 at 25 Hz, Q21 beta about 1500
-    // (the 2SC1583's hFE is at least 500: 46 Hz). The pole is 578.1 rad/s x corner / 115.
-    static constexpr double NATIVE_FEEDBACK_MIN = 25.0 * 2.0 * 3.14159265358979 * 115.0 / 578.1;
+    // Diode Native's corner at the knob's end: the coupling pole C27/C25 into Q21 at 46 Hz, Q21 beta about 500 (the
+    // 2SC1583's datasheet minimum). Higher betas make the network's ~7 Hz mode motorboat at high resonance (SPICE:
+    // beta 800 at full pot), so the knob stops here. The pole is 578.1 rad/s x corner / 115.
+    static constexpr double NATIVE_FEEDBACK_MIN = 46.0 * 2.0 * 3.14159265358979 * 115.0 / 578.1;
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (0.0 to 1.0)

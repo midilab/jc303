@@ -501,9 +501,8 @@ namespace dfl
       // The loop gain K(pot, cutoff) is solved offline so the resonant boost equals the SPICE model of the real VCF
       // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 0.8 dB rms over the curves);
       // KNC is the measured self-oscillation threshold (growth test, native_solver) at the Filter Feedback nodes
-      // 31.25 / 60 / 115 / 268 Hz (knob 1.0 / between / default / knob 0; Open303 maps the knob). Below the default the
-      // coupling network's ~7 Hz mode sets it: a real unit with a high-beta Q21 motorboats at high resonance (SPICE:
-      // beta 800 at full pot, 1500 from pot 0.9; Stinchcombe saw 8 Hz on a clone). The cap stops short of that.
+      // 57.5 / 115 / 268 Hz (knob 1.0 / default / 0; Open303 maps the knob). The knob stops at Q21 beta about 500:
+      // beyond it the coupling network's ~7 Hz mode motorboats at high resonance (SPICE: beta 800 at full pot).
       for (int i = 0; i < NET_N; ++i)
       {
         const double p = NET_POLE[i] * (i == 0 ? feedbackHpFreq / 115.0 : 1.0);
@@ -525,9 +524,8 @@ namespace dfl
         { 0, 3.328, 6.321, 9.437, 13.103, 15.309, 17.900 },
         { 0, 3.027, 6.266, 9.399, 13.085, 15.333, 17.987 },
         { 0, 2.643, 6.208, 9.394, 13.113, 15.434, 18.060 } };
-      static const double KNC[4][11] = {
-        { 17.994, 15.779, 14.584, 14.195, 13.429, 13.177, 12.977, 12.864, 12.802, 12.769, 12.750 },
-        { 24.230, 21.662, 20.272, 19.818, 18.922, 18.630, 18.408, 18.311, 18.328, 18.453, 18.708 },
+      static const double KNC[3][11] = {
+        { 24.030, 21.548, 20.204, 19.763, 18.896, 18.612, 18.397, 18.305, 18.324, 18.449, 18.705 },
         { 28.858, 24.252, 21.824, 21.041, 19.515, 19.023, 18.640, 18.455, 18.423, 18.524, 18.765 },
         { 43.817, 32.250, 26.466, 24.656, 21.223, 20.136, 19.296, 18.859, 18.688, 18.719, 18.920 } };
       const double pot = getNativePot();
@@ -538,9 +536,9 @@ namespace dfl
       const double af = std::clamp((pot - AN[ai]) / (AN[ai + 1] - AN[ai]), 0.0, 1.0);
       auto at = [&](int c) { return KNT[c][ai] + af * (KNT[c][ai + 1] - KNT[c][ai]); };
       double effK = loopGainTrim * (at(ci) + cf * (at(ci + 1) - at(ci)));
-      static const double FN[4] = { 31.247, 60.0, 115.0, 268.0 };
-      const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[3]));
-      int fi = 0; while (fi < 2 && std::log(FN[fi + 1]) < lf) ++fi;
+      static const double FN[3] = { 57.5, 115.0, 268.0 };
+      const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[2]));
+      const int fi = (lf < std::log(FN[1])) ? 0 : 1;
       const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
       auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
       // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
