@@ -32,12 +32,14 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 | `build/render_note` | Renders one note to raw float32 on stdout (`render_note <filterType> <cutoff> <res> <env> <decayMs> <accent> <gateOffSec> <totalSec> <driveDb> <morph> <midiNote> [fbHpHz] [bias]`) | - | helper |
 | `gen_k_tables.py` + `build/k_target_solver` | Re-solves the Diode Octave feedback-law tables (see below) | ~4 min | prints C++ arrays |
 | `gen_native_tables.py` + `spice/native_targets.py` + `build/native_solver` | Re-solves the Diode Native tables (`KNT`, `KNC`) against SPICE; run after changing the ladder, `NATIVE_TUNING`, the coupling network or the netlist | ~3 min | prints C++ arrays |
+| `build/native_output [-v]` | Diode Native's output network (`dfl_TB303OutputNetwork.h`) against SPICE, ladder top to jack, 5 resonance-pot positions x 7 frequencies (10 Hz-1 kHz), levels re pot 0 | ~1 s | within 0.5 dB (1 dB below 20 Hz) |
 | `spice/` | ngspice reference of the real filter (see below) | seconds each | see the scripts |
 
 ### Expected results (current tree, drive -6 dB, bass comp fixed)
 
 - stability sweep: 0 failures of 16800, worst tail about -69 dB (Diode Native at Filter Feedback 1.0, capped at 0.98 x threshold)
-- stress test: 0 failures of 450, worst tail about -297 dB, worst peak 2.2 (Diode Native, bass comp 1.0)
+- stress test: 0 failures of 630, worst tail about -293 dB, worst peak 3.6
+- native output: 0 of 35 points out of tolerance, worst 0.54 dB
 - plain modes: onset 86.9-92.4 % (the knob spans 0..0.8 of the old range)
 - parity cells: boost term 0.12 (worst 3.0 dB), peak-frequency term 0.04, passband spread 0.09, stopband shape 0.60
 - parity synth at -6 dB drive: level +0.02 dB (std 0.32), peak +0.75 dB, brightness +1.0 %

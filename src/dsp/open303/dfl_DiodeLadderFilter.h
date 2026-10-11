@@ -138,6 +138,13 @@ namespace dfl
     /** Returns the resonance parameter of this filter (0-1 range, pre-skewed). */
     double getResonance() const { return resonance; }
 
+    /** Diode Native: the resonance pot's rotation, 0..1 (the knob with Open303's skew undone). */
+    double getNativePot() const { return -std::log(1.0 - std::clamp(resonance, 0.0, 1.0) * PLAIN_SKEW_NORM) / 3.0; }
+
+    /** Diode Native: the dominant coupling pole (Hz), C27/C25 into Q21, as scaled by the Filter Feedback knob. It sits
+        in the output path as well as the feedback loop (see TB303OutputNetwork). */
+    double getNativeCouplingPoleHz() const { return NET_POLE[0] / (2.0 * PI) * feedbackHpFreq / 115.0; }
+
     /** Returns the drive parameter in decibels. */
     double getDrive() const { return drive; }
 
@@ -355,17 +362,20 @@ namespace dfl
     // resonant peak approaches at high cutoff. The Pirkle ladder's corner is 0.7006 x its cutoff coefficient
     // (fitted to the core polynomial, 0.4 dB / 3 degrees up to 8x cutoff), so tuning = 1 / (1.18921 * 0.7006).
     static constexpr double NATIVE_TUNING = 1.2003;
-    // Diode Native output gain: static, chosen so the resonance-0 level equals the TeeBee's. There is no
-    // resonance-dependent compensation: like the real circuit, the passband drops as resonance rises.
+    // Diode Native output gain: static, chosen so the resonance-0 level equals the TeeBee's above the bass. The output
+    // network (TB303OutputNetwork, in Open303) cuts more bass than Open303's chain, so low notes are quieter (C2 about
+    // -4 dB). Like the real circuit the ladder's passband drops as resonance rises; the network's wiper tap makes up
+    // about half of it.
     static constexpr double NATIVE_OUTPUT_GAIN = 2.1056;
     // Diode Native oscillation cap, as a fraction of the interpolated threshold KNC. 0.98 rather than 0.99: between the
     // 1 and 2 kHz nodes at Filter Feedback 1.0 the threshold sags below the interpolation (K / threshold reached
     // 0.9956 at 0.99 on a dense 20 x 20 check); it binds only near that knob extreme.
     static constexpr double NATIVE_K_MARGIN = 0.98;
     // Diode Native bass comp knob range (amount at knob 1.0). Full-synth level vs the TeeBee at resonance 60..100
-    // (mean of cutoff 400 / 1000 / 2500, env mod 60): amount 0 is 4-8 dB quieter, ~0.25 matches within 1 dB,
-    // 0.5 is 2-6 dB louder, and 1.0 (flat passband) would be 15-17 dB louder because the peak rises with it.
-    static constexpr double NATIVE_BASS_COMP_MAX = 0.5;
+    // (mean of cutoff 400 / 1000 / 2500, env mod 60, C2), with the output network's resonance-pot wiper tap already
+    // making up about half the loss: amount 0 is 1.4-2.7 dB quieter, 0.1 (knob 0.5) matches within 1.1 dB, 0.2 is
+    // 1.7-3.6 dB louder.
+    static constexpr double NATIVE_BASS_COMP_MAX = 0.2;
     // Diode Native unit trim range: about the 5th..95th percentile of the per-unit loop-gain scale in the component
     // tolerance Monte Carlo (x0.85..x1.16 at 500 Hz, x0.90..x1.12 above). At x1.15 a unit at full pot sits up to
     // 1.15 x the oscillation threshold and sustains a sine 5-11 dB below a resonance-0 saw.
@@ -517,7 +527,7 @@ namespace dfl
         { 20.814, 18.839, 17.986, 17.680, 17.565, 17.736, 18.038, 18.342, 18.350, 18.469, 18.720 },
         { 28.513, 24.078, 21.722, 20.962, 19.477, 18.997, 18.626, 18.446, 18.417, 18.517, 18.760 },
         { 43.424, 32.052, 26.354, 24.571, 21.183, 20.110, 19.280, 18.850, 18.682, 18.714, 18.916 } };
-      const double pot = -std::log(1.0 - std::clamp(resonance, 0.0, 1.0) * PLAIN_SKEW_NORM) / 3.0;
+      const double pot = getNativePot();
       double lc = std::log(std::clamp(cutoff, CN[0], CN[10]));
       int ci = 0; while (ci < 9 && std::log(CN[ci + 1]) < lc) ++ci;
       const double cf = (lc - std::log(CN[ci])) / (std::log(CN[ci + 1]) - std::log(CN[ci]));
