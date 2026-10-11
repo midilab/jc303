@@ -29,11 +29,9 @@ namespace rosic
   enum FilterType
   {
     FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
-    FILTER_DIODE_OCTAVE,    // Diode ladder with 1st pole one octave above (~18dB/oct)
-    FILTER_DIODE,           // Diode ladder (4-pole, 24dB/oct)
-    FILTER_DIODE_BP,        // Diode ladder, bandpass response (12/12 dB/oct)
-    FILTER_DIODE_HP,        // Diode ladder, highpass response (24 dB/oct)
-    FILTER_DIODE_NATIVE,    // Diode Octave calibrated to a SPICE model of the real circuit instead of the TeeBee
+    FILTER_DIODE_NATIVE,    // Diode ladder calibrated to a SPICE model of the real circuit
+    FILTER_DIODE_BP,        // Diode Native, bandpass response
+    FILTER_DIODE_HP,        // Diode Native, highpass response
     NUM_FILTER_TYPES
   };
 
@@ -102,14 +100,14 @@ namespace rosic
     FilterType getFilterType() const { return currentFilterType; }
 
     /** Sets the diode filter's HP/BP morph amount, 0..1: 0 = pure highpass / bandpass,
-    1 = pure lowpass (crossfade). Only affects the Diode HP and Diode BP models. */
+    1 = pure lowpass (crossfade), for Diode HP and Diode BP; the bass comp amount for Diode Native. */
     void setPassbandCompensation(double newCompensation);
 
     /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input to modulate filter cutoff frequency. */
     void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
 
-    /** Sets the Diode Native unit trim (loop-gain scale, 1 = nominal unit). */
+    /** Sets the diode models' unit trim (loop-gain scale, 1 = nominal unit). */
     void setResonanceTrim(double trim) { diodeFilter.setLoopGainTrim(trim); }
 
     /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB). The plugin
@@ -184,9 +182,9 @@ namespace rosic
       // The knob is referenced to the TeeBee's 150 Hz default; the diode follows the real
       // circuit's network, whose best single-pole corner is ~115 Hz (same relative range).
       double diodeCutoff = newCutoff * (115.0 / 150.0);
-      // Diode Native: past the TeeBee 150 Hz point the corner runs exponentially down to NATIVE_FEEDBACK_MIN at
-      // the knob's end (100 Hz) instead of 76.7, so the coupling pole reaches the realistic Q21 betas.
-      if(currentFilterType == FILTER_DIODE_NATIVE && newCutoff < 150.0)
+      // Past the TeeBee 150 Hz point the corner runs exponentially down to NATIVE_FEEDBACK_MIN at the knob's end
+      // (100 Hz) instead of 76.7, so the coupling pole reaches the realistic Q21 betas.
+      if(newCutoff < 150.0)
         diodeCutoff = 115.0 * pow(NATIVE_FEEDBACK_MIN / 115.0, log(150.0 / newCutoff) / log(150.0 / 100.0));
       diodeFilter.setFeedbackHighpass(diodeCutoff);
       outputNetwork.setCouplingPole(diodeFilter.getNativeCouplingPoleHz());
@@ -368,7 +366,7 @@ namespace rosic
     dfl::DualSubOscillator    subOscillator;
     TeeBeeFilter              filter;
     DiodeLadderFilter         diodeFilter;
-    dfl::TB303OutputNetwork   outputNetwork;   // Diode Native's output path, instead of allpass / highpass2 / notch
+    dfl::TB303OutputNetwork   outputNetwork;   // the diode models' output path, instead of allpass / highpass2 / notch
     AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
     LeakyIntegrator           pitchSlewLimiter;
@@ -445,8 +443,8 @@ namespace rosic
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     FilterType currentFilterType;  // currently selected filter type
-    double feedbackHighpass = 150.0;   // Filter Feedback knob in TeeBee Hz, kept to re-map on a filter-type change
-    // Diode Native's corner at the knob's end: the coupling pole C27/C25 into Q21 at 46 Hz, Q21 beta about 500 (the
+    double feedbackHighpass = 150.0;   // Filter Feedback knob in TeeBee Hz
+    // The diode models' corner at the knob's end: the coupling pole C27/C25 into Q21 at 46 Hz, Q21 beta about 500 (the
     // 2SC1583's datasheet minimum). Higher betas make the network's ~7 Hz mode motorboat at high resonance (SPICE:
     // beta 800 at full pot), so the knob stops here. The pole is 578.1 rad/s x corner / 115.
     static constexpr double NATIVE_FEEDBACK_MIN = 46.0 * 2.0 * 3.14159265358979 * 115.0 / 578.1;
@@ -616,7 +614,7 @@ namespace rosic
 
     // these filters may actually operate without oversampling (but only if we reset them in
     // triggerNote - avoid clicks)
-    if(currentFilterType == FILTER_DIODE_NATIVE)
+    if(currentFilterType != FILTER_TEEBEE)
       tmp = outputNetwork.getSample(tmp);
     else
     {

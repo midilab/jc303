@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2026 David Loewenfels
+// Copyright (C) 2026 David Lowenfels
 // Public interface modeled on rosic::TeeBeeFilter (Open303, MIT, Copyright (c) 2009 Robin Schmidt).
 
 #include "dfl_DiodeLadderFilter.h"
@@ -15,29 +15,21 @@ DiodeLadderFilter::DiodeLadderFilter()
   driveMakeup         =     1.0;
   driveLoopGain       =     1.0;
   satBiasKnob         = SAT_BIAS_DEFAULT;
-  driveTrim[0] = driveTrim[1] = driveTrim[2] = 1.0;
+  driveTrim[0] = driveTrim[1] = 1.0;
   satBias             =     0.0;
   satBiasShape        =     0.0;
   satBiasNorm         =     1.0;
   drive               =     0.0;
-  passbandCompensation =    0.0;   // HP/BP morph: pure HP/BP by default
+  passbandCompensation =    0.0;   // no bass comp; HP/BP morph: pure HP/BP
   resonance           =     0.0;
   sampleRate          = 44100.0;
-  octaveMode          =    true;  // default to TB-303 style
   responseMode        = RESPONSE_LP;
   K                   =     0.0;
-  Kcomp               =     0.0;
-  plainTrimLP         =     1.0;
-  plainTrimBPHP       =     1.0;
 
   // Filter FM (Devilfish mod)
   filterFmDepth       =     0.0;  // Default: off
   acCouplingState     =     0.0;  // AC coupling HPF state
-  feedbackHpFreq      =   115.0;  // Feedback-path HPF corner (fit to the real circuit)
-  feedbackHpAlpha     =     0.0;
-  feedbackHpGain      =     1.0;
-  feedbackHpState     =     0.0;
-  updateFeedbackHp();
+  feedbackHpFreq      =   115.0;  // Filter Feedback corner (fit to the real circuit)
 
   // Initialize coefficients
   alpha = 0.0;
@@ -65,7 +57,6 @@ void DiodeLadderFilter::setSampleRate(double newSampleRate)
 {
   if( newSampleRate > 0.0 )
     sampleRate = newSampleRate;
-  updateFeedbackHp();
   calculateCoefficients();
 }
 
@@ -111,6 +102,5 @@ void DiodeLadderFilter::reset()
   z3 = 0.0;
   z4 = 0.0;
   acCouplingState = 0.0;  // Reset AC coupling filter
-  feedbackHpState = 0.0;
   for (double& st : netState) st = 0.0;
 }
