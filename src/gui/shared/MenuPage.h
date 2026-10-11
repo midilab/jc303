@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "FilterModelOrder.h"
 
 // Rotary slider that exposes its double-click to MenuPage so a theme knob can
 // be repurposed for "assign this knob to the current menu item". Overriding
@@ -173,11 +172,8 @@ public:
         auto* param = valueTreeState.getParameter(item.id);
         if (param == nullptr)
             return;
-        float value = juce::jlimit(0.0f, 1.0f, percentage / 100.0f);
-        if (auto* model = filterModelParam(item))
-            value = model->convertTo0to1((float) FilterModelOrder::fromFraction(value));
         param->beginChangeGesture();
-        param->setValueNotifyingHost(value);
+        param->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, percentage / 100.0f));
         param->endChangeGesture();
         updateDisplay();
     }
@@ -363,8 +359,6 @@ private:
         if (currentItem().type == Type::value)
             if (auto* param = valueTreeState.getParameter(currentItem().id))
                 v = param->getValue() * 100.0f;
-        if (auto* model = filterModelParam(currentItem()))
-            v = FilterModelOrder::toFraction(model->getIndex()) * 100.0f;
         onCurrentItemChanged(v);
     }
 
@@ -415,28 +409,12 @@ private:
         updateDisplay();
     }
 
-    // The filter model steps in FilterModelOrder's sequence, not in choice-index order.
-    juce::AudioParameterChoice* filterModelParam(const Item& item)
-    {
-        return item.id == "filterType" ? dynamic_cast<juce::AudioParameterChoice*>(valueTreeState.getParameter(item.id)) : nullptr;
-    }
-
     void changeValue(float direction)
     {
         auto& item = currentItem();
         auto* param = valueTreeState.getParameter(item.id);
         if (param == nullptr)
             return;
-
-        if (auto* model = filterModelParam(item))
-        {
-            model->beginChangeGesture();
-            *model = FilterModelOrder::step(model->getIndex(), direction > 0.0f ? 1 : -1, false);
-            model->endChangeGesture();
-            updateDisplay();
-            notifyCurrentItemChanged();
-            return;
-        }
 
         const auto range = param->getNormalisableRange();
         float step = item.step > 0.0f
@@ -652,9 +630,9 @@ public:
 
         // every Mods-page item is greyed out and inert while the Mods switch is off
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
-        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", -1, 5, true, 5 });   // Diode Native only
+        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "bassComp",    "HP/BP Morph",      Type::value, {}, 0.0f, {}, "filterType", -1, 3, true, 5, "Bass Comp", 5 });   // Diode BP / HP morph; Diode Native bass comp
+        mod.items.add(Item { "bassComp",    "HP/BP Morph",      Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 << 30, "Bass Comp", 1 });   // Diode BP / HP morph; Diode Native bass comp
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, {}, -1, 0, true });

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the Diode Octave fidelity harnesses (JUCE-free) into tools/diode-fidelity/build/.
+# Builds the diode filter fidelity harnesses (JUCE-free) into tools/diode-fidelity/build/.
 #   MATH_APPROX=<dir>  include dir of math_approx (default: <repo>/lib/math_approx-src/include)
 #   CXX=<compiler>     default clang++
 set -euo pipefail
@@ -22,12 +22,9 @@ ALL_SRC="$(ls "$DSP"/*.cpp | tr '\n' ' ')"
 echo "using math_approx: $MATH_APPROX"
 $CXX $FLAGS "$HERE/stability_sweep.cpp" $FILTER_SRC -o "$OUT/stability_sweep"
 $CXX $FLAGS "$HERE/stress_test.cpp" $ALL_SRC -o "$OUT/stress_test"
-$CXX $FLAGS "$HERE/parity_cells.cpp" $FILTER_SRC -o "$OUT/parity_cells"
-$CXX $FLAGS "$HERE/plain_modes.cpp" $FILTER_SRC -o "$OUT/plain_modes"
 $CXX $FLAGS "$HERE/render_note.cpp" $ALL_SRC -o "$OUT/render_note"
 $CXX $FLAGS "$HERE/drive_level.cpp" $ALL_SRC -o "$OUT/drive_level"
 $CXX $FLAGS "$HERE/morph_level.cpp" $ALL_SRC -o "$OUT/morph_level"
-$CXX $FLAGS "$HERE/k_target_solver.cpp" $FILTER_SRC -o "$OUT/k_target_solver"
 $CXX $FLAGS "$HERE/native_solver.cpp" $FILTER_SRC -o "$OUT/native_solver"
 $CXX $FLAGS "$HERE/native_output.cpp" $ALL_SRC -o "$OUT/native_output"
 echo "built into $OUT"

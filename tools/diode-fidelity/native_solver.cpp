@@ -29,9 +29,9 @@ static double mag(D& f, double fr, double amp = 1e-4, double settle = 0.25)
 }
 static void mk(D& d, double c, double K, double fh = 115.0)
 {
-  d.setSampleRate(SR); d.setOctaveMode(true); d.setNativeMode(true); d.setResponseMode(D::RESPONSE_LP); d.setInputDrive(0.0);
+  d.setSampleRate(SR); d.setResponseMode(D::RESPONSE_LP); d.setInputDrive(0.0);
   d.setFeedbackHighpass(fh); d.setCutoff(c); d.setResonance(0.0);
-  d.K = K; d.Kcomp = K; d.reset();
+  d.K = K; d.reset();
 }
 // Not growing: the ring at 5-6 s is below the one at 2-3 s. The kick is tiny so the loop stays linear (a growing mode
 // would otherwise level off in the input tanh). A decay criterion is wrong here: with a low Filter Feedback corner the

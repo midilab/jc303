@@ -1,8 +1,8 @@
 # Diode filter fidelity tools
 
-JUCE-free harnesses for the Diode Octave / Diode / BP / HP filters (`src/dsp/open303/dfl_DiodeLadderFilter.*`):
-stability, stress, parity with the TeeBee, the offline solver behind the Diode Octave feedback law, and a SPICE
-reference of the real TB-303 filter. Background and results: [`docs/diode-octave-fidelity.md`](../../docs/diode-octave-fidelity.md).
+JUCE-free harnesses for the Diode Native / BP / HP filters (`src/dsp/open303/dfl_DiodeLadderFilter.*`):
+stability, stress, drive and morph levels, the offline solver behind the feedback law, and a SPICE reference of the
+real TB-303 filter. Background and results: [`docs/diode-octave-fidelity.md`](../../docs/diode-octave-fidelity.md).
 
 Run these after any change to the diode filter, the cutoff tuning, the feedback highpass, the drive range or
 `Open303` routing. Everything below was run clean on the current tree (see "Expected results").
@@ -21,50 +21,33 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 
 | Tool | What it checks | Run time | Pass criteria (exit code 0) |
 |---|---|---|---|
-| `build/stability_sweep` | Impulse-decay test of Diode Octave and Diode Native at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 7 feedback-HP corners (9 for Native, down to 57.5), 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 19200 cases | ~10 min | every case decays below -60 dB, or (a slow subsonic ring) does not grow over 6 s; prints the worst tail |
-| `build/stress_test` | Full synth, all 5 diode types x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100: 450 runs | ~10 s | no non-finite sample, tail after gate-off < -100 dB, peak < 20 |
-| `build/plain_modes` | Self-oscillation onset of plain Diode / BP / HP (bisection on the resonance knob) at 5 cutoffs, drive -6 and +4.5 | ~10 s | onset 83-95 % everywhere (design 87-92 %), none at 80 %, sustained at 100 % |
-| `build/drive_level [-v]` | Drive knob is not a volume control (48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-type limits (Diode Octave -1.5..+3 dB, plain modes wider) | ~1 min | every filter type within limits |
-| `build/morph_level` | BP / HP morph: at morph 1 the Diode BP and Diode HP types match plain Diode LP in level (full synth, 4 cutoffs x 4 resonances x 2 env mods x 3 drives) | ~10 s | worst deviation <= 0.5 dB |
+| `build/stability_sweep` | Impulse-decay test at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 9 Filter Feedback corners (57.5-268 Hz), 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 10800 cases | ~10 min | every case decays below -60 dB, or (a slow subsonic ring) does not grow over 6 s; prints the worst tail |
+| `build/stress_test` | Full synth, Native (Res Trim 0.85 / 1 / 1.15, full bass comp) and pure BP / HP (Res Trim 1.15) x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100: 450 runs | ~10 s | no non-finite sample, tail after gate-off < -100 dB, peak < 20 |
+| `build/drive_level [-v]` | Drive knob is not a volume control (48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-type limits (Native -2.5..+3.5 dB, BP / HP wider) | ~1 min | every filter type within limits |
+| `build/morph_level` | BP / HP morph: at morph 1 the Diode BP and Diode HP types match Diode Native LP in level (full synth, 4 cutoffs x 4 resonances x 2 env mods x 3 drives); also prints pure BP / HP vs Native | ~10 s | worst deviation <= 0.5 dB |
 | `fit_drive_trim.py` | Fits the drive level tables `DT` (run with `DT` zeroed; paste the printed arrays) | ~1 min | helper |
-| `build/parity_cells [-v] [drive]` | Small-signal parity vs TeeBee: boost, peak frequency, passband, stopband shape over 30 cells (500 Hz-10 kHz, resonance 30/60/100, both feedback-knob positions) | ~10 s | boost term <= 0.30 (worst <= 4 dB), peak-frequency term <= 0.10, stopband shape <= 1.0 |
-| `parity_synth.py [--check]` | Full-synth level / peak / brightness vs TeeBee over 96 settings per drive, plus the max-cutoff "shriek" check; uses `build/render_note` | ~15 s | `--check`: at the default -6 dB drive level within 0.5 dB (std < 0.6), brightness within 3 %, peak < 1.5 dB |
 | `build/render_note` | Renders one note to raw float32 on stdout (`render_note <filterType> <cutoff> <res> <env> <decayMs> <accent> <gateOffSec> <totalSec> <driveDb> <morph> <midiNote> [fbHpHz] [bias] [resTrim]`) | - | helper |
-| `gen_k_tables.py` + `build/k_target_solver` | Re-solves the Diode Octave feedback-law tables (see below) | ~4 min | prints C++ arrays |
 | `gen_native_tables.py` + `spice/native_targets.py` + `build/native_solver` | Re-solves the Diode Native tables (`KNT`, `KNC`) against SPICE; run after changing the ladder, `NATIVE_TUNING`, the coupling network or the netlist | ~3 min | prints C++ arrays |
 | `build/native_output [-v]` | Diode Native's output network (`dfl_TB303OutputNetwork.h`) against SPICE, ladder top to jack, 5 resonance-pot positions x 7 frequencies (10 Hz-1 kHz), levels re pot 0 | ~1 s | within 0.5 dB (1 dB below 20 Hz) |
 | `spice/` | ngspice reference of the real filter (see below) | seconds each | see the scripts |
 
-### Expected results (current tree, drive -6 dB, bass comp fixed)
+### Expected results (current tree, drive -3 dB)
 
-- stability sweep: 0 failures of 19200 (930 slow but decaying)
-- stress test: 0 failures of 630, worst tail about -293 dB, worst peak 3.6
+- stability sweep: 0 failures of 10800 (930 slow but decaying)
+- stress test: 0 failures of 450, worst tail about -287 dB, worst peak 5.4
 - native output: 0 of 35 points out of tolerance, worst 0.54 dB
-- plain modes: onset 86.9-92.4 % (the knob spans 0..0.8 of the old range)
-- parity cells: boost term 0.12 (worst 3.0 dB), peak-frequency term 0.04, passband spread 0.09, stopband shape 0.60
-- parity synth at -6 dB drive: level +0.02 dB (std 0.32), peak +0.75 dB, brightness +1.0 %
+- drive level: Native clean region 0.14 dB, +16 dB mean +1.0 dB (worst setting -2.4 / +3.1 dB)
+- morph level: morph 1 matches Native LP exactly; pure BP -0.5 dB, pure HP -0.6 dB vs Native at resonance 50..70
 
 ```sh
-cd tools/diode-fidelity && ./build.sh && for t in stability_sweep stress_test plain_modes parity_cells; do ./build/$t || echo "FAILED: $t"; done
-python3 parity_synth.py --check
+cd tools/diode-fidelity && ./build.sh && for t in stability_sweep stress_test native_output drive_level morph_level; do ./build/$t || echo "FAILED: $t"; done
 ```
 
-## When the feedback-law tables must be regenerated
+## When the tables must be regenerated
 
-The Diode Octave resonance (`calculateCoefficients`) is `K = K100(cutoff, fbHP) * rho(res, cutoff)`, capped at
-0.99 of the measured self-oscillation threshold, from tables fitted so the diode's resonant boost equals the
-TeeBee's. The tables depend on `CUTOFF_TUNING_OCTAVE`, the low-cutoff tuning boost, the loop highpass and the
-ladder. After changing any of those:
-
-```sh
-tools/diode-fidelity/build.sh
-python3 tools/diode-fidelity/gen_k_tables.py > /tmp/tables.txt     # ~4 minutes
-```
-
-Paste the three arrays (`K100T`, `KCT`, `RHOT`) over the ones in `calculateCoefficients`, then re-run the
-stability sweep and the parity tools. The solver overrides `K` *and* `Kcomp` directly (the output compensation
-depends on the resonance, so overriding only `K` inflates the solved K by about 20 %). Skipping the
-regeneration after a tuning change left 24 low-cutoff, drive-9 stability cases marginal once.
+The feedback law (`KNT`, `KNC`) depends on `NATIVE_TUNING`, the coupling network and the ladder; re-solve it with
+`gen_native_tables.py` after changing any of those, then re-run the stability sweep. The drive level tables (`DT`)
+depend on the drive stage, the output gains and the feedback law: refit them with `fit_drive_trim.py`.
 
 ## SPICE reference (`spice/`)
 
