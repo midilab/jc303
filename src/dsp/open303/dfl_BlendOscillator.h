@@ -5,7 +5,6 @@
 
 // rosic-includes:
 #include "rosic_MipMappedWaveTable.h"
-#include "rosic_RealFunctions.h"   // for rosic::tanhApprox
 
 namespace dfl
 {
@@ -22,7 +21,7 @@ namespace dfl
 
   What differs: the 303 pulse/square waveform is no longer read from a pre-rendered, fixed-symmetry
   wavetable. Instead it is synthesised at audio rate by subtracting two phase-offset copies of the
-  saw table and applying a tanh shaper - so the pulse width becomes a continuous, per-sample
+  saw table (a band-limited step) - so the pulse width becomes a continuous, per-sample
   parameter (setPulseWidth no longer regenerates any wavetable via FFT). This is what lets the
   pulse width track pitch the way the original TB-303 does. With setClassicSquare(true) the pulse
   is instead read from a second, pre-rendered wavetable (Open303's SQUARE303) exactly as the
@@ -79,12 +78,6 @@ namespace dfl
     stores a value, no wavetable regeneration, so it is safe to call at audio rate. */
     INLINE void setPulseWidth(double newPulseWidth);
 
-    /** Sets the drive (in dB) for the tanh-shaper that forms the 303-style pulse edges. */
-    void setTanhShaperDrive(double newDriveDb) { tanhDrive = dB2amp(newDriveDb); }
-
-    /** Sets the DC offset (raw value) for the tanh-shaper. */
-    void setTanhShaperOffset(double newOffset) { tanhOffset = newOffset; }
-
     /** Sets the phase shift (in degrees) of the pulse wave relative to the saw. */
     void setSquarePhaseShift(double newShift) { squarePhaseShift = newShift; }
 
@@ -107,12 +100,6 @@ namespace dfl
 
     /** Returns the blend/mix factor between saw and pulse (0...1). */
     double getBlendFactor() const { return blend; }
-
-    /** Returns the drive (in dB) of the tanh-shaper. */
-    double getTanhShaperDrive() const { return amp2dB(tanhDrive); }
-
-    /** Returns the DC offset of the tanh-shaper. */
-    double getTanhShaperOffset() const { return tanhOffset; }
 
     /** Returns the phase shift (in degrees) of the pulse wave relative to the saw. */
     double getSquarePhaseShift() const { return squarePhaseShift; }
@@ -151,8 +138,6 @@ namespace dfl
     double sampleRate;        // the samplerate
     double sampleRateRec;     // 1/sampleRate
     double pulseWidth;        // pulse width as 0-1 fraction (for two-saw pulse generation)
-    double tanhDrive;         // drive (amplitude) for the pulse-edge tanh shaper
-    double tanhOffset;        // DC offset for the pulse-edge tanh shaper
     double squarePhaseShift;  // phase shift of pulse relative to saw (degrees)
 
     MipMappedWaveTable *waveTable1; // the saw table both saws are read from
@@ -256,13 +241,11 @@ namespace dfl
 
     // The saw table is linear (slope 2 per cycle), so saw2 - saw1 is a band-limited step between two constant
     // levels: 2*pw outside the wrapped segment and 2*pw - 2 inside it (saw1 is just before the reset, saw2 just
-    // after). Shaping that step with the tanh directly hard-clips its Gibbs ripple and aliases (-31..-40 dB below
-    // 20 kHz at 4x); instead take the tanh of the two
-    // levels and crossfade between them with the band-limited step, which keeps the same levels and no aliasing.
-    // Negated to match the original 303 square-wave polarity.
+    // after). Map it to the pulse's levels, +1 inside the segment and -1 outside (negated to match the original
+    // 303 square-wave polarity); the circuit's shape comes from the waveshaper envelope below, not from a tanh,
+    // which would only clip the step's Gibbs ripple and alias (-31..-40 dB below 20 kHz at 4x).
     const double rawLo   = 2.0*pw - 2.0;
-    const double levelLo = -rosic::tanhApprox(tanhDrive*rawLo + tanhOffset);
-    const double levelHi = -rosic::tanhApprox(tanhDrive*(rawLo + 2.0) + tanhOffset);
+    const double levelLo = 1.0, levelHi = -1.0;
     double pulse = levelLo + 0.5*(saw2 - saw1 - rawLo)*(levelHi - levelLo);
     if( !circuitPulseShape || pulseSag <= 0.0 )
       return pulse;
@@ -462,8 +445,8 @@ namespace dfl
       return out1 + out2;
     }
 
-    // pulse component: synthesise from a second, phase-shifted read of the same saw table and
-    // shape it with a tanh - this is what makes the pulse width a continuous, per-sample value.
+    // pulse component: synthesise from a second, phase-shifted read of the same saw table - this is
+    // what makes the pulse width a continuous, per-sample value.
     if( blend > 0.0 )
     {
       const double phaseShiftSamples = squarePhaseShift * tableLengthDbl / 360.0;

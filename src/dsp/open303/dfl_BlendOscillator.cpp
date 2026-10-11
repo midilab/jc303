@@ -19,8 +19,6 @@ BlendOscillator::BlendOscillator()
 
   // audio-rate PWM parameters (two-saw subtraction method):
   pulseWidth           = 0.5;           // 50% duty cycle default
-  tanhDrive            = dB2amp(36.9);  // 303-style tanh drive
-  tanhOffset           = 4.37;          // 303-style DC offset
   squarePhaseShift     = 0.0;           // pulse aligned with saw
 
   // somewhat redundant:
