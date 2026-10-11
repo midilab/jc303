@@ -146,7 +146,7 @@ JC303::JC303()
             // filter model selection
             std::make_unique<juce::AudioParameterChoice> ("filterType",
                                                         "Filter Model",
-                                                        juce::StringArray{ "TeeBee", "Spicy", "Diode", "Diode BP", "Diode HP" },
+                                                        juce::StringArray{ "TeeBee", "Spicy", "Diode", "Diode BP", "Diode HP", "Diode Native" },
                                                         FILTER_TEEBEE),
             // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",

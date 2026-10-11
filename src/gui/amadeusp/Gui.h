@@ -28,7 +28,7 @@ private:
     SwitchButton* createSwitch();
     SwitchLed* createLed(const juce::String& paramID);
     void setControlsLayout();
-    // the HP/BP morph knob only means something for the Diode BP / Diode HP filter models
+    // the HP/BP morph knob only means something for Diode BP / Diode HP (and is the bass comp for Diode Native)
     void updateMorphVisibility(int filterTypeIndex);
     // knobs that only take effect with the Mods switch on are greyed out while it is off
     void updateModEnabled(bool modsOn);

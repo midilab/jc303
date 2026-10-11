@@ -511,3 +511,51 @@ alone left Diode Octave rising +2 to +3 dB at high resonance and BP/HP falling u
   +6.3 / +6.7 dBFS at cutoff 100, resonance 100, accent, +16 dB drive; LP, Octave and TeeBee peak at +10..+12 dBFS at
   cutoff 8000, resonance 0, env 100 with accent (pre-existing; a global accent-peak policy, not a BP / HP issue).
 
+## Diode Native
+
+A sixth filter model, **Diode Native**, is the octave ladder calibrated to the SPICE model of the real VCF
+(`docs/tb303-vcf.cir`) instead of to the TeeBee. Diode Octave stays as it is (TeeBee parity).
+
+| Part | Diode Octave | Diode Native |
+|---|---|---|
+| Ladder core | Pirkle octave ladder | Same; it matches Stinchcombe's core polynomial within 0.4 dB / 3 degrees up to 8x the corner |
+| Cutoff | `CUTOFF_TUNING_OCTAVE` 1.17 + low-cutoff boost, fitted to TeeBee's peak | `NATIVE_TUNING` 1.2003, derived: the cutoff parameter is the core's 180-degree point (1.18921 x its corner), so the max-resonance peak lands near the cutoff at high cutoff; at low cutoff the coupling network moves it, as in the circuit |
+| Feedback network | One-pole highpass at 115 Hz | Stinchcombe's full coupling network (four highpasses and a shelf, poles 1.2-92 Hz), solved inside the zero-delay loop; the Filter Feedback knob scales its dominant 92 Hz pole |
+| Resonance knob | Open303's skewed taper into K tables fitted to TeeBee's boost | The knob is the real pot's rotation (linear 50k, loaded); `KNT` (cutoff x pot) solved so the response matches SPICE |
+| Output level | Compensation rising with resonance, fitted to TeeBee | Static gain (res-0 level = TeeBee); no compensation, so the passband drops with resonance as in the circuit |
+| Self-oscillation | No (capped at 0.99 x threshold) | No (the circuit does not; capped at 0.98 x threshold, `KNC` at three Filter Feedback nodes) |
+
+**Calibration** (`tools/diode-fidelity/gen_native_tables.py`): `spice/native_targets.py` runs the netlist for 11
+cutoffs x 6 pot positions and records the response ratio |H_pot| / |H_0| over 0.4-2.4x cutoff; `native_solver`
+finds the K whose DSP response fits it (least squares in dB, boost weighted 4x). Fit: 0.83 dB rms over all curves.
+Held-out check (20 cutoff / pot pairs off the table nodes): boost within 0.42 dB rms (mean +0.13, worst 1.5 dB at
+400 Hz / pot 0.3, where there is no peak), peak frequency within about 3 %.
+
+**Level.** Full synth, saw: resonance 0 is within 0.2 dB of TeeBee. From resonance 0 to 100 the level falls 14-21
+dB (TeeBee 7-12 dB), ending 7-9 dB below TeeBee. SPICE gives a 16-19 dB passband drop for the bare VCF, so this is
+the circuit; whether real units sound this thin after the VCA has not been checked against recordings.
+
+**Bass Comp** (the `bassComp` parameter, which is HP/BP Morph in Diode BP / HP; labelled "Bass Comp" in Native and
+still an LFO destination): output gain `(1 + K)^amount`, which restores that fraction (in dB) of the passband loss
+and is exactly 1 at resonance 0. The knob spans amount 0..0.5 (`NATIVE_BASS_COMP_MAX`). Full synth vs TeeBee at
+resonance 60-100: amount 0 is 4-8 dB quieter, about 0.25 (knob 0.5) matches within 1 dB, 0.5 is 2-6 dB louder.
+Amount 1 (flat passband) would be 15-17 dB louder because the resonant peak rises with the passband.
+
+**Robustness.** Stability sweep (now Octave and Native, 16800 cases): all decay. A dense 20 x 20 check of the cap
+(Filter Feedback corner x cutoff) gave a worst K / threshold of 0.9956 at 0.99 margin (between the 1 and 2 kHz
+nodes at knob 1.0), hence 0.98: worst 0.9875. Stress test (450 runs incl. Native, bass comp 1.0): no failures.
+The Saturation knob changes Native's level by at most +2.6 dB (Octave +1.5 dB), using Octave's drive tables.
+
+### SPICE convergence fix
+
+With ngspice's default tolerances the netlist's operating point is sometimes wrong (the input pair Q12 reported
+more current than its tail source), and the AC boost jumped by about 3 dB between neighbouring tail currents
+(22.3 -> 22.8 uA), with spikes near the oscillation edge (53.7 dB at 1.5 kHz). `tb303_vcf.py` / `tb303-vcf.cir`
+now set `reltol=1e-6 abstol=1e-15 vntol=1e-9 gmin=1e-15`; removing the `.nodeset` gives the same result.
+
+Earlier SPICE numbers in this document were computed before the fix. `boost_spice.py` before / after, at the pot
+position for resonance 100: 11.3 / 9.9 dB (300 Hz), 20.2 / 14.3 (500 Hz), 21.4 / 17.7 (820 Hz), 32.3 / 23.3
+(1.5 kHz), 32.7 / 28.5 (3 kHz). So the real circuit resonates less than stated in "Resonance mapping" and "Max
+cutoff, max resonance" (where its max-pot boost was quoted as 25-33 dB from 1.5 to 15 kHz; native_targets.py now
+gives 23-35 dB from 1.5 to 20 kHz, rising with cutoff). The Monte Carlo spread was not re-run. Diode Octave's
+tables are fitted to TeeBee, not to SPICE, so its sound is unaffected.

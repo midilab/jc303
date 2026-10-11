@@ -102,9 +102,11 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
 void JC303Editor::updateMorphVisibility(int filterTypeIndex)
 {
-    const bool show = (filterTypeIndex == 3 || filterTypeIndex == 4);
+    // the same parameter is the HP/BP morph for Diode BP / HP and the bass comp for Diode Native
+    const bool show = (filterTypeIndex >= 3 && filterTypeIndex <= 5);
     bassCompSlider->setVisible(show);
     bassCompLabel.setVisible(show);
+    bassCompLabel.setText(filterTypeIndex == 5 ? "BASS COMP" : "HP/BP MORPH", juce::dontSendNotification);
 }
 
 void JC303Editor::updateModEnabled(bool modsOn)

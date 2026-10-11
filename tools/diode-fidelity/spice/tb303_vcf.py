@@ -67,6 +67,9 @@ C7  qbias 0 1u
 R14 e18 0 10k
 C8  e18 fbr 1u
 R15 fbr inR 10k
+* tight tolerances: with the defaults the operating point of the input pair Q12 is sometimes wrong (the boost
+* jumped by ~3 dB between neighbouring tail currents, e.g. 22.3 -> 22.8 uA), see docs/diode-octave-fidelity.md
+.option reltol=1e-6 abstol=1e-15 vntol=1e-9 gmin=1e-15
 .nodeset v(nb)=11.5 v(L0)=10.95 v(R0)=10.95 v(L1)=10.4 v(R1)=10.4 v(L2)=9.85 v(R2)=9.85 v(L3)=9.3 v(R3)=9.3 v(tail)=4.7 v(inL)=5.3 v(inR)=5.3
 """
     if mode == "ac":
