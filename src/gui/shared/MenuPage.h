@@ -637,9 +637,6 @@ public:
         mod.items.add(Item { "filterQuality", "Filter Quality", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterTension", "Filter Tension", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // Hi-Fi only; no effect on TeeBee
         mod.items.add(Item { "filterBite", "Filter Bite", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });         // no effect on TeeBee
-        mod.items.add(Item { "filterClip", "Filter Clip", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });         // no effect on TeeBee
-        mod.items.add(Item { "filterSharpness", "Filter Sharpness", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true }); // no effect on TeeBee
-        mod.items.add(Item { "filterWarmth", "Filter Warmth", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });     // no effect on TeeBee
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
