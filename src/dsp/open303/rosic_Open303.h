@@ -79,7 +79,8 @@ namespace rosic
     /** Sets the resonance amount for the filter. */
     void setResonance(double newResonance);
 
-    /** Sets the filter type. */
+    /** Sets the filter type. While playing, the output fades out over a few ms, the filter chains reset and the new
+    model fades in, so the switch does not click. */
     void setFilterType(dfl::FilterType newType);
 
     /** Sets the filter input drive in decibels. Pushes the signal into the
@@ -88,7 +89,7 @@ namespace rosic
     void setFilterDrive(double newDriveDb);
 
     /** Returns the current filter type. */
-    dfl::FilterType getFilterType() const { return currentFilterType; }
+    dfl::FilterType getFilterType() const { return pendingFilterType; }
 
     /** Sets the diode filter's bass comp amount, 0..1. */
     void setPassbandCompensation(double newCompensation);
@@ -383,6 +384,9 @@ namespace rosic
     used). */
     void triggerNote(int noteNumber, bool hasAccent);
 
+    /** Clears the state of both filter models' chains (filter, input / output networks, anti-alias). */
+    void resetFilters();
+
     /** Slides to a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
     void slideToNote(int noteNumber, bool hasAccent);
@@ -440,7 +444,10 @@ namespace rosic
     int    noteOffCountDown; // a countdown variable till next note-off in sequencer mode
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
-    dfl::FilterType currentFilterType;  // currently selected filter type
+    dfl::FilterType currentFilterType;  // filter type currently rendered
+    dfl::FilterType pendingFilterType;  // selected filter type; currentFilterType follows after the switch fade-out
+    double switchGain = 1.0;            // filter switch fade, 0..1
+    double switchStep = 1.0;            // per-sample fade increment (5 ms)
     double feedbackHighpass = 150.0;   // Filter Feedback knob in TeeBee Hz
     // Level per filter model, after the filter chain, so the models sit at equal loudness at resonance 0 (saw, mean
     // over C2 / C3 / C4 and cutoff 400 / 1000 / 2500 Hz, env mod 60; tools/diode-fidelity/model_level). Level matching
@@ -630,6 +637,19 @@ namespace rosic
       tmp = notch.getSample(tmp);
     }
     tmp *= FILTER_LEVEL[currentFilterType]; // level match between filter models
+    if(pendingFilterType != currentFilterType)
+    {
+      switchGain -= switchStep;
+      if(switchGain <= 0.0)
+      {
+        switchGain = 0.0;
+        currentFilterType = pendingFilterType;
+        resetFilters();
+      }
+    }
+    else if(switchGain < 1.0)
+      switchGain = fmin(switchGain + switchStep, 1.0);
+    tmp *= switchGain;                      // filter switch fade
     tmp *= ampEnvOut;                       // amplified
     tmp *= ampScaler;
     tmp *= volumeModFactor;                 // LFO volume modulation

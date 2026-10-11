@@ -32,6 +32,7 @@ Open303::Open303()
   slideToNextNote  = false;
   idle             = true;
   currentFilterType = dfl::FILTER_TEEBEE;
+  pendingFilterType = dfl::FILTER_TEEBEE;
 
   // LFO defaults
   lfoDepth         =    0.0;
@@ -120,6 +121,7 @@ void Open303::setSampleRate(double newSampleRate)
   subOscillator.setSampleRate (  oversampling*newSampleRate);
   filter.setSampleRate        (  oversampling*newSampleRate);
   diodeFilter.setSampleRate   (  oversampling*newSampleRate);
+  switchStep = 1.0 / (0.005 * newSampleRate);
   sampleRate = newSampleRate;
   updateAccentSweepGain();
 }
@@ -146,7 +148,22 @@ void Open303::setResonance(double newResonance)
 
 void Open303::setFilterType(dfl::FilterType newType)
 {
-  currentFilterType = newType;
+  pendingFilterType = newType;
+  if( idle )
+    currentFilterType = newType;   // nothing is sounding yet: switch right away
+}
+
+void Open303::resetFilters()
+{
+  filter.reset();
+  diodeFilter.reset();
+  highpass1.reset();
+  diodeInputCoupling.reset();
+  highpass2.reset();
+  allpass.reset();
+  notch.reset();
+  outputNetwork.reset();
+  antiAliasFilter.reset();
 }
 
 void Open303::setFilterDrive(double newDriveDb)
@@ -274,15 +291,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   {
     oscillator.resetPhase();
     subOscillator.resetPhase();
-    filter.reset();
-    diodeFilter.reset();
-    highpass1.reset();
-    diodeInputCoupling.reset();
-    highpass2.reset();
-    allpass.reset();
-    notch.reset();
-    outputNetwork.reset();
-    antiAliasFilter.reset();
+    resetFilters();
     ampDeClicker.reset();
   }
 
