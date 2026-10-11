@@ -28,7 +28,7 @@ DiodeLadderFilter::DiodeLadderFilter()
   // Filter FM (Devilfish mod)
   filterFmDepth       =     0.0;  // Default: off
   acCouplingState     =     0.0;  // AC coupling HPF state
-  feedbackHpFreq      =   115.0;  // Filter Feedback corner (fit to the real circuit)
+  feedbackHpFreq      =   FEEDBACK_DEFAULT;
 
   // Initialize coefficients
   alpha = 0.0;

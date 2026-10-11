@@ -620,3 +620,40 @@ position for resonance 100: 11.3 / 9.9 dB (300 Hz), 20.2 / 14.3 (500 Hz), 21.4 /
 cutoff, max resonance" (where its max-pot boost was quoted as 25-33 dB from 1.5 to 15 kHz; native_targets.py now
 gives 23-35 dB from 1.5 to 20 kHz, rising with cutoff). The Monte Carlo spread was not re-run. Diode Octave's
 tables are fitted to TeeBee, not to SPICE, so its sound is unaffected.
+
+## SPICE review fixes: input coupling and Q21 beta
+
+A review against the netlist and the service-notes schematic found two inconsistencies around the ladder.
+
+**Input coupling.** The diode path ran through Open303's 44.486 Hz pre-filter highpass (`highpass1`). The board has
+no such corner: the saw reaches the VCF through C17 1u into R62 220k + R70 2.2k, 0.72 Hz (the netlist's C15 / R20 /
+R19). Against SPICE (a=0, re 1 kHz) it cost 2.0 dB at 65 Hz, 3.9 at 40 and 8.4 at 20. Diode now has its own 0.72 Hz
+input coupling (`Open303::diodeInputCoupling`); TeeBee keeps `highpass1`.
+
+**Q21 beta.** The feedback law was fitted against the netlist at Q21 BF=300, but the DSP default coupling pole was
+Stinchcombe's 92 Hz (beta about 200). The netlist's C27/C25 corner by beta (`(b21a - b21b) / (L0 - R0)`, -3 dB):
+200: 89.2 Hz, 300: 63.2, 400: 52.1, 500: 44.7, 800: 34.2 (and 70: 216, 80: 192). The default corner is now beta 300
+(`DiodeLadderFilter::FEEDBACK_DEFAULT` = 79, pole 63.2 Hz); the knob runs exponentially from it to the old ends
+(214 Hz at knob 0, beta about 70; 46 Hz at knob 1, beta about 500). Open303's constructor now sets the knob, so the
+output network's coupling pole follows the default too (it was a fixed 92 Hz until the knob moved).
+
+`KNT` / `KNC` were re-solved at the new default (the coarse K scan in `native_solver` is now 96 steps: at 300 Hz /
+pot 0.4 the error valley is narrower than the old 24-step grid and the fit had landed on K 0.43). Over the solver's
+band (0.4-2.4 x cutoff) the fit is 1.10 dB rms (was 0.83 against the same curves at the 92 Hz pole); the boost is
+unchanged. Below the band the new pole is much closer: ratio |H_pot| / |H_0| minus SPICE at 20 / 45 / 100 Hz
+
+| cutoff, pot | 92 Hz pole | 63 Hz pole |
+|---|---|---|
+| 300 Hz, 1.0 | +2.83 / +1.85 / +0.64 | +0.87 / +0.66 / +0.78 |
+| 300 Hz, 0.6 | +2.15 / +1.26 / +0.05 | +0.34 / +0.04 / +0.15 |
+| 1 kHz, 1.0 | +2.74 / +1.93 / +0.76 | -0.23 / -0.09 / +0.00 |
+| 2 kHz, 0.8 | +2.58 / +1.79 / +0.57 | -0.74 / -0.51 / -0.45 |
+
+The worse in-band fit sits just below the peak at low cutoff (300 Hz cutoff, pot 1.0: +1.95 dB at 200 Hz, was
++0.58). The extra loop phase of the 92 Hz pole was likely hiding the octave-up first pole (`alpha2`; with the real
+C18 the bottom pole is about 0.92x the others, not 2x).
+
+**Level.** Full synth, saw, vs TeeBee (cutoff 400 / 1000 / 2500, env mod 60): resonance 0 at C2 is now -1.9 dB (was
+-4.2), C4 +0.0 (was -0.3), so `OUTPUT_GAIN` is unchanged. Bass Comp `BASS_COMP_MAX` 0.2 -> 0.12 keeps knob 0.5 at
+TeeBee level at C2 (resonance 60 / 80 / 100: -0.2 / -0.5 / +0.5 dB). `BP_GAIN` / `HP_GAIN` +0.6 dB each keep the
+pure modes at LP level (mode_level: -1.3 / 0.0 / -1.2 / 0.0 dB).

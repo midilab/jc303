@@ -71,9 +71,13 @@ namespace dfl
     void setMode(double newMode) { mode = std::clamp(newMode, 0.0, 1.0); }
 
     /** Sets the Filter Feedback corner (Hz): the real circuit's coupling network fits a one-pole highpass of
-        ~115 Hz, and the knob scales the network's dominant pole by newCutoff / 115 (see NET_POLE). Bleeds
-        resonance off as the cutoff falls into the bass. */
+        ~115 Hz at Stinchcombe's Q21 beta (about 200), and the knob scales the network's dominant pole by
+        newCutoff / 115 (see NET_POLE). Bleeds resonance off as the cutoff falls into the bass. */
     void setFeedbackHighpass(double newCutoff) { feedbackHpFreq = newCutoff; calculateCoefficients(); }
+
+    /** The default Filter Feedback corner: Q21 beta 300, as in the SPICE netlist the feedback law is fitted to
+        (tools/diode-fidelity/spice/tb303_vcf.py), whose C27/C25 coupling corner is 63.2 Hz (92.0 Hz at beta 200). */
+    static constexpr double FEEDBACK_DEFAULT = 79.0;
 
     /** Sets the unit trim: a loop-gain scale, TRIM_MIN..TRIM_MAX (1 = the nominal unit).
         Component tolerances make real units differ mostly by such a scale (spice/mc_native.py). Above 1 the
@@ -213,8 +217,8 @@ namespace dfl
     // resonant 303 setting (resonance 50..70, cutoff 800..1500 Hz, see mode_level). No correction by cutoff: the
     // BP/HP-vs-LP gap at low resonance and high cutoff is the filter's character (a saw has most of its energy at the
     // low harmonics that BP/HP remove).
-    static constexpr double BP_GAIN = 5.636;   // +15.0 dB
-    static constexpr double HP_GAIN = 4.009;   // +12.1 dB (the p^4 mix has passband 1/4)
+    static constexpr double BP_GAIN = 6.015;   // +15.6 dB
+    static constexpr double HP_GAIN = 4.311;   // +12.7 dB (the p^4 mix has passband 1/4)
 
     // Filter parameters
     double cutoff;
@@ -254,7 +258,7 @@ namespace dfl
     static constexpr double CUTOFF_TUNING = 1.2003;
     // Output gain: static, chosen so the resonance-0 level equals the TeeBee's above the bass. The output
     // network (TB303OutputNetwork, in Open303) cuts more bass than Open303's chain, so low notes are quieter (C2 about
-    // -4 dB). Like the real circuit the ladder's passband drops as resonance rises; the network's wiper tap makes up
+    // -1.9 dB). Like the real circuit the ladder's passband drops as resonance rises; the network's wiper tap makes up
     // about half of it.
     static constexpr double OUTPUT_GAIN = 2.1056;
     // Oscillation cap, as a fraction of the interpolated threshold KNC. 0.98 rather than 0.99: between the
@@ -263,9 +267,8 @@ namespace dfl
     static constexpr double K_MARGIN = 0.98;
     // Bass comp knob range (amount at knob 1.0). Full-synth level vs the TeeBee at resonance 60..100
     // (mean of cutoff 400 / 1000 / 2500, env mod 60, C2), with the output network's resonance-pot wiper tap already
-    // making up about half the loss: amount 0 is 1.4-2.7 dB quieter, 0.1 (knob 0.5) matches within 1.1 dB, 0.2 is
-    // 1.7-3.6 dB louder.
-    static constexpr double BASS_COMP_MAX = 0.2;
+    // making up about half the loss: amount 0 is 1.0-1.9 dB quieter, 0.06 (knob 0.5) matches within 0.5 dB.
+    static constexpr double BASS_COMP_MAX = 0.12;
     // Unit trim range: about the 5th..95th percentile of the per-unit loop-gain scale in the component
     // tolerance Monte Carlo (x0.85..x1.16 at 500 Hz, x0.90..x1.12 above). At x1.15 a unit at full pot sits up to
     // 1.15 x the oscillation threshold and sustains a sine 5-11 dB below a resonance-0 saw.
@@ -374,9 +377,9 @@ namespace dfl
     // small-signal gain, so the loop gain does not depend on drive).
     // The resonance knob is the real pot's rotation (linear 50k, loaded), so undo Open303's skew.
     // The loop gain K(pot, cutoff) is solved offline so the resonant boost equals the SPICE model of the real VCF
-    // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 0.8 dB rms over the curves);
+    // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 1.1 dB rms over the curves);
     // KNC is the measured self-oscillation threshold (growth test, native_solver) at the Filter Feedback nodes
-    // 57.5 / 115 / 268 Hz (knob 1.0 / default / 0; Open303 maps the knob). The knob stops at Q21 beta about 500:
+    // 57.5 / 79 / 268 Hz (knob 1.0 / default / 0; Open303 maps the knob). The knob stops at Q21 beta about 500:
     // beyond it the coupling network's ~7 Hz mode motorboats at high resonance (SPICE: beta 800 at full pot).
     for (int i = 0; i < NET_N; ++i)
     {
@@ -388,20 +391,20 @@ namespace dfl
     static const double CN[11] = { 300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000 };
     static const double AN[7]  = { 0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0 };
     static const double KNT[11][7] = {
-      { 0, 2.952, 6.701, 8.531, 11.899, 13.695, 15.977 },
-      { 0, 2.947, 6.254, 9.021, 12.297, 14.386, 16.718 },
-      { 0, 3.180, 6.236, 9.359, 12.750, 14.664, 17.123 },
-      { 0, 3.463, 6.484, 9.255, 12.806, 14.905, 17.307 },
-      { 0, 3.525, 6.412, 9.479, 12.993, 15.171, 17.646 },
-      { 0, 3.652, 6.333, 9.466, 13.112, 15.249, 17.778 },
-      { 0, 3.647, 6.360, 9.461, 13.196, 15.302, 17.871 },
-      { 0, 3.537, 6.332, 9.498, 13.121, 15.330, 17.855 },
-      { 0, 3.328, 6.321, 9.437, 13.103, 15.309, 17.900 },
-      { 0, 3.027, 6.266, 9.399, 13.085, 15.333, 17.987 },
-      { 0, 2.643, 6.208, 9.394, 13.113, 15.434, 18.060 } };
+      { 0, 3.279, 5.459, 7.854, 10.819, 12.441, 14.261 },
+      { 0, 3.433, 5.923, 8.627, 11.552, 13.316, 15.507 },
+      { 0, 3.871, 6.044, 8.711, 11.991, 14.039, 16.256 },
+      { 0, 3.644, 5.879, 8.857, 12.380, 14.277, 16.625 },
+      { 0, 3.746, 6.127, 9.206, 12.812, 14.841, 17.289 },
+      { 0, 3.771, 6.228, 9.349, 12.893, 15.059, 17.518 },
+      { 0, 3.690, 6.243, 9.450, 13.036, 15.209, 17.698 },
+      { 0, 3.612, 6.344, 9.376, 13.135, 15.231, 17.809 },
+      { 0, 3.379, 6.245, 9.412, 13.088, 15.250, 17.880 },
+      { 0, 3.064, 6.163, 9.351, 13.042, 15.306, 17.927 },
+      { 0, 2.672, 6.212, 9.315, 13.080, 15.377, 18.040 } };
     static const double KNC[3][11] = {
       { 24.030, 21.548, 20.204, 19.763, 18.896, 18.612, 18.397, 18.305, 18.324, 18.449, 18.705 },
-      { 28.858, 24.252, 21.824, 21.041, 19.515, 19.023, 18.640, 18.455, 18.423, 18.524, 18.765 },
+      { 25.781, 22.538, 20.802, 20.236, 19.126, 18.765, 18.488, 18.362, 18.362, 18.476, 18.728 },
       { 43.817, 32.250, 26.466, 24.656, 21.223, 20.136, 19.296, 18.859, 18.688, 18.719, 18.920 } };
     const double pot = getResonancePot();
     double lc = std::log(std::clamp(cutoff, CN[0], CN[10]));
@@ -411,7 +414,7 @@ namespace dfl
     const double af = std::clamp((pot - AN[ai]) / (AN[ai + 1] - AN[ai]), 0.0, 1.0);
     auto at = [&](int c) { return KNT[c][ai] + af * (KNT[c][ai + 1] - KNT[c][ai]); };
     double effK = loopGainTrim * (at(ci) + cf * (at(ci + 1) - at(ci)));
-    static const double FN[3] = { 57.5, 115.0, 268.0 };
+    static const double FN[3] = { 57.5, FEEDBACK_DEFAULT, 268.0 };
     const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[2]));
     const int fi = (lf < std::log(FN[1])) ? 0 : 1;
     const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
