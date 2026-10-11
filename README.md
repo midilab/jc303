@@ -12,7 +12,7 @@ The Open303 engine part of this software is also licensed under the MIT License.
 
 - The project as a whole is distributed under GPLv3 (see `LICENSE`).
 - `src/dsp/open303/rosic_*` and the other Open303 files are MIT, Copyright (c) 2009 Robin Schmidt (see `src/dsp/open303/LICENSE`).
-- `src/dsp/open303/dfl_DiodeLadderFilter.*` and `src/dsp/open303/dfl_LFO.*` are AGPL-3.0-or-later, Copyright (C) 2026 David Loewenfels (see `LICENSE-AGPL-3.0`). Each file carries an SPDX header.
+- `src/dsp/open303/dfl_DiodeLadderFilter.*`, `src/dsp/open303/dfl_TB303OutputNetwork.h` and `src/dsp/open303/dfl_LFO.*` are AGPL-3.0-or-later, Copyright (C) 2026 David Lowenfels (see `LICENSE-AGPL-3.0`). Each file carries an SPDX header.
 
 ## Download
 
