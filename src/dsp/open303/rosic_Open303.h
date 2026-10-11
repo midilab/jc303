@@ -131,6 +131,11 @@ namespace rosic
     void setTanhShaperDrive(double newDrive)
     { oscillator.setTanhShaperDrive(newDrive); }
 
+    /** Switches the TB-303 waveshaper envelope on the square (slow rise in the bottom octaves, sloped top, level
+    change with pitch; see dfl::BlendOscillator::ENV_TABLE). Off by default; the pitch-tracked pulse width applies
+    either way. */
+    void setCircuitPulseShape(bool on) { oscillator.setCircuitPulseShape(on); }
+
     /** Sets the offset (raw value) for the tanh-shaper that forms the 303-square waveform. */
     void setTanhShaperOffset(double newOffset)
     { oscillator.setTanhShaperOffset(newOffset); }

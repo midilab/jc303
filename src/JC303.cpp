@@ -806,9 +806,11 @@ void JC303::setDevilMod(bool mode)
         setParameter(LFO_PHASE, *lfoPhase);
         setParameter(LFO_SYNC, *lfoSync);
         open303Core.setLfoOn(true);
+        open303Core.setCircuitPulseShape(true);
     } else if (mode == false) {
         open303Core.setFilterType(FILTER_TEEBEE);
         open303Core.setLfoOn(false);   // hard-gates LFO; its internal values are never read while off
+        open303Core.setCircuitPulseShape(false);   // flat-topped square; the pitch-tracked pulse width still applies
         decayMin = 200.0;
         decayMax = 2000.0;
         setParameter(DECAY, *decay);   // main DECAY knob re-maps into the core range right away
