@@ -1,4 +1,4 @@
-// Drive-knob level check for Diode Octave / Diode / BP / HP: the drive control must not act as a volume knob.
+// Drive-knob level check for Diode Native / BP / HP: the drive control must not act as a volume knob.
 // Full-synth saw note per setting (cutoff x resonance x env mod); RMS over the first 0.25 s relative to the
 // drive floor (-3 dB, the bottom of the knob).
 //   -3..0 dB (clean region): level within +-FLAT_DB of the floor
@@ -11,15 +11,15 @@
 #include <cstring>
 #include <vector>
 static const double SR = 44100.0;
-// Per filter type (index 1 Diode Octave, 2 Diode, 3 BP, 4 HP): clean-region deviation, fall and rise above 0 dB
-// (dB, over 48 settings incl. resonance 0..100). The plain modes' level jumps with resonance near their
-// self-oscillation onset, which the 4-node drive trim tables cannot follow, so their limits are wide.
-static const double FLAT_DB[5]      = { 0, 0.5, 1.0, 1.0, 1.0 };
-static const double FALL_DB[5]      = { 0, 1.5, 5.0, 3.0, 3.5 };
-static const double MAX_RISE_DB[5]  = { 0, 3.0, 4.5, 6.0, 5.5 };
-static double rmsDb(int ft, double cutoff, double res, double env, double drive)
+// Per filter type (indexed by rosic::FilterType): clean-region deviation, fall and rise above 0 dB
+// (dB, over 48 settings incl. resonance 0..100). The means follow the fitted target closely; the worst settings
+// spread further because the level varies with resonance and cutoff more finely than the 4 x 6 tables resolve.
+static const double FLAT_DB[4]      = { 0, 0.5, 1.0, 1.0 };
+static const double FALL_DB[4]      = { 0, 2.5, 3.0, 3.5 };
+static const double MAX_RISE_DB[4]  = { 0, 3.5, 6.0, 5.5 };
+static double rmsDb(rosic::FilterType ft, double cutoff, double res, double env, double drive)
 {
-  rosic::Open303 s; s.setSampleRate(SR); s.setFilterType((rosic::FilterType)ft); s.setCutoff(cutoff);
+  rosic::Open303 s; s.setSampleRate(SR); s.setFilterType(ft); s.setCutoff(cutoff);
   s.setResonance(res); s.setEnvMod(env); s.setDecay(400.0); s.setAccent(80.0); s.setVolume(-12.0);
   s.setFilterDrive(drive); s.setPassbandCompensation(0.0); s.setWaveform(0.0);
   s.noteOn(45, 64, 0.0);
@@ -30,10 +30,10 @@ static double rmsDb(int ft, double cutoff, double res, double env, double drive)
 int main(int argc, char** argv)
 {
   bool verbose = argc > 1 && !strcmp(argv[1], "-v");
-  const char* names[] = { "TeeBee", "Diode Octave", "Diode", "Diode BP", "Diode HP" };
+  const char* names[] = { "TeeBee", "Diode Native", "Diode BP", "Diode HP" };
   const double drives[] = { -3.0, -1.5, 0.0, 3.0, 4.5, 6.0, 9.0, 16.0 };
   int bad = 0;
-  for (int ft = 1; ft <= 4; ft++)
+  for (rosic::FilterType ft : { rosic::FILTER_DIODE_NATIVE, rosic::FILTER_DIODE_BP, rosic::FILTER_DIODE_HP })
   {
     double worstFlat = 0.0, worstLow = 0.0, worstRise = -99.0, meanRise = 0.0; int n = 0;
     std::vector<double> mean(8, 0.0);

@@ -58,13 +58,13 @@ int main(int argc, char** argv)
   printf("native_output: %d of 35 points out of tolerance, worst %.2f dB\n", fails, worst);
 
   // Filter Feedback knob (TeeBee Hz, 350 at knob 0 .. 100 at knob 1): Native's coupling pole spans 214 Hz down to 46 Hz
-  // (Q21 beta about 500), unchanged up to the TeeBee 150 Hz point; the other diode types keep diode = TeeBee * 115/150.
+  // (Q21 beta about 500), unchanged up to the TeeBee 150 Hz point; the same for every diode type.
   struct Case { rosic::FilterType type; double knobHz, expectHz; };
   const Case cases[] = {
     { rosic::FILTER_DIODE_NATIVE, 350.0, 578.1 / (2.0 * M_PI) * 350.0 / 150.0 },
     { rosic::FILTER_DIODE_NATIVE, 150.0, 578.1 / (2.0 * M_PI) },
     { rosic::FILTER_DIODE_NATIVE, 100.0, 46.0 },
-    { rosic::FILTER_DIODE_OCTAVE, 100.0, 578.1 / (2.0 * M_PI) * 100.0 / 150.0 } };
+    { rosic::FILTER_DIODE_HP, 100.0, 46.0 } };
   int knobFails = 0;
   for (const Case& k : cases)
   {
@@ -74,9 +74,6 @@ int main(int argc, char** argv)
     const double got = s.diodeFilter.getNativeCouplingPoleHz();
     if (std::fabs(got / k.expectHz - 1.0) > 0.01) { ++knobFails; printf("  knob %g Hz: got %.2f, expected %.2f\n", k.knobHz, got, k.expectHz); }
   }
-  // the mapping follows a filter-type change made after the knob
-  rosic::Open303 s; s.setFeedbackHighpass(100.0); s.setFilterType(rosic::FILTER_DIODE_NATIVE);
-  if (std::fabs(s.diodeFilter.getNativeCouplingPoleHz() / 46.0 - 1.0) > 0.01) { ++knobFails; printf("  type change after knob: got %.2f\n", s.diodeFilter.getNativeCouplingPoleHz()); }
   printf("native_output: Filter Feedback knob mapping, %d failures\n", knobFails);
   return (fails || knobFails) ? 1 : 0;
 }

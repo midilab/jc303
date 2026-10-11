@@ -146,7 +146,7 @@ JC303::JC303()
             // filter model selection
             std::make_unique<juce::AudioParameterChoice> ("filterType",
                                                         "Filter Model",
-                                                        juce::StringArray{ "TeeBee", "Diode Octave", "Diode", "Diode BP", "Diode HP", "Diode Native" },
+                                                        juce::StringArray{ "TeeBee", "Diode Native", "Diode BP", "Diode HP" },
                                                         FILTER_TEEBEE),
             // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
@@ -162,7 +162,7 @@ JC303::JC303()
                                                         "HP/BP Morph",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f),   // 0 = pure HP/BP, 1 = lowpass (Diode HP / Diode BP only)
+                                                        0.0f),   // Diode HP / Diode BP: 0 = pure HP/BP, 1 = lowpass; Diode Native: bass comp
             std::make_unique<juce::AudioParameterFloat> ("filterFm",
                                                         "Filter FM",
                                                         0.0f,
@@ -172,7 +172,7 @@ JC303::JC303()
                                                         "Res Trim",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f),   // Diode Native unit trim, 0.5 = nominal unit
+                                                        0.5f),   // diode unit trim, 0.5 = nominal unit
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -714,7 +714,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case BASS_COMP:
-        // 0..1 HP/BP -> LP morph for the Diode HP / Diode BP models (0 = pure HP/BP); parameter id kept as "bassComp"
+        // 0..1 HP/BP -> LP morph for the Diode HP / Diode BP models (0 = pure HP/BP), bass comp for Diode Native
         open303Core.setPassbandCompensation(value);
         break;
     case FILTER_FM:
@@ -722,7 +722,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setFilterFmDepth(value);
         break;
     case RES_TRIM:
-        // 0..1 -> x0.85..x1.15 loop gain for Diode Native (component-tolerance spread; above x1 it may self-oscillate)
+        // 0..1 -> x0.85..x1.15 loop gain for the diode models (component-tolerance spread; above x1 it may self-oscillate)
         open303Core.setResonanceTrim(linToLin(value, 0.0, 1.0, 0.85, 1.15));
         break;
 

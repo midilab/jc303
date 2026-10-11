@@ -132,18 +132,10 @@ void Open303::setCutoff(double newCutoff)
 void Open303::setResonance(double newResonance)
 {
   // newResonance is a percentage (0..100). The TeeBee filter takes percent
-  // directly and skews/normalizes it internally; the diode filter expects a
-  // normalized, pre-skewed 0..1 value (K = 17*resonance, self-oscillation ~17).
+  // directly and skews/normalizes it internally; the diode filter takes the same
+  // saturating-exponential skew (see TeeBeeFilter::setResonance) as a 0..1 value
+  // and undoes it to recover the resonance pot's rotation.
   double normalizedResonance = 0.01 * newResonance;               // 0..100 -> 0..1
-
-  // Match the TeeBee's resonance skew so the knob tracks the same curve on both
-  // models: use the TeeBee's saturating-exponential map (see
-  // TeeBeeFilter::setResonance) instead of a cubic, so the resonance comes up on
-  // the same curve rather than staying flat then spiking. At knob = 100 this
-  // reaches 1.0, driving the diode's K to its self-oscillation point (17).
-  // The Diode Octave model is pulled back below self-oscillation to match the
-  // TeeBee - that ceiling lives in DiodeLadderFilter (octave-mode only), so
-  // plain Diode still self-oscillates at full knob.
   double skewedResonance = (1.0 - exp(-3.0*normalizedResonance)) / (1.0 - exp(-3.0));
 
   filter.setResonance(newResonance);
@@ -161,18 +153,12 @@ void Open303::setFilterType(FilterType newType)
 {
   currentFilterType = newType;
 
-  // Octave mode (steeper 1st pole) applies only to the plain-LP Diode Octave
-  // model. The BP/HP response modes are plain-diode only.
-  diodeFilter.setOctaveMode(newType == FILTER_DIODE_OCTAVE || newType == FILTER_DIODE_NATIVE);
-  diodeFilter.setNativeMode(newType == FILTER_DIODE_NATIVE);
-
   int response = DiodeLadderFilter::RESPONSE_LP;
   if(newType == FILTER_DIODE_BP)
     response = DiodeLadderFilter::RESPONSE_BP;
   else if(newType == FILTER_DIODE_HP)
     response = DiodeLadderFilter::RESPONSE_HP;
   diodeFilter.setResponseMode(response);
-  setFeedbackHighpass(feedbackHighpass);   // Native maps the knob differently
 }
 
 void Open303::setFilterDrive(double newDriveDb)
@@ -186,7 +172,7 @@ void Open303::setFilterDrive(double newDriveDb)
 
 void Open303::setPassbandCompensation(double newCompensation)
 {
-  // Diode HP / Diode BP morph amount (the diode-ladder only; the TeeBee has none). The LFO
+  // Diode HP / Diode BP morph amount, Diode Native bass comp (the diode-ladder only; the TeeBee has none). The LFO
   // may modulate it per sample (see getSample), so keep the knob value as the base.
   morphBase = newCompensation;
   diodeFilter.setPassbandCompensation(newCompensation);

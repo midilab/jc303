@@ -28,11 +28,11 @@ def measure(types):
             m = np.array([[next(it) for d in DRIVES] for _ in SETTINGS]); out[(ft, r)] = (m - m[:, :1]).mean(axis=0)
     return out
 def target(): return np.array([max(0.0, min(d / 16.0, 1.0)) * 1.0 for d in DRIVES])
-M = measure((1, 2, 3, 4))
-names = ("octave LP", "plain LP", "plain BP / HP")
+M = measure((1, 2, 3))
+names = ("LP", "BP / HP")
 for i, name in enumerate(names):
     print(f"        {{ // {name}")
     for r in RES:
-        meas = M[(1, r)] if i == 0 else M[(2, r)] if i == 1 else (M[(3, r)] + M[(4, r)]) / 2
+        meas = M[(1, r)] if i == 0 else (M[(2, r)] + M[(3, r)]) / 2
         print("          { " + ", ".join(f"{x:.2f}" for x in (target() - meas)) + " },   // resonance " + str(r))
     print("        },")

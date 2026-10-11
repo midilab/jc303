@@ -8,9 +8,16 @@ All numbers come from offline harnesses (the Open303 core compiled standalone, p
 ngspice reference of the real circuit). Nothing here has been verified by ear or on a
 physical TB-303. See [Not done](#not-done).
 
+> **Diode Octave and plain Diode have been removed.** Diode Native (calibrated to the SPICE model of the real
+> circuit, see "Diode Native" below) is the only diode core; Diode BP and Diode HP mix its ladder taps and share its
+> feedback network, resonance law, Res Trim and output network. The filter model choices are now TeeBee, Diode
+> Native, Diode BP, Diode HP (indices 0-3; a preset saved with the old index 2, plain Diode, loads as Diode BP). The
+> TeeBee-parity tables (`K100T`, `KCT`, `RHOT`), their solver and the parity harnesses are gone, and the drive level
+> tables were refit for Native (LP and BP / HP). The rest of this document is the history of the Diode Octave work.
+
 ## Summary
 
-**Current state (read this first):** the diode octave filter is retuned for parity with the TeeBee (see
+**Diode Octave state at the time:** the diode octave filter is retuned for parity with the TeeBee (see
 "TeeBee-parity retune" at the end). The sections on the fitted constants (ceiling 1.0, tracking exponent
 0.10, knee 17.2, ceiling 17.5/18.1) and on the drive default of 4.5 or 0 dB are the history of how the
 design got there and are superseded by that section.
