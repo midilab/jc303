@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 David Lowenfels
+
 #ifndef dfl_TB303OutputNetwork_h
 #define dfl_TB303OutputNetwork_h
 
