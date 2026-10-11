@@ -223,6 +223,7 @@ private:
     std::atomic<float>* overdriveLevel = nullptr;
     std::atomic<float>* overdriveDryWet = nullptr;
     std::atomic<float>* filterType = nullptr;
+    std::atomic<float>* squareModel = nullptr;
     std::atomic<float>* filterDrive = nullptr;
     std::atomic<float>* bassComp = nullptr;
     std::atomic<float>* filterFm = nullptr;
