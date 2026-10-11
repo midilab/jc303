@@ -3,15 +3,17 @@
 For each cutoff parameter and resonance-pot position, the real VCF's response ratio |H_pot| / |H_0| over
 0.4..2.4 x cutoff, plus its resonant boost and peak frequency. native_solver fits the DSP's loop gain K to them.
 Cutoff convention: cutoff parameter = 2^(1/4) x Stinchcombe's corner wc (the ladder core's 180-degree point).
-WC_PER_UA is the netlist's wc per uA of ladder current, fitted to its resonance-0 response (Stinchcombe's polynomial,
-0.25..4 x wc, shape within 0.14 dB rms); it falls from 61 Hz/uA at 4 uA to 54 at 400 uA, so If_for interpolates it.
+WC_PER_UA is the netlist's wc per uA of ladder current, fitted to its resonance-0 ladder top with an ideal buffer before
+C27 / C25 (Stinchcombe's polynomial, 0.25..4 x wc, shape within 0.013 dB rms): the unloaded ladder, which is what the
+DSP's stage rate is. 54.0 Hz/uA up to 120 uA, 53.6 at 400. (The loaded output reads higher at low current, 61 Hz/uA at
+4 uA: that is the Q21 loading, which the DSP models separately.)
 
   python3 native_targets.py [out=native_curves.txt]      (run from this directory; ~1 minute)"""
 import sys, subprocess, uuid, numpy as np
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, '.'); from tb303_vcf import netlist
 WC_UA     = [4, 8, 15, 21, 30, 60, 120, 240, 400]
-WC_PER_UA = [61.36, 58.39, 56.47, 55.60, 55.08, 54.45, 54.12, 53.85, 53.64]
+WC_PER_UA = [53.94, 54.02, 54.05, 54.05, 54.05, 53.99, 53.94, 53.78, 53.59]
 CUTS = [300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000]
 POTS = [0.2, 0.4, 0.6, 0.8, 0.9, 1.0]
 NJ = 25
