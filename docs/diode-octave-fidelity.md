@@ -719,3 +719,11 @@ nearly constant across cutoff (16.7-17.0; it was 12.2-16.8). Ratio |H_pot| / |H_
 300 Hz cutoff -0.06 dB at 20 Hz (was +1.78), worst +0.61 at 200 Hz; 500 Hz within 0.54; 1 kHz within 0.39.
 `OUTPUT_GAIN` unchanged (the loading takes about 0.5 dB off the in-band level, as in the circuit); `BP_GAIN` / `HP_GAIN`
 -0.27 / -0.46 dB keep the pure modes at LP level.
+
+## Level matching moved out of the filter
+
+The diode ladder no longer carries a TeeBee-matching output gain (`OUTPUT_GAIN` is gone): the filter stays at its own
+level, and level matching between filter models is a global stage, `Open303::FILTER_LEVEL`, applied after the filter
+chain. One static gain per model (TeeBee 1.0, Spicy 2.401 = +7.6 dB) puts the models at equal loudness at resonance 0
+(saw, mean over C2 / C3 / C4 and cutoff 400 / 1000 / 2500, env mod 60; `build/model_level`). Above that Spicy is about
+2.3 dB louder (resonance 50 and 100). Bass Comp defaults to 0 (the circuit); its range is unchanged.

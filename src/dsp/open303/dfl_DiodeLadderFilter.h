@@ -212,7 +212,7 @@ namespace dfl
     double tapW[5] = {};
     void updateTapMix(double rho);
 
-    // Static BP / HP output gains (on top of OUTPUT_GAIN) so the pure modes sit near LP loudness on a saw at a typical
+    // Static BP / HP output gains (relative to LP) so the pure modes sit near LP loudness on a saw at a typical
     // resonant 303 setting (resonance 50..70, cutoff 800..1500 Hz, see mode_level). No correction by cutoff: the
     // BP/HP-vs-LP gap at low resonance and high cutoff is the filter's character (a saw has most of its energy at the
     // low harmonics that BP/HP remove).
@@ -255,16 +255,12 @@ namespace dfl
     // resonant peak approaches at high cutoff. The equal-stage ladder's D0 (see TAP_MIX) is exactly that polynomial
     // with the stage rate at 2^(3/4) wc, so tuning = 2^(3/4) / 2^(1/4).
     static constexpr double CUTOFF_TUNING = 1.41421356237;
-    // Output gain: a static level (the circuit's absolute level is unknown). Like the real circuit the ladder's
-    // passband drops as resonance rises; the output network's wiper tap makes up about half of it.
-    static constexpr double OUTPUT_GAIN = 2.0482;
     // Oscillation cap, as a fraction of the interpolated threshold KNC. 0.98 rather than 0.99: between the
     // 1 and 2 kHz nodes at Filter Feedback 1.0 the threshold sags below the interpolation (K / threshold reached
     // 0.9956 at 0.99 on a dense 20 x 20 check); it binds only near that knob extreme.
     static constexpr double K_MARGIN = 0.98;
-    // Bass comp knob range (amount at knob 1.0). Full-synth level vs the TeeBee at resonance 60..100
-    // (mean of cutoff 400 / 1000 / 2500, env mod 60, C2), with the output network's resonance-pot wiper tap already
-    // making up about half the loss: amount 0 is 0.9-1.7 dB quieter, 0.06 (knob 0.5) matches within 0.6 dB.
+    // Bass comp knob range (amount at knob 1.0): the output gain (1 + K)^amount restores that fraction (in dB) of the
+    // ladder's resonance passband loss. 0 (the default) is the real circuit.
     static constexpr double BASS_COMP_MAX = 0.12;
     // Unit trim range: about the 5th..95th percentile of the per-unit loop-gain scale in the component
     // tolerance Monte Carlo (x0.85..x1.16 at 500 Hz, x0.90..x1.12 above). At x1.15 a unit at full pot sits up to
@@ -607,15 +603,15 @@ namespace dfl
     const double taps[5] = { un, lp1, lp2, lp3, lp4 };
     auto pk = [&](int k) { const double* w = tapMix[k]; return w[0] * taps[0] + w[1] * taps[1] + w[2] * taps[2] + w[3] * taps[3] + w[4] * taps[4] - tapW[k] * loadW; };
     const double bassComp = BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
-    const double gLP = OUTPUT_GAIN * driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0);
+    const double gLP = driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0);
     double out;
     if (mode <= 0.0)
       out = gLP * lp4;
     else
     {
-      const double gBP = OUTPUT_GAIN * BP_GAIN * driveTrim[1];
+      const double gBP = BP_GAIN * driveTrim[1];
       const double lo = mode < 0.5 ? std::sqrt(gLP) : std::sqrt(gBP);
-      const double hi = mode < 0.5 ? std::sqrt(gBP) : std::sqrt(OUTPUT_GAIN * HP_GAIN * driveTrim[1]);
+      const double hi = mode < 0.5 ? std::sqrt(gBP) : std::sqrt(HP_GAIN * driveTrim[1]);
       const int k = mode < 0.5 ? 0 : 2;
       const double t = mode < 0.5 ? 2.0 * mode : 2.0 * mode - 1.0;
       const double a = (1.0 - t) * lo, b = t * hi;
