@@ -652,10 +652,10 @@ public:
 
         // every Mods-page item is greyed out and inert while the Mods switch is off
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", -1, 5, true, 5 });   // Diode Native only
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "bassComp",    "HP/BP Morph",      Type::value, {}, 0.0f, {}, "filterType", -1, 3, true, 5, "Bass Comp", 5 });   // Diode BP / HP morph; Diode Native bass comp
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", -1, 5, true, 5 });   // Diode Native only
         mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f, {}, {}, -1, 0, true });
