@@ -163,6 +163,7 @@ void Open303::setFilterType(FilterType newType)
   else if(newType == FILTER_DIODE_HP)
     response = DiodeLadderFilter::RESPONSE_HP;
   diodeFilter.setResponseMode(response);
+  setFeedbackHighpass(feedbackHighpass);   // Native maps the knob differently
 }
 
 void Open303::setFilterDrive(double newDriveDb)
