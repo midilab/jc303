@@ -21,7 +21,7 @@ static std::vector<double> render(const Config& config, int n = 22050)
 {
   rosic::Open303 synth;
   synth.setSampleRate(44100.0);
-  synth.setFilterType(rosic::FILTER_DIODE);
+  synth.setFilterType(dfl::FILTER_DIODE);
   synth.setCutoff(800.0);
   synth.setResonance(60.0);
   synth.setFilterFmDepth(0.3);
@@ -171,7 +171,8 @@ static void newDestinationsMoveTheSound()
     s.setLfoDepth(0.5); s.setLfoDestination(rosic::MOD_DEST_CUTOFF); };
   std::vector<double> base = render(knobs);
   for(int dest : { rosic::MOD_DEST_ENV_MOD, rosic::MOD_DEST_DECAY, rosic::MOD_DEST_ACCENT,
-                   rosic::MOD_DEST_WAVEFORM, rosic::MOD_DEST_LFO_RATE, rosic::MOD_DEST_LFO_DEPTH })
+                   rosic::MOD_DEST_WAVEFORM, rosic::MOD_DEST_LFO_RATE, rosic::MOD_DEST_LFO_DEPTH,
+                   rosic::MOD_DEST_FILTER_MORPH })
   {
     std::vector<double> mod = render([&](rosic::Open303& s) {
       knobs(s); s.setModSlot(1, rosic::MOD_SRC_ENV, dest, 0.8); });

@@ -16,7 +16,7 @@ static int failures = 0;
 
 struct Setup
 {
-  int    filterType  = 2;     // plain diode: FM and resonance both audible
+  int    filterType  = dfl::FILTER_DIODE;   // FM and resonance both audible
   bool   lfoOn       = true;
   int    dest        = 0;
   double depth       = 1.0;
@@ -26,7 +26,7 @@ static std::vector<double> render(const Setup& s, int n = 22050)
 {
   rosic::Open303 synth;
   synth.setSampleRate(44100.0);
-  synth.setFilterType((rosic::FilterType) s.filterType);
+  synth.setFilterType((dfl::FilterType) s.filterType);
   synth.setCutoff(800.0);
   synth.setResonance(60.0);
   synth.setFilterFmDepth(0.3);
