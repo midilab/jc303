@@ -72,6 +72,7 @@ Open303::Open303()
 
   // tweakables:
   oscillator.setPulseWidth(50.0);
+  oscillator.setCircuitPulseShape(false);   // flat-topped square unless switched on (JC303: the Mods switch)
   highpass1.setCutoff(44.486);
   highpass2.setCutoff(24.167);
   allpass.setCutoff(14.008);
