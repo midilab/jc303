@@ -34,6 +34,7 @@ enum Open303Parameters
   FILTER_DRIVE,
   BASS_COMP,
   FILTER_FM,
+  RES_TRIM,
   // LFO
   LFO_WAVEFORM,
   LFO_RATE,
@@ -232,6 +233,7 @@ private:
     std::atomic<float>* filterDrive = nullptr;
     std::atomic<float>* bassComp = nullptr;
     std::atomic<float>* filterFm = nullptr;
+    std::atomic<float>* resTrim = nullptr;
     // generative sequencer
     std::atomic<float>* seqGenerativeFill = nullptr;
     std::atomic<float>* seqGenerativeAccentProbability = nullptr;

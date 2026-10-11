@@ -228,7 +228,7 @@ Cutoffs use Diode Native's convention.
 |---|---|
 | Cutoff (-10 dB point) | 4.2% at 500 Hz, 1.5% at 1.5 kHz, 1.2% at 5 kHz |
 | Bass (65 vs 500 Hz, pot 0.9) | 1.3 dB at 500 Hz, under 0.1 dB above |
-| Equivalent loop gain K (unit / nominal) | x0.85..x1.16 at 500 Hz, x0.90..x1.12 at 1.5-5 kHz (pot 0.6 / 0.9) |
+| Equivalent loop gain K (unit / nominal) | x0.85..x1.16 at 500 Hz, x0.90..x1.12 at 1.5-5 kHz |
 
 Resonant boost, 5th-95th percentile [nominal]:
 
@@ -238,11 +238,18 @@ Resonant boost, 5th-95th percentile [nominal]:
 | 1.5 kHz | 6.6..9.0 [7.5] | 13.5..20.1 [15.9] | 17.7..35.3 [22.3] |
 | 5 kHz | 7.6..10.1 [8.7] | 15.7..25.6 [19.1] | 21.8..45.5 [31.9] |
 
-A unit's variation is mostly a single loop-gain scale: across units the per-unit K scale has a std of 5.4%, while
-within one unit it varies by only 2.3% across cutoff and pot position (89 units where every point was in range). It is
-barely correlated with the unit's cutoff scale (-0.24). At full pot 6-11% of units resonate beyond what Diode Native
-allows at 0.5 and 1.5 kHz (boost above its stable maximum), i.e. some real units are at or near self-oscillation
-there. The first run's conclusion stands: units differ by roughly 10 dB of peak at high pot positions, more than the
+A unit's variation is mostly a single loop-gain scale (K inferred from each unit's boost via Diode Native's
+boost-vs-K curve): across units the per-unit scale has a std of 6.3%, while within one unit it varies by only 2.5%
+across cutoff and pot position (97 units). It is barely correlated with the unit's cutoff scale. The extra spread at
+500 Hz is the feedback coupling network's tolerance. At full pot 2-3% of units go past 0.99 x the oscillation
+threshold at 1.5 and 5 kHz (none at 500 Hz), i.e. a few real units are at or near self-oscillation there.
+
+**Res Trim** (Diode Native, Modifications menu; parameter `resTrim`, 0.5 = nominal) scales K by x0.85..x1.15, about
+the 5th-95th percentile above. Above x1 the oscillation cap rises with it: at x1.15 Native self-oscillates from pot
+about 0.93-0.95 at cutoffs of 2 kHz and up (never at 1 kHz and below, where the coupling network raises the
+threshold); the sustained sine sits 5-22 dB below a resonance-0 saw depending on how far past the threshold it is.
+The Filter Feedback knob is the complementary control: it moves the network's dominant corner, which changes
+resonance mainly at low cutoff. The first run's conclusion stands: units differ by roughly 10 dB of peak at high pot positions, more than the
 remaining model differences.
 
 ## Reproducing the checks

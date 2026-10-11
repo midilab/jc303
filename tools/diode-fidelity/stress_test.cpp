@@ -8,13 +8,14 @@
 int main()
 {
   int bad = 0, n = 0; double worstTail = -400, worstPeak = 0;
-  for (int ft : { 1, 2, 3, 4, 5 })   // Diode Octave, Diode, Diode BP, Diode HP, Diode Native
+  for (int ft : { 1, 2, 3, 4, 5, 6, 7 })   // Diode Octave, Diode, Diode BP, Diode HP, Diode Native; 6 / 7 = Native at Res Trim min / max
     for (double drive : { -3.0, 0.0, 4.5, 9.0, 16.0 })
       for (double cut : { 314.0, 1200.0, 2394.0 })
         for (double env : { 0.0, 60.0, 100.0 })
           for (double fm : { 0.0, 1.0 })
           {
-            rosic::Open303 s; s.setSampleRate(44100); s.setFilterType((rosic::FilterType)ft);
+            rosic::Open303 s; s.setSampleRate(44100); s.setFilterType((rosic::FilterType)(ft > 5 ? 5 : ft));
+            if (ft > 5) s.setResonanceTrim(ft == 6 ? 0.85 : 1.15);
             s.setCutoff(cut); s.setResonance(100); s.setEnvMod(env); s.setDecay(400); s.setAccent(100);
             s.setVolume(-12); s.setFilterDrive(drive); s.setPassbandCompensation(1.0); s.setFilterFmDepth(fm); s.setWaveform(0.0);
             s.noteOn(36, 127, 0.0);
