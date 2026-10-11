@@ -51,6 +51,12 @@ namespace rosic
     MOD_DEST_RESONANCE,
     MOD_DEST_OVERDRIVE,   // applied by the host (JC303) via getLfoOverdriveMod()
     MOD_DEST_FILTER_FM,
+    MOD_DEST_ENV_MOD,
+    MOD_DEST_DECAY,       // decay of the sounding note (normal or accent decay)
+    MOD_DEST_ACCENT,      // scales accented notes only
+    MOD_DEST_WAVEFORM,    // saw/square blend
+    MOD_DEST_LFO_RATE,
+    MOD_DEST_LFO_DEPTH,   // depth of the LFO slot (slot 0)
     MOD_DEST_FILTER_MORPH // diode filter mode (LP / BP / HP)
   };
 
@@ -85,7 +91,11 @@ namespace rosic
 
     /** Sets up the waveform continuously between saw and square - the input should be in the range
     0...1 where 0 means pure saw and 1 means pure square. */
-    void setWaveform(double newWaveform) { oscillator.setBlendFactor(newWaveform); }
+    void setWaveform(double newWaveform)
+    {
+      baseWaveform = newWaveform;
+      oscillator.setBlendFactor(newWaveform);
+    }
 
     /** Sets the sub oscillator gain (0.0 to 1.0). */
     void setSubOscGain(double newGain) { subOscGain = newGain; }
@@ -267,7 +277,11 @@ namespace rosic
     void setLfoWaveform(int waveform) { lfo.setWaveform(waveform); }
 
     /** Sets the LFO rate in Hz (0.1 to 1000.0). */
-    void setLfoRate(double rate) { lfo.setRate(rate); }
+    void setLfoRate(double rate)
+    {
+      baseLfoRate = rate;
+      lfo.setRate(rate);
+    }
 
     /** Sets the LFO depth (0.0 to 1.0, unipolar). */
     void setLfoDepth(double depth) { lfoDepth = depth; }
@@ -302,7 +316,7 @@ namespace rosic
 
     /** Returns the waveform as a continuous value between 0...1 where 0 means pure saw and 1 means
     pure square. */
-    double getWaveform() const { return oscillator.getBlendFactor(); }
+    double getWaveform() const { return baseWaveform; }
 
     /** Sets the master tuning frequency for note A4 (usually 440 Hz). */
     double getTuning() const { return tuning; }
@@ -432,8 +446,15 @@ namespace rosic
       double resonance     = 0.0;   // percentage points
       double filterFm      = 0.0;
       double overdrive     = 0.0;
+      double envMod        = 0.0;   // percentage points
+      double decayOctaves  = 0.0;
+      double accent        = 0.0;   // 0..1 like accentGain
+      double waveform      = 0.0;
+      double lfoRateOctaves = 0.0;
+      double lfoDepth      = 0.0;
       double filterMorph   = 0.0;   // diode filter mode offset
-      bool   pitchOn = false, resonanceOn = false, filterFmOn = false;
+      bool   pitchOn = false, resonanceOn = false, filterFmOn = false, envModOn = false,
+             decayOn = false, accentOn = false, waveformOn = false, lfoRateOn = false;
 
       void add(int destination, double value, double amount)
       {
@@ -449,6 +470,12 @@ namespace rosic
         case MOD_DEST_RESONANCE: resonance     += value * amount * 50.0; resonanceOn = true;  break;
         case MOD_DEST_OVERDRIVE: overdrive     += value * amount * 0.5;  break;
         case MOD_DEST_FILTER_FM: filterFm      += value * amount * 0.5;  filterFmOn = true;  break;
+        case MOD_DEST_ENV_MOD:   envMod        += value * amount * 50.0; envModOn = true;  break;
+        case MOD_DEST_DECAY:     decayOctaves  += value * amount * 2.0;  decayOn = true;  break;
+        case MOD_DEST_ACCENT:    accent        += value * amount * 0.5;  accentOn = true;  break;
+        case MOD_DEST_WAVEFORM:  waveform      += value * amount;        waveformOn = true;  break;
+        case MOD_DEST_LFO_RATE:  lfoRateOctaves += value * amount * 3.0; lfoRateOn = true;  break;
+        case MOD_DEST_LFO_DEPTH: lfoDepth      += value * amount;  break;
         case MOD_DEST_FILTER_MORPH: filterMorph += value * amount * 0.5;  break;   // +/- 0.5: LP -> BP or BP -> HP
         }
       }
@@ -472,7 +499,8 @@ namespace rosic
     /** Sets the decay-time of the main envelope and updates the normalizers n1, n2 accordingly. */
     void setMainEnvDecay(double newDecay);
 
-    void calculateEnvModScalerAndOffset();
+    /** Updates envScaler / envOffset from the given env mod (percent) and the cutoff knob. */
+    void calculateEnvModScalerAndOffset(double envModPercent);
 
     /** Updates the normalizer n1 according to the time-constant of rc1 and the decay-time of the
     main envelope generator. */
@@ -534,9 +562,18 @@ namespace rosic
     double baseResonance = 0.0;       // knob value (percent), LFO offsets are applied on top
     double baseFilterFmDepth = 0.0;   // knob value, LFO offsets are applied on top
     double lfoOverdriveMod = 0.0;
-    bool resonanceModActive = false;  // true while the LFO is moving resonance / FM, so that
-    bool fmModActive = false;         // the knob value can be restored when it stops
-    int lfoDestination;   // LFO destination (see LfoDestination)
+    double baseWaveform = 0.0;        // knob value, matrix offsets are applied on top
+    double baseLfoRate = 1.0;         // Hz, knob value
+    double currentDecay = 1000.0;     // decay of the sounding note (normal or accent decay)
+    bool noteAccented = false;
+    bool resonanceModActive = false;  // true while the matrix is moving a knob, so that the knob
+    bool fmModActive = false;         // value can be restored when it stops
+    bool envModModActive = false;
+    bool decayModActive = false;
+    bool accentModActive = false;
+    bool waveformModActive = false;
+    bool lfoRateModActive = false;
+    int lfoDestination;   // LFO destination (see ModDestination)
     double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the mod matrix offsets it
     bool lfoEnabled = false;  // master LFO processing switch
 
@@ -592,18 +629,19 @@ namespace rosic
     // filter envelope, shared by the cutoff path and the modulation matrix
     double mainEnvOut = mainEnv.getSample();
     double rc1Out     = n1 * rc1.getSample(mainEnvOut);
-    double rc2Out     = n2 * rc2.getSample(accentGain > 0.0 ? mainEnvOut : 0.0) * accentSweepGain;
+    double rc2Out     = n2 * rc2.getSample(accentGain > 0.0 || accentModActive ? mainEnvOut : 0.0) * accentSweepGain;
     double envSource  = rc1Out + accentGain * rc2Out;
 
     // modulation matrix: slot 0 is the LFO slot (lfoDepth / lfoDestination), slot 1 the envelope
-    // slot, 2..3 are free
+    // slot, 2..3 are free. Slot 0 runs last so the other slots can modulate its depth.
     ModAccum mod;
     if( lfoEnabled )
     {
       bool   lfoSampled = false;
       double lfoValue   = 0.0;
-      for(int i = 0; i < NUM_MOD_SLOTS; i++)
+      for(int k = 1; k <= NUM_MOD_SLOTS; k++)
       {
+        int    i           = k % NUM_MOD_SLOTS;
         int    source      = modSlots[i].source;
         int    destination = modSlots[i].destination;
         double amount      = modSlots[i].amount;
@@ -612,6 +650,8 @@ namespace rosic
           source      = MOD_SRC_LFO;
           destination = (int) lfoDestination;
           amount      = lfoDepth;
+          if( mod.lfoDepth != 0.0 )
+            amount = std::max(0.0, std::min(1.0, lfoDepth + mod.lfoDepth));
         }
         else if( i == 1 )
           source      = MOD_SRC_ENV;
@@ -644,6 +684,30 @@ namespace rosic
       diodeFilter.setFilterFmDepth(baseFilterFmDepth + mod.filterFm);   // clamped by the filter
       fmModActive = mod.filterFmOn;
     }
+    if( mod.envModOn || envModModActive )
+    {
+      calculateEnvModScalerAndOffset(std::max(0.0, std::min(100.0, envMod + mod.envMod)));
+      envModModActive = mod.envModOn;
+    }
+    if( mod.decayOn || decayModActive )
+    {
+      setMainEnvDecay(currentDecay * pow(2.0, mod.decayOctaves));
+      decayModActive = mod.decayOn;
+    }
+    if( mod.waveformOn || waveformModActive )
+    {
+      oscillator.setBlendFactor(std::max(0.0, std::min(1.0, baseWaveform + mod.waveform)));
+      waveformModActive = mod.waveformOn;
+    }
+    if( mod.lfoRateOn || lfoRateModActive )   // takes effect from the next LFO sample
+    {
+      lfo.setRate(std::max(0.1, std::min(1000.0, baseLfoRate * pow(2.0, mod.lfoRateOctaves))));
+      lfoRateModActive = mod.lfoRateOn;
+    }
+    double instAccentGain = accentGain;
+    if( mod.accentOn && noteAccented )
+      instAccentGain = std::max(0.0, std::min(1.0, accent + mod.accent));
+    accentModActive = mod.accentOn && noteAccented;
 
     // calculate instantaneous oscillator frequency and set up the oscillator:
     // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
@@ -675,7 +739,7 @@ namespace rosic
     // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
     // set up the filter:
     double tmp1       = envScaler * ( rc1Out - envOffset );  // seems not to work yet
-    double tmp2       = accentGain * rc2Out;
+    double tmp2       = instAccentGain * rc2Out;
     double instCutoff = cutoff * pow(2.0, tmp1+tmp2+mod.cutoffOctaves);
     filter.setCutoff(instCutoff);
     diodeFilter.setCutoff(instCutoff);
@@ -683,7 +747,7 @@ namespace rosic
     double ampEnvOut = ampEnv.getSample();
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
     if( ampEnv.isNoteOn() )
-      ampEnvOut += 0.45*mainEnvOut + accentGain*4.0*mainEnvOut;
+      ampEnvOut += 0.45*mainEnvOut + instAccentGain*4.0*mainEnvOut;
     ampEnvOut = ampDeClicker.getSample(ampEnvOut);
 
     // oversampled calculations:

@@ -123,7 +123,7 @@ void Open303::setSampleRate(double newSampleRate)
 void Open303::setCutoff(double newCutoff)
 {
   cutoff = newCutoff;
-  calculateEnvModScalerAndOffset();
+  calculateEnvModScalerAndOffset(envMod);
 }
 
 void Open303::setResonance(double newResonance)
@@ -169,7 +169,7 @@ void Open303::setPassbandCompensation(double newCompensation)
 void Open303::setEnvMod(double newEnvMod)
 {
   envMod = newEnvMod;
-  calculateEnvModScalerAndOffset();
+  calculateEnvModScalerAndOffset(envMod);
 }
 
 void Open303::setAccent(double newAccent)
@@ -287,6 +287,8 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
     ampDeClicker.reset();
   }
 
+  noteAccented = hasAccent;
+  currentDecay = hasAccent ? accentDecay : normalDecay;
   if( hasAccent )
   {
     accentGain = accent;
@@ -313,6 +315,8 @@ void Open303::slideToNote(int noteNumber, bool hasAccent)
 {
   oscFreq = pitchToFreq(noteNumber, tuning);
 
+  noteAccented = hasAccent;
+  currentDecay = hasAccent ? accentDecay : normalDecay;
   if( hasAccent )
   {
     accentGain = accent;
@@ -352,7 +356,7 @@ void Open303::setMainEnvDecay(double newDecay)
   updateNormalizer2();
 }
 
-void Open303::calculateEnvModScalerAndOffset()
+void Open303::calculateEnvModScalerAndOffset(double envModPercent)
 {
   bool useMeasuredMapping = true; // might be shown as user parameter later
   if( useMeasuredMapping == true )
@@ -368,7 +372,7 @@ void Open303::calculateEnvModScalerAndOffset()
     const double sHiC = 0.864344900642434;       // constant in line eq. for scaler at high cutoff
 
     // do the calculation of the scaler and offset:
-    double e   = linToLin(envMod, 0.0, 100.0, 0.0, 1.0);
+    double e   = linToLin(envModPercent, 0.0, 100.0, 0.0, 1.0);
     double c   = expToLin(cutoff, c0,   c1,   0.0, 1.0);
     double sLo = sLoF*e + sLoC;
     double sHi = sHiF*e + sHiC;
@@ -377,8 +381,8 @@ void Open303::calculateEnvModScalerAndOffset()
   }
   else
   {
-    double upRatio   = pitchOffsetToFreqFactor(      envUpFraction *envMod);
-    double downRatio = pitchOffsetToFreqFactor(-(1.0-envUpFraction)*envMod);
+    double upRatio   = pitchOffsetToFreqFactor(      envUpFraction *envModPercent);
+    double downRatio = pitchOffsetToFreqFactor(-(1.0-envUpFraction)*envModPercent);
     envScaler        = upRatio - downRatio;
     if( envScaler != 0.0 ) // avoid division by zero
       envOffset = - (downRatio - 1.0) / (upRatio - downRatio);

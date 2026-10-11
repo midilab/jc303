@@ -162,6 +162,87 @@ static void slotZeroIsOwnedByLegacySetters()
   CHECK(maxDiff(base, mod) < 1e-12);
 }
 
+static void newDestinationsMoveTheSound()
+{
+  // accented note (velocity 100) with the accent knob up so the accent destination has something
+  // to scale; a cutoff LFO so the LFO rate / depth destinations are audible
+  Config knobs = [](rosic::Open303& s) {
+    s.setAccent(50.0);
+    s.setLfoDepth(0.5); s.setLfoDestination(rosic::MOD_DEST_CUTOFF); };
+  std::vector<double> base = render(knobs);
+  for(int dest : { rosic::MOD_DEST_ENV_MOD, rosic::MOD_DEST_DECAY, rosic::MOD_DEST_ACCENT,
+                   rosic::MOD_DEST_WAVEFORM, rosic::MOD_DEST_LFO_RATE, rosic::MOD_DEST_LFO_DEPTH })
+  {
+    std::vector<double> mod = render([&](rosic::Open303& s) {
+      knobs(s); s.setModSlot(1, rosic::MOD_SRC_ENV, dest, 0.8); });
+    CHECK(maxDiff(base, mod) > 1e-3);
+  }
+}
+
+static void lfoDepthDestinationCanOpenAClosedLfo()
+{
+  // LFO depth knob at zero: the envelope fades the cutoff LFO in at the attack
+  Config lfoOff = [](rosic::Open303& s) { s.setLfoDestination(rosic::MOD_DEST_CUTOFF); };
+  std::vector<double> base = render(lfoOff);
+  std::vector<double> mod = render([&](rosic::Open303& s) {
+    lfoOff(s); s.setModSlot(1, rosic::MOD_SRC_ENV, rosic::MOD_DEST_LFO_DEPTH, 1.0); });
+  CHECK(maxDiff(base, mod) > 1e-3);
+}
+
+static void knobValuesAreRestoredWhenModulationStops()
+{
+  auto modulated = [](rosic::Open303& s, int dest) {
+    if( dest == rosic::MOD_DEST_WAVEFORM ) return s.oscillator.getBlendFactor() != 0.25;
+    if( dest == rosic::MOD_DEST_LFO_RATE ) return s.lfo.getRate() != 3.0;
+    return s.mainEnv.getDecayTimeConstant() != s.getDecay();
+  };
+  for(int dest : { rosic::MOD_DEST_WAVEFORM, rosic::MOD_DEST_DECAY, rosic::MOD_DEST_LFO_RATE,
+                   rosic::MOD_DEST_ENV_MOD })
+  {
+    rosic::Open303 s;
+    s.setSampleRate(44100.0);
+    s.setLfoOn(true);
+    s.setWaveform(0.25);
+    s.setEnvMod(40.0);
+    s.setLfoRate(3.0);
+    s.setModSlot(2, rosic::MOD_SRC_ENV, dest, 1.0);
+    s.noteOn(45, 64, 0.0);
+    for(int i = 0; i < 1000; i++)
+      s.getSample();
+    if( dest != rosic::MOD_DEST_ENV_MOD )
+      CHECK(modulated(s, dest));
+
+    // getters report the knob, not the modulated value
+    CHECK(s.getWaveform() == 0.25);
+    CHECK(s.getEnvMod() == 40.0);
+
+    s.setModSlot(2, rosic::MOD_SRC_ENV, dest, 0.0);
+    s.getSample();
+    if( dest != rosic::MOD_DEST_ENV_MOD )
+      CHECK(!modulated(s, dest));
+  }
+}
+
+static void accentDestinationLeavesUnaccentedNotesAlone()
+{
+  auto renderSoft = [](const Config& config) {
+    rosic::Open303 s;
+    s.setSampleRate(44100.0);
+    s.setAccent(50.0);
+    s.setLfoOn(true);
+    config(s);
+    s.noteOn(45, 64, 0.0);   // below the accent threshold
+    std::vector<double> out(8192);
+    for(double& x : out)
+      x = s.getSample();
+    return out;
+  };
+  std::vector<double> base = renderSoft(none);
+  std::vector<double> mod = renderSoft([](rosic::Open303& s) {
+    s.setModSlot(1, rosic::MOD_SRC_ENV, rosic::MOD_DEST_ACCENT, 1.0); });
+  CHECK(maxDiff(base, mod) < 1e-12);
+}
+
 int main()
 {
   lfoSlotMatchesLegacyDepth();
@@ -172,6 +253,10 @@ int main()
   envelopeSlotIsHardwiredAndBipolar();
   modsOffDisablesTheMatrix();
   slotZeroIsOwnedByLegacySetters();
+  newDestinationsMoveTheSound();
+  lfoDepthDestinationCanOpenAClosedLfo();
+  knobValuesAreRestoredWhenModulationStops();
+  accentDestinationLeavesUnaccentedNotesAlone();
   if(failures == 0)
     std::printf("open303_mod_test: all passed\n");
   return failures == 0 ? 0 : 1;
