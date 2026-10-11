@@ -182,6 +182,12 @@ JC303::JC303()
                                                         "Filter Quality",
                                                         juce::StringArray{ "Standard", "Hi-Fi" },
                                                         1),      // Diode: Hi-Fi (default) solves every diode pair's tanh; Standard only Q12 / Q21
+            std::make_unique<juce::AudioParameterFloat> ("filterTension",
+                                                        "Filter Tension",
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,    // Hi-Fi diode rungs: 0 = the circuit, - floppy, + stiff
+                                                        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                            [] (float v, int) { return signedPercent (bipolarDetent (v)); })),
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -301,6 +307,7 @@ JC303::JC303()
     filterFm = parameters.getRawParameterValue("filterFm");
     resTrim = parameters.getRawParameterValue("resTrim");
     filterQuality = parameters.getRawParameterValue("filterQuality");
+    filterTension = parameters.getRawParameterValue("filterTension");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -380,6 +387,7 @@ JC303::JC303()
     parameters.addParameterListener("filterFm", this);
     parameters.addParameterListener("resTrim", this);
     parameters.addParameterListener("filterQuality", this);
+    parameters.addParameterListener("filterTension", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -453,6 +461,7 @@ JC303::~JC303()
     parameters.removeParameterListener("filterFm", this);
     parameters.removeParameterListener("resTrim", this);
     parameters.removeParameterListener("filterQuality", this);
+    parameters.removeParameterListener("filterTension", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -570,6 +579,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "filterQuality" && *switchModState) {
         setParameter(FILTER_QUALITY, newValue);
+    }
+    else if (parameterID == "filterTension" && *switchModState) {
+        setParameter(FILTER_TENSION, newValue);
     }
     else if (parameterID == "seqPlayState") {
         _seqCommand.store (newValue > 0.5f ? static_cast<int>(SeqCommand::Play)
@@ -802,6 +814,10 @@ void JC303::setParameter (Open303Parameters index, float value)
         // 0 = Standard (Q12 and Q21 tanh only), 1 = Hi-Fi (every diode pair's tanh, solved per sample)
         open303Core.setFilterHiFi(value > 0.5f);
         break;
+    case FILTER_TENSION:
+        // -1..1 with a centre detent: how the Hi-Fi ladder's resonance moves with level (0 = the circuit's diodes)
+        open303Core.setFilterTension(bipolarDetent(value));
+        break;
 
     // LFO parameters
     case LFO_WAVEFORM:
@@ -858,6 +874,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(FILTER_FM, *filterFm);
         setParameter(RES_TRIM, *resTrim);
         setParameter(FILTER_QUALITY, *filterQuality);
+        setParameter(FILTER_TENSION, *filterTension);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
         setParameter(LFO_WAVEFORM, *lfoWaveform);

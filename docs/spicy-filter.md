@@ -349,9 +349,11 @@ note-dependent distortion.
   fitted drive tables (`DT`, one set per quality) keep the knob from acting as a volume control. At +16 dB (6.3x the
   real level), Hi-Fi's level depends on cutoff: low cutoff with no envelope comes out about 4.6 dB quieter, and high
   cutoff with full envelope about 5 dB louder. The tables do not resolve cutoff.
-- **Asymmetry.** Q12's curve can run as tanh(a + b) - tanh(b), normalised to keep its small-signal slope at 1, which
-  adds even harmonics. b ramps in with drive, from 0 at 0 dB to full at +16 dB, so the default is symmetric. The
-  default amount is 0.5, and it is not exposed in the plugin. The real Q12 pair is symmetric.
+- **Asymmetry.** Q12's curve can run as tanh(a + b) - tanh(b), an input pair with an offset, which adds even
+  harmonics. Its slope is sech^2 b at rest and never above 1, so the asymmetry cannot raise the loop gain (an earlier
+  version normalised the slope to 1 at rest and latched, see the development log). b ramps in with drive, from 0 at
+  0 dB to full at +16 dB, so the default is symmetric. The default amount is 0.5, and it is not exposed in the plugin.
+  The real Q12 pair is symmetric.
 
 ## Calibration against SPICE
 

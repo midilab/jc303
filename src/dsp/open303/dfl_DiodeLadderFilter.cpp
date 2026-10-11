@@ -17,7 +17,6 @@ DiodeLadderFilter::DiodeLadderFilter()
   driveTrim[0] = driveTrim[1] = 1.0;
   satBias             =     0.0;
   satBiasShape        =     0.0;
-  satBiasNorm         =     1.0;
   drive               =     0.0;
   passbandCompensation =    0.0;   // no bass comp
   resonance           =     0.0;
@@ -84,8 +83,6 @@ void DiodeLadderFilter::updateSatBias()
 {
   satBias = satBiasKnob * SAT_BIAS_MAX * std::clamp(drive / SAT_BIAS_TOP_DB, 0.0, 1.0);
   satBiasShape = shape(satBias);
-  const double t = std::tanh(satBias);
-  satBiasNorm = 1.0 / (1.0 - t * t);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -102,6 +99,7 @@ void DiodeLadderFilter::reset()
   outCouplingState = 0.0;
   for (int k = 0; k < 4; ++k) yPrev[k] = yPrev2[k] = shadowZ[k] = 0.0;
   shadowLoadState = 0.0;
+  for (double& e : envE) e = 0.0;
   acCouplingState = 0.0;  // Reset AC coupling filter
   for (double& st : netState) st = 0.0;
 }
