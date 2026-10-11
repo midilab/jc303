@@ -93,8 +93,10 @@ namespace dfl
     void setCircuitPulseShape(bool enabled) { circuitPulseShape = enabled; }
 
     /** Scales the waveshaper envelope (with setCircuitPulseShape on): 0 = flat top, 1 = the circuit, up to 2 =
-    exaggerated (each envelope node v becomes v^2 at 2: slower rise, deeper sag). The table nodes are scaled, so the
-    drawn envelope stays piecewise linear and its corners stay band-limited. */
+    exaggerated (each envelope node v becomes v^2 at 2: slower rise, deeper sag). Below 1 the circuit's rise is
+    compressed in time by the sag around the nominal edge and the top's droop is scaled by it, so a smaller sag is a
+    faster transistor rather than a partial hard step. Either way the drawn envelope stays piecewise linear and its
+    corners stay band-limited. */
     void setPulseSag(double newSag) { pulseSag = std::min(std::max(newSag, 0.0), 2.0); }
 
     /** Sets the phase increment from outside. */
@@ -195,6 +197,16 @@ namespace dfl
     int    envRow = 0;            // ENV_FREQ row below the current frequency (set in calculateIncrement)
     double envRowFrac = 0.0;      // interpolation weight towards envRow + 1
     double envLead = 0.0;         // ENV_LEAD at the current frequency
+    // below a sag of 1 the envelope is the circuit's with its rise compressed in time by the sag around the nominal
+    // edge, up to node warpK (the rise's peak), and the rest stretched to fill the segment; the lead before the edge
+    // shrinks by the same factor, so the rise still starts where the segment does (see setupSagWarp)
+    bool   warp = false;
+    int    warpK = 0;
+    double warpPc = 0.0, warpPcTable = 0.0, warpSlope = 1.0, warpPK = 0.0, warpQK = 0.0, warpRiseScale = 1.0;
+    INLINE void   setupSagWarp(double pwCircuit, double pwExtended);
+    INLINE double rawNode(int i) const;
+    INLINE double nodePos(int i) const;
+    INLINE double warpBack(double x) const;
     INLINE double pulseEnvelope(double extPos) const;
     INLINE double envNode(int i) const;
     INLINE double drawnEnvelope(double extPos, double dp, double flatLen) const;
@@ -275,9 +287,60 @@ namespace dfl
     return levelHi + (pulse - levelHi) * envGain;
   }
 
+  INLINE double BlendOscillator::rawNode(int i) const
+  {
+    return ENV_TABLE[envRow][i] + envRowFrac*(ENV_TABLE[envRow+1][i] - ENV_TABLE[envRow][i]);
+  }
+
+  INLINE void BlendOscillator::setupSagWarp(double pwCircuit, double pwExtended)
+  {
+    warp = false;
+    int k = 0;
+    for( int i = 1; i < ENV_COLS; i++ )
+      if( rawNode(i) > rawNode(k) )
+        k = i;
+    const double N1 = ENV_COLS-1;
+    warpK  = k;
+    warpPK = (k/N1)*(k/N1);
+    // the nominal edge in the table's units (lead at full length) and in this segment's (lead shrunk by the sag);
+    // a table position's time from the edge, scaled by the sag, lands at warpPc + warpSlope*(p - warpPcTable)
+    warpPcTable = 1.0 - pulseWidth/pwCircuit;
+    warpPc      = 1.0 - pulseWidth/pwExtended;
+    warpSlope   = pulseSag * pwCircuit/pwExtended;
+    if( warpPK <= warpPcTable )
+      return;
+    warpQK        = warpPc + warpSlope*(warpPK - warpPcTable);
+    warpRiseScale = (1.0 + pulseSag*(rawNode(k) - 1.0)) / rawNode(k);
+    warp          = true;
+  }
+
+  // position of node i in the (possibly warped) envelope
+  INLINE double BlendOscillator::nodePos(int i) const
+  {
+    const double N1 = ENV_COLS-1;
+    const double p  = (i/N1)*(i/N1);
+    if( !warp )
+      return p;
+    if( i <= warpK )
+      return warpPc + warpSlope*(p - warpPcTable);
+    return warpQK + (p - warpPK)*(1.0 - warpQK)/(1.0 - warpPK);
+  }
+
+  // the table position a warped position x reads from
+  INLINE double BlendOscillator::warpBack(double x) const
+  {
+    if( !warp )
+      return x;
+    if( x <= warpQK )
+      return warpPcTable + (x - warpPc)/warpSlope;
+    return warpPK + (x - warpQK)*(1.0 - warpPK)/(1.0 - warpQK);
+  }
+
   INLINE double BlendOscillator::envNode(int i) const
   {
-    const double v = ENV_TABLE[envRow][i] + envRowFrac*(ENV_TABLE[envRow+1][i] - ENV_TABLE[envRow][i]);
+    const double v = rawNode(i);
+    if( warp )
+      return i <= warpK ? v*warpRiseScale : 1.0 + pulseSag*(v - 1.0);
     if( pulseSag == 1.0 )
       return v;
     if( pulseSag < 1.0 )
@@ -291,10 +354,12 @@ namespace dfl
   {
     const double N1 = ENV_COLS-1;
     const double p  = std::min(std::max(extPos, 0.0), 1.0);
-    const double xs = std::sqrt(p)*N1;
+    if( p <= nodePos(0) )
+      return envNode(0);
+    const double xs = std::sqrt(std::min(std::max(warpBack(p), 0.0), 1.0))*N1;
     const int    i  = std::min((int) xs, ENV_COLS-2);
     const double y0 = envNode(i);
-    const double p0 = (i/N1)*(i/N1), p1 = ((i+1)/N1)*((i+1)/N1);
+    const double p0 = nodePos(i), p1 = nodePos(i+1);
     return y0 + (p - p0)/(p1 - p0) * (envNode(i+1) - y0);
   }
 
@@ -342,18 +407,20 @@ namespace dfl
     const double lo = extPos - BLAMP_AFTER*dp, hi = extPos + BLAMP_BEFORE*dp;
     if( hi <= 0.0 || lo >= 1.0 )
       return env;
-    const int i0 = lo <= 0.0 ? 0 : (int) std::ceil(std::sqrt(lo)*N1);
-    const int i1 = hi >= 1.0 ? ENV_COLS-1 : (int) (std::sqrt(hi)*N1);
+    // node indices whose corners lie in [lo, hi]: the warp is monotone, so map the window back onto the table
+    const double wl = warpBack(lo), wh = warpBack(hi);
+    const int i0 = wl <= 0.0 ? 0 : (int) std::ceil(std::sqrt(std::min(wl, 1.0))*N1);
+    const int i1 = wh >= 1.0 ? ENV_COLS-1 : (int) (std::sqrt(std::max(wh, 0.0))*N1);
     // chord slope (level per unit position) into node i0; zero before node 0 and after the last node
     double yPrev = envNode(std::max(i0-1, 0)), yCur = envNode(i0);
-    double pPrev = ((i0-1)/N1)*((i0-1)/N1), pCur = (i0/N1)*(i0/N1);
+    double pPrev = nodePos(i0-1), pCur = nodePos(i0);
     double slopeIn = i0 > 0 ? (yCur - yPrev)/(pCur - pPrev) : 0.0;
     for( int i = i0; i <= i1; i++ )
     {
       double slopeOut = 0.0, yNext = yCur, pNext = pCur;
       if( i < ENV_COLS-1 )
       {
-        yNext = envNode(i+1); pNext = ((i+1)/N1)*((i+1)/N1);
+        yNext = envNode(i+1); pNext = nodePos(i+1);
         slopeOut = (yNext - yCur)/(pNext - pCur);
       }
       env += (slopeOut - slopeIn)*dp * blampResidual((extPos - pCur)/dp);
@@ -404,6 +471,10 @@ namespace dfl
       // envelope then reaches the 50% level at the nominal pulse width, so the duty is unchanged
       const bool   shaped = circuitPulseShape && pulseSag > 0.0;
       const double pw     = shaped ? std::min(pulseWidth*(1.0 + envLead*std::min(pulseSag, 1.0)), 0.95) : pulseWidth;
+      if( shaped && pulseSag < 1.0 )
+        setupSagWarp(std::min(pulseWidth*(1.0 + envLead), 0.95), pw);
+      else
+        warp = false;
       const double pulse = shapedPulse(saw1, tableNumber, phaseShiftSamples, pw);
       out2 = blend * pulse * 0.5;  // 0.5 to match the original square level
     }
