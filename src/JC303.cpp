@@ -20,6 +20,12 @@ namespace
             });
     }
 
+    // order matches rosic::ModSource
+    juce::StringArray modSourceNames()
+    {
+        return { "Off", "LFO", "Env", "Accent", "Key", "Random" };
+    }
+
     // order matches rosic::ModDestination
     juce::StringArray modDestinationNames()
     {
@@ -178,7 +184,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("modSlot3Source",
                                                         "Mod Slot 3 Source",
-                                                        juce::StringArray{ "Off", "LFO", "Env" },
+                                                        modSourceNames(),
                                                         0),
             std::make_unique<juce::AudioParameterChoice> ("modSlot3Dest",
                                                         "Mod Slot 3 Destination",
@@ -191,7 +197,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("modSlot4Source",
                                                         "Mod Slot 4 Source",
-                                                        juce::StringArray{ "Off", "LFO", "Env" },
+                                                        modSourceNames(),
                                                         0),
             std::make_unique<juce::AudioParameterChoice> ("modSlot4Dest",
                                                         "Mod Slot 4 Destination",
