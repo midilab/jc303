@@ -136,7 +136,7 @@ namespace rosic
     /** Sets the drive (in dB) for the tanh-shaper that forms the 303-square waveform (the Open303 square
     model; the circuit model's pulse is fully saturated at any drive). */
     void setTanhShaperDrive(double newDrive)
-    { waveTable2.setTanhShaperDriveFor303Square(newDrive); oscillator.setTanhShaperDrive(newDrive); }
+    { waveTable2.setTanhShaperDriveFor303Square(newDrive); }
 
     /** Switches the TB-303 waveshaper envelope on the square (slow rise in the bottom octaves, sloped top, level
     change with pitch; see dfl::BlendOscillator::ENV_TABLE). Off by default; the pitch-tracked pulse width applies
@@ -162,7 +162,7 @@ namespace rosic
 
     /** Sets the offset (raw value) for the tanh-shaper that forms the 303-square waveform. */
     void setTanhShaperOffset(double newOffset)
-    { waveTable2.setTanhShaperOffsetFor303Square(newOffset); oscillator.setTanhShaperOffset(newOffset); }
+    { waveTable2.setTanhShaperOffsetFor303Square(newOffset); }
 
     /** Sets the cutoff frequency for the highpass before the main filter. */
     void setPreFilterHighpass(double newCutoff) { highpass1.setCutoff(newCutoff); }
