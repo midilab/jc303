@@ -496,8 +496,8 @@ alone left Diode Octave rising +2 to +3 dB at high resonance and BP/HP falling u
 - **Loop gain.** `K` is divided by `driveLoopGain = driveFactor * driveMakeup`, and the zero-delay solve includes it too
   (it assumed unit gain, exact only at or below 0 dB; above that the under-counted instantaneous feedback made the
   loop oscillate at +16 dB, 20 kHz cutoff, resonance >= 0.97).
-- **Saturation bias.** The shaper is `shape(a + b) - shape(b)` divided by its slope at `b` (small-signal gain stays 1, so
-  loop gain, resonance and stability are unchanged), with `b = 0.5 * clamp(drive / 16, 0, 1)`: zero at and below 0 dB,
+- **Saturation bias.** The shaper is `shape(a + b) - shape(b)` (at first divided by its slope at `b`; that normalisation
+  latched Hi-Fi and was removed, see "Bias shaper latch-up" below), with `b = 0.5 * clamp(drive / 16, 0, 1)`: zero at and below 0 dB,
   so the clean region and the default are untouched. Fixed at 0.5 in the plugin (`SAT_BIAS_DEFAULT`); the core still
   has `setSaturationBias` / `Open303::setFilterBias` for the tools. A version with it as a parameter ("Saturation Bias
   (Bite)") and its own level compensation is on the branch `backup/filter-bias-parameter`. On a saw the bias is
@@ -776,3 +776,24 @@ The Filter Quality switch (Mods menu, Spicy only) selects Standard. `DT` has one
 level spreads with cutoff (low cutoff, no env mod -4.6 dB; high cutoff, full env mod +5.0 dB) because the diodes'
 compression depends on cutoff and the tables do not; `drive_level` allows that for Hi-Fi LP only. Up to +9 dB Hi-Fi
 tracks Standard within 0.5 dB.
+
+## Bias shaper latch-up (Hi-Fi)
+
+A loud-kick stability sweep (`stability_sweep --kick 3`: a 20 ms sine burst at the cutoff instead of a 1e-3 impulse)
+found Hi-Fi latching: 34 of 10800 cases kept a sustained tone after the burst (for example 3.75 kHz at -29 dB, still
+there after 8 s, at cutoff 12.5 kHz). All at resonance 1.0, cutoff 5 kHz and up, drive +12 dB and up, Filter Feedback
+57.5-65 Hz. The small-impulse sweep never saw it: the loop is stable about rest; this is a large-signal limit cycle.
+
+Cause: the asymmetric shaper `shape(a + b) - shape(b)` was divided by its slope at `b`, so its slope at rest was 1 but
+reached cosh^2 b once a signal walked the pair back to the tanh's centre (1.27, +2 dB, at the shipped b = 0.5;
+2.38 at bias 1.0). The diode rungs supply that walk: their DC shift under the asymmetric drive moves Q12's operating
+point. With the loop gain set 2 % under the threshold, +2 dB is enough to sustain an oscillation (lower than the
+cutoff, as the half-saturated rungs slow the stages). A converged Newton solve (8 steps) latches the same way, linear
+rungs (or Standard) do not, and bias 0 does not.
+
+Fix: no normalisation. An input pair with an offset has less gm at its operating point, never more, so no operating
+point lifts the loop gain past the symmetric pair's. Nothing changes at or below 0 dB drive (b is 0 there; a pattern
+render at the default is bit-identical); above it the small-signal gain at rest drops by sech^2 b (up to 2 dB at
++16 dB), and the drive level tables `DT` were refitted for both qualities (corrections up to +5 dB, BP / HP at
+resonance 100). On the acid pattern the level moves +0.04 dB at +9 dB drive and +0.17 dB at +16 dB.
+

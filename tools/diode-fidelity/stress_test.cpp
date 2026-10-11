@@ -1,6 +1,6 @@
 // Full-synth stress test: every diode filter type x drive x cutoff x env-mod x Devilfish FM,
 // at maximum resonance with accent 100, full bass comp, LP / BP / HP and in-between modes, and the Res Trim extremes. Fails on any non-finite sample,
-// on a sustained tail after gate-off (> -100 dB), or an absurd peak (> 20).
+// on a sustained tail after gate-off (> -100 dB), or an absurd peak (> 20). Hi-Fi runs at tension -1, 0 and 1.
 #include "rosic_Open303.h"
 #include <cstdio>
 #include <cstdlib>
@@ -18,13 +18,15 @@ int main()
     { 1.15, 1.0,  "HP trim 1.15" } };
   int bad = 0, n = 0; double worstTail = -400, worstPeak = 0;
   for (int q = 0; q < 2; q++)
+  for (double tension : { -1.0, 0.0, 1.0 })
   for (const Case& c : cases)
     for (double drive : { -3.0, 0.0, 4.5, 9.0, 16.0 })
       for (double cut : { 314.0, 1200.0, 2394.0 })
         for (double env : { 0.0, 60.0, 100.0 })
           for (double fm : { 0.0, 1.0 })
           {
-            rosic::Open303 s; s.setSampleRate(44100); s.setFilterType(dfl::FILTER_DIODE); s.setResonanceTrim(c.trim); s.setFilterMode(c.mode); s.setFilterHiFi(q != 0);
+            if (q == 0 && tension != 0.0) continue;   // tension is Hi-Fi only
+            rosic::Open303 s; s.setSampleRate(44100); s.setFilterType(dfl::FILTER_DIODE); s.setResonanceTrim(c.trim); s.setFilterMode(c.mode); s.setFilterHiFi(q != 0); s.setFilterTension(tension);
             s.setCutoff(cut); s.setResonance(100); s.setEnvMod(env); s.setDecay(400); s.setAccent(100);
             s.setVolume(-12); s.setFilterDrive(drive); s.setPassbandCompensation(1.0); s.setFilterFmDepth(fm); s.setWaveform(0.0);
             s.noteOn(36, 127, 0.0);
@@ -37,7 +39,7 @@ int main()
               peak = fmax(peak, fabs(y)); if (i > N - 4410) tail = fmax(tail, fabs(y));
             }
             n++; double t = 20 * log10(tail + 1e-300);
-            if (!finite || t > -100 || peak > 20) { bad++; printf("  FAIL %s %s drive %.1f cutoff %.0f env %.0f fm %.0f: finite=%d tail %.0f dB peak %.2f\n", q ? "Hi-Fi" : "Standard", c.name, drive, cut, env, fm, (int)finite, t, peak); }
+            if (!finite || t > -100 || peak > 20) { bad++; printf("  FAIL %s tension %g %s drive %.1f cutoff %.0f env %.0f fm %.0f: finite=%d tail %.0f dB peak %.2f\n", q ? "Hi-Fi" : "Standard", tension, c.name, drive, cut, env, fm, (int)finite, t, peak); }
             worstTail = fmax(worstTail, t); worstPeak = fmax(worstPeak, peak);
           }
   printf("stress test: %d runs, %d failures; worst tail %.0f dB, worst peak %.2f\n", n, bad, worstTail, worstPeak);

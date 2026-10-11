@@ -434,6 +434,8 @@ private:
 
     static juce::String valueString(juce::RangedAudioParameter* param)
     {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(param); p != nullptr && p->range.start < 0.0f)
+            return p->getCurrentValueAsText();   // bipolar: the parameter's own signed text (e.g. "+24%")
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(param))
             return juce::String(p->get());
         if (auto* p = dynamic_cast<juce::AudioParameterBool*>(param))
@@ -633,6 +635,7 @@ public:
         mod.items.add(Item { "filterMorph", "Filter Morph",     Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // LP / BP / HP; no effect on TeeBee
         mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterQuality", "Filter Quality", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        mod.items.add(Item { "filterTension", "Filter Tension", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // Hi-Fi only; no effect on TeeBee
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee

@@ -95,6 +95,26 @@ namespace dfl
     void setHiFi(bool on) { hiFi = on; calculateCoefficients(); }
     bool getHiFi() const { return hiFi; }
 
+    /** Sets the ladder's tension, -1..1 (Hi-Fi only): how the rungs' conductance, and so each stage's pole, moves with
+        the signal across them (a Duffing-like spring: the resonance's pitch follows its level). 0 = the circuit's diodes
+        (tanh: a loud signal slows a stage, the pitch falls, about 75 cents in self-oscillation). Below 0 the rungs
+        saturate earlier (floppy: -1 falls about 6 semitones); above 0 the softening fades out (linear at
+        1 / (1 + TENSION_STIFF_MAX)) and then reverses, the conductance rising with level (stiff: +1 rises about
+        4 semitones). Both ends also narrow the rungs' voltage scale, so the effect starts at lower levels.
+        Measured by tools/diode-fidelity/backbone. */
+    void setTension(double newTension)
+    {
+      tension = std::clamp(newTension, -1.0, 1.0);
+      const double t = tensionEnvelope ? 0.0 : tension;   // the envelope mode leaves the diodes as they are
+      rungScale = headroomBias * std::pow(TENSION_SCALE_MAX, 0.5 * std::abs(t));
+      rungMix   = t > 0.0 ? 1.0 - (1.0 + TENSION_STIFF_MAX) * t : 1.0;
+    }
+    double getTension() const { return tension; }
+    /** Comparison switch (temporary): true = the tension scales each stage's rate by exp(tension TENSION_ENV_GAIN e),
+        e a smoothed (TENSION_ENV_MS) square of its rungs' current re their limit, the diodes untouched; false = the
+        tension reshapes the rungs' I-V curve. */
+    void setTensionEnvelope(bool on) { tensionEnvelope = on; setTension(tension); }
+
     /** Sets the Filter FM depth (0 to 1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input signal to modulate filter cutoff frequency. */
     void setFilterFmDepth(double depth) { filterFmDepth = std::max(0.0, std::min(1.0, depth)); }
@@ -175,8 +195,10 @@ namespace dfl
     // the signal is actually driven. 0.5 = 6 dB headroom (matches DB303).
     static constexpr double headroomBias = 0.5;
 
-    // Asymmetric shaper bias: the shaper is shape(a + b) - shape(b), scaled so its small-signal slope
-    // stays 1 (loop gain, resonance and stability are unchanged). b = bias knob (0..1) * SAT_BIAS_MAX,
+    // Asymmetric shaper bias: the shaper is shape(a + b) - shape(b), an input pair with an offset: its slope (gm) is
+    // sech^2 b at rest and never above 1, so no operating point raises the loop gain past the symmetric pair's. (Scaled
+    // to slope 1 at rest it reached cosh^2 b once the signal walked the pair back to its centre, and Hi-Fi latched into
+    // a sustained oscillation after a loud note at high drive and resonance.) b = bias knob (0..1) * SAT_BIAS_MAX,
     // ramping from 0 at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean region is untouched.
     // Large-signal level and resonance depend on b; the level is part of the drive level tables DT below
     // (fitted at SAT_BIAS_DEFAULT).
@@ -235,7 +257,6 @@ namespace dfl
     double satBias;               // asymmetric shaper offset in effect (knob * SAT_BIAS_MAX * drive ramp)
     void updateSatBias();
     double satBiasShape;          // shape(satBias)
-    double satBiasNorm;           // 1 / slope of the shaper at satBias
     double passbandCompensation;  // bass comp amount, 0..1
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
@@ -289,6 +310,16 @@ namespace dfl
     double q21Slope(double u) { const double t = shape(headroomBias * u); return 1.0 - t * t; }
     double outCouplingState = 0.0;  // the output's own C27 / C25 coupling (the mode mix differs from the loop's lp4)
     bool   hiFi = true;
+    // Tension (setTension): the rungs pass x + rungMix (tanh(rungScale x) / rungScale - x), with conductance
+    // 1 - rungMix tanh^2(rungScale x). rungMix 1 at rungScale = headroomBias is the diode; the cubic term (the Duffing
+    // coefficient) is -rungMix rungScale^2 / 3.
+    static constexpr double TENSION_SCALE_MAX = 8.0;   // rungScale^2 at tension +-1, re the diode
+    static constexpr double TENSION_STIFF_MAX = 3.0;   // tension 1: a rung's conductance rises to 1 + this when loud
+    double tension = 0.0, rungScale = headroomBias, rungMix = 1.0;
+    bool   tensionEnvelope = false;
+    static constexpr double TENSION_ENV_GAIN = 2.8;   // log stage-rate change at full tension and a rung at its limit
+    static constexpr double TENSION_ENV_MS   = 2.0;   // envelope time constant
+    double envA = 0.0, envE[4] = {};
     double yPrev[4] = {}, yPrev2[4] = {};   // the last two ladder solutions (Hi-Fi's Newton predictor)
 
     // tanh(x) as x P(x^2) / Q(x^2), max error 5.8e-8 on |x| <= 9 (clamped beyond): one division (Hi-Fi)
@@ -349,6 +380,7 @@ namespace dfl
     // Bilinear transform, prewarped at the cutoff (the resonant peak) rather than the stage rate, so the peak
     // frequency does not depend on the sample rate (stage rate tuned to the circuit's ladder core, see CUTOFF_TUNING)
     double gCoeff = CUTOFF_TUNING * tan(PI * cutoff / sampleRate);
+    envA = 1.0 - std::exp(-1000.0 / (TENSION_ENV_MS * sampleRate));
     double gp1 = 1.0 + gCoeff;
 
     // Q21 loading on stage 4 (see LOAD_KAPPA): rate g (1 + kappa rho), input (a4 lp3 + kappa rho w) / (1 + kappa rho),
@@ -459,23 +491,23 @@ namespace dfl
       static const double RN[DT_RES_N]   = { 0.0, 0.6245, 0.9235, 1.0 };
       static const double DT[2][2][DT_RES_N][DT_DRIVE_N] = {
         // Standard
-        { { { 0.00, 0.29, -0.25, 1.03, 3.22, 5.94 },
-            { 0.00, 0.05, -1.75, -3.38, -4.21, -3.55 },
-            { 0.00, 0.09, -1.52, -3.16, -4.47, -5.49 },
-            { 0.00, 0.45, -0.29, -1.52, -2.79, -4.03 } },
-          { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
-            { 0.00, 0.62, 2.03, 4.24, 5.81, 8.42 },
-            { 0.00, 0.77, 2.79, 5.82, 7.74, 9.58 },
-            { 0.00, 1.25, 3.97, 7.36, 8.72, 9.39 } } },
+        { { { 0.00, 0.29, -0.11, 1.55, 4.13, 7.32 },
+            { 0.00, 0.05, -1.70, -3.16, -3.66, -2.37 },
+            { 0.00, 0.09, -1.48, -3.04, -4.21, -4.89 },
+            { 0.00, 0.45, -0.20, -1.37, -2.57, -3.61 } },
+          { { 0.00, 0.35, 0.40, 3.17, 6.53, 10.02 },
+            { 0.00, 0.62, 2.20, 4.82, 7.04, 10.51 },
+            { 0.00, 0.77, 3.02, 6.64, 9.14, 11.79 },
+            { 0.00, 1.25, 4.52, 9.15, 12.45, 15.52 } } },
         // Hi-Fi
-        { { { 0.00, 0.22, -0.67, 0.61, 3.65, 7.71 },
-            { 0.00, 0.05, -1.77, -3.44, -3.82, -0.22 },
-            { 0.00, 0.09, -1.53, -3.18, -4.34, -1.87 },
-            { 0.00, 0.44, -0.29, -1.52, -2.89, -2.37 } },
-          { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
-            { 0.00, 0.61, 2.03, 4.30, 5.65, 8.18 },
-            { 0.00, 0.76, 2.74, 5.70, 7.19, 7.37 },
-            { 0.00, 1.23, 3.90, 7.06, 6.91, 9.43 } } } };
+        { { { 0.00, 0.22, -0.51, 0.95, 3.91, 7.53 },
+            { 0.00, 0.05, -1.71, -3.22, -3.69, -1.78 },
+            { 0.00, 0.09, -1.49, -3.05, -4.19, -3.91 },
+            { 0.00, 0.44, -0.19, -1.34, -2.57, -3.04 } },
+          { { 0.00, 0.35, 0.40, 3.17, 6.53, 10.02 },
+            { 0.00, 0.61, 2.19, 4.89, 7.04, 10.48 },
+            { 0.00, 0.76, 2.97, 6.56, 8.90, 10.76 },
+            { 0.00, 1.23, 4.48, 9.05, 12.03, 13.61 } } } };
       int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
       const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
       const double rr = std::min(std::max(resonance, 0.0), 1.0);
@@ -548,28 +580,40 @@ namespace dfl
       netS = gx * netS + gs * netState[i];
     }
     const double KG = K * netG, z[4] = { z1, z2, z3, z4 };
+    // a rung's current and slope (see setTension; the diode at tension 0)
+    const double rs = rungScale, rm = rungMix;
+    auto rung = [rs, rm](double x, double& slope)
+    {
+      const double t = tanhRational(rs * x);
+      slope = 1.0 - rm * t * t;
+      return x + rm * (t / rs - x);
+    };
     double y[4];
     for (int k = 0; k < 4; ++k) y[k] = 2.0 * yPrev[k] - yPrev2[k];
+    // per-stage rates (the envelope tension; 1 otherwise)
+    double gk[4] = { g, g, g, g };
+    if (tensionEnvelope && tension != 0.0)
+      for (int k = 0; k < 4; ++k) gk[k] = g * std::exp(tension * TENSION_ENV_GAIN * envE[k]);
     for (int it = 0; it < 2; ++it)
     {
       const double u0 = c0 * (y[3] - s0);
       const double tq = tanhRational(h * u0), Qv = tq / h, Qd = 1.0 - tq * tq;
       const double tv = tanhRational(h * (vIn - KG * Qv - K * netS) + satBias);
-      un = (tv - satBiasShape) * satBiasNorm / h;
-      const double dun = (1.0 - tv * tv) * satBiasNorm * (-KG * Qd * c0);
-      const double t12 = tanhRational(h * (y[0] - y[1])), t23 = tanhRational(h * (y[1] - y[2]));
-      const double t34 = tanhRational(h * (y[2] - y[3])), t4 = tanhRational(h * y[3]);
-      const double T12 = t12 / h, T23 = t23 / h, T34 = t34 / h, T4 = t4 / h;
-      const double d12 = 1.0 - t12 * t12, d23 = 1.0 - t23 * t23, d34 = 1.0 - t34 * t34, d4 = 1.0 - t4 * t4;
-      const double b0 = -(y[0] - z[0] - g * (un - T12));
-      const double b1 = -(y[1] - z[1] - g * 0.5 * (T12 - T23));
-      const double b2 = -(y[2] - z[2] - g * 0.5 * (T23 - T34));
-      const double b3 = -(y[3] - z[3] - g * (0.5 * (T34 - T4) - lamA * y[3] + lamW));
+      un = (tv - satBiasShape) / h;
+      const double dun = (1.0 - tv * tv) * (-KG * Qd * c0);
+      double d12, d23, d34, d4;
+      const double T12 = rung(y[0] - y[1], d12), T23 = rung(y[1] - y[2], d23);
+      const double T34 = rung(y[2] - y[3], d34), T4 = rung(y[3], d4);
+      const double g0 = gk[0], g1 = gk[1], g2 = gk[2], g3 = gk[3];
+      const double b0 = -(y[0] - z[0] - g0 * (un - T12));
+      const double b1 = -(y[1] - z[1] - g1 * 0.5 * (T12 - T23));
+      const double b2 = -(y[2] - z[2] - g2 * 0.5 * (T23 - T34));
+      const double b3 = -(y[3] - z[3] - g3 * (0.5 * (T34 - T4) - lamA * y[3] + lamW));
       // Jacobian I - g dF/dy
-      const double a00 = 1.0 + g * d12, a01 = -g * d12, a03 = -g * dun;
-      const double a10 = -0.5 * g * d12, a11 = 1.0 + 0.5 * g * (d12 + d23), a12 = -0.5 * g * d23;
-      const double a21 = -0.5 * g * d23, a22 = 1.0 + 0.5 * g * (d23 + d34), a23 = -0.5 * g * d34;
-      const double a32 = -0.5 * g * d34, a33 = 1.0 + 0.5 * g * (d34 + d4) + g * lamA;
+      const double a00 = 1.0 + g0 * d12, a01 = -g0 * d12, a03 = -g0 * dun;
+      const double a10 = -0.5 * g1 * d12, a11 = 1.0 + 0.5 * g1 * (d12 + d23), a12 = -0.5 * g1 * d23;
+      const double a21 = -0.5 * g2 * d23, a22 = 1.0 + 0.5 * g2 * (d23 + d34), a23 = -0.5 * g2 * d34;
+      const double a32 = -0.5 * g3 * d34, a33 = 1.0 + 0.5 * g3 * (d34 + d4) + g3 * lamA;
       // Cramer's rule on the sparse pattern
       const double D2 = a00 * a11 - a01 * a10, P = a22 * a33 - a23 * a32;
       const double det = D2 * P - a00 * a12 * a21 * a33 - a03 * a10 * a21 * a32;
@@ -586,6 +630,14 @@ namespace dfl
     }
     z1 = 2.0 * y[0] - z1; z2 = 2.0 * y[1] - z2; z3 = 2.0 * y[2] - z3; z4 = 2.0 * y[3] - z4;
     for (int k = 0; k < 4; ++k) lp[k] = y[k];
+    if (tensionEnvelope)
+    {
+      // each stage's envelope: the mean square of its rungs' current re the limit (stage 1 has one rung)
+      const double s12 = tanhRational(h * (y[0] - y[1])), s23 = tanhRational(h * (y[1] - y[2]));
+      const double s34 = tanhRational(h * (y[2] - y[3])), s4 = tanhRational(h * y[3]);
+      const double e[4] = { s12 * s12, 0.5 * (s12 * s12 + s23 * s23), 0.5 * (s23 * s23 + s34 * s34), 0.5 * (s34 * s34 + s4 * s4) };
+      for (int k = 0; k < 4; ++k) envE[k] += envA * (e[k] - envE[k]);
+    }
 
     // advance the coupling network (Q21 after section 0) and the load lowpass
     double x = y[3];
@@ -708,8 +760,8 @@ namespace dfl
       }
 
       // Q12, the input pair: a tanh with headroom scaling (0 dB drive = the real 303's level, see setInputDrive) and
-      // the optional asymmetry, normalised to slope 1. The level makeup is applied at the output.
-      un = (shape(un * headroomBias + satBias) - satBiasShape) * satBiasNorm / headroomBias;
+      // the optional asymmetry (see SAT_BIAS_MAX). The level makeup is applied at the output.
+      un = (shape(un * headroomBias + satBias) - satBiasShape) / headroomBias;
 
       // 1st stage
       double xin = un * gamma1 + S2 + epsilon1 * S1;

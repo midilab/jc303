@@ -109,6 +109,10 @@ namespace rosic
     /** Diode filter quality: Hi-Fi (the default) solves every diode pair's tanh per sample (DiodeLadderFilter::setHiFi). */
     void setFilterHiFi(bool on) { diodeFilter.setHiFi(on); }
 
+    /** Diode ladder tension, -1..1 (Hi-Fi only; 0 = the circuit's diodes, DiodeLadderFilter::setTension). */
+    void setFilterTension(double t) { diodeFilter.setTension(t); }
+    void setFilterTensionEnvelope(bool on) { diodeFilter.setTensionEnvelope(on); }   // comparison switch (temporary)
+
     /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB). The plugin
      *  keeps the default (the backup branch backup/filter-bias-parameter exposes it as a parameter); this is for the
      *  fidelity tools. */
