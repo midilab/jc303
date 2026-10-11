@@ -474,19 +474,15 @@ namespace rosic
     subOscillator.setFrequency(instFreq*pitchWheelFactor);
     subOscillator.calculateIncrement();
 
-    // TB-303 pulse width tracks pitch: the pitch CV feeding the analog PWM input gives a wider
-    // pulse at low notes (~71% duty) and a narrower one up high (~45%). We reproduce that here,
-    // now that the oscillator synthesises the pulse at audio rate. The curve is linear in
-    // log-frequency and is deliberately NOT clamped to the keyboard range - it continues past the
-    // C1..C4 endpoints just as the continuous CV relationship would; only the resulting pulse
-    // width is clamped, so extreme octaves stay musical rather than degenerating to a sliver.
+    // TB-303 pulse width tracks pitch: the square comes from the saw through the Q8 waveshaper, whose
+    // RC-coupled bias makes the duty depend on frequency: 58% at C1, 50% near 65 Hz, 41.7% at C4, 36% at C5.
+    // Cubic fit in octaves above C1 to an ngspice model of the stage (service-manual values), within
+    // 1.1 points from 10 Hz to 2 kHz; it agrees with ~50% at 85 Hz measured on a real unit. The input is
+    // clamped to that range so the cubic cannot run away under pitch bend or LFO.
     {
-      const double lowFreq  =  32.703; // C1
-      const double highFreq = 261.626; // C4
-      double norm = log(instFreq/lowFreq) / log(highFreq/lowFreq); // 0 at C1, 1 at C4, extends beyond
-      double pw   = 71.0 - norm*26.0;                              // 71% at C1 -> 45% at C4
-      pw = clip(pw, 25.0, 75.0);                                  // keep the pulse musical at extremes
-      oscillator.setPulseWidth(pw);
+      double x  = clip(log2(instFreq*pitchWheelFactor / 32.703), -1.71, 5.93);   // octaves above C1, 10 Hz..2 kHz
+      double pw = 58.164 + x*(-7.543 + x*(0.812 - x*0.071));
+      oscillator.setPulseWidth(clip(pw, 25.0, 75.0));
     }
 
     // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
