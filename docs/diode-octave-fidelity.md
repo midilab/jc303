@@ -688,3 +688,34 @@ threshold. Below the band, ratio |H_pot| / |H_0| minus SPICE at pot 1.0: 1 kHz w
 **Levels.** `OUTPUT_GAIN` 2.1056 -> 2.0482 (C4 at resonance 0 equals TeeBee; C2 -2.0 dB), `BP_GAIN` +18.6 dB and
 `HP_GAIN` +18.8 dB (mode_level -1.3 / 0.0 / -1.2 / 0.0 dB vs LP). Bass Comp knob 0.5 at C2, resonance 60 / 80 / 100:
 +0.1 / -0.2 / +0.7 dB vs TeeBee.
+
+## Q21 loading of the ladder top
+
+C27 / C25 into Q21's bases is a series RC load on the ladder's top rung. At low ladder current the rung's diode
+resistance is high and the load pulls the top down (SPICE, ladder top vs an ideal buffer before C27 / C25, resonance 0):
+up to 1.9 dB at 300 Hz cutoff, 0.8 at 1 kHz, 0.2 at 5 kHz, a broad dip around 100-200 Hz that vanishes below about
+10 Hz where C27 isolates the load. The same top voltage feeds the output and the resonance loop, so with one K the DSP
+cut 1.8 dB less sub-bass than SPICE at 300 Hz cutoff / pot 1.0 (20 Hz), and K had to fall with cutoff to absorb the
+in-band loss.
+
+**Model.** In the stage equations (p = s / wg) the load adds kappa p / (1 + p / rho) y4 to the top node, kappa =
+C27 / (2 C26) = 1.515 (the rung's diode resistance is 1 / (wg C26)) and rho = coupling pole / wg: an extra conductance
+kappa rho above the coupling pole, cancelled below it by a one-pole lowpass of y4 at the pole. It matches SPICE's loss
+within 0.16 dB (20-640 Hz, 300 Hz-5 kHz cutoff) with no fitted parameter. In the DSP stage 4 runs at g (1 + kappa rho)
+with input (a4 lp3 + kappa rho w) / (1 + kappa rho), solved together with the lowpass w; rho = gl / g in the discrete
+domain. The ladder's K = 0 response matches the analytic loaded model within 0.02 dB.
+
+**Corner.** The previous fit of wc per uA (61 Hz/uA at 4 uA falling to 54 at 400) was taken at the loaded output, so it
+contained the loading. On the buffered (unloaded) ladder it is 54.0 Hz/uA up to 120 uA and 53.6 at 400, shape within
+0.013 dB; `native_targets.py` now uses that, since the DSP models the loading itself.
+
+**Mode taps.** The load changes the top stage, so the fixed p^k tap mixes leaked (HP only 17.6 dB down at cutoff / 8,
+an 11.7 dB notch in the sweep). `updateTapMix` now writes each tap as P(p) lp4 + c w (p w = rho (lp4 - w)) and solves
+the triangular system per coefficient update; at kappa rho = 0 it gives the old table. mode_level: HP 82 dB down at
+cutoff / 8, worst dip 0.14 dB.
+
+**Fit.** `KNT` / `KNC` re-solved: 0.26 dB rms over all curves, worst 0.78 (0.38 / 1.34 before). Full-pot K is now
+nearly constant across cutoff (16.7-17.0; it was 12.2-16.8). Ratio |H_pot| / |H_0| minus SPICE at pot 1.0, 20-600 Hz:
+300 Hz cutoff -0.06 dB at 20 Hz (was +1.78), worst +0.61 at 200 Hz; 500 Hz within 0.54; 1 kHz within 0.39.
+`OUTPUT_GAIN` unchanged (the loading takes about 0.5 dB off the in-band level, as in the circuit); `BP_GAIN` / `HP_GAIN`
+-0.27 / -0.46 dB keep the pure modes at LP level.

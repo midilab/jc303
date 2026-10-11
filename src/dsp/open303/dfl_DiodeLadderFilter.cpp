@@ -99,6 +99,8 @@ void DiodeLadderFilter::reset()
   z2 = 0.0;
   z3 = 0.0;
   z4 = 0.0;
+  loadState = 0.0;
+  loadW = 0.0;
   acCouplingState = 0.0;  // Reset AC coupling filter
   for (double& st : netState) st = 0.0;
 }
