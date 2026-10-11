@@ -168,6 +168,11 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.0f),   // Devilfish audio-rate cutoff FM, off by default
+            std::make_unique<juce::AudioParameterFloat> ("resTrim",
+                                                        "Res Trim",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f),   // Diode Native unit trim, 0.5 = nominal unit
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -284,6 +289,7 @@ JC303::JC303()
     filterDrive = parameters.getRawParameterValue("filterDrive");
     bassComp = parameters.getRawParameterValue("bassComp");
     filterFm = parameters.getRawParameterValue("filterFm");
+    resTrim = parameters.getRawParameterValue("resTrim");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -360,6 +366,7 @@ JC303::JC303()
     parameters.addParameterListener("filterDrive", this);
     parameters.addParameterListener("bassComp", this);
     parameters.addParameterListener("filterFm", this);
+    parameters.addParameterListener("resTrim", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -430,6 +437,7 @@ JC303::~JC303()
     parameters.removeParameterListener("filterDrive", this);
     parameters.removeParameterListener("bassComp", this);
     parameters.removeParameterListener("filterFm", this);
+    parameters.removeParameterListener("resTrim", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -713,6 +721,10 @@ void JC303::setParameter (Open303Parameters index, float value)
         // 0..1 Devilfish-style audio-rate cutoff FM depth, applied directly
         open303Core.setFilterFmDepth(value);
         break;
+    case RES_TRIM:
+        // 0..1 -> x0.85..x1.15 loop gain for Diode Native (component-tolerance spread; above x1 it may self-oscillate)
+        open303Core.setResonanceTrim(linToLin(value, 0.0, 1.0, 0.85, 1.15));
+        break;
 
     // LFO parameters
     case LFO_WAVEFORM:
@@ -766,6 +778,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(FILTER_DRIVE, *filterDrive);
         setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
+        setParameter(RES_TRIM, *resTrim);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
         setParameter(LFO_WAVEFORM, *lfoWaveform);

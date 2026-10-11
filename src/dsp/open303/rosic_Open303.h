@@ -109,6 +109,9 @@ namespace rosic
      *  Uses AC-coupled input to modulate filter cutoff frequency. */
     void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
 
+    /** Sets the Diode Native unit trim (loop-gain scale, 1 = nominal unit). */
+    void setResonanceTrim(double trim) { diodeFilter.setLoopGainTrim(trim); }
+
     /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB). The plugin
      *  keeps the default (the backup branch backup/filter-bias-parameter exposes it as a parameter); this is for the
      *  fidelity tools. */
