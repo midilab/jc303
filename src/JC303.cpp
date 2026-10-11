@@ -23,7 +23,7 @@ namespace
     // order matches rosic::ModSource
     juce::StringArray modSourceNames()
     {
-        return { "Off", "LFO", "Env", "Accent", "Key", "Random" };
+        return { "Off", "LFO", "Env", "Accent", "Key", "Random", "Cutoff" };
     }
 
     // order matches rosic::ModDestination
@@ -797,7 +797,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         break;
     case CUTOFF:
         open303Core.setCutoff(
-            linToExp(value, 0.0, 1.0, 314.0,    2394.0)
+            linToExp(value, 0.0, 1.0, rosic::Open303::CUTOFF_KNOB_MIN, rosic::Open303::CUTOFF_KNOB_MAX)
         );
         break;
     case RESONANCE:

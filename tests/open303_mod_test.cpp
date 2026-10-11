@@ -313,6 +313,34 @@ static void randomSourceChangesPerNoteAndIsRepeatable()
   CHECK(changed);
 }
 
+static void cutoffKnobSourceFollowsTheKnobPosition()
+{
+  rosic::Open303 s;
+  double knob1k = std::log(1000.0 / rosic::Open303::CUTOFF_KNOB_MIN)
+                  / std::log(rosic::Open303::CUTOFF_KNOB_MAX / rosic::Open303::CUTOFF_KNOB_MIN);
+  CHECK(std::fabs(s.getCutoff() - 1000.0) < 1e-12);
+  CHECK(std::fabs(s.getCutoffKnobModValue() - knob1k) < 1e-12);
+  s.setCutoff(rosic::Open303::CUTOFF_KNOB_MIN);
+  CHECK(std::fabs(s.getCutoffKnobModValue()) < 1e-12);
+  s.setCutoff(rosic::Open303::CUTOFF_KNOB_MAX);
+  CHECK(std::fabs(s.getCutoffKnobModValue() - 1.0) < 1e-12);
+  s.setCutoff(std::sqrt(rosic::Open303::CUTOFF_KNOB_MIN * rosic::Open303::CUTOFF_KNOB_MAX));
+  CHECK(std::fabs(s.getCutoffKnobModValue() - 0.5) < 1e-12);
+
+  auto at = [](double cutoff) {
+    return [cutoff](rosic::Open303& s) {
+      s.setCutoff(cutoff);
+      s.setModSlot(2, rosic::MOD_SRC_CUTOFF, rosic::MOD_DEST_PITCH, 1.0); };
+  };
+  auto plain = [](double cutoff) {
+    return [cutoff](rosic::Open303& s) { s.setCutoff(cutoff); };
+  };
+  // knob fully left: source is 0, nothing moves; open knob shifts the pitch
+  CHECK(maxDiff(renderNote(45, 64, plain(rosic::Open303::CUTOFF_KNOB_MIN)),
+                renderNote(45, 64, at(rosic::Open303::CUTOFF_KNOB_MIN))) < 1e-12);
+  CHECK(maxDiff(renderNote(45, 64, plain(1000.0)), renderNote(45, 64, at(1000.0))) > 1e-3);
+}
+
 int main()
 {
   lfoSlotMatchesLegacyDepth();
@@ -330,6 +358,7 @@ int main()
   accentSourceIsAGateOnAccentedNotes();
   keytrackIsZeroAtTheCenterNote();
   randomSourceChangesPerNoteAndIsRepeatable();
+  cutoffKnobSourceFollowsTheKnobPosition();
   if(failures == 0)
     std::printf("open303_mod_test: all passed\n");
   return failures == 0 ? 0 : 1;

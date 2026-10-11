@@ -15,6 +15,7 @@ Open303::Open303()
   accent           =     0.0;
   slideTime        =    60.0;
   cutoff           =  1000.0;
+  cutoffKnobModValue = cutoffToKnobPosition(cutoff);
   envUpFraction    =     2.0/3.0;
   normalAttack     =     3.0;
   accentAttack     =     3.0;
@@ -124,6 +125,7 @@ void Open303::setSampleRate(double newSampleRate)
 void Open303::setCutoff(double newCutoff)
 {
   cutoff = newCutoff;
+  cutoffKnobModValue = cutoffToKnobPosition(newCutoff);
   calculateEnvModScalerAndOffset(envMod);
 }
 

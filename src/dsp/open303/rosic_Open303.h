@@ -41,7 +41,8 @@ namespace rosic
     MOD_SRC_ENV,          // filter envelope, bipolar (envelope 0..1 mapped to -1..+1)
     MOD_SRC_ACCENT,       // accent gate, 0 or 1 (smoothed over ~1 ms)
     MOD_SRC_KEYTRACK,     // pitch around MIDI note 48, -1..+1 over +/-2 octaves, follows slides
-    MOD_SRC_RANDOM        // new bipolar value on every note (triggered or slid)
+    MOD_SRC_RANDOM,       // new bipolar value on every note (triggered or slid)
+    MOD_SRC_CUTOFF        // cutoff knob position, 0..1 over CUTOFF_KNOB_MIN..CUTOFF_KNOB_MAX
   };
 
   /** Modulation matrix destinations (also the values of the lfoDestination parameter). */
@@ -76,6 +77,10 @@ namespace rosic
   {
 
   public:
+
+    /** Range of the cutoff knob (in Hz, exponential taper). */
+    static constexpr double CUTOFF_KNOB_MIN = 314.0;
+    static constexpr double CUTOFF_KNOB_MAX = 2394.0;
 
     //-----------------------------------------------------------------------------------------------
     // construction/destruction:
@@ -334,6 +339,9 @@ namespace rosic
     generator (in percent). */
     double getEnvMod() const { return envMod; }
 
+    /** Returns the cutoff knob position used by the cutoff modulation source (0..1). */
+    double getCutoffKnobModValue() const { return cutoffKnobModValue; }
+
     /** Returns the current value of the random modulation source (-1..+1). */
     double getRandomModValue() const { return randomModValue; }
 
@@ -487,6 +495,13 @@ namespace rosic
       }
     };
 
+    /** Maps a cutoff frequency to the knob position (0..1) of the exponential cutoff knob. */
+    static double cutoffToKnobPosition(double cutoffHz)
+    {
+      double position = log(cutoffHz / CUTOFF_KNOB_MIN) / log(CUTOFF_KNOB_MAX / CUTOFF_KNOB_MIN);
+      return std::max(0.0, std::min(1.0, position));
+    }
+
     /** Draws a new value for the random source (xorshift, so renders are repeatable). */
     void drawRandomModValue()
     {
@@ -584,6 +599,7 @@ namespace rosic
     double accentGateSmoothed = 0.0;  // accent source, follows noteAccented
     double accentGateCoeff = 0.0;
     double randomModValue = 0.0;      // random source, redrawn per note
+    double cutoffKnobModValue = 0.0;  // cutoff source, updated by setCutoff
     unsigned int randomState = 0x9E3779B9u;
     bool resonanceModActive = false;  // true while the matrix is moving a knob, so that the knob
     bool fmModActive = false;         // value can be restored when it stops
@@ -695,6 +711,8 @@ namespace rosic
           value = accentGateSmoothed;
         else if( source == MOD_SRC_RANDOM )
           value = randomModValue;
+        else if( source == MOD_SRC_CUTOFF )
+          value = cutoffKnobModValue;
         else if( source == MOD_SRC_KEYTRACK )
         {
           if( !keySampled )
