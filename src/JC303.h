@@ -26,6 +26,7 @@ enum Open303Parameters
   SWITCH_MOD,
   NORMAL_DECAY,
   ACCENT_DECAY,
+  ACCENT_SWEEP,
   FEEDBACK_HPF,
   SOFT_ATTACK,
   SLIDE_TIME,
@@ -53,6 +54,9 @@ enum Open303Parameters
 };
 
 //==============================================================================
+// Accent Sweep knob 0..1 -> accent capacitor time constant in ms; 15 ms is the stock 303
+inline double accentSweepMs (float value) { return linToExp (value, 0.0, 1.0, 15.0, 2000.0); }
+
 class JC303  :  public juce::AudioProcessor,
                 public juce::AudioProcessorValueTreeState::Listener
 {
@@ -206,6 +210,7 @@ private:
     std::atomic<float>* switchModState = nullptr;
     std::atomic<float>* normalDecay = nullptr;
     std::atomic<float>* accentDecay = nullptr;
+    std::atomic<float>* accentSweep = nullptr;
     std::atomic<float>* feedbackFilter = nullptr;
     std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* slideTime = nullptr;
