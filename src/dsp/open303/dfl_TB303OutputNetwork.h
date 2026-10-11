@@ -45,6 +45,9 @@ namespace dfl
       updateCoefficients();
     }
 
+    /** Leaves out the C27/C25 coupling stage when the filter applies it itself (with Q21's tanh after it). */
+    void setCouplingInFilter(bool inFilter) { couplingInFilter = inFilter; }
+
     /** Corner (Hz) of the C27/C25 coupling into Q21 (DiodeLadderFilter::getCouplingPoleHz). */
     void setCouplingPole(double newHz)
     {
@@ -59,7 +62,7 @@ namespace dfl
 
     double getSample(double in)
     {
-      double x = highpass(Q21, highpass(C14, in));
+      double x = highpass(C14, couplingInFilter ? in : highpass(Q21, in));
       x = highpass(TAP_A, x) + tapBGain * highpass(TAP_B, x);
       for(int i = POST1; i < NUM_STAGES; ++i)
         x = highpass(i, x);
@@ -112,6 +115,7 @@ namespace dfl
     double sampleRate = 44100.0;
     double pot        = 0.0;
     double couplingHz = 92.0;
+    bool   couplingInFilter = false;
     double tapBGain   = 0.0;
     double coeff[NUM_STAGES] = {};
     double state[NUM_STAGES] = {};

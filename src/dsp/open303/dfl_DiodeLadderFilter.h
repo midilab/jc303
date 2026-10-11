@@ -230,7 +230,6 @@ namespace dfl
     void updateSatBias();
     double satBiasShape;          // shape(satBias)
     double satBiasNorm;           // 1 / slope of the shaper at satBias
-    double driveLoopGain;         // driveFactor * driveMakeup: small-signal gain of the drive stage inside the loop
     double passbandCompensation;  // bass comp amount, 0..1
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
@@ -278,6 +277,11 @@ namespace dfl
     double loadA     = 0.0;   // load lowpass: TPT one-pole coefficient at the coupling pole
     double loadState = 0.0;
     double loadW     = 0.0;   // load lowpass output
+    // Q21 (the output pair) is an undegenerated differential pair at the same 2 Vt scale as Q12, after the C27 / C25
+    // coupling: a tanh on network section 0's output, in the feedback loop and in the output (see getSample).
+    double q21(double u)      { return shape(headroomBias * u) / headroomBias; }
+    double q21Slope(double u) { const double t = shape(headroomBias * u); return 1.0 - t * t; }
+    double outCouplingState = 0.0;  // the output's own C27 / C25 coupling (the mode mix differs from the loop's lp4)
     double netA[NET_N] = {};      // feedback network: TPT one-pole coefficients g / (1 + g)
     double netState[NET_N] = {};
     double shelfRatio = 1.0;      // NET_SHELF_ZERO / shelf pole
@@ -375,8 +379,7 @@ namespace dfl
     epsilon2 = G3;
     epsilon3 = G4;
 
-    // Feedback factor. Drive is applied through driveLoopGain (drive-invariance: K is divided by the drive stage's
-    // small-signal gain, so the loop gain does not depend on drive).
+    // Feedback factor. Drive scales only the input into Q12 (a hotter VCO), so the loop gain does not depend on it.
     // The resonance knob is the real pot's rotation (linear 50k, loaded), so undo Open303's skew.
     // The loop gain K(pot, cutoff) is solved offline so the resonant boost equals the SPICE model of the real VCF
     // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 0.26 dB rms over the curves);
@@ -423,7 +426,7 @@ namespace dfl
     auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
     // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
     effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
-    K = effK / driveLoopGain;
+    K = effK;
     logLoopGain = std::log1p(effK);
 
     // Drive level compensation (see DT_* above)
@@ -431,14 +434,14 @@ namespace dfl
       static const double DN[DT_DRIVE_N] = { -3.0, 0.0, 4.5, 9.0, 12.5, 16.0 };
       static const double RN[DT_RES_N]   = { 0.0, 0.6245, 0.9235, 1.0 };
       static const double DT[2][DT_RES_N][DT_DRIVE_N] = {
-        { { 0.00, 0.23, -0.37, 0.16, 1.49, 3.57 },
-          { 0.00, 0.08, -1.54, -2.97, -4.00, -4.56 },
-          { 0.00, 0.12, -1.32, -2.72, -3.91, -5.08 },
-          { 0.00, 0.50, -0.04, -1.00, -2.13, -3.36 } },
-        { { 0.00, 0.44, 0.98, 2.91, 5.19, 7.81 },
-          { 0.00, 0.69, 2.49, 5.14, 6.58, 8.29 },
-          { 0.00, 0.80, 2.94, 6.17, 8.15, 9.59 },
-          { 0.00, 1.27, 4.03, 7.47, 8.61, 8.00 } } };
+        { { 0.00, 0.29, -0.25, 1.03, 3.22, 5.94 },
+          { 0.00, 0.05, -1.75, -3.38, -4.21, -3.55 },
+          { 0.00, 0.09, -1.52, -3.16, -4.47, -5.49 },
+          { 0.00, 0.45, -0.29, -1.52, -2.79, -4.03 } },
+        { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
+          { 0.00, 0.62, 2.03, 4.24, 5.81, 8.42 },
+          { 0.00, 0.77, 2.79, 5.82, 7.74, 9.58 },
+          { 0.00, 1.25, 3.97, 7.36, 8.72, 9.39 } } };
       int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
       const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
       const double rr = std::min(std::max(resonance, 0.0), 1.0);
@@ -531,11 +534,12 @@ namespace dfl
     // SIGMA - weighted sum of feedback signals
     double SIGMA = SG1 * S1 + SG2 * S2 + SG3 * S3 + SG4 * S4;
 
-    // Form input to the ladder (with feedback). The coupling network is linear, so the cascade's instantaneous
-    // response is y = netG * x + netS, with x = SIGMA + GAMMA*g*un the ladder output estimate: solve for un exactly,
-    // then advance the cascade.
-    double netG = 1.0, netS = 0.0;
-    for (int i = 0; i < NET_N; ++i)
+    // Form input to the ladder (with feedback). The coupling network is linear apart from Q21, the tanh after its
+    // section 0 (u0, C27 / C25). With x = SIGMA + GAMMA un the ladder output estimate, a linear first pass gives u0;
+    // Q21 is linearised about it, so the solve for un stays exact for small signals, then the cascade advances.
+    const double c0 = 1.0 - netA[0];
+    double netG = 1.0, netS = 0.0;   // sections 1.. : y = netG * q + netS
+    for (int i = 1; i < NET_N; ++i)
     {
       const double a = netA[i], c = 1.0 - a;
       const double gx = (i < NET_N - 1) ? c : c + shelfRatio * a;   // highpass, or (s+z)/(s+p) shelf
@@ -543,26 +547,27 @@ namespace dfl
       netG *= gx;
       netS = gx * netS + gs * netState[i];
     }
-    double un = (input - K * (netG * SIGMA + netS)) / (1.0 + K * netG * GAMMA * driveLoopGain);
-    double x = SIGMA + GAMMA * driveLoopGain * un;
+    const double vIn = driveFactor * input;   // the drive is the VCO level into Q12; the feedback is not scaled
+    const double unLin = (vIn - K * (netG * c0 * (SIGMA - netState[0]) + netS)) / (1.0 + K * netG * c0 * GAMMA);
+    const double u0e = c0 * (SIGMA + GAMMA * unLin - netState[0]);
+    const double qd = q21Slope(u0e);
+    const double fbA = netG * (q21(u0e) + qd * (c0 * (SIGMA - netState[0]) - u0e)) + netS;
+    const double fbB = netG * qd * c0 * GAMMA;
+    double un = (vIn - K * fbA) / (1.0 + K * fbB);
+    double x = SIGMA + GAMMA * un;
+    double q21Residual = 0.0;
     for (int i = 0; i < NET_N; ++i)
     {
       const double v = (x - netState[i]) * netA[i];
       const double lp = v + netState[i];
       netState[i] = lp + v;
       x = (i < NET_N - 1) ? x - lp : x - lp + shelfRatio * lp;
+      if (i == 0) { const double q = q21(x); q21Residual = q - x; x = q; }
     }
 
-    // Apply input nonlinearity with headroom scaling: scale down before the
-    // tanh and back up after, so 0 dB drive (driveFactor == 1) stays clean
-    // and turning up the drive pushes the signal into saturation. Matches the
-    // DB303 shaper so the 0..9 dB range feels the same.
-    // driveMakeup is the level compensation (see setInputDrive): without it the
-    // pre-tanh driveFactor gain doubles as a volume boost, so the drive knob
-    // acted as a loudness control. It keeps drive roughly level-neutral while the
-    // tanh still saturates peaks - so drive changes timbre/resonance-compression,
-    // not overall level.
-    un = (shape(driveFactor * un * headroomBias + satBias) - satBiasShape) * satBiasNorm * driveMakeup / headroomBias;
+    // Q12, the input pair: a tanh with headroom scaling (0 dB drive = the real 303's level, see setInputDrive) and
+    // the optional asymmetry, normalised to slope 1. The level makeup is applied at the output.
+    un = (shape(un * headroomBias + satBias) - satBiasShape) * satBiasNorm / headroomBias;
 
     // 1st stage
     double xin = un * gamma1 + S2 + epsilon1 * S1;
@@ -603,22 +608,29 @@ namespace dfl
     const double taps[5] = { un, lp1, lp2, lp3, lp4 };
     auto pk = [&](int k) { const double* w = tapMix[k]; return w[0] * taps[0] + w[1] * taps[1] + w[2] * taps[2] + w[3] * taps[3] + w[4] * taps[4] - tapW[k] * loadW; };
     const double bassComp = BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
-    const double gLP = driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0);
+    const double gLP = driveMakeup * driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0);
+    double lpWeight = 1.0;   // the LP term's share of the mix (Q21's distortion follows it)
     double out;
     if (mode <= 0.0)
       out = gLP * lp4;
     else
     {
-      const double gBP = BP_GAIN * driveTrim[1];
+      const double gBP = driveMakeup * BP_GAIN * driveTrim[1];
       const double lo = mode < 0.5 ? std::sqrt(gLP) : std::sqrt(gBP);
-      const double hi = mode < 0.5 ? std::sqrt(gBP) : std::sqrt(HP_GAIN * driveTrim[1]);
+      const double hi = mode < 0.5 ? std::sqrt(gBP) : std::sqrt(driveMakeup * HP_GAIN * driveTrim[1]);
       const int k = mode < 0.5 ? 0 : 2;
       const double t = mode < 0.5 ? 2.0 * mode : 2.0 * mode - 1.0;
       const double a = (1.0 - t) * lo, b = t * hi;
       // the weights sum to (1-t)^2 + t^2 (0.5 at the midpoint); normalising keeps the in-between level up
-      out = (a * a * pk(k) + 2.0 * a * b * pk(k + 1) + b * b * pk(k + 2)) / ((1.0 - t) * (1.0 - t) + t * t);
+      const double norm = (1.0 - t) * (1.0 - t) + t * t;
+      out = (a * a * pk(k) + 2.0 * a * b * pk(k + 1) + b * b * pk(k + 2)) / norm;
+      lpWeight = mode < 0.5 ? (1.0 - t) * (1.0 - t) / norm : 0.0;
     }
-    return out;
+    // the C27 / C25 coupling into Q21, then Q21's distortion (exact for LP: the same node as the loop's)
+    const double vo = (out - outCouplingState) * netA[0];
+    const double hp = out - (vo + outCouplingState);
+    outCouplingState += 2.0 * vo;
+    return hp + gLP * lpWeight * q21Residual;
   }
 
 } // end namespace dfl
