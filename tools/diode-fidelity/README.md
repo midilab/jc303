@@ -21,8 +21,8 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 
 | Tool | What it checks | Run time | Pass criteria (exit code 0) |
 |---|---|---|---|
-| `build/stability_sweep` | Impulse-decay test of Diode Octave at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 7 feedback-HP corners, 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 8400 cases | ~2.5 min | every case decays below -60 dB; prints the worst tail |
-| `build/stress_test` | Full synth, all 4 diode types x 4 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100: 288 runs | ~10 s | no non-finite sample, tail after gate-off < -100 dB, peak < 20 |
+| `build/stability_sweep` | Impulse-decay test of Diode Octave and Diode Native at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 7 feedback-HP corners, 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 16800 cases | ~5 min | every case decays below -60 dB; prints the worst tail |
+| `build/stress_test` | Full synth, all 5 diode types x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100: 450 runs | ~10 s | no non-finite sample, tail after gate-off < -100 dB, peak < 20 |
 | `build/plain_modes` | Self-oscillation onset of plain Diode / BP / HP (bisection on the resonance knob) at 5 cutoffs, drive -6 and +4.5 | ~10 s | onset 83-95 % everywhere (design 87-92 %), none at 80 %, sustained at 100 % |
 | `build/drive_level [-v]` | Drive knob is not a volume control (48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-type limits (Diode Octave -1.5..+3 dB, plain modes wider) | ~1 min | every filter type within limits |
 | `build/morph_level` | BP / HP morph: at morph 1 the Diode BP and Diode HP types match plain Diode LP in level (full synth, 4 cutoffs x 4 resonances x 2 env mods x 3 drives) | ~10 s | worst deviation <= 0.5 dB |
@@ -31,12 +31,13 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 | `parity_synth.py [--check]` | Full-synth level / peak / brightness vs TeeBee over 96 settings per drive, plus the max-cutoff "shriek" check; uses `build/render_note` | ~15 s | `--check`: at the default -6 dB drive level within 0.5 dB (std < 0.6), brightness within 3 %, peak < 1.5 dB |
 | `build/render_note` | Renders one note to raw float32 on stdout (`render_note <filterType> <cutoff> <res> <env> <decayMs> <accent> <gateOffSec> <totalSec> <driveDb> <morph> <midiNote> [fbHpHz] [bias]`) | - | helper |
 | `gen_k_tables.py` + `build/k_target_solver` | Re-solves the Diode Octave feedback-law tables (see below) | ~4 min | prints C++ arrays |
+| `gen_native_tables.py` + `spice/native_targets.py` + `build/native_solver` | Re-solves the Diode Native tables (`KNT`, `KNC`) against SPICE; run after changing the ladder, `NATIVE_TUNING`, the coupling network or the netlist | ~3 min | prints C++ arrays |
 | `spice/` | ngspice reference of the real filter (see below) | seconds each | see the scripts |
 
 ### Expected results (current tree, drive -6 dB, bass comp fixed)
 
-- stability sweep: 0 failures, worst tail about -138 dB
-- stress test: 0 failures, worst tail about -297 dB
+- stability sweep: 0 failures of 16800, worst tail about -69 dB (Diode Native at Filter Feedback 1.0, capped at 0.98 x threshold)
+- stress test: 0 failures of 450, worst tail about -297 dB, worst peak 2.2 (Diode Native, bass comp 1.0)
 - plain modes: onset 86.9-92.4 % (the knob spans 0..0.8 of the old range)
 - parity cells: boost term 0.12 (worst 3.0 dB), peak-frequency term 0.04, passband spread 0.09, stopband shape 0.60
 - parity synth at -6 dB drive: level +0.02 dB (std 0.32), peak +0.75 dB, brightness +1.0 %
@@ -68,6 +69,8 @@ regeneration after a tuning change left 24 low-cutoff, drive-9 stability cases m
 Needs ngspice (`brew install ngspice`) and numpy. Run the scripts from the `spice/` directory.
 
 - `tb303_vcf.py`: netlist generator (also checked in as `docs/tb303-vcf.cir`; its header lists the unverified guesses).
+  It sets tight tolerances: with the defaults the operating point is sometimes wrong and AC results jump (see the doc).
+- `native_targets.py`: SPICE targets for Diode Native (response ratio vs pot position and cutoff).
 - `run_ac.py`: small-signal AC sweep; `boost_spice.py`: resonant boost versus pot position and cutoff;
   `real303.py`: Stinchcombe's published polynomial for comparison; the netlist matches it to 0.03 dB with resonance off.
 - `tran_spice.py`, `ablate.py`: large-signal sine drive and the ablations (linearise Q21 / Q12) behind the finding that

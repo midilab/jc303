@@ -45,6 +45,9 @@ public:
         int hiddenWhenIndex = -1;
         int shownFromIndex = 0;        // item is skipped while hiddenWhenId's choice index is below this
         bool needsMod = false;         // greyed out and inert while the Mods switch is off
+        int shownUntilIndex = 1 << 30; // item is skipped while hiddenWhenId's choice index is above this
+        juce::String altLabel;         // shown instead of label while hiddenWhenId's choice index equals altLabelIndex
+        int altLabelIndex = -1;
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
     };
 
@@ -243,7 +246,7 @@ public:
         for (auto& pg : pageList)
             for (auto& it : pg.items)
                 if (it.id == id)
-                    return it.label;
+                    return labelOf(it);
         return {};
     }
 
@@ -272,6 +275,15 @@ public:
     }
 
 private:
+    juce::String labelOf(const Item& item) const
+    {
+        if (item.altLabel.isNotEmpty())
+            if (auto* p = valueTreeState.getParameter(item.hiddenWhenId))
+                if ((int) std::lround(p->convertFrom0to1(p->getValue())) == item.altLabelIndex)
+                    return item.altLabel;
+        return item.label;
+    }
+
     bool isHidden(const Item& item) const
     {
         if (item.hiddenWhenId.isEmpty())
@@ -280,7 +292,7 @@ private:
         if (p == nullptr)
             return false;
         const int index = (int) std::lround(p->convertFrom0to1(p->getValue()));
-        return index == item.hiddenWhenIndex || index < item.shownFromIndex;
+        return index == item.hiddenWhenIndex || index < item.shownFromIndex || index > item.shownUntilIndex;
     }
 
     bool modsOn() const
@@ -304,7 +316,10 @@ private:
             if (s.slider != nullptr)
                 s.slider->setEnabled(enabled);
             if (s.label != nullptr)
+            {
+                s.label->setText(bound ? assignableLabel(i) : juce::String(), juce::dontSendNotification);
                 s.label->setAlpha(bound && ! enabled ? 0.4f : 1.0f);
+            }
         }
     }
 
@@ -452,7 +467,7 @@ private:
             return item.options[juce::jlimit(0, item.options.size() - 1, p->get())];
         }
 
-        return item.label;
+        return labelOf(item);
     }
 
     void updateDisplay()
@@ -463,7 +478,7 @@ private:
         auto& item = currentItem();
         if (item.type == Type::value)
         {
-            itemLabel.setText(item.label, juce::dontSendNotification);
+            itemLabel.setText(labelOf(item), juce::dontSendNotification);
             valueLabel.setText(displayValue(item), juce::dontSendNotification);
         }
         else
@@ -531,7 +546,7 @@ private:
             auto& it = page.items.getReference(i);
             if (isHidden(it))
                 continue;
-            juce::String text = it.type == Type::placeholder ? "Soon to be implemented" : it.label;
+            juce::String text = it.type == Type::placeholder ? "Soon to be implemented" : labelOf(it);
             menu.addItem(1 + i, text, isItemEnabled(it), i == cursor);
         }
         menu.setLookAndFeel(&popupLookAndFeel);
@@ -616,7 +631,7 @@ public:
         // every Mods-page item is greyed out and inert while the Mods switch is off
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "bassComp",    "HP/BP Morph",      Type::value, {}, 0.0f, {}, "filterType", -1, 3, true });        // Diode BP / Diode HP only
+        mod.items.add(Item { "bassComp",    "HP/BP Morph",      Type::value, {}, 0.0f, {}, "filterType", -1, 3, true, 5, "Bass Comp", 5 });   // Diode BP / HP morph; Diode Native bass comp
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, {}, -1, 0, true });

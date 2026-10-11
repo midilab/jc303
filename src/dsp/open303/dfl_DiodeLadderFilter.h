@@ -74,7 +74,8 @@ namespace dfl
     void setSaturationBias(double newBias);
 
     /** Sets the morph amount (0..1) for the BP and HP responses: 0 = pure bandpass / highpass,
-        1 = pure lowpass, crossfading linearly. Ignored in LP mode. (Historically the bass-comp
+        1 = pure lowpass, crossfading linearly. In Diode Native it is the bass comp amount (see getSample);
+        ignored by the other LP modes. (Historically the bass-comp
         knob; the LP/BP output compensation is now a fixed constant, see FIXED_PASSBAND_COMP.) */
     void setPassbandCompensation(double newCompensation) { passbandCompensation = newCompensation; }
 
@@ -92,6 +93,19 @@ namespace dfl
         octaveMode = enabled;
         feedbackHpState = 0.0;    // the loop highpass only runs in octave mode
         calculateCoefficients();  // octave mode caps the resonance (see K below)
+      }
+    }
+
+    /** Sets Diode Native mode: the octave ladder with the real circuit's feedback coupling network and
+        resonance-pot law, calibrated to a SPICE model of the TB-303 VCF instead of to the TeeBee (see
+        calculateCoefficients). Implies octave mode; LP response only. */
+    INLINE void setNativeMode(bool enabled)
+    {
+      if (enabled != nativeMode)
+      {
+        nativeMode = enabled;
+        for (double& st : netState) st = 0.0;
+        calculateCoefficients();
       }
     }
 
@@ -300,6 +314,7 @@ namespace dfl
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
     bool   octaveMode;            // true = 1st pole one octave above (TB-303 style)
+    bool   nativeMode = false;    // Diode Native (implies octaveMode), see setNativeMode
     int    responseMode;          // LP/BP/HP output mixing (@see ResponseMode)
 
     // Filter FM (Devilfish mod) - audio-rate cutoff modulation from input
@@ -318,6 +333,35 @@ namespace dfl
       feedbackHpAlpha = 1.0 - exp(-2.0 * PI * feedbackHpFreq / sampleRate);
       feedbackHpGain  = 1.0 - feedbackHpAlpha;
     }
+    // Diode Native: the real feedback coupling network (Stinchcombe's full TB-303 analysis, poles and zeroes in
+    // rad/s) F(s) = s^4 (s+46.5)(s+4.40) / ((s+578.1)(s+97.5)(s+38.5)(s+20.0)(s+7.41)(s+4.45)), unity at high
+    // frequency, run as a cascade of TPT one-poles inside the zero-delay loop solve: four highpasses and the
+    // (s+46.5)/(s+38.5) shelf. (s+4.40)/(s+4.45) is unity within 0.1 dB and is left out. The Filter Feedback knob
+    // scales the dominant 578.1 rad/s (92 Hz) pole by feedbackHpFreq / 115.
+    static constexpr int    NET_N = 5;
+    static constexpr double NET_POLE[NET_N] = { 578.1, 97.5, 20.0, 7.41, 38.5 };
+    static constexpr double NET_SHELF_ZERO  = 46.5;   // zero of the last section
+    // Diode Native cutoff: the cutoff parameter is the circuit's ladder-core 180-degree frequency, 1.18921 x its
+    // corner wc (Stinchcombe's core polynomial s^4 + 6.727 s^3 + 14.142 s^2 + 9.514 s + 1), the frequency the
+    // resonant peak approaches at high cutoff. The Pirkle ladder's corner is 0.7006 x its cutoff coefficient
+    // (fitted to the core polynomial, 0.4 dB / 3 degrees up to 8x cutoff), so tuning = 1 / (1.18921 * 0.7006).
+    static constexpr double NATIVE_TUNING = 1.2003;
+    // Diode Native output gain: static, chosen so the resonance-0 level equals the TeeBee's. There is no
+    // resonance-dependent compensation: like the real circuit, the passband drops as resonance rises.
+    static constexpr double NATIVE_OUTPUT_GAIN = 2.1056;
+    // Diode Native oscillation cap, as a fraction of the interpolated threshold KNC. 0.98 rather than 0.99: between the
+    // 1 and 2 kHz nodes at Filter Feedback 1.0 the threshold sags below the interpolation (K / threshold reached
+    // 0.9956 at 0.99 on a dense 20 x 20 check); it binds only near that knob extreme.
+    static constexpr double NATIVE_K_MARGIN = 0.98;
+    // Diode Native bass comp knob range (amount at knob 1.0). Full-synth level vs the TeeBee at resonance 60..100
+    // (mean of cutoff 400 / 1000 / 2500, env mod 60): amount 0 is 4-8 dB quieter, ~0.25 matches within 1 dB,
+    // 0.5 is 2-6 dB louder, and 1.0 (flat passband) would be 15-17 dB louder because the peak rises with it.
+    static constexpr double NATIVE_BASS_COMP_MAX = 0.5;
+    double netA[NET_N] = {};      // Diode Native feedback network: TPT one-pole coefficients g / (1 + g)
+    double netState[NET_N] = {};
+    double shelfRatio = 1.0;      // NET_SHELF_ZERO / shelf pole
+    double nativeLogLoop = 0.0;   // log(1 + K): the bass comp gain is exp(amount * nativeLogLoop)
+
     static constexpr double acCouplingFreq = 20.0; // AC coupling corner frequency (Hz)
     static constexpr double filterFmScale  = 0.4;  // Scale factor for FM modulation depth
   };
@@ -355,7 +399,9 @@ namespace dfl
     // Bilinear transform calculations (cutoff tuned so the resonant peak lands
     // on the nominal frequency - see CUTOFF_TUNING constants)
     double tuning = CUTOFF_TUNING;
-    if (octaveMode)
+    if (nativeMode)
+      tuning = NATIVE_TUNING;
+    else if (octaveMode)
     {
       double w = 1.0 - std::log(std::max(cutoff, OCTAVE_TUNING_LOW_C0) / OCTAVE_TUNING_LOW_C0)
                        / std::log(OCTAVE_TUNING_LOW_C1 / OCTAVE_TUNING_LOW_C0);
@@ -424,7 +470,58 @@ namespace dfl
     // Octave mode follows the TeeBee instead (see the table block below); drive is applied
     // through driveLoopGain (drive-invariance: K is divided by the drive stage's small-signal
     // gain, so the loop gain does not depend on drive).
-    if (octaveMode)
+    if (nativeMode)
+    {
+      // Diode Native: the resonance knob is the real pot's rotation (linear 50k, loaded), so undo Open303's skew.
+      // The loop gain K(pot, cutoff) is solved offline so the resonant boost equals the SPICE model of the real VCF
+      // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 0.8 dB rms over the curves);
+      // KNC is the measured self-oscillation threshold at the Filter Feedback nodes 76.7 / 115 / 268 Hz (knob 1.0 /
+      // default / 0); the cap keeps the knob from pushing it into oscillation, which the real circuit never does.
+      for (int i = 0; i < NET_N; ++i)
+      {
+        const double p = NET_POLE[i] * (i == 0 ? feedbackHpFreq / 115.0 : 1.0);
+        const double gn = std::tan(std::min(0.5 * p / sampleRate, 1.4));
+        netA[i] = gn / (1.0 + gn);
+      }
+      shelfRatio = NET_SHELF_ZERO / NET_POLE[NET_N - 1];
+      static const double CN[11] = { 300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000 };
+      static const double AN[7]  = { 0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0 };
+      static const double KNT[11][7] = {
+        { 0, 2.952, 6.701, 8.531, 11.899, 13.695, 15.977 },
+        { 0, 2.947, 6.254, 9.021, 12.297, 14.386, 16.718 },
+        { 0, 3.180, 6.236, 9.359, 12.750, 14.664, 17.123 },
+        { 0, 3.463, 6.484, 9.255, 12.806, 14.905, 17.307 },
+        { 0, 3.525, 6.412, 9.479, 12.993, 15.171, 17.646 },
+        { 0, 3.652, 6.333, 9.466, 13.112, 15.249, 17.778 },
+        { 0, 3.647, 6.360, 9.461, 13.196, 15.302, 17.871 },
+        { 0, 3.537, 6.332, 9.498, 13.121, 15.330, 17.855 },
+        { 0, 3.328, 6.321, 9.437, 13.103, 15.309, 17.900 },
+        { 0, 3.027, 6.266, 9.399, 13.085, 15.333, 17.987 },
+        { 0, 2.643, 6.208, 9.394, 13.113, 15.434, 18.060 } };
+      static const double KNC[3][11] = {
+        { 20.814, 18.839, 17.986, 17.680, 17.565, 17.736, 18.038, 18.342, 18.350, 18.469, 18.720 },
+        { 28.513, 24.078, 21.722, 20.962, 19.477, 18.997, 18.626, 18.446, 18.417, 18.517, 18.760 },
+        { 43.424, 32.052, 26.354, 24.571, 21.183, 20.110, 19.280, 18.850, 18.682, 18.714, 18.916 } };
+      const double pot = -std::log(1.0 - std::clamp(resonance, 0.0, 1.0) * PLAIN_SKEW_NORM) / 3.0;
+      double lc = std::log(std::clamp(cutoff, CN[0], CN[10]));
+      int ci = 0; while (ci < 9 && std::log(CN[ci + 1]) < lc) ++ci;
+      const double cf = (lc - std::log(CN[ci])) / (std::log(CN[ci + 1]) - std::log(CN[ci]));
+      int ai = 0; while (ai < 5 && AN[ai + 1] < pot) ++ai;
+      const double af = std::clamp((pot - AN[ai]) / (AN[ai + 1] - AN[ai]), 0.0, 1.0);
+      auto at = [&](int c) { return KNT[c][ai] + af * (KNT[c][ai + 1] - KNT[c][ai]); };
+      double effK = at(ci) + cf * (at(ci + 1) - at(ci));
+      static const double FN[3] = { 76.7, 115.0, 268.0 };
+      const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[2]));
+      const int fi = (lf < std::log(FN[1])) ? 0 : 1;
+      const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
+      auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
+      effK = std::min(effK, NATIVE_K_MARGIN * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
+      K = effK / driveLoopGain;
+      Kcomp = effK;
+      nativeLogLoop = std::log1p(effK);
+      plainTrimLP = plainTrimBPHP = 1.0;
+    }
+    else if (octaveMode)
     {
       // TeeBee-parity feedback law (fitted offline, drive-0 basis, cutoff tuning 1.17 with the low-cutoff boost): the
       // feedback K that makes the diode's resonant boost equal the TeeBee's at the same
@@ -593,7 +690,30 @@ namespace dfl
 
     // Form input to the ladder (with feedback)
     double un;
-    if (octaveMode)
+    if (nativeMode)
+    {
+      // The coupling network is linear, so the cascade's instantaneous response is y = netG * x + netS,
+      // with x = SIGMA + GAMMA*g*un the ladder output estimate: solve for un exactly, then advance the cascade.
+      double netG = 1.0, netS = 0.0;
+      for (int i = 0; i < NET_N; ++i)
+      {
+        const double a = netA[i], c = 1.0 - a;
+        const double gx = (i < NET_N - 1) ? c : c + shelfRatio * a;   // highpass, or (s+z)/(s+p) shelf
+        const double gs = (i < NET_N - 1) ? -c : (shelfRatio - 1.0) * c;
+        netG *= gx;
+        netS = gx * netS + gs * netState[i];
+      }
+      un = (input - K * (netG * SIGMA + netS)) / (1.0 + K * netG * GAMMA * driveLoopGain);
+      double x = SIGMA + GAMMA * driveLoopGain * un;
+      for (int i = 0; i < NET_N; ++i)
+      {
+        const double v = (x - netState[i]) * netA[i];
+        const double lp = v + netState[i];
+        netState[i] = lp + v;
+        x = (i < NET_N - 1) ? x - lp : x - lp + shelfRatio * lp;
+      }
+    }
+    else if (octaveMode)
     {
       // un = input - fbHpGain*(K*(SIGMA + GAMMA*g*un) - s)  =>  solve for un exactly, with g the
       // drive stage's small-signal gain (driveLoopGain) between un and the ladder input.
@@ -686,6 +806,14 @@ namespace dfl
       }
       case RESPONSE_LP:
       default:
+        if (nativeMode)
+        {
+          // Bass comp: below cutoff the loop's passband gain is about 1 / (1 + K), so (1 + K)^amount restores that
+          // fraction (in dB) of the resonance bass loss; 0 = the real circuit, and nothing changes at resonance 0.
+          const double bassComp = NATIVE_BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
+          out = NATIVE_OUTPUT_GAIN * driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * nativeLogLoop) : 1.0) * lp4;
+          break;
+        }
         out = passbandComp * (octaveMode ? octaveTrim : plainTrimLP) * driveTrim[octaveMode ? 0 : 1] * lp4;
         break;
     }

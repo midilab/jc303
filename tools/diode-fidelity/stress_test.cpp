@@ -8,7 +8,7 @@
 int main()
 {
   int bad = 0, n = 0; double worstTail = -400, worstPeak = 0;
-  for (int ft : { 1, 2, 3, 4 })   // Diode Octave, Diode, Diode BP, Diode HP
+  for (int ft : { 1, 2, 3, 4, 5 })   // Diode Octave, Diode, Diode BP, Diode HP, Diode Native
     for (double drive : { -3.0, 0.0, 4.5, 9.0, 16.0 })
       for (double cut : { 314.0, 1200.0, 2394.0 })
         for (double env : { 0.0, 60.0, 100.0 })
