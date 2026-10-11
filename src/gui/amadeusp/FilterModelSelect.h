@@ -1,9 +1,10 @@
 #pragma once
 
 #include "Gui.h"
+#include "../shared/FilterModelOrder.h"
 
-// Compact prev/next selector for the "filterType" AudioParameterChoice
-// (TeeBee / Diode / Diode Octave). Mirrors OverdriveModelSelect, but sized
+// Compact prev/next selector for the "filterType" AudioParameterChoice, stepping
+// in FilterModelOrder's sequence. Mirrors OverdriveModelSelect, but sized
 // to overlay inside the MODIFICATIONS label cell.
 class FilterModelSelect : public juce::Component,
                           public juce::AudioProcessorValueTreeState::Listener
@@ -46,10 +47,9 @@ public:
     {
         if (auto* param = dynamic_cast<juce::AudioParameterChoice*>(valueTreeState.getParameter("filterType")))
         {
-            int numChoices = param->choices.size();
             // Wrap around so the selector is circular: left from the first
-            // choice lands on the last, right from the last lands on the first.
-            int newValue = (param->getIndex() + delta + numChoices) % numChoices;
+            // model lands on the last, right from the last lands on the first.
+            int newValue = FilterModelOrder::step(param->getIndex(), delta, true);
             param->beginChangeGesture();
             *param = newValue;
             param->endChangeGesture();
