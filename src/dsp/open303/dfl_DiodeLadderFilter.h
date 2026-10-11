@@ -195,16 +195,16 @@ namespace dfl
     // the signal is actually driven. 0.5 = 6 dB headroom (matches DB303).
     static constexpr double headroomBias = 0.5;
 
-    // Asymmetric shaper bias: the shaper is shape(a + b) - shape(b), an input pair with an offset: its slope (gm) is
-    // sech^2 b at rest and never above 1, so no operating point raises the loop gain past the symmetric pair's. (Scaled
-    // to slope 1 at rest it reached cosh^2 b once the signal walked the pair back to its centre, and Hi-Fi latched into
-    // a sustained oscillation after a loud note at high drive and resonance.) b = bias knob (0..1) * SAT_BIAS_MAX,
-    // ramping from 0 at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean region is untouched.
-    // Large-signal level and resonance depend on b; the level is part of the drive level tables DT below
-    // (fitted at SAT_BIAS_DEFAULT).
+    // Asymmetric shaper bias (a non-circuit option for the tools: the real Q12 pair is symmetric, and the default is
+    // 0): the shaper is shape(a + b) - shape(b), an input pair with an offset, whose slope (gm) is sech^2 b at rest and
+    // never above 1, so no operating point raises the loop gain past the symmetric pair's. (Scaled to slope 1 at rest
+    // it reached cosh^2 b once the signal walked the pair back to its centre, and Hi-Fi latched into a sustained
+    // oscillation after a loud note at high drive and resonance.) b = bias knob (0..1) * SAT_BIAS_MAX, ramping from 0
+    // at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean region is untouched. Large-signal level and resonance
+    // depend on b; the drive level tables DT below are fitted at SAT_BIAS_DEFAULT.
     static constexpr double SAT_BIAS_MAX     = 1.0;
     static constexpr double SAT_BIAS_TOP_DB  = 16.0;
-    static constexpr double SAT_BIAS_DEFAULT = 0.5;
+    static constexpr double SAT_BIAS_DEFAULT = 0.0;
 
     // Drive level compensation (dB): output gain as a function of drive and resonance so the drive knob is not
     // a volume control. Full-synth renders (default bias, mean over cutoff / env mod) of the level relative to the
@@ -491,23 +491,23 @@ namespace dfl
       static const double RN[DT_RES_N]   = { 0.0, 0.6245, 0.9235, 1.0 };
       static const double DT[2][2][DT_RES_N][DT_DRIVE_N] = {
         // Standard
-        { { { 0.00, 0.29, -0.11, 1.55, 4.13, 7.32 },
-            { 0.00, 0.05, -1.70, -3.16, -3.66, -2.37 },
-            { 0.00, 0.09, -1.48, -3.04, -4.21, -4.89 },
-            { 0.00, 0.45, -0.20, -1.37, -2.57, -3.61 } },
-          { { 0.00, 0.35, 0.40, 3.17, 6.53, 10.02 },
-            { 0.00, 0.62, 2.20, 4.82, 7.04, 10.51 },
-            { 0.00, 0.77, 3.02, 6.64, 9.14, 11.79 },
-            { 0.00, 1.25, 4.52, 9.15, 12.45, 15.52 } } },
+        { { { 0.00, 0.29, -0.16, 1.53, 4.14, 7.34 },
+            { 0.00, 0.05, -1.76, -3.19, -3.52, -2.29 },
+            { 0.00, 0.09, -1.62, -3.19, -4.22, -4.62 },
+            { 0.00, 0.45, -0.50, -1.69, -2.75, -3.50 } },
+          { { 0.00, 0.35, 0.34, 3.14, 6.53, 10.03 },
+            { 0.00, 0.62, 1.38, 3.80, 6.81, 10.50 },
+            { 0.00, 0.77, 2.06, 4.84, 7.47, 11.31 },
+            { 0.00, 1.25, 3.51, 7.02, 10.11, 13.82 } } },
         // Hi-Fi
-        { { { 0.00, 0.22, -0.51, 0.95, 3.91, 7.53 },
-            { 0.00, 0.05, -1.71, -3.22, -3.69, -1.78 },
-            { 0.00, 0.09, -1.49, -3.05, -4.19, -3.91 },
-            { 0.00, 0.44, -0.19, -1.34, -2.57, -3.04 } },
-          { { 0.00, 0.35, 0.40, 3.17, 6.53, 10.02 },
-            { 0.00, 0.61, 2.19, 4.89, 7.04, 10.48 },
-            { 0.00, 0.76, 2.97, 6.56, 8.90, 10.76 },
-            { 0.00, 1.23, 4.48, 9.05, 12.03, 13.61 } } } };
+        { { { 0.00, 0.22, -0.55, 0.65, 2.98, 6.09 },
+            { 0.00, 0.05, -1.78, -3.25, -3.71, -2.86 },
+            { 0.00, 0.09, -1.64, -3.21, -4.26, -4.72 },
+            { 0.00, 0.44, -0.51, -1.67, -2.74, -3.51 } },
+          { { 0.00, 0.35, 0.34, 3.14, 6.53, 10.03 },
+            { 0.00, 0.61, 1.36, 3.83, 6.81, 10.49 },
+            { 0.00, 0.76, 2.01, 4.76, 7.38, 11.04 },
+            { 0.00, 1.23, 3.44, 6.93, 9.99, 13.66 } } } };
       int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
       const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
       const double rr = std::min(std::max(resonance, 0.0), 1.0);

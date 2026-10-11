@@ -112,9 +112,9 @@ namespace rosic
     void setFilterTension(double t) { diodeFilter.setTension(t); }
     void setFilterTensionEnvelope(bool on) { diodeFilter.setTensionEnvelope(on); }   // comparison switch (temporary)
 
-    /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB). The plugin
-     *  keeps the default (the backup branch backup/filter-bias-parameter exposes it as a parameter); this is for the
-     *  fidelity tools. */
+    /** Sets the diode filter's saturation asymmetry (0-1, default 0 = symmetric like the real Q12, ramps in with drive
+     *  above 0 dB). The plugin keeps the default (the backup branch backup/filter-bias-parameter exposes it as a
+     *  parameter); this is for the fidelity tools. */
     void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); }
 
     /** Returns the Filter FM depth. */

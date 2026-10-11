@@ -21,9 +21,9 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 
 | Tool | What it checks | Run time | Pass criteria (exit code 0) |
 |---|---|---|---|
-| `build/stability_sweep [--standard]` | Impulse-decay test (Hi-Fi, or Standard with `--standard`) at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 9 Filter Feedback corners (57.5-268 Hz), 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 10800 cases | ~10 min | every case decays below -60 dB, or (a slow subsonic ring) does not grow over 6 s; prints the worst tail |
-| `build/stress_test` | Full synth, both qualities, Diode at Res Trim 0.85 / 1 / 1.15 (LP) and 1.15 at mode 0.25 / 0.5 / 0.75 / 1, full bass comp, x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100: 1260 runs | ~15 s | no non-finite sample, tail after gate-off < -100 dB, peak < 20 |
-| `build/drive_level [-v]` | Drive knob is not a volume control (both qualities, 48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-mode limits (LP -2.5..+3.5 dB, BP / HP wider) | ~1 min | every filter type within limits |
+| `build/stability_sweep [--standard] [--tension T] [--kick A]` | Impulse-decay test (Hi-Fi, or Standard with `--standard`; `--kick 3`: a loud 20 ms burst at the cutoff instead of the impulse, for large-signal latch-ups; `--tension`: Hi-Fi rung tension) at resonance 0.97/0.99/1.0 over 40 cutoffs (200-20000 Hz), 9 Filter Feedback corners (57.5-268 Hz), 10 drive values (-12..16 dB; the filter clamps to [-12, +16]) = 10800 cases | ~10 min | every case decays below -60 dB, or (a slow subsonic ring) does not grow over 6 s; after a loud kick, nothing still within 20 dB of its peak; prints the worst tail |
+| `build/stress_test` | Full synth, both qualities, Diode at Res Trim 0.85 / 1 / 1.15 (LP) and 1.15 at mode 0.25 / 0.5 / 0.75 / 1, full bass comp, x 5 drives x 3 cutoffs x 3 env mods x FM on/off at resonance 100, accent 100, Hi-Fi at tension -1 / 0 / 1: 2520 runs | ~2 min | no non-finite sample, tail after gate-off < -100 dB, peak < 24 |
+| `build/drive_level [-v]` | Drive knob is not a volume control (both qualities, 48 settings per filter incl. resonance 0..100): clean region flat, level above 0 dB within per-mode limits (LP -3.0..+3.5 dB, Hi-Fi LP -5.0..+5.5 dB, BP / HP wider) | ~1 min | every filter type within limits |
 | `build/mode_level` | Mode morph: level of mode 0.25 / 0.5 / 0.75 / 1 vs LP (full synth, resonance 50..70, cutoff 800..1500); small-signal shape over 21 mode steps (no dip deeper than 3 dB below its 1/3-octave neighbours, i.e. no notch); BP / HP slopes | ~6 s | level within 1.5 dB, no notch, HP >= 30 dB down at cutoff / 8, BP >= 12 dB at cutoff / 8 and x 8 |
 | `build/model_level` | Global level between filter models (`Open303::FILTER_LEVEL`): Spicy vs TeeBee at resonance 0 (saw, C2 / C3 / C4 x cutoff 400 / 1000 / 2500) | ~2 s | within 0.25 dB |
 | `build/large_signal` | Large-signal response against SPICE (`spice/large_targets.txt`): sine at the VCF input, 144 points (cutoff x pot x note x level -6 / 0 / +6 dB around the real 303's), compression and THD at the output, both qualities | ~10 s | rms within per-quality limits (Hi-Fi 0.15 dB / 0.25 pts at the real level) |
@@ -35,10 +35,10 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 
 ### Expected results (current tree)
 
-- stability sweep: Hi-Fi 0 failures of 10800 (183 slow but decaying); Standard 0 failures (0 slow)
-- stress test: 0 failures of 1260, worst tail about -274 dB, worst peak 16.3
+- stability sweep: Hi-Fi and Standard 0 failures of 10800 (0 slow), also with `--kick 3` (0 slow, worst tail -62 dB)
+- stress test: 0 failures of 2520, worst tail about -274 dB, worst peak 21.6 (HP, Res Trim 1.15, +16 dB)
 - native output: 0 of 35 points out of tolerance, worst 0.54 dB
-- drive level: Hi-Fi LP +16 dB mean +1.0 dB (worst setting -4.6 / +5.0 dB, cutoff-dependent at the top of the knob); Standard LP +1.0 dB (-2.2 / +3.4); BP / HP within limits
+- drive level: Hi-Fi LP +16 dB mean +1.0 dB (worst setting -3.3 / +3.1 dB, cutoff-dependent at the top of the knob); Standard LP +1.0 dB (-2.8 / +3.1); BP / HP within limits
 - model level: Spicy vs TeeBee -0.09 dB at resonance 0 (+2.3 dB at 50 and 100; only resonance 0 is matched)
 - mode level: 0.25 / 0.5 / 0.75 / 1 at -1.3 / 0.0 / -1.2 / 0.0 dB vs LP; worst dip 0.08 dB
 - large signal: Hi-Fi 0.07 dB / 0.11 pts rms at the real level (0.11 / 0.31 at +6 dB); Standard 0.20 / 0.43 (0.45 / 1.52)

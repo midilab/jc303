@@ -352,7 +352,7 @@ note-dependent distortion.
 - **Asymmetry.** Q12's curve can run as tanh(a + b) - tanh(b), an input pair with an offset, which adds even
   harmonics. Its slope is sech^2 b at rest and never above 1, so the asymmetry cannot raise the loop gain (an earlier
   version normalised the slope to 1 at rest and latched, see the development log). b ramps in with drive, from 0 at
-  0 dB to full at +16 dB, so the default is symmetric. The default amount is 0.5, and it is not exposed in the plugin.
+  0 dB to full at +16 dB. The default amount is 0 (symmetric at every drive), and it is not exposed in the plugin.
   The real Q12 pair is symmetric.
 
 ## Calibration against SPICE

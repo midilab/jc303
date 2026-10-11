@@ -498,7 +498,7 @@ alone left Diode Octave rising +2 to +3 dB at high resonance and BP/HP falling u
   loop oscillate at +16 dB, 20 kHz cutoff, resonance >= 0.97).
 - **Saturation bias.** The shaper is `shape(a + b) - shape(b)` (at first divided by its slope at `b`; that normalisation
   latched Hi-Fi and was removed, see "Bias shaper latch-up" below), with `b = 0.5 * clamp(drive / 16, 0, 1)`: zero at and below 0 dB,
-  so the clean region and the default are untouched. Fixed at 0.5 in the plugin (`SAT_BIAS_DEFAULT`); the core still
+  so the clean region and the default are untouched. Fixed at 0.5 in the plugin at first, 0 since the latch-up fix (`SAT_BIAS_DEFAULT`); the core still
   has `setSaturationBias` / `Open303::setFilterBias` for the tools. A version with it as a parameter ("Saturation Bias
   (Bite)") and its own level compensation is on the branch `backup/filter-bias-parameter`. On a saw the bias is
   inaudible at 0.3, mostly a level and resonant-peak change at 0.5 and above; no even-harmonic emphasis is measurable
@@ -791,9 +791,16 @@ point. With the loop gain set 2 % under the threshold, +2 dB is enough to sustai
 cutoff, as the half-saturated rungs slow the stages). A converged Newton solve (8 steps) latches the same way, linear
 rungs (or Standard) do not, and bias 0 does not.
 
-Fix: no normalisation. An input pair with an offset has less gm at its operating point, never more, so no operating
-point lifts the loop gain past the symmetric pair's. Nothing changes at or below 0 dB drive (b is 0 there; a pattern
-render at the default is bit-identical); above it the small-signal gain at rest drops by sech^2 b (up to 2 dB at
-+16 dB), and the drive level tables `DT` were refitted for both qualities (corrections up to +5 dB, BP / HP at
-resonance 100). On the acid pattern the level moves +0.04 dB at +9 dB drive and +0.17 dB at +16 dB.
+Fix: the shipped bias is 0, a symmetric Q12 as in the real circuit, and the shaper is no longer normalised.
+
+- Removing the normalisation alone (an input pair with an offset has less gm at its operating point, never more)
+  cleared the latch but cost resonance at high drive: the small-signal resonant boost at +16 dB, pot 1.0 fell from
+  24.8 to 14.0 dB at 2 kHz (12.9 to 8.5 dB at 500 Hz, and 2-3 dB even at pot 0.7), and the refitted tables pushed
+  self-oscillating HP (Res Trim 1.15) past the stress test's peak limit.
+- The bias itself is not part of the circuit, and earlier listening found it mostly a level and resonant-peak change
+  (that resonant-peak change is the over-unity gain). At bias 0 the shaper is the plain tanh, resonance is the same as
+  before at every drive, and no case latched. The normalisation stays out, so a bias set from the tools cannot latch
+  either.
+- Nothing changes at or below 0 dB drive (the bias ramps in above it). The drive level tables `DT` were refitted for
+  both qualities at bias 0 (`fit_drive_trim.py` now renders at the shipped bias): corrections within -2.3..+0.3 dB.
 
