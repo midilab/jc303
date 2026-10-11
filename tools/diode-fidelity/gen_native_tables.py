@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Regenerate the Diode Native feedback-law tables (KNT, KNC) from the SPICE model of the real VCF.
+"""Regenerate the Diode feedback-law tables (KNT, KNC) from the SPICE model of the real VCF.
 
 Runs spice/native_targets.py (ngspice, ~1 minute) and build/native_solver for each cutoff node (~1 minute in
 parallel), then prints C++ arrays to paste over the ones in src/dsp/open303/dfl_DiodeLadderFilter.h
-(calculateCoefficients, nativeMode branch). Run after changing the ladder, NATIVE_TUNING, the feedback network
+(calculateCoefficients). Run after changing the ladder, CUTOFF_TUNING, the feedback network
 or the netlist.
 
   python3 gen_native_tables.py [--jobs N]"""

@@ -1,7 +1,7 @@
 // Renders one note through rosic::Open303 to raw 32-bit float mono (44.1 kHz) on stdout.
 // usage: render_note <filterType> <cutoffHz> <res0to100> <envMod0to100> <decayMs> <accent0/1> <gateOffSec> <totalSec>
 //                    <driveDb> <hpbpMorph0to1> <midiNote> [feedbackHpHz] [bias0to1] [resTrim]
-// filterType: 0 TeeBee, 1 Diode Native, 2 Diode BP, 3 Diode HP. resTrim: diode loop-gain scale (1 = nominal,
+// filterType: 0 TeeBee, 1 Diode, 2 Diode BP, 3 Diode HP. resTrim: diode loop-gain scale (1 = nominal,
 // 0.85..1.15). Saw wave, volume -12 dB.
 #include "rosic_Open303.h"
 #include <cstdio>

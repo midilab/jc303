@@ -82,12 +82,12 @@ namespace dfl
         resonance off as the cutoff falls into the bass. */
     void setFeedbackHighpass(double newCutoff) { feedbackHpFreq = newCutoff; calculateCoefficients(); }
 
-    /** Sets the unit trim: a loop-gain scale, NATIVE_TRIM_MIN..NATIVE_TRIM_MAX (1 = the nominal unit).
+    /** Sets the unit trim: a loop-gain scale, TRIM_MIN..TRIM_MAX (1 = the nominal unit).
         Component tolerances make real units differ mostly by such a scale (spice/mc_native.py). Above 1 the
         oscillation cap rises with it, so a hot unit self-oscillates at high resonance as some real units do. */
     void setLoopGainTrim(double newTrim)
     {
-      loopGainTrim = std::clamp(newTrim, NATIVE_TRIM_MIN, NATIVE_TRIM_MAX);
+      loopGainTrim = std::clamp(newTrim, TRIM_MIN, TRIM_MAX);
       calculateCoefficients();
     }
 
@@ -112,11 +112,11 @@ namespace dfl
     double getResonance() const { return resonance; }
 
     /** The resonance pot's rotation, 0..1 (the knob with Open303's skew undone). */
-    double getNativePot() const { return -std::log(1.0 - std::clamp(resonance, 0.0, 1.0) * RES_SKEW_NORM) / 3.0; }
+    double getResonancePot() const { return -std::log(1.0 - std::clamp(resonance, 0.0, 1.0) * RES_SKEW_NORM) / 3.0; }
 
     /** The dominant coupling pole (Hz), C27/C25 into Q21, as scaled by the Filter Feedback knob. It sits
         in the output path as well as the feedback loop (see TB303OutputNetwork). */
-    double getNativeCouplingPoleHz() const { return NET_POLE[0] / (2.0 * PI) * feedbackHpFreq / 115.0; }
+    double getCouplingPoleHz() const { return NET_POLE[0] / (2.0 * PI) * feedbackHpFreq / 115.0; }
 
     /** Returns the drive parameter in decibels. */
     double getDrive() const { return drive; }
@@ -216,7 +216,7 @@ namespace dfl
     // It is fixed by the a-coefficients (every stage has unity gain at DC), so it is a constant.
     static constexpr double HP_LP_SUBTRACT = 0.2;  // = 1/5, DC-null for the HP mix
 
-    // Static BP / HP output gains (on top of NATIVE_OUTPUT_GAIN for BP) so they sit near LP loudness on a saw at a
+    // Static BP / HP output gains (on top of OUTPUT_GAIN for BP) so they sit near LP loudness on a saw at a
     // typical resonant 303 setting (resonance 50..70, cutoff 800..1500 Hz: BP -0.5 dB, HP -0.6 dB, see morph_level).
     // No correction by cutoff: the BP/HP-vs-LP gap at low resonance and high cutoff is the filter's character (a saw
     // has most of its energy at the low harmonics that BP/HP remove).
@@ -258,30 +258,30 @@ namespace dfl
     // corner wc (Stinchcombe's core polynomial s^4 + 6.727 s^3 + 14.142 s^2 + 9.514 s + 1), the frequency the
     // resonant peak approaches at high cutoff. The Pirkle ladder's corner is 0.7006 x its cutoff coefficient
     // (fitted to the core polynomial, 0.4 dB / 3 degrees up to 8x cutoff), so tuning = 1 / (1.18921 * 0.7006).
-    static constexpr double NATIVE_TUNING = 1.2003;
+    static constexpr double CUTOFF_TUNING = 1.2003;
     // Output gain: static, chosen so the resonance-0 level equals the TeeBee's above the bass. The output
     // network (TB303OutputNetwork, in Open303) cuts more bass than Open303's chain, so low notes are quieter (C2 about
     // -4 dB). Like the real circuit the ladder's passband drops as resonance rises; the network's wiper tap makes up
     // about half of it.
-    static constexpr double NATIVE_OUTPUT_GAIN = 2.1056;
+    static constexpr double OUTPUT_GAIN = 2.1056;
     // Oscillation cap, as a fraction of the interpolated threshold KNC. 0.98 rather than 0.99: between the
     // 1 and 2 kHz nodes at Filter Feedback 1.0 the threshold sags below the interpolation (K / threshold reached
     // 0.9956 at 0.99 on a dense 20 x 20 check); it binds only near that knob extreme.
-    static constexpr double NATIVE_K_MARGIN = 0.98;
+    static constexpr double K_MARGIN = 0.98;
     // Bass comp knob range (amount at knob 1.0). Full-synth level vs the TeeBee at resonance 60..100
     // (mean of cutoff 400 / 1000 / 2500, env mod 60, C2), with the output network's resonance-pot wiper tap already
     // making up about half the loss: amount 0 is 1.4-2.7 dB quieter, 0.1 (knob 0.5) matches within 1.1 dB, 0.2 is
     // 1.7-3.6 dB louder.
-    static constexpr double NATIVE_BASS_COMP_MAX = 0.2;
+    static constexpr double BASS_COMP_MAX = 0.2;
     // Unit trim range: about the 5th..95th percentile of the per-unit loop-gain scale in the component
     // tolerance Monte Carlo (x0.85..x1.16 at 500 Hz, x0.90..x1.12 above). At x1.15 a unit at full pot sits up to
     // 1.15 x the oscillation threshold and sustains a sine 5-11 dB below a resonance-0 saw.
-    static constexpr double NATIVE_TRIM_MIN = 0.85;
-    static constexpr double NATIVE_TRIM_MAX = 1.15;
+    static constexpr double TRIM_MIN = 0.85;
+    static constexpr double TRIM_MAX = 1.15;
     double netA[NET_N] = {};      // feedback network: TPT one-pole coefficients g / (1 + g)
     double netState[NET_N] = {};
     double shelfRatio = 1.0;      // NET_SHELF_ZERO / shelf pole
-    double nativeLogLoop = 0.0;   // log(1 + K): the bass comp gain is exp(amount * nativeLogLoop)
+    double logLoopGain = 0.0;   // log(1 + K): the bass comp gain is exp(amount * logLoopGain)
     double loopGainTrim = 1.0;    // unit trim, see setLoopGainTrim
 
     static constexpr double acCouplingFreq = 20.0; // AC coupling corner frequency (Hz)
@@ -318,8 +318,8 @@ namespace dfl
 
   INLINE void DiodeLadderFilter::calculateCoefficients()
   {
-    // Bilinear transform calculations (cutoff tuned to the circuit's ladder core, see NATIVE_TUNING)
-    double tunedCutoff = cutoff * NATIVE_TUNING;
+    // Bilinear transform calculations (cutoff tuned to the circuit's ladder core, see CUTOFF_TUNING)
+    double tunedCutoff = cutoff * CUTOFF_TUNING;
     double wd = 2.0 * PI * tunedCutoff;
     double T = 1.0 / sampleRate;
     double wa = (2.0 / T) * tan(wd * T / 2.0);
@@ -410,7 +410,7 @@ namespace dfl
       { 24.030, 21.548, 20.204, 19.763, 18.896, 18.612, 18.397, 18.305, 18.324, 18.449, 18.705 },
       { 28.858, 24.252, 21.824, 21.041, 19.515, 19.023, 18.640, 18.455, 18.423, 18.524, 18.765 },
       { 43.817, 32.250, 26.466, 24.656, 21.223, 20.136, 19.296, 18.859, 18.688, 18.719, 18.920 } };
-    const double pot = getNativePot();
+    const double pot = getResonancePot();
     double lc = std::log(std::clamp(cutoff, CN[0], CN[10]));
     int ci = 0; while (ci < 9 && std::log(CN[ci + 1]) < lc) ++ci;
     const double cf = (lc - std::log(CN[ci])) / (std::log(CN[ci + 1]) - std::log(CN[ci]));
@@ -424,9 +424,9 @@ namespace dfl
     const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
     auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
     // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
-    effK = std::min(effK, NATIVE_K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
+    effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
     K = effK / driveLoopGain;
-    nativeLogLoop = std::log1p(effK);
+    logLoopGain = std::log1p(effK);
 
     // Drive level compensation (see DT_* above)
     {
@@ -569,13 +569,13 @@ namespace dfl
     // In BP / HP the knob (passbandCompensation) crossfades to LP: 0 = pure bandpass / highpass, 1 = pure lowpass
     // (the HP midpoint is a notch). The LP end has the LP level without bass comp, so each end of a morph has the
     // level of its pure mode. Each term is scaled by the drive level table of its response (driveTrim).
-    const double lpGain = NATIVE_OUTPUT_GAIN * driveTrim[0];
+    const double lpGain = OUTPUT_GAIN * driveTrim[0];
     double out;
     switch (responseMode)
     {
       case RESPONSE_BP:
       {
-        double bp = NATIVE_OUTPUT_GAIN * BP_OUTPUT_GAIN * 0.25 * (lp2 - 2.0 * lp3 + lp4);
+        double bp = OUTPUT_GAIN * BP_OUTPUT_GAIN * 0.25 * (lp2 - 2.0 * lp3 + lp4);
         double t  = std::clamp(passbandCompensation, 0.0, 1.0);
         out = (1.0 - t) * driveTrim[1] * bp + t * lpGain * lp4;
         break;
@@ -592,8 +592,8 @@ namespace dfl
       {
         // Bass comp: below cutoff the loop's passband gain is about 1 / (1 + K), so (1 + K)^amount restores that
         // fraction (in dB) of the resonance bass loss; 0 = the real circuit, and nothing changes at resonance 0.
-        const double bassComp = NATIVE_BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
-        out = lpGain * (bassComp > 0.0 ? std::exp(bassComp * nativeLogLoop) : 1.0) * lp4;
+        const double bassComp = BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
+        out = lpGain * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0) * lp4;
         break;
       }
     }

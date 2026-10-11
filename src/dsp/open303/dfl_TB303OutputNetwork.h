@@ -11,7 +11,7 @@ namespace dfl
 {
 
   /**
-  Diode Native's output path, from the ladder top to the output jack, as linear coupling filters. It replaces Open303's
+  The diode filter's output path, from the ladder top to the output jack, as linear coupling filters. It replaces Open303's
   fitted allpass / highpass / notch chain for that model only. Values from the TB-303 service notes; checked against
   SPICE (tools/diode-fidelity/spice/tb303_vca.py, tools/diode-fidelity/native_output.cpp), within 0.25 dB above 20 Hz.
 
@@ -38,14 +38,14 @@ namespace dfl
       updateCoefficients();
     }
 
-    /** Resonance pot rotation, 0..1 (DiodeLadderFilter::getNativePot). */
+    /** Resonance pot rotation, 0..1 (DiodeLadderFilter::getResonancePot). */
     void setPot(double newPot)
     {
       pot = std::clamp(newPot, 0.0, 1.0);
       updateCoefficients();
     }
 
-    /** Corner (Hz) of the C27/C25 coupling into Q21 (DiodeLadderFilter::getNativeCouplingPoleHz). */
+    /** Corner (Hz) of the C27/C25 coupling into Q21 (DiodeLadderFilter::getCouplingPoleHz). */
     void setCouplingPole(double newHz)
     {
       couplingHz = newHz;

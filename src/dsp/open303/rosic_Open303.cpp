@@ -137,7 +137,7 @@ void Open303::setResonance(double newResonance)
 
   filter.setResonance(newResonance);
   diodeFilter.setResonance(skewedResonance);
-  outputNetwork.setPot(diodeFilter.getNativePot());
+  outputNetwork.setPot(diodeFilter.getResonancePot());
 }
 
 void Open303::setFilterType(FilterType newType)
@@ -163,7 +163,7 @@ void Open303::setFilterDrive(double newDriveDb)
 
 void Open303::setPassbandCompensation(double newCompensation)
 {
-  // Diode HP / Diode BP morph amount, Diode Native bass comp (the diode-ladder only; the TeeBee has none). The LFO
+  // Diode HP / Diode BP morph amount, Diode bass comp (the diode-ladder only; the TeeBee has none). The LFO
   // may modulate it per sample (see getSample), so keep the knob value as the base.
   morphBase = newCompensation;
   diodeFilter.setPassbandCompensation(newCompensation);
