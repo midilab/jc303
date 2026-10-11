@@ -219,27 +219,31 @@ default setting.
 
 ### 5. Component tolerance
 
-A Monte Carlo over 100 randomised units (resistors +-5%, film capacitors +-10%,
-electrolytics +-20%, transistor IS lognormal sigma 0.2, BF lognormal sigma 0.3, matched
-duals share parameters):
+Re-run after the SPICE convergence fix (see "Diode Native"), with `spice/mc_native.py`: 100 randomised units
+(resistors +-5%, film capacitors +-10%, electrolytics +-20%, transistor IS lognormal sigma 0.2, BF lognormal sigma 0.3,
+matched duals share parameters, and the resonance pot's total resistance +-20%, which the first run held fixed).
+Cutoffs use Diode Native's convention.
 
-| Quantity | Spread |
+| Quantity | Spread (std, or 5th-95th percentile) |
 |---|---|
-| Cutoff | +-1.6 to +-2.6% |
-| Resonant-peak frequency | +-0.05 of the cutoff |
-| Bass (65 Hz vs 500 Hz) | +-1 dB |
-| Resonant boost | standard deviation 3-7 dB at high pot positions |
+| Cutoff (-10 dB point) | 4.2% at 500 Hz, 1.5% at 1.5 kHz, 1.2% at 5 kHz |
+| Bass (65 vs 500 Hz, pot 0.9) | 1.3 dB at 500 Hz, under 0.1 dB above |
+| Equivalent loop gain K (unit / nominal) | x0.85..x1.16 at 500 Hz, x0.90..x1.12 at 1.5-5 kHz (pot 0.6 / 0.9) |
 
-Boost range (5th-95th percentile, nominal in brackets) at pot position 1.0:
+Resonant boost, 5th-95th percentile [nominal]:
 
-| SPICE cutoff | Boost |
-|---|---|
-| ~500 Hz | 12.6 to 28.1 dB [20.2] |
-| ~1500 Hz | 20.4 to 36.0 dB [32.3] |
-| ~3000 Hz | 18.7 to 36.1 dB [32.7] |
+| Cutoff | Pot 0.6 | Pot 0.9 | Pot 1.0 |
+|---|---|---|---|
+| 500 Hz | 3.7..6.5 [5.0] | 8.2..13.1 [10.4] | 10.3..17.0 [13.2] |
+| 1.5 kHz | 6.6..9.0 [7.5] | 13.5..20.1 [15.9] | 17.7..35.3 [22.3] |
+| 5 kHz | 7.6..10.1 [8.7] | 15.7..25.6 [19.1] | 21.8..45.5 [31.9] |
 
-Two real units at identical settings can differ by about 10 dB of resonant peak. This is
-why the remaining 1-3 dB model differences are not worth tuning.
+A unit's variation is mostly a single loop-gain scale: across units the per-unit K scale has a std of 5.4%, while
+within one unit it varies by only 2.3% across cutoff and pot position (89 units where every point was in range). It is
+barely correlated with the unit's cutoff scale (-0.24). At full pot 6-11% of units resonate beyond what Diode Native
+allows at 0.5 and 1.5 kHz (boost above its stable maximum), i.e. some real units are at or near self-oscillation
+there. The first run's conclusion stands: units differ by roughly 10 dB of peak at high pot positions, more than the
+remaining model differences.
 
 ## Reproducing the checks
 

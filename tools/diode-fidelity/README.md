@@ -75,6 +75,8 @@ Needs ngspice (`brew install ngspice`) and numpy. Run the scripts from the `spic
   `real303.py`: Stinchcombe's published polynomial for comparison; the netlist matches it to 0.03 dB with resonance off.
 - `tran_spice.py`, `ablate.py`: large-signal sine drive and the ablations (linearise Q21 / Q12) behind the finding that
   an input-pair `tanh` explains the real circuit's saturation.
+- `mc_native.py`: component-tolerance Monte Carlo mapped onto Diode Native (cutoff scale, equivalent loop-gain
+  scale, boost spread); writes `mc_native.json`. ~5 s for 100 units.
 - `mc.py`, `mc_run.py`: component-tolerance Monte Carlo (100 units; ~20 s, run sequentially: a macOS
   `multiprocessing.Pool` without a `__main__` guard fork-bombs).
 - `sweep_spice.py`, `tp6.py`: envelope-driven cutoff sweep and the TP6 output-level check against the service manual.
