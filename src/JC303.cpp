@@ -724,12 +724,12 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case TANH_SHAPER_DRIVE:
-        // one knob, two meanings: edge drive of the classic square (TeeBee filter) and waveshaper sag of the
-        // pitch-tracked pulse (diode filters); the default 0.25 is the measured circuit (sag 1), 1.0 doubles it
+        // one knob, two meanings, same direction (up = cleaner square): edge drive of the classic square (TeeBee
+        // filter) and waveshaper sag of the pitch-tracked pulse (diode filters, default 0.25 = the measured circuit)
         open303Core.setTanhShaperDrive(
             linToLin(value, 0.0, 1.0,   25.0,     80.0)
         );
-        open303Core.setPulseSag(value <= 0.25 ? value * 4.0 : 1.0 + (value - 0.25) / 0.75);
+        open303Core.setPulseSag(rosic::Open303::sagForSquareDrive(value));
         break;
     case FILTER_DRIVE:
         // 0..1 -> 0..9 dB into the diode ladder's saturating input stage
