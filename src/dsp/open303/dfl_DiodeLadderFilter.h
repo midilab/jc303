@@ -109,6 +109,15 @@ namespace dfl
       }
     }
 
+    /** Sets the Diode Native unit trim: a loop-gain scale, NATIVE_TRIM_MIN..NATIVE_TRIM_MAX (1 = the nominal unit).
+        Component tolerances make real units differ mostly by such a scale (spice/mc_native.py). Above 1 the
+        oscillation cap rises with it, so a hot unit self-oscillates at high resonance as some real units do. */
+    void setLoopGainTrim(double newTrim)
+    {
+      loopGainTrim = std::clamp(newTrim, NATIVE_TRIM_MIN, NATIVE_TRIM_MAX);
+      calculateCoefficients();
+    }
+
     /** Sets the response mode (LP/BP/HP). This only re-mixes the ladder's stage
         outputs, so it needs no coefficient recalculation. @see ResponseMode */
     INLINE void setResponseMode(int newMode) { responseMode = newMode; }
@@ -357,10 +366,16 @@ namespace dfl
     // (mean of cutoff 400 / 1000 / 2500, env mod 60): amount 0 is 4-8 dB quieter, ~0.25 matches within 1 dB,
     // 0.5 is 2-6 dB louder, and 1.0 (flat passband) would be 15-17 dB louder because the peak rises with it.
     static constexpr double NATIVE_BASS_COMP_MAX = 0.5;
+    // Diode Native unit trim range: about the 5th..95th percentile of the per-unit loop-gain scale in the component
+    // tolerance Monte Carlo (x0.85..x1.16 at 500 Hz, x0.90..x1.12 above). At x1.15 a unit at full pot sits up to
+    // 1.15 x the oscillation threshold and sustains a sine 5-11 dB below a resonance-0 saw.
+    static constexpr double NATIVE_TRIM_MIN = 0.85;
+    static constexpr double NATIVE_TRIM_MAX = 1.15;
     double netA[NET_N] = {};      // Diode Native feedback network: TPT one-pole coefficients g / (1 + g)
     double netState[NET_N] = {};
     double shelfRatio = 1.0;      // NET_SHELF_ZERO / shelf pole
     double nativeLogLoop = 0.0;   // log(1 + K): the bass comp gain is exp(amount * nativeLogLoop)
+    double loopGainTrim = 1.0;    // Diode Native unit trim, see setLoopGainTrim
 
     static constexpr double acCouplingFreq = 20.0; // AC coupling corner frequency (Hz)
     static constexpr double filterFmScale  = 0.4;  // Scale factor for FM modulation depth
@@ -509,13 +524,14 @@ namespace dfl
       int ai = 0; while (ai < 5 && AN[ai + 1] < pot) ++ai;
       const double af = std::clamp((pot - AN[ai]) / (AN[ai + 1] - AN[ai]), 0.0, 1.0);
       auto at = [&](int c) { return KNT[c][ai] + af * (KNT[c][ai + 1] - KNT[c][ai]); };
-      double effK = at(ci) + cf * (at(ci + 1) - at(ci));
+      double effK = loopGainTrim * (at(ci) + cf * (at(ci + 1) - at(ci)));
       static const double FN[3] = { 76.7, 115.0, 268.0 };
       const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[2]));
       const int fi = (lf < std::log(FN[1])) ? 0 : 1;
       const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
       auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
-      effK = std::min(effK, NATIVE_K_MARGIN * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
+      // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
+      effK = std::min(effK, NATIVE_K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
       K = effK / driveLoopGain;
       Kcomp = effK;
       nativeLogLoop = std::log1p(effK);
