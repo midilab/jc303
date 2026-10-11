@@ -5,6 +5,7 @@
 // Open303
 #include "dsp/open303/rosic_Open303.h"
 using namespace rosic;
+using namespace dfl;
 
 // GuitarML BYOD implementation
 #include "dsp/guitarml-byod/processors/drive/GuitarMLAmp.h"

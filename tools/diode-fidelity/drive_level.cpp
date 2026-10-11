@@ -11,13 +11,13 @@
 #include <cstring>
 #include <vector>
 static const double SR = 44100.0;
-// Per filter type (indexed by rosic::FilterType): clean-region deviation, fall and rise above 0 dB
+// Per filter type (indexed by dfl::FilterType): clean-region deviation, fall and rise above 0 dB
 // (dB, over 48 settings incl. resonance 0..100). The means follow the fitted target closely; the worst settings
 // spread further because the level varies with resonance and cutoff more finely than the 4 x 6 tables resolve.
 static const double FLAT_DB[4]      = { 0, 0.5, 1.0, 1.0 };
 static const double FALL_DB[4]      = { 0, 2.5, 3.0, 3.5 };
 static const double MAX_RISE_DB[4]  = { 0, 3.5, 6.0, 5.5 };
-static double rmsDb(rosic::FilterType ft, double cutoff, double res, double env, double drive)
+static double rmsDb(dfl::FilterType ft, double cutoff, double res, double env, double drive)
 {
   rosic::Open303 s; s.setSampleRate(SR); s.setFilterType(ft); s.setCutoff(cutoff);
   s.setResonance(res); s.setEnvMod(env); s.setDecay(400.0); s.setAccent(80.0); s.setVolume(-12.0);
@@ -33,7 +33,7 @@ int main(int argc, char** argv)
   const char* names[] = { "TeeBee", "Diode", "Diode BP", "Diode HP" };
   const double drives[] = { -3.0, -1.5, 0.0, 3.0, 4.5, 6.0, 9.0, 16.0 };
   int bad = 0;
-  for (rosic::FilterType ft : { rosic::FILTER_DIODE, rosic::FILTER_DIODE_BP, rosic::FILTER_DIODE_HP })
+  for (dfl::FilterType ft : { dfl::FILTER_DIODE, dfl::FILTER_DIODE_BP, dfl::FILTER_DIODE_HP })
   {
     double worstFlat = 0.0, worstLow = 0.0, worstRise = -99.0, meanRise = 0.0; int n = 0;
     std::vector<double> mean(8, 0.0);

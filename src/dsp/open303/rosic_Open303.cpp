@@ -32,7 +32,7 @@ Open303::Open303()
   noteOffCountDown =     0;
   slideToNextNote  = false;
   idle             = true;
-  currentFilterType = FILTER_TEEBEE;
+  currentFilterType = dfl::FILTER_TEEBEE;
 
   // LFO defaults
   lfoDepth         =    0.0;
@@ -149,14 +149,14 @@ void Open303::setResonance(double newResonance)
   outputNetwork.setPot(diodeFilter.getResonancePot());
 }
 
-void Open303::setFilterType(FilterType newType)
+void Open303::setFilterType(dfl::FilterType newType)
 {
   currentFilterType = newType;
 
   int response = DiodeLadderFilter::RESPONSE_LP;
-  if(newType == FILTER_DIODE_BP)
+  if(newType == dfl::FILTER_DIODE_BP)
     response = DiodeLadderFilter::RESPONSE_BP;
-  else if(newType == FILTER_DIODE_HP)
+  else if(newType == dfl::FILTER_DIODE_HP)
     response = DiodeLadderFilter::RESPONSE_HP;
   diodeFilter.setResponseMode(response);
 }
