@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "FilterModelOrder.h"
 
 // Rotary slider that exposes its double-click to MenuPage so a theme knob can
 // be repurposed for "assign this knob to the current menu item". Overriding
@@ -172,8 +173,11 @@ public:
         auto* param = valueTreeState.getParameter(item.id);
         if (param == nullptr)
             return;
+        float value = juce::jlimit(0.0f, 1.0f, percentage / 100.0f);
+        if (auto* model = filterModelParam(item))
+            value = model->convertTo0to1((float) FilterModelOrder::fromFraction(value));
         param->beginChangeGesture();
-        param->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, percentage / 100.0f));
+        param->setValueNotifyingHost(value);
         param->endChangeGesture();
         updateDisplay();
     }
@@ -359,6 +363,8 @@ private:
         if (currentItem().type == Type::value)
             if (auto* param = valueTreeState.getParameter(currentItem().id))
                 v = param->getValue() * 100.0f;
+        if (auto* model = filterModelParam(currentItem()))
+            v = FilterModelOrder::toFraction(model->getIndex()) * 100.0f;
         onCurrentItemChanged(v);
     }
 
@@ -409,12 +415,28 @@ private:
         updateDisplay();
     }
 
+    // The filter model steps in FilterModelOrder's sequence, not in choice-index order.
+    juce::AudioParameterChoice* filterModelParam(const Item& item)
+    {
+        return item.id == "filterType" ? dynamic_cast<juce::AudioParameterChoice*>(valueTreeState.getParameter(item.id)) : nullptr;
+    }
+
     void changeValue(float direction)
     {
         auto& item = currentItem();
         auto* param = valueTreeState.getParameter(item.id);
         if (param == nullptr)
             return;
+
+        if (auto* model = filterModelParam(item))
+        {
+            model->beginChangeGesture();
+            *model = FilterModelOrder::step(model->getIndex(), direction > 0.0f ? 1 : -1, false);
+            model->endChangeGesture();
+            updateDisplay();
+            notifyCurrentItemChanged();
+            return;
+        }
 
         const auto range = param->getNormalisableRange();
         float step = item.step > 0.0f
