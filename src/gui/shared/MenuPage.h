@@ -519,27 +519,28 @@ public:
         static const juce::Identifier modItemIDs[] =
         {
             "normalDecay", "accentDecay", "accentSweep", "feedbackFilter",
-            "softAttack", "slideTime", "sqrDriver",
+            "softAttack", "slideTime",
             "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination",
             "lfoPhase", "lfoSync"
         };
         static const juce::String modItemLabels[] =
         {
             "Normal decay", "Accent decay", "Accent sweep", "Filter Feedback",
-            "Soft attack", "Slide time", "Square driver",
+            "Soft attack", "Slide time",
             "LFO rate", "LFO depth", "LFO wave", "LFO dest",
             "LFO phase", "LFO key sync"
         };
 
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f });
-        mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f });
         mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f });
         mod.items.add(Item { "bassComp",    "Filter Bass Comp", Type::value, {}, 0.0f });
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
+        mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f });
+        mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f });
         mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f });
         mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f });
 
-        static constexpr uint8_t numModItems = 13;
+        static constexpr uint8_t numModItems = 12;
         for (uint8_t i = 0; i < numModItems; ++i)
             mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
 

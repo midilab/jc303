@@ -41,10 +41,10 @@ Open303::Open303()
 
   oscillator.setWaveTable1(&waveTable1);
   oscillator.setWaveForm1(MipMappedWaveTable::SAW303);
-  // classic square (TeeBee filter): Open303's pre-rendered table; the diode filters use the pitch-tracked pulse
+  // Open303's pre-rendered square (the default square model); the circuit model synthesises the pulse instead
   waveTable2.setWaveform(MipMappedWaveTable::SQUARE303);
   oscillator.setWaveTable2(&waveTable2);
-  updateSquareModel();
+  setSquareModel(SQUARE_OPEN303);
 
   waveTable3.setWaveform(MipMappedWaveTable::SAW303);
   subOscillator.setWaveTable(&waveTable3);
@@ -149,7 +149,6 @@ void Open303::setResonance(double newResonance)
 void Open303::setFilterType(FilterType newType)
 {
   currentFilterType = newType;
-  updateSquareModel();
 
   // Octave mode (steeper 1st pole) applies only to the plain-LP Diode Octave
   // model. The BP/HP response modes are plain-diode only.

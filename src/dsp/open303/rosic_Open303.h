@@ -37,8 +37,7 @@ namespace rosic
 
   enum SquareModel
   {
-    SQUARE_AUTO = 0,        // by filter: Open303 with TeeBee, Circuit with the diode filters
-    SQUARE_OPEN303,         // Open303's pre-rendered wavetable square (fixed duty, tanh edge drive)
+    SQUARE_OPEN303 = 0,     // Open303's pre-rendered wavetable square (fixed duty, tanh edge drive)
     SQUARE_CIRCUIT,         // pitch-tracked pulse width and waveshaper sag, from a model of the TB-303 circuit
     NUM_SQUARE_MODELS
   };
@@ -134,8 +133,8 @@ namespace rosic
     and 100% of the full volume. In the normal 303, this parameter was fixed to zero. */
     void setAmpSustain(double newAmpSustain) { ampEnv.setSustainInDecibels(newAmpSustain); }
 
-    /** Sets the drive (in dB) for the tanh-shaper that forms the 303-square waveform (the classic square used
-    with the TeeBee filter; the pitch-tracked pulse is fully saturated at any drive). */
+    /** Sets the drive (in dB) for the tanh-shaper that forms the 303-square waveform (the Open303 square
+    model; the circuit model's pulse is fully saturated at any drive). */
     void setTanhShaperDrive(double newDrive)
     { waveTable2.setTanhShaperDriveFor303Square(newDrive); oscillator.setTanhShaperDrive(newDrive); }
 
@@ -144,8 +143,8 @@ namespace rosic
     either way. */
     void setCircuitPulseShape(bool on) { oscillator.setCircuitPulseShape(on); }
 
-    /** Selects the square: Open303's wavetable, the circuit model, or by filter (Auto, the default). */
-    void setSquareModel(SquareModel newModel) { squareModel = newModel; updateSquareModel(); }
+    /** Selects the square: Open303's wavetable (the default) or the circuit model. */
+    void setSquareModel(SquareModel newModel) { oscillator.setClassicSquare(newModel == SQUARE_OPEN303); }
 
     /** Scales the waveshaper envelope: 0 = flat top, 1 = the circuit (default), 2 = exaggerated. */
     void setPulseSag(double newSag) { oscillator.setPulseSag(newSag); }
@@ -423,14 +422,6 @@ namespace rosic
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     FilterType currentFilterType;  // currently selected filter type
-    SquareModel squareModel = SQUARE_AUTO;
-
-    /** Points the oscillator at the square the model (and, for Auto, the filter) selects. */
-    void updateSquareModel()
-    {
-      oscillator.setClassicSquare(squareModel == SQUARE_OPEN303
-                                  || (squareModel == SQUARE_AUTO && currentFilterType == FILTER_TEEBEE));
-    }
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (0.0 to 1.0)

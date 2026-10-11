@@ -90,7 +90,7 @@ JC303::JC303()
                                                         1.0f,
                                                         0.33f),
             std::make_unique<juce::AudioParameterFloat> ("sqrDriver",
-                                                        "Square Driver",
+                                                        "Square Drive",
                                                         0.0f,
                                                         1.0f,
                                                         0.25f),
@@ -148,11 +148,11 @@ JC303::JC303()
                                                         "Filter Model",
                                                         juce::StringArray{ "TeeBee", "Spicy", "Diode", "Diode BP", "Diode HP" },
                                                         FILTER_TEEBEE),
-            // square wave model: Open303's wavetable, the TB-303 circuit model, or by filter
+            // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
                                                         "Square Model",
-                                                        juce::StringArray{ "Auto (by filter)", "Open303", "Circuit" },
-                                                        SQUARE_AUTO),
+                                                        juce::StringArray{ "Open303", "Circuit" },
+                                                        SQUARE_OPEN303),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
                                                         "Filter Drive",
                                                         0.0f,
