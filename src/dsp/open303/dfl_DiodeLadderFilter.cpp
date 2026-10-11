@@ -32,7 +32,6 @@ DiodeLadderFilter::DiodeLadderFilter()
 
   // Initialize coefficients
   alpha = 0.0;
-  alpha2 = 0.0;
   G1 = G2 = G3 = G4 = 0.0;
   beta1 = beta2 = beta3 = beta4 = 0.0;
   delta1 = delta2 = delta3 = 0.0;

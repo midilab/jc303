@@ -33,10 +33,10 @@ Needs a C++17 compiler (`CXX`, default `clang++`) and the `math_approx` headers 
 
 ### Expected results (current tree, drive -3 dB)
 
-- stability sweep: 0 failures of 10800 (850 slow but decaying)
-- stress test: 0 failures of 630, worst tail about -275 dB, worst peak 14.0
+- stability sweep: 0 failures of 10800 (460 slow but decaying)
+- stress test: 0 failures of 630, worst tail about -275 dB, worst peak 14.5
 - native output: 0 of 35 points out of tolerance, worst 0.54 dB
-- drive level: LP clean region 0.18 dB, +16 dB mean +1.4 dB (worst setting -1.9 / +3.4 dB); BP / HP within limits
+- drive level: LP clean region 0.21 dB, +16 dB mean +1.3 dB (worst setting -2.3 / +3.4 dB); BP / HP within limits
 - mode level: 0.25 / 0.5 / 0.75 / 1 at -1.3 / 0.0 / -1.2 / 0.0 dB vs LP; worst dip 0.27 dB; HP 70 dB down at cutoff / 8
 
 ```sh

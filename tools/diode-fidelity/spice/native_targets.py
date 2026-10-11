@@ -2,19 +2,25 @@
 
 For each cutoff parameter and resonance-pot position, the real VCF's response ratio |H_pot| / |H_0| over
 0.4..2.4 x cutoff, plus its resonant boost and peak frequency. native_solver fits the DSP's loop gain K to them.
-Cutoff convention: cutoff parameter = 1.18921 x Stinchcombe's corner wc (the ladder core's 180-degree point);
-wc = 52.05 Hz per uA of ladder current (fitted to this netlist at 6 / 21 / 60 uA, within 1.5 %).
+Cutoff convention: cutoff parameter = 2^(1/4) x Stinchcombe's corner wc (the ladder core's 180-degree point).
+WC_PER_UA is the netlist's wc per uA of ladder current, fitted to its resonance-0 response (Stinchcombe's polynomial,
+0.25..4 x wc, shape within 0.14 dB rms); it falls from 61 Hz/uA at 4 uA to 54 at 400 uA, so If_for interpolates it.
 
   python3 native_targets.py [out=native_curves.txt]      (run from this directory; ~1 minute)"""
 import sys, subprocess, uuid, numpy as np
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, '.'); from tb303_vcf import netlist
-HZ_PER_UA = 1093.0 / 21.0
+WC_UA     = [4, 8, 15, 21, 30, 60, 120, 240, 400]
+WC_PER_UA = [61.36, 58.39, 56.47, 55.60, 55.08, 54.45, 54.12, 53.85, 53.64]
 CUTS = [300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000]
 POTS = [0.2, 0.4, 0.6, 0.8, 0.9, 1.0]
 NJ = 25
 
-def If_for(cut): return cut / 1.18921 / HZ_PER_UA * 1e-6
+def If_for(cut):
+    """Ladder current (A) whose netlist corner wc is cut / 2^(1/4)."""
+    wc = cut / 2 ** 0.25; lu = np.log(WC_UA)
+    lwc = lu + np.log(WC_PER_UA)   # log wc at each table current, increasing
+    return float(np.exp(np.interp(np.log(wc), lwc, lu, left=None, right=None))) * 1e-6
 
 def ac(pot, cut):
     base = f"/tmp/_nat_{uuid.uuid4().hex[:10]}"
