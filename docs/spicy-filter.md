@@ -253,7 +253,7 @@ Two consequences:
 ## Nonlinearities
 
 Three parts of the TB-303 VCF saturate: the Q12 input pair, every diode pair in the ladder, and the Q21 output pair.
-Spicy's default quality, Hi-Fi, models all three and solves them together every sample. It matches SPICE's
+Spicy's Hi-Fi quality (Standard is the default) models all three and solves them together every sample. It matches SPICE's
 large-signal response within 0.07 dB of compression and 0.11 points of THD (rms) at the real 303's level. TeeBee's
 TB_303 mode is linear: Open303 has a cubic soft clipper (x - x^3/6, clipped at +-sqrt(2)), but that mode never calls
 it, so its drive control does nothing.
@@ -343,7 +343,7 @@ note-dependent distortion.
 
 ### Controls that are not circuit behaviour
 
-- **Saturation (drive).** -3 to +16 dB, default 0 dB (the real 303's level). It scales only the VCO signal into Q12,
+- **Saturation (drive).** -3 to +16 dB, default -3 dB (0 dB is the real 303's level). It scales only the VCO signal into Q12,
   like a hotter oscillator. The feedback is unaffected, so resonance does not change with drive. Above 0 dB the gain
   grows 1.5x faster than the knob's dB value. A level makeup at the output (full below 0 dB, exponent 0.65 above) and
   fitted drive tables (`DT`, one set per quality) keep the knob from acting as a volume control. At +16 dB (6.3x the
