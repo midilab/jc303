@@ -832,6 +832,19 @@ That inharmonic energy is the over-unity loop locking onto its own frequency und
 loud-kick sweep reports as a latch. With real notes it is never a stuck tone: the VCA closes on it (0 of 240 note
 renders left a tail). So the latch is the character, and the guard is gone.
 
+
+In the circuit (`tools/diode-fidelity/spice/crunch.py`): with Q12's pair offset by b (Q12a's IS x e^(2b), 2 b Vt, about
+26 mV at 0.5) and the loop gain raised by cosh^2 b as the normalised shaper does (in hardware: resonance turned up
+until just under oscillation again), a saw at the VCF input (pot 1.0, cutoff 1 kHz) puts -14 dB of its output between
+the note's harmonics at b = 0.5 (-6 dB at 0.71), against -56 dB for the stock circuit; at 3 kHz -6 / -4 against -36 dB.
+At b = 0.5 the filter rests (a 1 mV input stays at -86 dBV) and the tail dies after note-off: the oscillation is the
+note's doing, as in the model. The offset alone (stock loop gain) does not do it (-51..-62 dB at 1 kHz): an offset
+pair's gain only climbs back to the symmetric pair's, which the stock pot keeps under the threshold. From b = 0.71 the
+cosh^2 b gain overshoots in the circuit (the offset also moves the ladder's operating currents) and it oscillates by
+itself. One difference: in the circuit the crunch is strongest at the real 303 level and fades as the saw gets louder
+(the input pair stays saturated for more of each cycle, so the loop's gain is up less of the time), while the model's
+bias ramps in only above 0 dB drive.
+
 - `K` is capped by the plain oscillation cap again (`K_MARGIN * max(trim, 1) * kc`), both qualities. With Tension 0 the
   default sound is 038591e's: Standard is bit-identical, and Hi-Fi matches to rounding (about -170 dB) everywhere except
   where the loop is in the crunch, which is chaotic, so round-off grows into different waveforms with the same level

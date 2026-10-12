@@ -64,6 +64,8 @@ disguise, the model being homogeneous; Sharpness acts much like Res Trim; Warmth
 None raises any element's slope above its rest value, so none can push the loop gain past the symmetric circuit's
 (the latch-up mechanism, see docs/diode-fidelity.md). `reset()` settles onto Bite's DC operating point (no step).
 
+- `spice/crunch.py`: the driven crunch in the circuit (Q12 offset + loop gain raised by cosh^2 b, a saw, pot 1.0):
+  energy between the note's harmonics, note-off tails and a 1 mV rest probe. See docs/diode-fidelity.md.
 - `spice/character.py` (`build/character` renders): at cutoff 1350, pot 0 / 0.6 / 0.9, 110 / 440 Hz, 3.25 / 6.5 V, each
   control at its extremes is within 0.56 dB of compression, 0.7 THD points and 0.3 H2 points of SPICE (the circuit
   itself: 0.26 dB / 0.58 / 0.08); all four at once within 0.49 dB / 0.49 / 2.2.
