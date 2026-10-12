@@ -497,11 +497,11 @@ alone left Diode Octave rising +2 to +3 dB at high resonance and BP/HP falling u
   (it assumed unit gain, exact only at or below 0 dB; above that the under-counted instantaneous feedback made the
   loop oscillate at +16 dB, 20 kHz cutoff, resonance >= 0.97).
 - **Saturation bias.** The shaper is `shape(a + b) - shape(b)` divided by its slope at `b` (that normalisation latched
-  Hi-Fi; it was removed, then restored by ear with a guard, see "Bias shaper latch-up" below), with
-  `b = 0.5 * clamp(drive / 16, 0, 1)`: zero at and below 0 dB, so the clean region and the default are untouched. Fixed
-  at 0.5 in the plugin (`SAT_BIAS_DEFAULT`; 0 for a while after the latch-up fix); the core still
-  has `setSaturationBias` / `Open303::setFilterBias` for the tools. A version with it as a parameter ("Saturation Bias
-  (Bite)") and its own level compensation is on the branch `backup/filter-bias-parameter`. On a saw the bias is
+  Hi-Fi; it was removed, then restored by ear, and the latch kept as the crunch, see "Bias shaper latch-up" below), with
+  `b = 0.5 * clamp(drive / 16, 0, 1)`: zero at and below 0 dB, so the clean region and the default are untouched. 0.5 by
+  default (`SAT_BIAS_DEFAULT`; 0 for a while after the latch-up fix), exposed as the Saturation Bias parameter (0..1,
+  `Open303::setFilterBias`; higher = more swell and crunch). The `DT` level tables are fitted at the default. An older
+  version with its own level compensation is on the branch `backup/filter-bias-parameter`. On a saw the bias is
   inaudible at 0.3, mostly a level and resonant-peak change at 0.5 and above; no even-harmonic emphasis is measurable
   because the saw already has even partials.
 - **Drive level tables (`DT`).** Output gain in dB as a function of drive (nodes -3, 0, 4.5, 9, 12.5, 16) and resonance
@@ -805,7 +805,7 @@ Fix: the shipped bias is 0, a symmetric Q12 as in the real circuit, and the shap
 - Nothing changes at or below 0 dB drive (the bias ramps in above it). The drive level tables `DT` were refitted for
   both qualities at bias 0 (`fit_drive_trim.py` now renders at the shipped bias): corrections within -2.3..+0.3 dB.
 
-### Restored by ear, with a latch guard
+### Restored by ear, with a latch guard (since removed)
 
 Listening, the symmetric Q12 lost the driven filter's push: at +16 dB the octaves above ~500 Hz came out 4-12 dB down
 against the earlier build (038591e), the over-unity swell being the sound. So the normalised bias 0.5 is the default
@@ -822,4 +822,34 @@ which never latched) keeps the full swell and is identical to 038591e.
 - Levels: `DT` refitted at bias 0.5 (Hi-Fi's resonance-100 row moved by the cap; Standard's tables are 038591e's);
   `drive_level`'s Hi-Fi LP fall / rise limits are 5.1 / 5.8 dB (worst settings 5.0 / 5.7 dB), Standard LP's fall is
   back to 2.5 dB.
+
+### Guard removed: the latch is the crunch
+
+Listening again, the guarded build lost what made 038591e "crunchy, sort of like FM" at high Saturation. Measured on
+held, driven resonant notes (full synth, +16 dB, resonance 90-100), 038591e put 10-25 dB more energy between the note's
+harmonics than the guarded build in 14 of 64 settings (6 kHz, resonance 100, C3: -19 against -45 dB re the total).
+That inharmonic energy is the over-unity loop locking onto its own frequency under the note: the same mechanism the
+loud-kick sweep reports as a latch. With real notes it is never a stuck tone: the VCA closes on it (0 of 240 note
+renders left a tail). So the latch is the character, and the guard is gone.
+
+- `K` is capped by the plain oscillation cap again (`K_MARGIN * max(trim, 1) * kc`), both qualities. With Tension 0 the
+  default sound is 038591e's: Standard is bit-identical, and Hi-Fi matches to rounding (about -170 dB) everywhere except
+  where the loop is in the crunch, which is chaotic, so round-off grows into different waveforms with the same level
+  (within 0.3 dB) and the same inharmonic energy (median difference -0.03 dB over 64 settings).
+- `DT` is 038591e's tables again (`fit_drive_trim.py` residual within 0.02 dB, both qualities); `drive_level`'s Hi-Fi
+  LP limits are back to 5.0 / 5.5 dB.
+- Saturation Bias (0..1, default 0.5) is a plugin parameter: higher means more swell and more crunch.
+- Tension's envelope reads the rungs as if at full Saturation (`tensionSens`, the +16 dB drive over the current one),
+  so it is audible at any Saturation: at 0 dB the spectral centroid of a held note moves from 1320 Hz to 370 Hz
+  (Tension -1) or 4367 Hz (+1), against about +-7 % with the earlier sensitivity cap of 2. It can lock into the crunch
+  too. Below 0 dB drive it stays at its 0 dB value (24 dB): the full drive makeup there let stiff Tension at Res Trim
+  1.15 in HP peak at 27 at -3 dB drive (73 at the filter's -12 dB floor). The stage-rate cap stays at 0.35 fs
+  (Nyquist safety).
+- Policy: the tools still require every sample to be finite, the peak bounded, and an idle synth to decay
+  (`stress_test`'s tail after gate-off; its peak limit is 26, stiff Tension's worst case being 24.9). A loud kick that
+  is still ringing 20 dB under its peak in `stability_sweep --kick` is reported as a latch, not a failure (`--strict`
+  fails it). Results, 10800 cases each, 0 failing in every
+  run: the impulse sweep (Hi-Fi at Tension 0 and +1, Standard) latches nowhere; `--kick 3` latches in 18 cases at
+  Tension 0 (drive +14 / +16 dB, cutoff 7.8 kHz and up), 7 at Tension -1 (+16 dB, 9.8 kHz and up), 320 at Tension +1 (every drive,
+  cutoff 6.9 kHz and up: the stiff rungs' raised stage rates hold the top-octave ring), and 0 in Standard.
 

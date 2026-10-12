@@ -113,15 +113,14 @@ namespace rosic
     void setFilterTension(double t) { diodeFilter.setTension(t); }
     void setFilterTensionEnvelope(bool on) { diodeFilter.setTensionEnvelope(on); }   // comparison switch (temporary)
 
-    /** The diode filter's Bite, 0..1 (DiodeLadderFilter::setBite; 0 = the circuit). Clip / Sharpness / Warmth stay in the
-     *  filter for the fidelity tools but are not exposed: Clip is Saturation in disguise (the model is homogeneous),
-     *  Sharpness acts much like Res Trim, Warmth only once Saturation drives Q21. */
-    void setFilterBite(double v) { diodeFilter.setBite(v); }
+    // The character controls (DiodeLadderFilter::setBite / setClipThreshold / setSharpness / setWarmth) stay in the filter
+    // for the fidelity tools but are not exposed: Clip is Saturation in disguise (the model is homogeneous), Sharpness
+    // acts much like Res Trim, Warmth and Bite only once Saturation drives the pairs (Bite overlapping Saturation Bias).
 
     /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB; its swell of the
-     *  loop gain is the driven filter's push, capped against latching: DiodeLadderFilter SAT_BIAS_MAX). The plugin
-     *  keeps the default (the backup branch backup/filter-bias-parameter exposes it as a parameter); this is for the
-     *  fidelity tools. */
+     *  loop gain is the driven filter's push, and near full resonance its crunch: the loop locks onto its own frequency
+     *  under the note, deliberately uncapped, see DiodeLadderFilter SAT_BIAS_MAX). Higher = more swell and crunch. The
+     *  plugin's Saturation Bias parameter. */
     void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); }
 
     /** Returns the Filter FM depth. */
