@@ -48,6 +48,8 @@ public:
         int shownUntilIndex = 1 << 30; // item is skipped while hiddenWhenId's choice index is above this
         juce::String altLabel;         // shown instead of label while hiddenWhenId's choice index equals altLabelIndex
         int altLabelIndex = -1;
+        juce::String alsoHiddenWhenId;  // a second condition: also skipped while this choice param equals alsoHiddenWhenIndex
+        int alsoHiddenWhenIndex = -1;
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
     };
 
@@ -286,6 +288,10 @@ private:
 
     bool isHidden(const Item& item) const
     {
+        if (item.alsoHiddenWhenId.isNotEmpty())
+            if (auto* p = valueTreeState.getParameter(item.alsoHiddenWhenId))
+                if ((int) std::lround(p->convertFrom0to1(p->getValue())) == item.alsoHiddenWhenIndex)
+                    return true;
         if (item.hiddenWhenId.isEmpty())
             return false;
         auto* p = valueTreeState.getParameter(item.hiddenWhenId);
@@ -635,7 +641,12 @@ public:
         mod.items.add(Item { "filterMorph", "Filter Morph",     Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // LP / BP / HP; no effect on TeeBee
         mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterQuality", "Filter Quality", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "filterTension", "Filter Tension", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // Hi-Fi only; no effect on TeeBee
+        {
+            Item tension { "filterTension", "Filter Tension", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true };   // no effect on TeeBee
+            tension.alsoHiddenWhenId = "filterQuality";   // Hi-Fi only: hidden in Standard
+            tension.alsoHiddenWhenIndex = 0;
+            mod.items.add(tension);
+        }
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "filterBias", "Saturation Bias", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });    // no effect on TeeBee
         mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
