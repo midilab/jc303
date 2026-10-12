@@ -861,4 +861,10 @@ renders left a tail). So the latch is the character, and the guard is gone.
   DC as level and slowed the stages. Floppy now reads the rungs relative to Q12's tracked mean (`unMean`, 3 Hz), as it
   already did for Bite's static offset; Tension 0 and +1 are unchanged (bit-identical). On held notes (+16 dB, 96
   settings) every Tension now holds to bias 0.7 and chokes from 0.75 (floppy chokes in 0 of 96 at 0.7, was 55).
+  So Hi-Fi caps the bias by Tension, at the bounds found by ear at full Saturation with patterns: 0.74 floppy, 0.71 at
+  Tension 0, 0.85 stiff (linear in between; `SAT_BIAS_CAP_*`). The knob's top half (0.5..1) is rescaled to 0.5..cap, so
+  the knob keeps its 0..100 range, the default and below are unchanged (bit-identical at Tension 0 / +1), and 100 is
+  the cap. Standard never chokes (0 of 192 held notes at bias 0.85 / 1.0) and is not capped. Held 1 s at the knob's
+  top, stiff still chokes in 91 of 96 settings (0.85 is the patterns' bound, not the held notes'); Tension 0 in 1, floppy
+  in none.
 
