@@ -123,6 +123,10 @@ namespace rosic
      *  plugin's Saturation Bias parameter. */
     void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); }
 
+    /** Sets the diode filter's rail, 0..1 (Hi-Fi; 1 = unlimited, the full crunch; lower = cleaner, see
+     *  DiodeLadderFilter::setRail). */
+    void setFilterRail(double rail) { diodeFilter.setRail(rail); }
+
     /** Returns the Filter FM depth. */
     double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
 
