@@ -1,6 +1,6 @@
 // Drive-knob level check for the diode filter in LP / BP / HP mode: the drive control must not act as a volume knob.
 // Full-synth saw note per setting (cutoff x resonance x env mod); RMS over the first 0.25 s relative to the
-// drive floor (-3 dB, the bottom of the knob).
+// drive floor (-3 dB; the plugin's knob starts at 0 dB, the core accepts lower).
 //   -3..0 dB (clean region): level within +-FLAT_DB of the floor
 //   0..+16 dB (saturating):  level rise at most MAX_RISE_DB, never below -FALL_DB (the fitted target rises 1 dB)
 // Levels come from the drive level tables (dfl_DiodeLadderFilter.h, fit_drive_trim.py).
