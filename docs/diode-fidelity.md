@@ -852,4 +852,13 @@ renders left a tail). So the latch is the character, and the guard is gone.
   run: the impulse sweep (Hi-Fi at Tension 0 and +1, Standard) latches nowhere; `--kick 3` latches in 18 cases at
   Tension 0 (drive +14 / +16 dB, cutoff 7.8 kHz and up), 7 at Tension -1 (+16 dB, 9.8 kHz and up), 320 at Tension +1 (every drive,
   cutoff 6.9 kHz and up: the stiff rungs' raised stage rates hold the top-octave ring), and 0 in Standard.
+- Choke at high bias (found by ear: full Saturation, bias above 0.85 at Tension +1, above 0.5 at Tension -1). Driven
+  hard, the biased shaper rectifies; when its mean output passes what stage 1's single rung can carry (saturated, 1 / hs),
+  stage 1 integrates the rest without bound, every rung saturates and the note goes silent (not a ring: the output is
+  finite and the tail decays). The default bias already runs at that edge (Q12's mean reaches 0.94-1.01 of the rung's
+  limit on held notes), so a DC bleed, or a rail on stage 1 (whose rung voltage is past |16| 40 % of the time at the
+  default), changed the default sound; neither was kept. Floppy Tension made it worse: its envelope read the rectified
+  DC as level and slowed the stages. Floppy now reads the rungs relative to Q12's tracked mean (`unMean`, 3 Hz), as it
+  already did for Bite's static offset; Tension 0 and +1 are unchanged (bit-identical). On held notes (+16 dB, 96
+  settings) every Tension now holds to bias 0.7 and chokes from 0.75 (floppy chokes in 0 of 96 at 0.7, was 55).
 

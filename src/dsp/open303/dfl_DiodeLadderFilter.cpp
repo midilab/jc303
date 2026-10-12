@@ -142,6 +142,7 @@ void DiodeLadderFilter::reset()
   for (int k = 0; k < 4; ++k) yPrev[k] = yPrev2[k] = shadowZ[k] = 0.0;
   shadowLoadState = 0.0;
   for (double& e : envE) e = 0.0;
+  unMean = restRung * clipS / headroomBias;   // Bite's DC operating point (0 without Bite)
   acCouplingState = 0.0;  // Reset AC coupling filter
   for (double& st : netState) st = 0.0;
 

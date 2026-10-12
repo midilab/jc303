@@ -405,7 +405,9 @@ namespace dfl
                                 // stays at its 0 dB value (24 dB): hotter, stiff tension at Res Trim 1.15 in HP peaked at
                                 // 27 (-3 dB drive) to 73 (-12 dB) in the stress test; at 0 dB and above, 21.6 at most
 
-    double restRung = 0.0;   // tanh of every rung at the DC operating point (Bite: hs un_dc, see updateCharacter)
+    double unMean = 0.0, unMeanA = 0.0;   // Q12's mean output (UN_MEAN_HZ): the rungs' DC, the tension envelope's rest
+    static constexpr double UN_MEAN_HZ = 3.0;
+    double restRung = 0.0;   // tanh of every rung at Bite's DC operating point (hs un_dc, see updateCharacter): unMean's start
     double yPrev[4] = {}, yPrev2[4] = {};   // the last two ladder solutions (Hi-Fi's Newton predictor)
 
     // tanh(x) as x P(x^2) / Q(x^2), max error 5.8e-8 on |x| <= 9 (clamped beyond): one division (Hi-Fi)
@@ -467,6 +469,7 @@ namespace dfl
     // frequency does not depend on the sample rate (stage rate tuned to the circuit's ladder core, see CUTOFF_TUNING)
     double gCoeff = CUTOFF_TUNING * tan(PI * cutoff / sampleRate);
     envA = 1.0 - std::exp(-1000.0 / (TENSION_ENV_MS * sampleRate));
+    unMeanA = 1.0 - std::exp(-2.0 * M_PI * UN_MEAN_HZ / sampleRate);
     double gp1 = 1.0 + gCoeff;
 
     // Q21 loading on stage 4 (see LOAD_KAPPA): rate g (1 + kappa rho), input (a4 lp3 + kappa rho w) / (1 + kappa rho),
@@ -735,8 +738,13 @@ namespace dfl
       const double hv = hs * tensionSens;
       const double s12 = tanhRational(hv * (y[0] - y[1])), s23 = tanhRational(hv * (y[1] - y[2]));
       const double s34 = tanhRational(hv * (y[2] - y[3])), s4 = tanhRational(hv * y[3]);
-      // relative to the rungs' rest current (Bite's Q12 offset runs a DC current through every rung: not level)
-      const double r0 = (restRung != 0.0) ? std::tanh(tensionSens * std::atanh(restRung)) : 0.0;
+      // relative to the rungs' rest current: Bite's offset runs a DC current through every rung, and so does the biased
+      // shaper's rectification when driven (at DC every rung carries Q12's mean output). Neither is level: read as level,
+      // floppy tension slowed the stages on it and choked the note (+16 dB, bias above about 0.5). Stiff tension keeps
+      // reading the rectified DC (its faster stages carry it: relative to it, bias 0.7 choked)
+      unMean += unMeanA * (un - unMean);
+      const double rest = (tension < 0.0) ? std::clamp(hs * unMean, -0.999, 0.999) : restRung;   // at most the limit
+      const double r0 = (rest != 0.0) ? std::tanh(tensionSens * std::atanh(rest)) : 0.0;
       const double r12 = s12 - r0, r23 = s23 - r0, r34 = s34 - r0, r4 = s4 - r0;
       const double e[4] = { r12 * r12, 0.5 * (r12 * r12 + r23 * r23), 0.5 * (r23 * r23 + r34 * r34), 0.5 * (r34 * r34 + r4 * r4) };
       for (int k = 0; k < 4; ++k) envE[k] += envA * (e[k] - envE[k]);
