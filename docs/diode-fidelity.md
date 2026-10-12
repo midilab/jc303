@@ -496,9 +496,10 @@ alone left Diode Octave rising +2 to +3 dB at high resonance and BP/HP falling u
 - **Loop gain.** `K` is divided by `driveLoopGain = driveFactor * driveMakeup`, and the zero-delay solve includes it too
   (it assumed unit gain, exact only at or below 0 dB; above that the under-counted instantaneous feedback made the
   loop oscillate at +16 dB, 20 kHz cutoff, resonance >= 0.97).
-- **Saturation bias.** The shaper is `shape(a + b) - shape(b)` (at first divided by its slope at `b`; that normalisation
-  latched Hi-Fi and was removed, see "Bias shaper latch-up" below), with `b = 0.5 * clamp(drive / 16, 0, 1)`: zero at and below 0 dB,
-  so the clean region and the default are untouched. Fixed at 0.5 in the plugin at first, 0 since the latch-up fix (`SAT_BIAS_DEFAULT`); the core still
+- **Saturation bias.** The shaper is `shape(a + b) - shape(b)` divided by its slope at `b` (that normalisation latched
+  Hi-Fi; it was removed, then restored by ear with a guard, see "Bias shaper latch-up" below), with
+  `b = 0.5 * clamp(drive / 16, 0, 1)`: zero at and below 0 dB, so the clean region and the default are untouched. Fixed
+  at 0.5 in the plugin (`SAT_BIAS_DEFAULT`; 0 for a while after the latch-up fix); the core still
   has `setSaturationBias` / `Open303::setFilterBias` for the tools. A version with it as a parameter ("Saturation Bias
   (Bite)") and its own level compensation is on the branch `backup/filter-bias-parameter`. On a saw the bias is
   inaudible at 0.3, mostly a level and resonant-peak change at 0.5 and above; no even-harmonic emphasis is measurable
@@ -803,4 +804,22 @@ Fix: the shipped bias is 0, a symmetric Q12 as in the real circuit, and the shap
   either.
 - Nothing changes at or below 0 dB drive (the bias ramps in above it). The drive level tables `DT` were refitted for
   both qualities at bias 0 (`fit_drive_trim.py` now renders at the shipped bias): corrections within -2.3..+0.3 dB.
+
+### Restored by ear, with a latch guard
+
+Listening, the symmetric Q12 lost the driven filter's push: at +16 dB the octaves above ~500 Hz came out 4-12 dB down
+against the earlier build (038591e), the over-unity swell being the sound. So the normalised bias 0.5 is the default
+again, and the latch is prevented instead by capping the loop gain: in Hi-Fi, `K` is held to the oscillation cap
+divided by the shaper's largest slope (cosh^2 b at its centre, 1.27 at full drive), so the swell can no longer carry
+the loop past its threshold. It only acts near the top of the resonance knob at high drive. Standard (linear rungs,
+which never latched) keeps the full swell and is identical to 038591e.
+
+- Sound: within about +-1 dB of 038591e per octave at +16 dB, resonance 80-90; at resonance 90-100 and full drive the
+  top octaves are up to 2-4 dB lower (the cap). Unchanged at and below 0 dB.
+- Stability (`stability_sweep --kick 3` and the impulse sweep, Tension -1 / 0 / +1, with and without Bite): 0 failing,
+  where the uncapped normalised shaper latched in 34 cases. The Tension envelope's stage-rate cap went from 0.4 to
+  0.35 fs: with the swell back, stiff Tension with Bite rang on at the top cutoffs at 0.4 fs.
+- Levels: `DT` refitted at bias 0.5 (Hi-Fi's resonance-100 row moved by the cap; Standard's tables are 038591e's);
+  `drive_level`'s Hi-Fi LP fall / rise limits are 5.1 / 5.8 dB (worst settings 5.0 / 5.7 dB), Standard LP's fall is
+  back to 2.5 dB.
 

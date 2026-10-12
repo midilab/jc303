@@ -118,9 +118,10 @@ namespace rosic
      *  Sharpness acts much like Res Trim, Warmth only once Saturation drives Q21. */
     void setFilterBite(double v) { diodeFilter.setBite(v); }
 
-    /** Sets the diode filter's saturation asymmetry (0-1, default 0 = symmetric like the real Q12, ramps in with drive
-     *  above 0 dB). The plugin keeps the default (the backup branch backup/filter-bias-parameter exposes it as a
-     *  parameter); this is for the fidelity tools. */
+    /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB; its swell of the
+     *  loop gain is the driven filter's push, capped against latching: DiodeLadderFilter SAT_BIAS_MAX). The plugin
+     *  keeps the default (the backup branch backup/filter-bias-parameter exposes it as a parameter); this is for the
+     *  fidelity tools. */
     void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); }
 
     /** Returns the Filter FM depth. */
