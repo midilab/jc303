@@ -92,7 +92,7 @@ namespace dfl
     /** Hi-Fi (the default): every diode pair passes its tanh (If tanh(dv / 2Vt)), solved per sample (stepHiFi).
         Off: only Q12 and Q21 saturate, around the linear ladder's zero-delay solve. Hi-Fi matches SPICE's large-signal
         response far more closely for about 6 % more CPU per voice; the small-signal response is the same. */
-    void setHiFi(bool on) { hiFi = on; updateCharacter(); calculateCoefficients(); }
+    void setHiFi(bool on) { hiFi = on; updateSatBias(); calculateCoefficients(); }   // (the bias cap is Hi-Fi's)
     bool getHiFi() const { return hiFi; }
 
     /** Sets the ladder's tension, -1..1 (Hi-Fi only): how the rungs' conductance, and so each stage's pole, moves with
@@ -108,6 +108,7 @@ namespace dfl
       const double t = tensionEnvelope ? 0.0 : tension;   // the envelope mode leaves the diodes as they are
       rungScale = headroomBias * std::pow(TENSION_SCALE_MAX, 0.5 * std::abs(t));
       rungMix   = t > 0.0 ? 1.0 - (1.0 + TENSION_STIFF_MAX) * t : 1.0;
+      if (hiFi && satBiasKnob > SAT_BIAS_DEFAULT) { updateSatBias(); calculateCoefficients(); }   // the knob's top half follows
     }
     double getTension() const { return tension; }
     /** Comparison switch (temporary): true = the tension scales each stage's rate by exp(tension TENSION_ENV_GAIN e),
@@ -234,6 +235,13 @@ namespace dfl
     static constexpr double SAT_BIAS_MAX     = 1.0;
     static constexpr double SAT_BIAS_TOP_DB  = 16.0;
     static constexpr double SAT_BIAS_DEFAULT = 0.5;
+    // Hi-Fi caps the bias by tension (linear between the three): above the cap, driven hard, the rectified DC passes what
+    // stage 1's rung can carry and the note chokes (docs/diode-fidelity.md, "Choke at high bias"). Set by ear at full
+    // Saturation: floppy holds to 0.74, the circuit to 0.71, stiff to 0.85. The knob's top half (0.5..1) is rescaled to
+    // 0.5..cap, so the whole knob is usable and the default and below are unchanged. Standard (linear rungs) never chokes.
+    static constexpr double SAT_BIAS_CAP_FLOPPY  = 0.74;
+    static constexpr double SAT_BIAS_CAP_CIRCUIT = 0.71;
+    static constexpr double SAT_BIAS_CAP_STIFF   = 0.85;
 
     // Drive level compensation (dB): output gain as a function of drive and resonance so the drive knob is not
     // a volume control. Full-synth renders (default bias, mean over cutoff / env mod) of the level relative to the

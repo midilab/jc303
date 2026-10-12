@@ -119,7 +119,8 @@ namespace rosic
 
     /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB; its swell of the
      *  loop gain is the driven filter's push, and near full resonance its crunch: the loop locks onto its own frequency
-     *  under the note, deliberately uncapped, see DiodeLadderFilter SAT_BIAS_MAX). Higher = more swell and crunch. The
+     *  under the note, see DiodeLadderFilter SAT_BIAS_MAX). Higher = more swell and crunch. In Hi-Fi the range's top
+     *  half is rescaled to end at a cap that follows the tension (SAT_BIAS_CAP_*: past it the note chokes). The
      *  plugin's Saturation Bias parameter. */
     void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); }
 
