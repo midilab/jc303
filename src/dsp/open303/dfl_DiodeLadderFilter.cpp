@@ -63,6 +63,9 @@ void DiodeLadderFilter::setInputDrive(double newDrive)
   // cutoff / feedback-HP / resonance; the drive scales only the input, so the loop gain does not depend on it).
   drive = std::clamp(newDrive, -12.0, 16.0);
   driveFactor = dB2amp(drive > 0.0 ? drive * (1.0 + SAT_DEPTH_EXTRA) : drive);
+  // Tension's envelope reads the rungs as if at full Saturation (exactly 1 there), at most as hot as at 0 dB (see
+  // tensionSens)
+  tensionSens = dB2amp(SAT_BIAS_TOP_DB * (1.0 + SAT_DEPTH_EXTRA)) / std::max(driveFactor, 1.0);
   // Level makeup so the drive knob is not a volume control: full below 0 dB (the shaper is nearly
   // linear there), partial above (the shaper compresses, so the drive may add a little level with
   // the grit). Continuous at 0 dB. See DRIVE_MAKEUP_EXP_*.
@@ -117,8 +120,6 @@ void DiodeLadderFilter::updateCharacter()
   q12TB = (q12Rho > 0.0) ? degenT(XB, q12Rho, dt) : (hiFi ? tanhRational(XB) : shape(XB));
   if (q12Rho <= 0.0) dt = 1.0 - q12TB * q12TB;
   q12Nrm = 1.0 / (q12C * dt);   // slope 1 at rest
-  // the shaper's largest slope, at its centre (X = 0; cosh^2 b for the plain pair, see SAT_BIAS_MAX): the K cap
-  q12MaxSlope = std::max(1.0, q12Nrm * q12C * ((q12Rho > 0.0) ? 1.0 / (1.0 + q12Rho) : 1.0));
   q12Plain = (bite_ == 0.0 && clip_ == 0.5 && q12Rho == 0.0);
   // the rungs' rest current: at DC every rung carries Q12's output (its feedback is AC-coupled), T(x) = un_dc, so each
   // rung's tanh sits at hs un_dc (only Bite's offset makes un_dc non-zero)

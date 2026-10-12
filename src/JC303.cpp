@@ -188,12 +188,11 @@ JC303::JC303()
                                                         0.0f,    // Hi-Fi diode rungs: 0 = the circuit, - floppy, + stiff
                                                         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                                                             [] (float v, int) { return signedPercent (bipolarDetent (v)); })),
-            // diode character control (0 = the circuit; checked against the SPICE netlist, tools/diode-fidelity)
-            std::make_unique<juce::AudioParameterFloat> ("filterBite",
-                                                        "Filter Bite",
+            std::make_unique<juce::AudioParameterFloat> ("filterBias",
+                                                        "Saturation Bias",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f),   // Diode: Q12 / Q21 mismatch (a lopsided ladder and resonance)
+                                                        0.5f),   // Diode: Q12's asymmetry and driven swell; acts above 0 dB Saturation (0 = symmetric)
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -314,7 +313,7 @@ JC303::JC303()
     resTrim = parameters.getRawParameterValue("resTrim");
     filterQuality = parameters.getRawParameterValue("filterQuality");
     filterTension = parameters.getRawParameterValue("filterTension");
-    filterBite = parameters.getRawParameterValue("filterBite");
+    filterBias = parameters.getRawParameterValue("filterBias");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -395,7 +394,7 @@ JC303::JC303()
     parameters.addParameterListener("resTrim", this);
     parameters.addParameterListener("filterQuality", this);
     parameters.addParameterListener("filterTension", this);
-    parameters.addParameterListener("filterBite", this);
+    parameters.addParameterListener("filterBias", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -470,7 +469,7 @@ JC303::~JC303()
     parameters.removeParameterListener("resTrim", this);
     parameters.removeParameterListener("filterQuality", this);
     parameters.removeParameterListener("filterTension", this);
-    parameters.removeParameterListener("filterBite", this);
+    parameters.removeParameterListener("filterBias", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -592,8 +591,8 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "filterTension" && *switchModState) {
         setParameter(FILTER_TENSION, newValue);
     }
-    else if (parameterID == "filterBite" && *switchModState) {
-        setParameter(FILTER_BITE, newValue);
+    else if (parameterID == "filterBias" && *switchModState) {
+        setParameter(FILTER_BIAS, newValue);
     }
     else if (parameterID == "seqPlayState") {
         _seqCommand.store (newValue > 0.5f ? static_cast<int>(SeqCommand::Play)
@@ -830,9 +829,10 @@ void JC303::setParameter (Open303Parameters index, float value)
         // -1..1 with a centre detent: how the Hi-Fi ladder's resonance moves with level (0 = the circuit's diodes)
         open303Core.setFilterTension(bipolarDetent(value));
         break;
-    case FILTER_BITE:
-        // 0..1: Q12 / Q21 saturation-current mismatch (DiodeLadderFilter::setBite)
-        open303Core.setFilterBite(value);
+    case FILTER_BIAS:
+        // 0..1: Q12's asymmetry and driven swell, ramping in above 0 dB Saturation (DiodeLadderFilter::setSaturationBias;
+        // the DT level tables are fitted at the default 0.5; higher = more swell and crunch near full resonance)
+        open303Core.setFilterBias(value);
         break;
 
     // LFO parameters
@@ -891,7 +891,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(RES_TRIM, *resTrim);
         setParameter(FILTER_QUALITY, *filterQuality);
         setParameter(FILTER_TENSION, *filterTension);
-        setParameter(FILTER_BITE, *filterBite);
+        setParameter(FILTER_BIAS, *filterBias);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
         setParameter(LFO_WAVEFORM, *lfoWaveform);

@@ -16,11 +16,10 @@ static const double SR = 44100.0;
 // spread further because the level varies with resonance and cutoff more finely than the 4 x 6 tables resolve.
 // Hi-Fi LP spreads further at the top of the knob only: up to +9 dB it tracks Standard within 0.5 dB, but at +16 dB
 // (6.3x the real VCO level) the diodes' compression depends on cutoff, which the drive tables do not resolve (low
-// cutoff, no env mod about -4.6 dB; high cutoff, full env mod about +5 dB). Hi-Fi LP's fall / rise are 5.1 / 5.8 dB
-// since the latch guard caps K at high drive near full resonance (its worst settings 5.0 / 5.7 dB, the mean on target).
+// cutoff, no env mod about -4.6 dB; high cutoff, full env mod about +5 dB).
 static const double FLAT_DB[2][3]     = { { 0.5, 1.0, 1.0 }, { 0.5, 1.0, 1.0 } };   // [Standard, Hi-Fi][LP, BP, HP]
-static const double FALL_DB[2][3]     = { { 2.5, 3.0, 3.5 }, { 5.1, 3.0, 3.5 } };
-static const double MAX_RISE_DB[2][3] = { { 3.5, 6.0, 5.5 }, { 5.8, 6.0, 5.5 } };
+static const double FALL_DB[2][3]     = { { 2.5, 3.0, 3.5 }, { 5.0, 3.0, 3.5 } };
+static const double MAX_RISE_DB[2][3] = { { 3.5, 6.0, 5.5 }, { 5.5, 6.0, 5.5 } };
 static bool hiFi = true;
 static double rmsDb(double mode, double cutoff, double res, double env, double drive)
 {

@@ -225,12 +225,12 @@ namespace dfl
 
     // Asymmetric shaper bias: the shaper is shape(a + b) - shape(b), scaled to slope 1 at rest (satBiasNorm). As a loud
     // signal walks the pair back to its centre its slope rises to cosh^2 b: driven hard, the loop gain swells with the
-    // level (the bright, pushing sound of the driven filter). Unbounded, that swell pushed the loop past its threshold
-    // near full resonance and Hi-Fi latched into a sustained oscillation after a loud note; K is therefore capped so that
-    // K x the shaper's largest slope stays under the oscillation cap (calculateCoefficients: only the top of the
-    // resonance knob at high drive is affected; Hi-Fi only, Standard never latched). b = bias knob (0..1) * SAT_BIAS_MAX,
-    // ramping from 0 at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean region is untouched. Large-signal level and
-    // resonance depend on b; the drive level tables DT below are fitted at SAT_BIAS_DEFAULT.
+    // level. Near full resonance that swell carries the loop past its threshold and it locks onto its own frequency under
+    // the note: inharmonic, FM-like crunch, the driven filter's character (by ear; a loud-kick sweep reads it as a
+    // "latch", see docs/diode-fidelity.md; the VCA closes between notes, so it is never a stuck tone). Deliberately not
+    // capped. b = bias knob (0..1) * SAT_BIAS_MAX, ramping from 0 at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean
+    // region is untouched. Large-signal level and resonance depend on b; the drive level tables DT below are fitted at
+    // SAT_BIAS_DEFAULT.
     static constexpr double SAT_BIAS_MAX     = 1.0;
     static constexpr double SAT_BIAS_TOP_DB  = 16.0;
     static constexpr double SAT_BIAS_DEFAULT = 0.5;
@@ -287,7 +287,6 @@ namespace dfl
     void updateSatBias();
     double satBiasShape;          // shape(satBias)
     double satBiasNorm;           // 1 / slope of the shaper at satBias
-    double q12MaxSlope = 1.0;     // the shaper's largest slope (its centre): the K cap divides by it
     double passbandCompensation;  // bass comp amount, 0..1
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
@@ -401,6 +400,11 @@ namespace dfl
     // (0.45 fs left marginal rings at the top cutoffs, stiff and loud; 0.4 fs did too once the driven shaper's swell
     // was back (SAT_BIAS_MAX), with Bite; 0.35 fs: none)
     double envA = 0.0, envE[4] = {};
+    double tensionSens = 1.0;   // the envelope's gain: the full-Saturation drive over the current drive (setInputDrive),
+                                // so Tension is audible at any Saturation (it may lock into the crunch too). Below 0 dB it
+                                // stays at its 0 dB value (24 dB): hotter, stiff tension at Res Trim 1.15 in HP peaked at
+                                // 27 (-3 dB drive) to 73 (-12 dB) in the stress test; at 0 dB and above, 21.6 at most
+
     double restRung = 0.0;   // tanh of every rung at the DC operating point (Bite: hs un_dc, see updateCharacter)
     double yPrev[4] = {}, yPrev2[4] = {};   // the last two ladder solutions (Hi-Fi's Newton predictor)
 
@@ -563,10 +567,7 @@ namespace dfl
     const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
     auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
     // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
-    // ... and, in Hi-Fi, divided by the input pair's largest slope (see SAT_BIAS_MAX), so its swell cannot latch the
-    // loop (Standard's linear rungs never latched: it keeps the full swell, as before)
-    effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi)))
-                          / (hiFi ? q12MaxSlope : 1.0));
+    effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
     K = effK;
     logLoopGain = std::log1p(effK);
 
@@ -587,12 +588,12 @@ namespace dfl
         // Hi-Fi
         { { { 0.00, 0.22, -0.67, 0.61, 3.65, 7.71 },
             { 0.00, 0.05, -1.77, -3.44, -3.82, -0.22 },
-            { 0.00, 0.09, -1.53, -3.18, -4.34, -1.89 },
-            { 0.00, 0.44, -0.29, -1.70, -3.40, -2.81 } },
+            { 0.00, 0.09, -1.53, -3.18, -4.34, -1.87 },
+            { 0.00, 0.44, -0.29, -1.52, -2.89, -2.37 } },
           { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
             { 0.00, 0.61, 2.03, 4.30, 5.65, 8.18 },
-            { 0.00, 0.76, 2.74, 5.70, 7.19, 7.36 },
-            { 0.00, 1.23, 3.94, 7.73, 9.73, 10.99 } } } };
+            { 0.00, 0.76, 2.74, 5.70, 7.19, 7.37 },
+            { 0.00, 1.23, 3.90, 7.06, 6.91, 9.43 } } } };
       int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
       const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
       const double rr = std::min(std::max(resonance, 0.0), 1.0);
@@ -728,11 +729,15 @@ namespace dfl
     for (int k = 0; k < 4; ++k) lp[k] = y[k];
     if (tensionEnvelope)
     {
-      // each stage's envelope: the mean square of its rungs' current re the limit (stage 1 has one rung)
-      const double s12 = tanhRational(hs * (y[0] - y[1])), s23 = tanhRational(hs * (y[1] - y[2]));
-      const double s34 = tanhRational(hs * (y[2] - y[3])), s4 = tanhRational(hs * y[3]);
+      // each stage's envelope: the mean square of its rungs' current re the limit (stage 1 has one rung), as if driven
+      // at full Saturation (tensionSens): the pitch follows the note's dynamics at any Saturation, not only when the
+      // rungs really approach their limit
+      const double hv = hs * tensionSens;
+      const double s12 = tanhRational(hv * (y[0] - y[1])), s23 = tanhRational(hv * (y[1] - y[2]));
+      const double s34 = tanhRational(hv * (y[2] - y[3])), s4 = tanhRational(hv * y[3]);
       // relative to the rungs' rest current (Bite's Q12 offset runs a DC current through every rung: not level)
-      const double r12 = s12 - restRung, r23 = s23 - restRung, r34 = s34 - restRung, r4 = s4 - restRung;
+      const double r0 = (restRung != 0.0) ? std::tanh(tensionSens * std::atanh(restRung)) : 0.0;
+      const double r12 = s12 - r0, r23 = s23 - r0, r34 = s34 - r0, r4 = s4 - r0;
       const double e[4] = { r12 * r12, 0.5 * (r12 * r12 + r23 * r23), 0.5 * (r23 * r23 + r34 * r34), 0.5 * (r34 * r34 + r4 * r4) };
       for (int k = 0; k < 4; ++k) envE[k] += envA * (e[k] - envE[k]);
     }

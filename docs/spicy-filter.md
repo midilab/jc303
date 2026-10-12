@@ -352,8 +352,10 @@ note-dependent distortion.
 - **Asymmetry.** Q12's curve runs as tanh(a + b) - tanh(b) scaled to slope 1 at rest, an input pair with an offset,
   which adds even harmonics; as a loud signal walks the pair back to its centre the slope rises to cosh^2 b, so the
   driven loop swells with level (the push of the driven filter). b ramps in with drive, from 0 at 0 dB to 0.5 at
-  +16 dB (not exposed in the plugin). Unbounded, that swell latched Hi-Fi near full resonance; Hi-Fi's loop gain is
-  capped by the swell's largest slope instead (see the development log). The real Q12 pair is symmetric.
+  +16 dB, times the Saturation Bias knob (0..1, default 0.5). Near full resonance the swell carries the loop past its
+  threshold and it locks onto its own frequency under the note: an inharmonic, FM-like crunch, kept on purpose (it
+  reads as a "latch" in a loud-kick sweep, but in the synth the VCA closes on it; see the development log). The real
+  Q12 pair is symmetric.
 
 ## Calibration against SPICE
 
