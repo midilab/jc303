@@ -85,7 +85,20 @@ int main(int argc, char** argv)
           // A slow ring is not a failure: near its threshold the coupling network's ~7 Hz mode (low Filter Feedback
           // corner) decays over seconds. Fail only if it is also growing (tiny kick, so the loop stays linear), or, after a
           // loud kick, if it is still within 20 dB of its peak (a large-signal ring the small-signal check cannot see).
-          const bool latched = KICK > 0.0 && rel > -20;
+          bool latched = KICK > 0.0 && rel > -20;
+          if (latched)
+          {
+            // confirm: a latch is sustained; a slow ring near the threshold (maximum resonance, drive and feedback) still
+            // decays. Keep running 4.5 s: unless it fell at least another 20 dB, it latched.
+            double late = 0;
+            for (int k = 0; k < (int)(SR * 4.5); k++)
+            {
+              const double y = fabs(d.getSample(0.0));
+              if (!std::isfinite(y)) { late = 1e9; break; }
+              if (k > (int)(SR * 4.3)) late = fmax(late, y);
+            }
+            latched = 20 * log10(late / tail + 1e-300) > -20;
+          }
           if (rel > -60 && !latched && std::isfinite(tail) && !growing(d, c, fh, drive, res)) slow++;
           else if (rel > -60) { bad++; printf("  FAIL cutoff %.0f fh %.1f drive %.1f res %.2f tail %.0f dB\n", c, fh, drive, res, rel); }
           if (rel > worst) { worst = rel; worstC = c; worstF = fh; worstD = drive; }

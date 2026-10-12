@@ -123,24 +123,24 @@ namespace dfl
     /** Bite, 0..1: Q12's and Q21's saturation-current mismatch, up to BITE_Q12 / BITE_Q21 (ln of the IS ratio): the
         Q12 offset's DC current runs through every rung (a lopsided ladder and resonance); Q21's is mostly cancelled by
         its base currents through R113 / R114 (Q21_SELF_CENTRE). */
-    void setBite(double amount) { bite_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); }
+    void setBite(double amount) { bite_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); calculateCoefficients(); }
     double getBite() const { return bite_; }
 
     /** Clip, 0..1 (0 = early, 0.5 = the circuit, 1 = late): every junction's Vt scaled by 2^(2 clip - 1), the currents
         scaled to hold the cutoff and gains. The model is homogeneous, so this moves the whole ladder's saturation
         (input and resonance) against the clean passband: y(x; clip) = s y(x / s; circuit), Tension included. */
-    void setClipThreshold(double amount) { clip_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); }
+    void setClipThreshold(double amount) { clip_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); calculateCoefficients(); }
     double getClipThreshold() const { return clip_; }
 
     /** Sharpness, 0..1: Q12's knee. Above 0.5 its emitters are degenerated (RE If / 2 Vt up to SHARP_RHO_MAX, the gain
         renormalised: linear, then a hard knee); 0.5 and below = the circuit (a bipolar pair cannot get softer: raising
         its Vt and renormalising at its dividers cancels). */
-    void setSharpness(double amount) { sharp_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); }
+    void setSharpness(double amount) { sharp_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); calculateCoefficients(); }
     double getSharpness() const { return sharp_; }
 
     /** Warmth, 0..1: Q21 (the output / feedback pair) driven WARM_MAX^warmth harder, its output scaled back: grit in the
         resonance loop and the output. 0 = the circuit. */
-    void setWarmth(double amount) { warmth_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); }
+    void setWarmth(double amount) { warmth_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); calculateCoefficients(); }
     double getWarmth() const { return warmth_; }
 
     /** Sets the Filter FM depth (0 to 1). Devilfish-style audio-rate cutoff modulation.
@@ -223,16 +223,17 @@ namespace dfl
     // the signal is actually driven. 0.5 = 6 dB headroom (matches DB303).
     static constexpr double headroomBias = 0.5;
 
-    // Asymmetric shaper bias (a non-circuit option for the tools: the real Q12 pair is symmetric, and the default is
-    // 0): the shaper is shape(a + b) - shape(b), an input pair with an offset, whose slope (gm) is sech^2 b at rest and
-    // never above 1, so no operating point raises the loop gain past the symmetric pair's. (Scaled to slope 1 at rest
-    // it reached cosh^2 b once the signal walked the pair back to its centre, and Hi-Fi latched into a sustained
-    // oscillation after a loud note at high drive and resonance.) b = bias knob (0..1) * SAT_BIAS_MAX, ramping from 0
-    // at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean region is untouched. Large-signal level and resonance
-    // depend on b; the drive level tables DT below are fitted at SAT_BIAS_DEFAULT.
+    // Asymmetric shaper bias: the shaper is shape(a + b) - shape(b), scaled to slope 1 at rest (satBiasNorm). As a loud
+    // signal walks the pair back to its centre its slope rises to cosh^2 b: driven hard, the loop gain swells with the
+    // level (the bright, pushing sound of the driven filter). Unbounded, that swell pushed the loop past its threshold
+    // near full resonance and Hi-Fi latched into a sustained oscillation after a loud note; K is therefore capped so that
+    // K x the shaper's largest slope stays under the oscillation cap (calculateCoefficients: only the top of the
+    // resonance knob at high drive is affected; Hi-Fi only, Standard never latched). b = bias knob (0..1) * SAT_BIAS_MAX,
+    // ramping from 0 at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean region is untouched. Large-signal level and
+    // resonance depend on b; the drive level tables DT below are fitted at SAT_BIAS_DEFAULT.
     static constexpr double SAT_BIAS_MAX     = 1.0;
     static constexpr double SAT_BIAS_TOP_DB  = 16.0;
-    static constexpr double SAT_BIAS_DEFAULT = 0.0;
+    static constexpr double SAT_BIAS_DEFAULT = 0.5;
 
     // Drive level compensation (dB): output gain as a function of drive and resonance so the drive knob is not
     // a volume control. Full-synth renders (default bias, mean over cutoff / env mod) of the level relative to the
@@ -285,6 +286,8 @@ namespace dfl
     double satBias;               // asymmetric shaper offset in effect (knob * SAT_BIAS_MAX * drive ramp)
     void updateSatBias();
     double satBiasShape;          // shape(satBias)
+    double satBiasNorm;           // 1 / slope of the shaper at satBias
+    double q12MaxSlope = 1.0;     // the shaper's largest slope (its centre): the K cap divides by it
     double passbandCompensation;  // bass comp amount, 0..1
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
@@ -328,7 +331,7 @@ namespace dfl
 
     /** Q12 in general (Clip's Vt, Bite's offset, Sharpness' degeneration, Saturation Bias): un for the base difference
         arg, and dun / darg. The offset sits at the bases, outside the dividers that renormalise the degenerated gain;
-        the rest slope is the undegenerated pair's (sech^2 of the saturation bias, see SAT_BIAS_MAX). */
+        normalised to slope 1 at rest without the offset, as the circuit path (see SAT_BIAS_MAX). */
     double q12(double arg, double& dun, bool rational)
     {
       const double X = q12C * (headroomBias * arg / clipS + satBias) + headroomBias * o12;
@@ -394,8 +397,9 @@ namespace dfl
     bool   tensionEnvelope = true;   // the envelope version is Tension (the rung I-V version stays behind the switch for now)
     static constexpr double TENSION_ENV_GAIN = 2.8;   // log stage-rate change at full tension and a rung at its limit
     static constexpr double TENSION_ENV_MS   = 2.0;   // envelope time constant
-    static constexpr double TENSION_G_MAX    = 3.077683537175253;   // tan(0.4 pi): a stage's rate stays below 0.4 fs
-    // (0.45 fs still left marginal rings at the top cutoffs, stiff and loud; 0.4 fs: none, worst tail -67 dB)
+    static constexpr double TENSION_G_MAX    = 1.9626105055051506;   // tan(0.35 pi): a stage's rate stays below 0.35 fs
+    // (0.45 fs left marginal rings at the top cutoffs, stiff and loud; 0.4 fs did too once the driven shaper's swell
+    // was back (SAT_BIAS_MAX), with Bite; 0.35 fs: none)
     double envA = 0.0, envE[4] = {};
     double restRung = 0.0;   // tanh of every rung at the DC operating point (Bite: hs un_dc, see updateCharacter)
     double yPrev[4] = {}, yPrev2[4] = {};   // the last two ladder solutions (Hi-Fi's Newton predictor)
@@ -559,7 +563,10 @@ namespace dfl
     const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
     auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
     // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
-    effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
+    // ... and, in Hi-Fi, divided by the input pair's largest slope (see SAT_BIAS_MAX), so its swell cannot latch the
+    // loop (Standard's linear rungs never latched: it keeps the full swell, as before)
+    effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi)))
+                          / (hiFi ? q12MaxSlope : 1.0));
     K = effK;
     logLoopGain = std::log1p(effK);
 
@@ -569,23 +576,23 @@ namespace dfl
       static const double RN[DT_RES_N]   = { 0.0, 0.6245, 0.9235, 1.0 };
       static const double DT[2][2][DT_RES_N][DT_DRIVE_N] = {
         // Standard
-        { { { 0.00, 0.29, -0.16, 1.53, 4.14, 7.34 },
-            { 0.00, 0.05, -1.76, -3.19, -3.52, -2.29 },
-            { 0.00, 0.09, -1.62, -3.19, -4.22, -4.62 },
-            { 0.00, 0.45, -0.50, -1.69, -2.75, -3.50 } },
-          { { 0.00, 0.35, 0.34, 3.14, 6.53, 10.03 },
-            { 0.00, 0.62, 1.38, 3.80, 6.81, 10.50 },
-            { 0.00, 0.77, 2.06, 4.84, 7.47, 11.31 },
-            { 0.00, 1.25, 3.51, 7.02, 10.11, 13.82 } } },
+        { { { 0.00, 0.29, -0.25, 1.03, 3.22, 5.94 },
+            { 0.00, 0.05, -1.75, -3.38, -4.21, -3.55 },
+            { 0.00, 0.09, -1.52, -3.16, -4.47, -5.49 },
+            { 0.00, 0.45, -0.29, -1.52, -2.79, -4.03 } },
+          { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
+            { 0.00, 0.62, 2.03, 4.24, 5.81, 8.42 },
+            { 0.00, 0.77, 2.79, 5.82, 7.74, 9.58 },
+            { 0.00, 1.25, 3.97, 7.36, 8.72, 9.39 } } },
         // Hi-Fi
-        { { { 0.00, 0.22, -0.55, 0.65, 2.98, 6.09 },
-            { 0.00, 0.05, -1.78, -3.25, -3.71, -2.86 },
-            { 0.00, 0.09, -1.64, -3.21, -4.26, -4.72 },
-            { 0.00, 0.44, -0.51, -1.67, -2.74, -3.51 } },
-          { { 0.00, 0.35, 0.34, 3.14, 6.53, 10.03 },
-            { 0.00, 0.61, 1.36, 3.83, 6.81, 10.49 },
-            { 0.00, 0.76, 2.01, 4.76, 7.38, 11.04 },
-            { 0.00, 1.23, 3.44, 6.93, 9.99, 13.66 } } } };
+        { { { 0.00, 0.22, -0.67, 0.61, 3.65, 7.71 },
+            { 0.00, 0.05, -1.77, -3.44, -3.82, -0.22 },
+            { 0.00, 0.09, -1.53, -3.18, -4.34, -1.89 },
+            { 0.00, 0.44, -0.29, -1.70, -3.40, -2.81 } },
+          { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
+            { 0.00, 0.61, 2.03, 4.30, 5.65, 8.18 },
+            { 0.00, 0.76, 2.74, 5.70, 7.19, 7.36 },
+            { 0.00, 1.23, 3.94, 7.73, 9.73, 10.99 } } } };
       int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
       const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
       const double rr = std::min(std::max(resonance, 0.0), 1.0);
@@ -681,8 +688,8 @@ namespace dfl
       if (q12Plain)
       {
         const double tv = tanhRational(h * (vIn - KG * Qv - K * netS) + satBias);
-        un = (tv - satBiasShape) / h;
-        dun = (1.0 - tv * tv) * (-KG * Qd * c0);
+        un = (tv - satBiasShape) * satBiasNorm / h;
+        dun = (1.0 - tv * tv) * satBiasNorm * (-KG * Qd * c0);
       }
       else
       {
@@ -860,7 +867,7 @@ namespace dfl
       // Q12, the input pair: a tanh with headroom scaling (0 dB drive = the real 303's level, see setInputDrive) and
       // the optional asymmetry (see SAT_BIAS_MAX). The level makeup is applied at the output.
       if (q12Plain)
-        un = (shape(un * headroomBias + satBias) - satBiasShape) / headroomBias;
+        un = (shape(un * headroomBias + satBias) - satBiasShape) * satBiasNorm / headroomBias;
       else
       {
         double dq;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fits the drive level compensation tables (DT in dfl_DiodeLadderFilter.h).
 
-Renders full-synth notes with build/render_note at the shipped bias (0, symmetric) for every filter type, drive node and resonance node
+Renders full-synth notes with build/render_note at the shipped bias (0.5) for every filter type, drive node and resonance node
 (mean over 4 cutoffs x 3 env mods), and prints the correction in dB = target - measured, where measured is the
 level relative to the -3 dB default drive and the target rises 1 dB from 0 to +16 dB drive. Run it with the DT
 tables set to all zeros (the printed values are corrections on top of whatever the build already applies), paste
@@ -18,7 +18,7 @@ SETTINGS = list(itertools.product((400, 800, 1500, 2394), (0, 60, 100)))
 HIFI = "0" if "--standard" in sys.argv else "1"
 def level(job):
     mode, cut, res, env, drive = job
-    a = [BIN, "1", str(cut), str(res), str(env), "400", "0", "0.4", "0.6", str(drive), "0", "45", "0", "0", "1", str(mode), HIFI]
+    a = [BIN, "1", str(cut), str(res), str(env), "400", "0", "0.4", "0.6", str(drive), "0", "45", "0", "0.5", "1", str(mode), HIFI]
     x = np.frombuffer(subprocess.run(a, capture_output=True).stdout, dtype=np.float32)[:int(.25 * SR)]
     return 20 * np.log10(np.sqrt((x ** 2).mean()) + 1e-12)
 def measure(types):

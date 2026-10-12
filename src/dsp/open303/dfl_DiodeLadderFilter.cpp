@@ -17,6 +17,7 @@ DiodeLadderFilter::DiodeLadderFilter()
   driveTrim[0] = driveTrim[1] = 1.0;
   satBias             =     0.0;
   satBiasShape        =     0.0;
+  satBiasNorm         =     1.0;
   drive               =     0.0;
   passbandCompensation =    0.0;   // no bass comp
   resonance           =     0.0;
@@ -83,6 +84,8 @@ void DiodeLadderFilter::updateSatBias()
 {
   satBias = satBiasKnob * SAT_BIAS_MAX * std::clamp(drive / SAT_BIAS_TOP_DB, 0.0, 1.0);
   satBiasShape = shape(satBias);
+  const double t = std::tanh(satBias);
+  satBiasNorm = 1.0 / (1.0 - t * t);
   updateCharacter();
 }
 
@@ -111,10 +114,11 @@ void DiodeLadderFilter::updateCharacter()
   // undegenerated pair's rest slope (sech^2 of the bias)
   double dt;
   const double XB = q12C * satBias;
-  const double tb0 = hiFi ? tanhRational(satBias) : shape(satBias);
   q12TB = (q12Rho > 0.0) ? degenT(XB, q12Rho, dt) : (hiFi ? tanhRational(XB) : shape(XB));
   if (q12Rho <= 0.0) dt = 1.0 - q12TB * q12TB;
-  q12Nrm = (1.0 - tb0 * tb0) / (q12C * dt);
+  q12Nrm = 1.0 / (q12C * dt);   // slope 1 at rest
+  // the shaper's largest slope, at its centre (X = 0; cosh^2 b for the plain pair, see SAT_BIAS_MAX): the K cap
+  q12MaxSlope = std::max(1.0, q12Nrm * q12C * ((q12Rho > 0.0) ? 1.0 / (1.0 + q12Rho) : 1.0));
   q12Plain = (bite_ == 0.0 && clip_ == 0.5 && q12Rho == 0.0);
   // the rungs' rest current: at DC every rung carries Q12's output (its feedback is AC-coupled), T(x) = un_dc, so each
   // rung's tanh sits at hs un_dc (only Bite's offset makes un_dc non-zero)
