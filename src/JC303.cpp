@@ -193,6 +193,11 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.5f),   // Diode: Q12's asymmetry and driven swell; acts above 0 dB Saturation (0 = symmetric)
+            std::make_unique<juce::AudioParameterFloat> ("filterRail",
+                                                        "Saturation Rail",
+                                                        0.0f,
+                                                        1.0f,
+                                                        1.0f),   // Diode Hi-Fi: ceiling on the ladder's stage voltages; 1 = unlimited (the full crunch), lower = cleaner
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -314,6 +319,7 @@ JC303::JC303()
     filterQuality = parameters.getRawParameterValue("filterQuality");
     filterTension = parameters.getRawParameterValue("filterTension");
     filterBias = parameters.getRawParameterValue("filterBias");
+    filterRail = parameters.getRawParameterValue("filterRail");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -395,6 +401,7 @@ JC303::JC303()
     parameters.addParameterListener("filterQuality", this);
     parameters.addParameterListener("filterTension", this);
     parameters.addParameterListener("filterBias", this);
+    parameters.addParameterListener("filterRail", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -470,6 +477,7 @@ JC303::~JC303()
     parameters.removeParameterListener("filterQuality", this);
     parameters.removeParameterListener("filterTension", this);
     parameters.removeParameterListener("filterBias", this);
+    parameters.removeParameterListener("filterRail", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -773,6 +781,11 @@ void JC303::setParameter (Open303Parameters index, float value)
         // the DT level tables are fitted at the default 0.5; higher = more swell and crunch near full resonance)
         open303Core.setFilterBias(value);
         break;
+    case FILTER_RAIL:
+        // 0..1: a ceiling on the Hi-Fi ladder's stage voltages (DiodeLadderFilter::setRail); 1 = unlimited, the crunch
+        // at high Saturation and Bias in full; lower = cleaner, toward what a real ladder can swing
+        open303Core.setFilterRail(value);
+        break;
 
     // LFO parameters
     case LFO_WAVEFORM:
@@ -831,6 +844,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(FILTER_QUALITY, *filterQuality);
         setParameter(FILTER_TENSION, *filterTension);
         setParameter(FILTER_BIAS, *filterBias);
+        setParameter(FILTER_RAIL, *filterRail);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
         setParameter(LFO_WAVEFORM, *lfoWaveform);

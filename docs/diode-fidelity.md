@@ -833,17 +833,18 @@ loud-kick sweep reports as a latch. With real notes it is never a stuck tone: th
 renders left a tail). So the latch is the character, and the guard is gone.
 
 
-In the circuit (`tools/diode-fidelity/spice/crunch.py`): with Q12's pair offset by b (Q12a's IS x e^(2b), 2 b Vt, about
-26 mV at 0.5) and the loop gain raised by cosh^2 b as the normalised shaper does (in hardware: resonance turned up
-until just under oscillation again), a saw at the VCF input (pot 1.0, cutoff 1 kHz) puts -14 dB of its output between
-the note's harmonics at b = 0.5 (-6 dB at 0.71), against -56 dB for the stock circuit; at 3 kHz -6 / -4 against -36 dB.
-At b = 0.5 the filter rests (a 1 mV input stays at -86 dBV) and the tail dies after note-off: the oscillation is the
-note's doing, as in the model. The offset alone (stock loop gain) does not do it (-51..-62 dB at 1 kHz): an offset
-pair's gain only climbs back to the symmetric pair's, which the stock pot keeps under the threshold. From b = 0.71 the
-cosh^2 b gain overshoots in the circuit (the offset also moves the ladder's operating currents) and it oscillates by
-itself. One difference: in the circuit the crunch is strongest at the real 303 level and fades as the saw gets louder
-(the input pair stays saturated for more of each cycle, so the loop's gain is up less of the time), while the model's
-bias ramps in only above 0 dB drive.
+Is it physical? No, though it is not a numerical artefact either (unchanged with 8 Newton steps and at twice the
+sample rate). It needs the first stage's voltage to run far past anything a circuit can swing: driven with the bias,
+Q12 pushes more current into stage 1 than its rungs carry, and the stage runs off (tens to hundreds of units) and
+recovers every cycle. Limiting the stage voltages removes it (held C2, Saturation 100, Bias 0.64, resonance 100,
+energy between the harmonics at cutoff 1750-5900 Hz: about -7 dB unlimited, -17 to -22 dB at +-16 units, -43 to
+-68 dB at +-8 (about +-21 V), -68 dB at +-4); a 303's ladder nodes have a volt or two of room. In SPICE an exact analog
+of the biased shaper (Q12 offset, its tail x cosh^2 b fed in at L3 / R3, the offset's static DC cancelled there) stays
+clean on held notes. The circuit does something else with the gain swell (`tools/diode-fidelity/spice/crunch.py`,
+`bend.py`): Q12 offset by about 26 mV and the loop gain raised (R15 lowered, or an ideal cosh^2 b gain) put -14 dB
+between the harmonics at the real 303 level while the filter rests stably without a note, but it sounds squeaky, a
+driven oscillation just past the threshold, not the model's crunch. So the crunch is kept as a digital-only effect
+and made a knob, Saturation Rail (below).
 
 - `K` is capped by the plain oscillation cap again (`K_MARGIN * max(trim, 1) * kc`), both qualities. With Tension 0 the
   default sound is 038591e's: Standard is bit-identical, and Hi-Fi matches to rounding (about -170 dB) everywhere except
@@ -881,3 +882,21 @@ bias ramps in only above 0 dB drive.
   top, stiff still chokes in 91 of 96 settings (0.85 is the patterns' bound, not the held notes'); Tension 0 in 1, floppy
   in none.
 
+### Saturation Rail
+
+`DiodeLadderFilter::setRail` (Hi-Fi; the plugin's Saturation Rail, default 1 = unlimited, bit-identical to the model
+without it): after the Newton solve each stage voltage passes unchanged up to half the rail and then bends (tanh) toward
+it. The knob maps 0 to 8 units and doubles the rail every 0.2 (`RAIL_MIN`, `RAIL_OCTAVES`). Held C2, Saturation 100,
+Bias 0.64, resonance 100, cutoff 2400 Hz, energy between the harmonics: -68 dB at 0, -37 at 0.2, -16 at 0.4, -12 at
+0.6, -11.5 at 0.8, -10 at 0.95, -7 unlimited, the level within about 1 dB. With a finite rail the top of the bias
+crunches instead of choking (the choke is the same runaway). Checked: unlimited is bit-identical to the previous build
+over 216 settings; at rails 0 / 0.3 / 0.7 / 0.99, 864 full-synth runs (both tensions' extremes, LP / BP / HP, Res Trim
+1.15, -3 / +16 dB) are finite, peak at most 20.3 and decay after note-off.
+
+The rail also lifts the bias cap (the choke is the same runaway): mapped at Saturation 100 with the cap off, 96 held
+notes per cell, no note choked up to bias 1.0 at any tension with the rail at 0.6 or below, a few (4-6 of 96, from
+bias 0.8) at 0.8-0.95, and most of them at unlimited. So the cap is 1.0 at rail 0.6 and below and blends linearly back
+to the tension caps at unlimited (`RAIL_FREE_BIAS`); the knob's top half spans 0.5 up to that cap, so Bias 100 still
+lands at the edge, where the near-choke sounds are. With a finite rail the rail sets most of the crunch (median energy
+between the harmonics at tension 0: -37 dB at rail 0.2, -25 at 0.6, -16 at 0.95 for bias 0.5; bias 1.0 adds 3-6 dB).
+Unlimited is unchanged (bit-identical).

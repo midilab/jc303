@@ -64,6 +64,15 @@ namespace dfl
         the drive (none at or below 0 dB), so the clean region is unaffected. */
     void setSaturationBias(double newBias);
 
+    /** Sets the ladder's rail, 0..1 (Hi-Fi): a soft ceiling on the stage voltages. 1 = unlimited (the model as it was);
+        lower values limit how far a stage can be driven past what its rungs carry (see RAIL_MIN). */
+    void setRail(double knob)
+    {
+      railKnob  = std::clamp(knob, 0.0, 1.0);
+      railLimit = (railKnob >= 1.0) ? 0.0 : RAIL_MIN * std::pow(2.0, RAIL_OCTAVES * railKnob);
+      if (hiFi && satBiasKnob > SAT_BIAS_DEFAULT) { updateSatBias(); calculateCoefficients(); }   // the bias cap follows
+    }
+
     /** Sets the bass comp amount (0..1): restores part of the passband loss that resonance causes (see getSample). */
     void setPassbandCompensation(double newCompensation) { passbandCompensation = newCompensation; }
 
@@ -237,8 +246,9 @@ namespace dfl
     static constexpr double SAT_BIAS_DEFAULT = 0.5;
     // Hi-Fi caps the bias by tension (linear between the three): above the cap, driven hard, the rectified DC passes what
     // stage 1's rung can carry and the note chokes (docs/diode-fidelity.md, "Choke at high bias"). Set by ear at full
-    // Saturation: floppy holds to 0.74, the circuit to 0.71, stiff to 0.85. The knob's top half (0.5..1) is rescaled to
-    // 0.5..cap, so the whole knob is usable and the default and below are unchanged. Standard (linear rungs) never chokes.
+    // Saturation: floppy holds to 0.74, the circuit to 0.71, stiff to 0.85. A finite rail lifts the cap (RAIL_FREE_BIAS).
+    // The knob's top half (0.5..1) is rescaled to 0.5..cap, so the whole knob is usable and the default and below are
+    // unchanged. Standard (linear rungs) never chokes.
     static constexpr double SAT_BIAS_CAP_FLOPPY  = 0.74;
     static constexpr double SAT_BIAS_CAP_CIRCUIT = 0.71;
     static constexpr double SAT_BIAS_CAP_STIFF   = 0.85;
@@ -413,6 +423,18 @@ namespace dfl
                                 // stays at its 0 dB value (24 dB): hotter, stiff tension at Res Trim 1.15 in HP peaked at
                                 // 27 (-3 dB drive) to 73 (-12 dB) in the stress test; at 0 dB and above, 21.6 at most
 
+    // Rail. Driven hard with the bias, Q12 pushes more current into stage 1 than its rungs can pass, and the stage's
+    // voltage runs off (tens to hundreds of units) and recovers every cycle: the FM-like crunch. No circuit can do that
+    // (a 303's ladder nodes sit near 10 V on a 12 V supply; in SPICE an exact analog of the biased shaper stays clean),
+    // so the rail is a knob: each stage voltage passes unchanged up to half the rail and then bends smoothly (tanh)
+    // toward it. 8 units (about 21 V) is already clean, 16 starts the crunch, 64 and up is most of it, unlimited the
+    // full crunch (and, at the top of the bias, the choke). railLimit = 0: unlimited.
+    static constexpr double RAIL_MIN = 8.0, RAIL_OCTAVES = 5.0;
+    // ... and the rail lifts the bias cap (SAT_BIAS_CAP_*: the choke is the same runaway): none at or below
+    // RAIL_FREE_BIAS (on held notes at +16 dB, no choke up to bias 1 at any tension), blending back to the full cap at
+    // unlimited (between, a few held notes choked from bias 0.8)
+    static constexpr double RAIL_FREE_BIAS = 0.6;
+    double railKnob = 1.0, railLimit = 0.0;
     double unMean = 0.0, unMeanA = 0.0;   // Q12's mean output (UN_MEAN_HZ): the rungs' DC, the tension envelope's rest
     static constexpr double UN_MEAN_HZ = 3.0;
     double restRung = 0.0;   // tanh of every rung at Bite's DC operating point (hs un_dc, see updateCharacter): unMean's start
@@ -735,6 +757,15 @@ namespace dfl
                       - a03 * (a21 * a32 * b1 - a11 * (a32 * b2 - a22 * b3) - a12 * a21 * b3);
       const double r = 1.0 / det;
       y[0] += N0 * r; y[1] += N1 * r; y[2] += N2 * r; y[3] += N3 * r;
+    }
+    if (railLimit > 0.0)
+    {
+      const double a = 0.5 * railLimit, w = railLimit - a;
+      for (int k = 0; k < 4; ++k)
+      {
+        const double m = std::fabs(y[k]);
+        if (m > a) y[k] = std::copysign(a + w * std::tanh((m - a) / w), y[k]);
+      }
     }
     z1 = 2.0 * y[0] - z1; z2 = 2.0 * y[1] - z2; z3 = 2.0 * y[2] - z3; z4 = 2.0 * y[3] - z4;
     for (int k = 0; k < 4; ++k) lp[k] = y[k];

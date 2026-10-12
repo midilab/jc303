@@ -85,8 +85,10 @@ void DiodeLadderFilter::setSaturationBias(double newBias)
 
 void DiodeLadderFilter::updateSatBias()
 {
-  const double cap = tension < 0.0 ? SAT_BIAS_CAP_CIRCUIT - tension * (SAT_BIAS_CAP_FLOPPY - SAT_BIAS_CAP_CIRCUIT)
-                                   : SAT_BIAS_CAP_CIRCUIT + tension * (SAT_BIAS_CAP_STIFF - SAT_BIAS_CAP_CIRCUIT);
+  const double tensionCap = tension < 0.0 ? SAT_BIAS_CAP_CIRCUIT - tension * (SAT_BIAS_CAP_FLOPPY - SAT_BIAS_CAP_CIRCUIT)
+                                          : SAT_BIAS_CAP_CIRCUIT + tension * (SAT_BIAS_CAP_STIFF - SAT_BIAS_CAP_CIRCUIT);
+  const double railW = std::clamp((railKnob - RAIL_FREE_BIAS) / (1.0 - RAIL_FREE_BIAS), 0.0, 1.0);   // 1 = unlimited
+  const double cap = 1.0 + railW * (tensionCap - 1.0);
   // the knob's top half spans the default to the cap (its bottom half, and so the default, as without the cap)
   const double knob = (hiFi && satBiasKnob > SAT_BIAS_DEFAULT)
                     ? SAT_BIAS_DEFAULT + (satBiasKnob - SAT_BIAS_DEFAULT) / (1.0 - SAT_BIAS_DEFAULT) * (cap - SAT_BIAS_DEFAULT)
