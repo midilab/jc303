@@ -148,11 +148,15 @@ namespace dfl
     // Bias 1 = the CA3080's datasheet maximum input offset (5 mV), untrimmed: HP / LP 2.3 V off ground (LP up)
     static constexpr double BIAS_MAX_V = 5e-3, BIAS_LAG = 0.1, RAIL_SAG = 0.3;
 
-    // Input level: volts at R155 for a full-scale (+-1) signal at 0 dB drive (the SEM's oscillators, 10 V p-p, mixer
-    // at full). The output is divided by driveFactor^MAKEUP_EXP: the SEM is clean up to A12's rails, so full make-up
-    // keeps LP within 0.1 dB from 0 to +16 dB at RES 0 (tools/sem-fidelity/levels).
-    static constexpr double INPUT_VOLTS = 5.0;
-    static constexpr double MAKEUP_EXP = 1.0;
+    // Input level: volts at R155 for a full-scale (+-1) signal at 0 dB drive: one of the SEM's oscillators (10 V p-p)
+    // with its mixer pot at full. The drive's dB are scaled by DRIVE_EXP at R155: the mixer sums three such sources, so
+    // 15 V (+9.5 dB) is the most the SEM's own VCOs give, and the SEM is clean there (LP's gain is R138 / R155 = 0.45,
+    // so LP needs ~30 V in to reach its rails). +16 dB is then +22 dB at R155, 63 V: about twice the unscaled knob,
+    // four of the mixer's three-source sums, where LP clips (~25 % THD in the passband) and hot HP / BP clip and slew.
+    // The output is divided by driveFactor^MAKEUP_EXP (driveFactor at R155): LP's saw level within +1.2 / -1.5 dB from
+    // 0 to +16 dB at RES 0..0.5 (tools/sem-fidelity/levels).
+    static constexpr double INPUT_VOLTS = 5.0, DRIVE_EXP = 1.375;
+    static constexpr double MAKEUP_EXP = 0.9;
     // The outputs' passband gain (LP and HP alike: R138 / R155 = R139 / R155), divided out to unity at 0 dB drive
     static constexpr double OUT_GAIN = INPUT_VOLTS * R139 / R155;
     // BP / HP output trims (dB): the pure modes sit near LP loudness on a saw at a typical resonant setting (pot

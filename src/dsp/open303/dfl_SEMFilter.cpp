@@ -44,7 +44,7 @@ void SEMFilter::setSampleRate(double newSampleRate)
 void SEMFilter::setInputDrive(double newDrive)
 {
   drive = newDrive;
-  driveFactor = dB2amp(newDrive);
+  driveFactor = dB2amp(DRIVE_EXP * newDrive);
   driveMakeup = std::pow(driveFactor, MAKEUP_EXP);
 }
 

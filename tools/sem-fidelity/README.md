@@ -27,7 +27,12 @@ CA3080 as an ideal tanh with its output clamped 1.5 V inside the rails; A12 as a
 datasheet's 0.5 V / us and 1 MHz at 30 pF (its input stage a tanh 80 mV wide into the compensation node), DC gain 1e5,
 its output clamped 1.5 V inside the supply; the offset trims T9 / T10 at null; the expo converter splitting its current
 equally between the OTAs (the 15k R146 / R152); a linear RES pot. The input level (5 V peak at R155 for a full-scale
-signal: the SEM's 10 V p-p oscillators) is a guess.
+signal at 0 dB drive: one of the SEM's 10 V p-p oscillators) is a guess.
+
+Drive: the plugin's dB are scaled by 1.375 at R155, so +16 dB is 63 V there. The SEM's mixer sums three 10 V p-p
+sources (15 V, +9.5 dB re one), and its LP passband is clean there (LP gain 0.45, its rails need ~30 V in); the top of
+the knob goes about four three-source sums past that, into LP clipping (23 % THD at 100 Hz) and HP / BP clipping and
+slew. LP's saw level stays within +1.2 / -1.5 dB from 0 to +16 dB at RES 0..0.5 (make-up exponent 0.9).
 
 ## Behaviour and character controls
 
@@ -62,11 +67,11 @@ tools/sem-fidelity/build.sh      # into tools/sem-fidelity/build/ (git-ignored);
 |---|---|
 | `build/probe <cutoff> <res\|pot:x> <mode\|lp\|bp\|hp> <f>...` | small-signal magnitude (dB) by sine probe, 4 x 44.1 kHz: the output at a mode position, or a circuit node over the outputs' passband gain |
 | `build/render <cutoff> <pot> <mode> <amp V> <freq> <secs> [kick V] [node] [bias rail]` | renders in circuit volts (float32 on stdout); node: out, n0..n8 (the circuit nodes, n8 = HP); `render dc` prints the DC operating point |
-| `build/levels [noteHz]` | saw output level per mode / pot / drive: the BP / HP trims and the drive make-up were fitted with it |
+| `build/levels [noteHz]` | saw output level per mode / pot / drive (the plugin's dB): the BP / HP trims and the drive make-up were fitted with it |
 | `build/stress` | 400 cases (RES 0..1, mode 0 / 0.25 / 0.5 / 0.75 / 1, drive -3..+24 dB, filter FM, bias 1, rail 0, 20 Hz..20 kHz cutoff sweeps, at Open303's fixed 4 x rate): finite, bounded, rings down, every Newton solve converges; prints ns / sample. Exit 0 = pass |
 | `spice/sem_vcf.py` | ngspice netlist generator (the same device equations) |
 | `spice/compare_ac.py` | DSP vs SPICE small-signal response, 5 cutoffs x 6 pot positions, LP / BP / HP (same Iabc, no fitting) |
-| `spice/tran_compare.py` | kick rings, distortion vs level (gain compression, THD, H2), Saturation Bias 1 and Rail 0, A12's slew on HP |
+| `spice/tran_compare.py` | kick rings, distortion vs level (gain compression, THD, H2), Saturation Bias 1 and Rail 0, the plugin's top drive (63 V) at Bias 0 / 1, A12's slew on HP |
 
 Needs ngspice (`brew install ngspice`) and numpy for the `spice/` scripts; run them from `spice/` after `build.sh`.
 `spice/` imports `spice_util.py` from `tools/ms20-fidelity/spice` (`tran_compare` refuses a run that stops early).
@@ -80,7 +85,8 @@ Needs ngspice (`brew install ngspice`) and numpy for the `spice/` scripts; run t
   and A12's backward-Euler step, which a trapezoidal step would avoid at the cost of ringing at Nyquist).
 - Large signal (`tran_compare`): gain compression within 0.03 dB and THD / H2 within 0.15 % of SPICE from 0.5 to 20 V
   in the passband and near the peak, A12 clipping included, also at Bias 1 and Rail 0; the full-RES rings at 200 Hz and
-  1 kHz within ~2 % in amplitude and 0.1 Hz. A12 slewing on HP (8 / 12 kHz, 5..30 V): gain within 0.13 dB, THD 8.1 /
+  1 kHz within ~2 % in amplitude and 0.1 Hz. Driven to 63 V (the plugin's +16 dB) in LP's passband: within 0.03 dB,
+  THD within 0.1 % (23 %; 32 % with H2 28 % at Bias 1), H2 within 0.4 %. A12 slewing on HP (8 / 12 kHz, 5..30 V): gain within 0.13 dB, THD 8.1 /
   10.3 % vs SPICE's 8.8 / 11.7 % at 30 V (the slewing edge resolved per sample).
 - Stress: 0 of 400 failures, no unconverged sample; ~185 ns / sample at 4 x 44.1 kHz (the solve eliminates four nodes
   in closed form, then a 5 x 5; A12's input step is limited in units of its input stage's tanh argument, the nodes to

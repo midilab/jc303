@@ -3,6 +3,7 @@
   ring:        a kick at 1 ms, then the output over the last 50 ms (p-p, frequency): whether and how it oscillates
   distortion:  sine through the passband and near the peak at rising levels (gain compression, THD, H2), LP output
   character:   the same at Saturation Bias 1 and Rail 0
+  driven:      the plugin's top drive (+16 dB = 63 V at R155) in LP's passband, at Bias 0 and 1
   slew:        sine through HP's passband at high frequencies and levels (A12's slew limit), HP output
 
   python3 tran_compare.py      (run from this directory after ../build.sh)"""
@@ -67,6 +68,10 @@ def main():
     w = max(w, distortion(cases[:2], amps, bias=1.0))
     print("\ncharacter: Rail 0 (supplies sagged 30 %)")
     w = max(w, distortion(cases[:2], amps, rail=0.0))
+    print("\ndriven (LP passband, up to the plugin's +16 dB)")
+    w = max(w, distortion(cases[:1], (5.0, 20.0, 40.0, 63.0)))
+    print("\ndriven at Saturation Bias 1")
+    w = max(w, distortion(cases[:1], (5.0, 20.0, 40.0, 63.0), bias=1.0))
     print("\nslew (HP): A12 at 0.5 V / us, full-power bandwidth ~6 kHz at its 13.5 V swing")
     w = max(w, distortion(((500.0, 0.0, 16.0), (500.0, 0.0, 24.0)), (5.0, 15.0, 30.0), node="n8"))
     print(f"\nworst gain-compression difference {w:.2f} dB")
