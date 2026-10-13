@@ -40,9 +40,9 @@ def tail_for(fc):
 def netlist(pot=0.0, fc=1000.0, analysis="ac", amp=1.0, freq=100.0, tstop=0.1, tstep=2e-6, kick=0.0,
             fstart=5, fstop=80e3, ppd=100, rail=1.0, mod=False):
     """The circuit; input 'vin' at the mixer pot. analysis 'ac' (1 V AC) or 'tran' (sine amp V at freq, plus a 100 us
-    kick pulse of `kick` V at 1 ms). rail as ARP4075Filter::setRail (the -14 V supply sagged by up to 60 %); mod: the
-    2k2 mod (R2 / R7 / R12 / R17 4k7 -> 2k2)."""
-    vneg = V_NEG * (1 - 0.6 * (1 - rail)); ref = -0.5 * vneg; rt = 2.2e3 if mod else R_TAIL
+    kick pulse of `kick` V at 1 ms). rail as ARP4075Filter::setRail (the +15 V and -14 V supplies sagged together by
+    up to 60 %, the reference half the -14 V); mod: the 2k2 mod (R2 / R7 / R12 / R17 4k7 -> 2k2)."""
+    sag = 1 - 0.6 * (1 - rail); vneg = V_NEG * sag; vpos = 15.0 * sag; ref = -0.5 * vneg; rt = 2.2e3 if mod else R_TAIL
     it = tail_for(fc); rtop = max((1 - pot) * 100e3, 1e-3); rbot = max(pot * 100e3, 1e-3)
     if analysis == "ac":
         src = f"Vin vin 0 DC 0 AC 1\n.ac dec {ppd} {fstart} {fstop}\n"
@@ -70,7 +70,7 @@ E{k} y{k} 0 s{k} 0 1
 """)
     return f"""* ARP 4075 VCF (Odyssey Mk III)
 {MODELS}
-Vp vp 0 DC 15
+Vp vp 0 DC {vpos}
 Vref ref 0 DC {ref}
 Vyh yh 0 DC {-1.0}
 Vyl yl 0 DC {-vneg + 0.1}

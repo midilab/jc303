@@ -51,8 +51,16 @@ those sweeps, and the resonance follows them above 12 kHz. The resonance map hol
 to 3 kHz).
 
 Saturation Bias offsets the limiter pair (its resting current trimmed out: unequal current limits). Saturation Rail
-sags the LM3900s' -14 V supply by up to 60 %: the stages' swing shrinks (about the reference, half the supply), small
-signals are unchanged. Open303 ramps the bias in with Saturation, as on the other models.
+sags the +15 V and -14 V supplies together by up to 60 % (the -7 V reference follows, half the -14 V). The +15 V
+sets the limiter's tail (R24): its current ceiling and its gain fall together, and the pair's threshold (2 VT) does
+not move, so a lower rail does not limit earlier; it makes the filter quieter (-1.4 / -3.1 / -5.3 / -8.2 dB at rail
+0.75 / 0.5 / 0.25 / 0, RES 0) and less resonant (the loop gain is the limiter's: less peak and bass loss, the
+oscillation onset from pot 0.84 to 0.99 at rail 0.3, none below). With less of the resonance's negative feedback,
+more of the input reaches the limiter at moderate RES (knob 0.3, 200 Hz, +16 dB: THD 3.5 % at rail 1, 9.4 % at 0).
+The stages' swing shrinks with their signals, and Q14's headroom with the reference (the cutoff ceiling falls from
+~12 kHz to ~5 kHz at rail 0). SPICE (`tran_compare`, the same sag) agrees: -8.23 vs -8.21 dB at RES 0, -18.2 vs
+-18.1 dB at pot 0.75, compression within 0.06 dB at rail 0. Open303 ramps the bias in with Saturation, as on the
+other models.
 
 The LP / BP / HP morph mixes the stage outputs (BP = -(y2 - 2 y3 + y4), HP = u - 4 y1 + 6 y2 - 4 y3 + y4, u the
 stage-1 equivalent input), signed so the crossfades have no notches. The Odyssey's own HPF (a passive one-pole after

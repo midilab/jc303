@@ -58,7 +58,7 @@ def main():
     cases = ((1000.0, 0.0, 0.1), (1000.0, 0.5, 0.8), (1000.0, 0.75, 0.9), (200.0, 0.75, 0.9))
     amps = (0.5, 2.0, 5.0, 10.0, 20.0)
     w = distortion(cases, amps)
-    print("\nRail 0 (the -14 V supply sagged 60 %)")
+    print("\nRail 0 (the +15 V and -14 V supplies sagged 60 %)")
     w = max(w, distortion(cases[:1] + cases[2:3], amps, rail=0.0))
     print(f"\nworst gain-compression difference {w:.2f} dB")
 

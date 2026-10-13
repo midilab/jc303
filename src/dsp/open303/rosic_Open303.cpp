@@ -234,6 +234,9 @@ void Open303::updateCircuitCharacter()
   //   loop cancels the offset by holding HP and LP up to 2.3 V off ground (the 100k / 220R divider's 455 x), so the
   //   clean filter is unchanged and, once driven, its outputs clip unevenly (even harmonics). Rail sags its +-15 V
   //   supplies, see SEMFilter::setSaturationBias / setRail.
+  // - ARP 4075: Bias offsets the limiter pair, ramping in the same way; Rail sags its +15 / -14 V supplies, the
+  //   limiter's tail with the +15 V: a quieter, less resonant filter rather than an earlier limit (its threshold is
+  //   the pair's 2 VT), see ARP4075Filter::setRail.
   const double bias = circuitBias * std::clamp(circuitDriveDb / 16.0, 0.0, 1.0);
   const double clip = 0.5 * circuitRail;
   ms20Filter.setSaturationBias(bias);
@@ -246,7 +249,7 @@ void Open303::updateCircuitCharacter()
     f->setRail(circuitRail);
   }
   arpFilter.setSaturationBias(bias);   // the limiter pair's offset
-  arpFilter.setRail(circuitRail);      // the LM3900s' -14 V supply
+  arpFilter.setRail(circuitRail);      // its +15 / -14 V supplies: quieter and less resonant, see ARP4075Filter::setRail
   semFilter.setSaturationBias(bias);
   semFilter.setRail(circuitRail);
 }

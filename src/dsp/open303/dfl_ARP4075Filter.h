@@ -25,7 +25,7 @@
 //
 // The LP / BP / HP morph mixes the stage outputs (binomial taps of the cascade, signs chosen so the crossfades have
 // no notches): the circuit runs unchanged, with its resonance and limiter, in every mode. Saturation Bias offsets the
-// limiter pair (its resting current trimmed out), Saturation Rail sags the LM3900s' -14 V supply (their swing).
+// limiter pair (its resting current trimmed out), Saturation Rail sags the supplies (setRail).
 
 // standard-library includes:
 #include <stdlib.h>
@@ -92,8 +92,14 @@ namespace dfl
     void setSaturationBias(double b) { satBias_ = std::clamp(b, 0.0, 1.0); satBiasT = std::tanh(satBias_); }
     double getSaturationBias() const { return satBias_; }
 
-    /** Supply rail, 0..1: 1 = the circuit; lower sags the LM3900s' -14 V supply by up to RAIL_SAG of itself, so the
-        stage outputs clip sooner (about the reference, half the supply). Small signals are unchanged. */
+    /** Supply rail, 0..1: 1 = the circuit; lower sags the +15 V and -14 V supplies together by up to RAIL_SAG of
+        themselves (the -7 V reference, half the -14 V, follows). The +15 V sets the limiter's tail through R24: its
+        current ceiling and its gain fall together (the pair's threshold, 2 VT, does not move: no earlier limiting),
+        so the filter gets quieter (-8.2 dB at 0) and the resonance loop's gain falls with it: less peak and bass
+        loss (more of the input reaches the limiter: more passband distortion at moderate RES), the oscillation
+        onset from pot 0.84 to 0.99 at rail 0.3, none below. The LM3900s' swing about the reference shrinks with
+        the stage signals, and Q14's headroom above the stage emitters with the reference (the cutoff ceiling,
+        ~12 kHz, falls to ~5 kHz at 0). */
     void setRail(double r) { rail_ = std::clamp(r, 0.0, 1.0); updateRails(); }
     double getRail() const { return rail_; }
 
@@ -161,7 +167,7 @@ namespace dfl
       const double w = 2.0 / T * std::tan(PI * std::min(fc, 0.45 * sampleRate) * T);
       // the Iabc the pole wants, as Q14's emitter current (its collector carries ALPHA_Q14 of it, the pairs' collectors
       // ALPHA of their tails: the cutoff convention is the analog want without them, as SPICE's)
-      const double want = ALPHA_Q14 * w * 2.0 * VT * C_ST / K_SUM, imax = VQ14_HEAD / rTail, e = TAIL_KNEE * imax;
+      const double want = ALPHA_Q14 * w * 2.0 * VT * C_ST / K_SUM, imax = q14Head / rTail, e = TAIL_KNEE * imax;
       return 0.5 * (want + imax - std::sqrt((want - imax) * (want - imax) + e * e)) + 0.5 * (std::sqrt((imax) * (imax) + e * e) - imax);
     }
 
@@ -228,6 +234,7 @@ namespace dfl
 
     // derived
     double iIn = (V_POS - VBE) / R24;     // limiter tail
+    double q14Head = VQ14_HEAD;           // Q14's headroom above the stage emitters (the reference follows the rail)
     double rD = 1e5;                      // the limiter's differential input resistance, 2 (beta + 1) re
     double kLoad = 1.0;                   // base loading: rD / (rD + the pins' source resistances)
     double vHi = 0.5 * V_NEG - SWING_HI_DROP, vLo = -(0.5 * V_NEG - SWING_LO_DROP);   // stage swing re the reference
