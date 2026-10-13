@@ -496,7 +496,7 @@ namespace rosic
     // Level per filter model, after the filter chain, so the models sit at equal loudness at resonance 0 (saw, mean
     // over C2 / C3 / C4 and cutoff 400 / 1000 / 2500 Hz, env mod 60; tools/diode-fidelity/model_level). Level matching
     // between models lives here rather than in the filters, which stay at their own (circuit) level.
-    static constexpr double FILTER_LEVEL[dfl::NUM_FILTER_TYPES] = { 1.0, 2.401, 1.349, 1.392, 1.112, 1.099, 1.265, 1.288 };   // TeeBee, Spicy (+7.6 dB), MissBehave (+2.6 dB), JuneBug (+2.9 dB), Wasabi (+0.9 dB), Hornet (+0.8 dB), SemiSweet (+2.0 dB), Oddity (+2.2 dB)
+    static constexpr double FILTER_LEVEL[dfl::NUM_FILTER_TYPES] = { 1.0, 2.401, 1.349, 1.392, 1.106, 1.259, 1.265, 1.288 };   // TeeBee, Spicy (+7.6 dB), MissBehave (+2.6 dB), JuneBug (+2.9 dB), Wasabi (+0.9 dB), Hornet (+2.0 dB), SemiSweet (+2.0 dB), Oddity (+2.2 dB)
     // The diode models' corner at the knob's end: the coupling pole C27/C25 into Q21 at 46 Hz, Q21 beta about 500 (the
     // 2SC1583's datasheet minimum). Higher betas make the network's ~7 Hz mode motorboat at high resonance (SPICE:
     // beta 800 at full pot), so the knob stops here. The pole is 578.1 rad/s x corner / 115.
