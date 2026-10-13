@@ -88,7 +88,8 @@ namespace dfl
 
     /** Limiter diode threshold, 0..1 (0 = early, 1 = late). Scales the diodes' saturation current by
         10^(CLIP_DECADES * (0.5 - amount)): each decade moves the knee by N VT ln 10 (~0.1 V per diode).
-        0.5 = the circuit's 1S1588. */
+        0.5 = the circuit's 1S1588. Earlier diodes already conduct at rest, so the x58 stage's gain falls and its curve
+        softens: less THD at the same drive (the output is renormalised, see K35_LIMITER_NORM_SLOPE). */
     void setClipThreshold(double amount) { clipThreshold_ = std::clamp(amount, 0.0, 1.0); updateDiodes(); }
     double getClipThreshold() const { return clipThreshold_; }
 
@@ -139,25 +140,29 @@ namespace dfl
     static constexpr double CLIP_DECADES = 4.0;
     static constexpr double BITE_MAX_DECADES = 2.0;
 
-    // Input level: volts at the filter input for a full-scale (+-1) signal at 0 dB drive. The Korg35 LPF is fed from
-    // the HPF's x58 stage, which its diodes hold to about +-0.7 V; 0.5 V leaves the drive knob's +9 dB to reach it and
-    // beyond.
-    static constexpr double K35_INPUT_VOLTS = 0.5;
+    // Input level: volts at the LPF's input (the top of R112) for a full-scale (+-1) signal at 0 dB drive. In the MS-20
+    // the LPF is fed from the HPF's output. The VCF's external input takes 3 Vp-p at most (Korg's MS-20 spec; the VCO
+    // mixer feeds the same point), and the HPF passes it, open, with its input pad R104 / R100 x JFET follower x the
+    // x58 stage: 47 / 20k x 1.08 x 58.4 = 0.148, so +-1.5 V arrives as +-0.22 V. That is 0 dB: the circuit's nominal
+    // level, where the forward-path diodes just bend (a full-scale sine ~4 % THD, as SPICE at 0.2 V). +16 dB (1.4 V) is
+    // the hot end, past what the HPF's own diodes (~+-0.7 V) would pass at rest: an overdriven HPF peak or a hot
+    // external signal.
+    static constexpr double K35_INPUT_VOLTS = 0.22;
 
     // Drive make-up: the output is divided by driveFactor^exp, so the drive knob adds grit, not level. The Korg35's
-    // forward-path limiter already compresses at 0 dB (its level falls 0.7 dB per dB of drive with full make-up).
-    // Fitted on a saw (tools/ms20-fidelity/levels).
-    static constexpr double K35_MAKEUP_EXP = 0.3;
+    // forward-path limiter compresses as the drive rises (its level falls 0.43 dB per dB of drive with full make-up).
+    // Least-squares fit on a saw, drive 0..+16 dB, PEAK 0 / 0.5 / 0.7, cutoff 500 Hz..2 kHz, A1 / A2.
+    static constexpr double K35_MAKEUP_EXP = 0.57;
     // Korg35 limiter normalisation: at 0 dB the output is renormalised to the diodes' resting conductance (an earlier
     // knee leaks at rest, a small-signal gain loss), driven harder the knee sets the level instead, so the share
-    // falls by this much per dB of drive. Keeps Clip / Bite / the saturation bias within ~1.5 dB of the circuit's level
-    // from 0 to +16 dB (saw, resonance 0 / 60, C2 / C3).
-    static constexpr double K35_LIMITER_NORM_SLOPE = 0.0175;
+    // falls by this much per dB of drive. Keeps Clip 0 and the saturation bias (ramped in, as Open303 does) within
+    // ~2.3 dB of the circuit's level from 0 to +16 dB (saw A2, PEAK 0 / 0.6, cutoff 500 Hz / 1 kHz).
+    static constexpr double K35_LIMITER_NORM_SLOPE = 0.0105;
 
     // BP / HP output trims (dB): the pure modes sit near LP loudness on a saw at a typical resonant setting (pot
     // 0.5..0.7, cutoff 1 kHz, tools/ms20-fidelity/levels). Their gap at low resonance and high cutoff is the
     // filter's character (a saw's energy is in the low harmonics that BP / HP remove).
-    static constexpr double K35_BP_TRIM_DB = 7.7, K35_HP_TRIM_DB = -1.0;
+    static constexpr double K35_BP_TRIM_DB = 4.9, K35_HP_TRIM_DB = -1.0;
 
     // Warmth: the buffer input swing that cuts the starved JFET follower off (V); it sees the chip's
     // tens-of-millivolt node.

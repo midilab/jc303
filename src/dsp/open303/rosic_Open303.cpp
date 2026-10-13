@@ -223,7 +223,10 @@ void Open303::updateCircuitCharacter()
   //   diode ladder's bias shape; Korg35: one forward limiter diode), see setSaturationBias. It ramps in with
   //   Saturation as the diode's does, from none at 0 dB to the knob's value at +16 dB, so the clean filter stays the
   //   circuit.
-  // - Rail = Clip, the limiter's threshold (MS-20: the limiter diodes; Juno: the BA662's input range): 1 = the circuit, lower = the limiter bends earlier. These circuits have real rails, so there is no
+  // - Rail = Clip, the limiter's threshold (MS-20: the limiter diodes; Juno: the BA662's input range): 1 = the circuit,
+  //   lower = the limiter bends earlier. On the MS-20 that is a softer limiter, not a harder one: the earlier diodes
+  //   already conduct at rest, so the x58 stage's gain falls and its curve rounds off (at 0 dB a full-scale sine's
+  //   THD falls from ~4 % to ~3 %, at +16 dB from ~28 % to ~16 %). These circuits have real rails, so there is no
   //   runaway for a ceiling to tame.
   // - Wasp: Bias offsets OTA1's input divider (IC1 then sits off its switching point), ramping in the same way; Rail is
   //   its supply, 1 = the circuit, lower = sagging (less headroom and inverter gain), see WaspFilter::setRail.
