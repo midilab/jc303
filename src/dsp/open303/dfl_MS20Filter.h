@@ -181,10 +181,6 @@ namespace dfl
     /** Korg35 control voltage (Q1's collector source) for a corner of fc Hz, from the table. */
     INLINE double k35ControlFor(double fc) const;
 
-    /** Solves the forward gain-stage limiter: diode voltage vd for the feedback current i, and dvd/di.
-        Vd / R + Ia (exp(u) - 1) - Ib (exp(-u) - 1) = i,  u = vd / (n VT). */
-    INLINE void solveLimiter(double i, double R, double nVt, double& vd, double& dvdi) const;
-
     /** SPICE's junction voltage limiting for the limiter diodes: the voltage vNew a Newton step proposes, from vOld, held
         to a logarithmic advance past the critical voltage vCrit (where the diode's current outgrows its linearisation). */
     static INLINE double pnjlim(double vNew, double vOld, double nVt, double vCrit);
@@ -265,25 +261,6 @@ namespace dfl
     int i = (int)x;
     double f = x - i;
     return ctVb[i] + f * (ctVb[i + 1] - ctVb[i]);
-  }
-
-  INLINE void MS20Filter::solveLimiter(double i, double R, double nVt, double& v, double& dvdi) const
-  {
-    // Newton from the previous solution; the function is monotonic and convex either side of 0
-    for (int it = 0; it < 30; ++it)
-    {
-      double u = std::clamp(v / nVt, -40.0, 40.0);
-      double ep = std::exp(u), em = 1.0 / ep;
-      double f = v / R + diodeIa * (ep - 1.0) - diodeIb * (em - 1.0) - i;
-      double df = 1.0 / R + (diodeIa * ep + diodeIb * em) / nVt;
-      double dv = -f / df;
-      dv = std::clamp(dv, -2.0 * nVt, 2.0 * nVt);
-      v += dv;
-      if (std::fabs(dv) < 1e-10) break;
-    }
-    double u = std::clamp(v / nVt, -40.0, 40.0);
-    double ep = std::exp(u);
-    dvdi = 1.0 / (1.0 / R + (diodeIa * ep + diodeIb / ep) / nVt);
   }
 
   INLINE double MS20Filter::pnjlim(double vNew, double vOld, double nVt, double vCrit)
