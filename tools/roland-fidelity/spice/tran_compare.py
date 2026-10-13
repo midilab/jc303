@@ -53,7 +53,8 @@ def main():
 
 def character():
     """Each character control at its extremes: self-oscillation (Out4) and a resonant sine (output, THD / H2).
-    (bite, clip, warmth[, bias]); bias is the saturation bias (setSaturationBias), clip 0..0.5 the plugin's Rail."""
+    (bite, clip, warmth[, bias]); bias is the saturation bias (setSaturationBias), clip the BA662's input scale
+    (setClipThreshold; the plugin's Rail sags the supplies instead, setRail)."""
     th = lambda h: 100 * np.sqrt(sum(x * x for x in h[1:])) / h[0]
     fc, pot, amp = 1000.0, 0.95, 0.8
     print(f"\ncharacter: (bite, clip, warmth) -> osc p-p V, +/- peak | sine {amp} V at 300 Hz, RES 0: THD %, H2 %   SPICE | DSP")

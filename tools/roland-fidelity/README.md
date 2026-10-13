@@ -49,6 +49,10 @@ The MS-20's Bite / Clip / Sharpness / Warmth parameters drive this filter too (0
 | Sharpness | stage OTA VT x 2^(1 - 2 s) (the cutoff holds) |
 | Warmth | the VCA input driven 4^warmth harder |
 
+Saturation Rail (`setRail`, 1 = the circuit) sags both +-15 V supplies by up to 30 %: the stage OTAs' output
+compliance and the followers' ceiling follow them (Out4 swings +-8.5 V instead of +-13 V at rail 0). It is not in the
+SPICE model.
+
 Checked against SPICE with the same knobs (`tran_compare.py`'s character section): oscillation amplitude within ~1 % and
 THD / H2 within ~0.1 % at every extreme. Sharpness is not in the SPICE model.
 

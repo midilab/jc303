@@ -10,6 +10,7 @@ using namespace dfl;
 RolandFilter::RolandFilter()
 {
   setSampleRate(44100.0);
+  updateSupply();
   updateCharacter();
   setInputDrive(drive);
   updateGains();
@@ -71,6 +72,16 @@ void RolandFilter::updateCharacter()
   // Warmth: VCA drive
   vcaK = VCA_K * std::pow(VCA_DRIVE_MAX, warmth_);
   updatePot();
+}
+
+void RolandFilter::updateSupply()
+{
+  // both supplies sag alike; the followers' ceiling and the OTAs' compliance follow them
+  const double sag = 1.0 - RAIL_SAG * (1.0 - rail_);
+  const double vPos = V_POS * sag, vNeg = V_NEG * sag;
+  yCeil = vPos - Y_CEIL_DROP;
+  vHi = vPos - VCLAMP;
+  vLo = vNeg + VCLAMP;
 }
 
 void RolandFilter::updateGains()

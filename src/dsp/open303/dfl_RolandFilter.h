@@ -19,7 +19,9 @@
 // static stage here, at the circuit's level; Open303's own VCA applies the envelope after it).
 //
 // Character controls (shared with the MS-20, 0 / 0.5 = the circuit): Bite = current-mirror mismatch in the stage
-// OTAs, Clip = the resonance OTA's input scale, Sharpness = the stage OTAs' VT, Warmth = the VCA drive.
+// OTAs, Clip = the resonance OTA's input scale, Sharpness = the stage OTAs' VT, Warmth = the VCA drive. Saturation
+// Bias offsets stage 1's input pair, Saturation Rail sags the +-15 V supplies (the stage OTAs' output compliance and
+// the followers' ceiling).
 //
 // The LP / BP / HP morph mixes the stage outputs (binomial taps of the cascade, signs chosen so the crossfades have
 // no notches): the circuit runs unchanged, with its resonance, in every mode.
@@ -115,6 +117,11 @@ namespace dfl
     void setSaturationBias(double b) { satBias_ = std::clamp(b, 0.0, 1.0); updateCharacter(); }
     double getSaturationBias() const { return satBias_; }
 
+    /** Supply rail, 0..1: 1 = +-15 V, lower sags both rails by up to RAIL_SAG of themselves (the stage OTAs' output
+        compliance and the followers' ceiling: less headroom). */
+    void setRail(double r) { rail_ = std::clamp(r, 0.0, 1.0); updateSupply(); }
+    double getRail() const { return rail_; }
+
     /** Filter FM depth (0..1): Devilfish-style audio-rate cutoff modulation from the AC-coupled input. */
     void setFilterFmDepth(double amount) { filterFmDepth_ = std::clamp(amount, 0.0, 1.0); }
     double getFilterFmDepth() const { return filterFmDepth_; }
@@ -135,9 +142,8 @@ namespace dfl
     static constexpr double VCLAMP = 0.8;                       // OTA output compliance from either rail
     static constexpr double Y_CEIL_DROP = 0.2, Y_CEIL_S = 0.05; // follower ceiling below the supply (softplus width)
     static constexpr double CLAMP_IS = 1e-14;
-    // rails: +-15 V re ground
-    static constexpr double V_POS = 15.0, V_NEG = -15.0;
-    static constexpr double Y_CEIL = V_POS - Y_CEIL_DROP;
+    // rails: +-15 V re ground; Saturation Rail sags them by up to RAIL_SAG
+    static constexpr double V_POS = 15.0, V_NEG = -15.0, RAIL_SAG = 0.3;
 
     // Input 4.7k; BA662 resonance VCA inputs 100k / 1.5k (from Out4), 24k / 1.5k (from the input; the Juno-6 has 10k
     // and 47k); its Iabc at full RES for the service notes' 4.8 V p-p oscillation (VR26), and the RES CV's Tr18 offset
@@ -173,6 +179,7 @@ namespace dfl
     void updatePot();
     void updateGains();
     void updateCharacter();
+    void updateSupply();
 
     INLINE double getSampleCircuit(double vin, double fc);
 
@@ -210,7 +217,9 @@ namespace dfl
     double resKn = RES_KN, resKp = RES_KP;
     double bite_ = 0.0, clipThreshold_ = 0.5, sharpness_ = 0.5, warmth_ = 0.0;
     double mirror[4] = {}, gmNorm[4] = { 1.0, 1.0, 1.0, 1.0 };   // per-stage mirror mismatch, gain renormalisation
-    double satBias_ = 0.0;
+    double satBias_ = 0.0, rail_ = 1.0;
+    double yCeil = V_POS - Y_CEIL_DROP;   // the followers' ceiling
+    double vHi = V_POS - VCLAMP, vLo = V_NEG + VCLAMP;   // the stage OTAs' output compliance
     double inOff[4] = {}, inOffT[4] = {};  // per-stage input offset (in 2 VT units) and its tanh, trimmed out at rest
     double vcaK = VCA_K;
     double gC = 0.0;                      // 2 C / T
@@ -250,9 +259,9 @@ namespace dfl
   INLINE double RolandFilter::follower(double v, double& dy) const
   {
     const double x = v + VSH;
-    const double u = (x - Y_CEIL) / Y_CEIL_S;
+    const double u = (x - yCeil) / Y_CEIL_S;
     if (u < -30.0) { dy = 1.0; return x; }
-    if (u > 30.0) { dy = 0.0; return Y_CEIL; }
+    if (u > 30.0) { dy = 0.0; return yCeil; }
     const double e = std::exp(u);
     dy = 1.0 / (1.0 + e);
     return x - Y_CEIL_S * std::log1p(e);
@@ -285,7 +294,6 @@ namespace dfl
     dO = -gi * (1.0 - t * t) * (1.0 + h) / twoVt;
     double iCl = 0.0;
     dCl = -gC;
-    constexpr double vHi = V_POS - VCLAMP, vLo = V_NEG + VCLAMP;
     if (vc[k] > vHi - 0.3)
     {
       const double e = std::exp(std::min((vc[k] - vHi) / VT, 80.0));
@@ -388,7 +396,7 @@ namespace dfl
         vc[k] += d; mx = std::max(mx, std::fabs(d));
         // the fallback keeps the capacitor nodes out of the clamp junctions' far exponential (where Newton crawls back
         // a VT per step)
-        if (it >= NEWTON_IT) vc[k] = std::clamp(vc[k], V_NEG + VCLAMP - FALLBACK_OVER, V_POS - VCLAMP + FALLBACK_OVER);
+        if (it >= NEWTON_IT) vc[k] = std::clamp(vc[k], vLo - FALLBACK_OVER, vHi + FALLBACK_OVER);
       }
       if (mx < 1e-9) { converged = true; break; }
     }
