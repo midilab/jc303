@@ -171,9 +171,13 @@ namespace dfl
     // whose mix is discrete (service notes May 1982, p. 9: 12 V p-p saw through 15k + 68k into 10k || 10k (its IR3109
     // input) || 47k || 33k, Out4 3.7 V p-p against its 4 V p-p oscillation, p. 16). It sits between the 106's noise
     // (3.2 V p-p at VCF out) and the sub's ceiling (0.58 V p-p into VCF IN's ~4k, 8.4 V p-p at Out4).
-    static constexpr double INPUT_VOLTS = 0.155;
-    // Drive make-up exponent: the output is divided by driveFactor^exp.
-    static constexpr double MAKEUP_EXP = 0.95;
+    // The drive's dB are scaled by DRIVE_EXP at VCF IN, so +16 dB is +24 dB there (2.5 V p-p, past anything the 106's
+    // own sources give): the stages hit the followers' ceiling and the OTAs' compliance and the filter hard clips
+    // (~30 % THD on a full-scale sine at 200 Hz, cutoff 2 kHz).
+    static constexpr double INPUT_VOLTS = 0.155, DRIVE_EXP = 1.5;
+    // Drive make-up exponent: the output is divided by driveFactor^exp (driveFactor at VCF IN). One exponent cannot
+    // flatten a hard clipper: the saw stays within +2 / -3 dB from 0 to +16 dB (tools/roland-fidelity/levels).
+    static constexpr double MAKEUP_EXP = 0.8;
     // Newton: iterations from the last sample, then the fallback's (from it again, steps up to FALLBACK_STEP volts, the
     // capacitor nodes at most FALLBACK_OVER past the compliance clamps' knees)
     static constexpr int NEWTON_IT = 24, FALLBACK_IT = 40;

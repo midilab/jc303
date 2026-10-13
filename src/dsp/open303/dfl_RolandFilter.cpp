@@ -38,7 +38,7 @@ void RolandFilter::setSampleRate(double newSampleRate)
 void RolandFilter::setInputDrive(double newDrive)
 {
   drive = newDrive;
-  driveFactor = dB2amp(newDrive);
+  driveFactor = dB2amp(DRIVE_EXP * newDrive);
   driveMakeup = std::pow(driveFactor, MAKEUP_EXP);
 }
 
