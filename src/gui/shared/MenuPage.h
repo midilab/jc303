@@ -540,7 +540,7 @@ public:
         mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f });
         mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f });
 
-        static constexpr uint8_t numModItems = 12;
+        static constexpr uint8_t numModItems = juce::numElementsInArray (modItemIDs);
         for (uint8_t i = 0; i < numModItems; ++i)
             mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
 
