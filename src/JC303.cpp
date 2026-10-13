@@ -90,7 +90,7 @@ JC303::JC303()
                                                         1.0f,
                                                         0.33f),
             std::make_unique<juce::AudioParameterFloat> ("sqrDriver",
-                                                        "Square Driver",
+                                                        "Square Drive",
                                                         0.0f,
                                                         1.0f,
                                                         0.25f),
@@ -114,7 +114,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch" },
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width" },
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("lfoPhase",
                                                         "LFO Phase",
@@ -148,6 +148,11 @@ JC303::JC303()
                                                         "Filter Model",
                                                         juce::StringArray{ "TeeBee", "Diode Octave", "Diode", "Diode BP", "Diode HP" },
                                                         FILTER_TEEBEE),
+            // square wave model: Open303's wavetable or the TB-303 circuit model
+            std::make_unique<juce::AudioParameterChoice> ("squareModel",
+                                                        "Square Model",
+                                                        juce::StringArray{ "Open303", "Circuit" },
+                                                        SQUARE_OPEN303),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
                                                         "Filter Drive",
                                                         0.0f,
@@ -275,6 +280,7 @@ JC303::JC303()
     overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
     // filter model
     filterType = parameters.getRawParameterValue("filterType");
+    squareModel = parameters.getRawParameterValue("squareModel");
     filterDrive = parameters.getRawParameterValue("filterDrive");
     bassComp = parameters.getRawParameterValue("bassComp");
     filterFm = parameters.getRawParameterValue("filterFm");
@@ -350,6 +356,7 @@ JC303::JC303()
     parameters.addParameterListener("overdriveModelIndex", this);
     parameters.addParameterListener("switchOverdriveState", this);
     parameters.addParameterListener("filterType", this);
+    parameters.addParameterListener("squareModel", this);
     parameters.addParameterListener("filterDrive", this);
     parameters.addParameterListener("bassComp", this);
     parameters.addParameterListener("filterFm", this);
@@ -419,6 +426,7 @@ JC303::~JC303()
     parameters.removeParameterListener("overdriveModelIndex", this);
     parameters.removeParameterListener("switchOverdriveState", this);
     parameters.removeParameterListener("filterType", this);
+    parameters.removeParameterListener("squareModel", this);
     parameters.removeParameterListener("filterDrive", this);
     parameters.removeParameterListener("bassComp", this);
     parameters.removeParameterListener("filterFm", this);
@@ -518,6 +526,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "filterType" && *switchModState) {
         open303Core.setFilterType(static_cast<FilterType>((int) newValue));
+    }
+    else if (parameterID == "squareModel" && *switchModState) {
+        open303Core.setSquareModel(static_cast<SquareModel>((int) newValue));
     }
     else if (parameterID == "filterDrive" && *switchModState) {
         setParameter(FILTER_DRIVE, newValue);
@@ -724,9 +735,12 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case TANH_SHAPER_DRIVE:
+        // one knob, two meanings, same direction (up = cleaner square): edge drive of the Open303 square and
+        // waveshaper sag of the Circuit square (default 0.25 = the measured circuit); see Square Model
         open303Core.setTanhShaperDrive(
             linToLin(value, 0.0, 1.0,   25.0,     80.0)
         );
+        open303Core.setPulseSag(rosic::Open303::sagForSquareDrive(value));
         break;
     case FILTER_DRIVE:
         // 0..1 -> 0..9 dB into the diode ladder's saturating input stage
@@ -793,6 +807,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(SLIDE_TIME, *slideTime);
         setParameter(TANH_SHAPER_DRIVE, *sqrDriver);
         open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
+        open303Core.setSquareModel(static_cast<SquareModel>((int) *squareModel));
         setParameter(FILTER_DRIVE, *filterDrive);
         setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
@@ -805,9 +820,12 @@ void JC303::setDevilMod(bool mode)
         setParameter(LFO_PHASE, *lfoPhase);
         setParameter(LFO_SYNC, *lfoSync);
         open303Core.setLfoOn(true);
+        open303Core.setCircuitPulseShape(true);
     } else if (mode == false) {
         open303Core.setFilterType(FILTER_TEEBEE);
+        open303Core.setSquareModel(SQUARE_OPEN303);
         open303Core.setLfoOn(false);   // hard-gates LFO; its internal values are never read while off
+        open303Core.setCircuitPulseShape(false);   // moot here: Mods off is the Open303 square
         decayMin = 200.0;
         decayMax = 2000.0;
         setParameter(DECAY, *decay);   // main DECAY knob re-maps into the core range right away
