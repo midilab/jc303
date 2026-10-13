@@ -118,6 +118,8 @@ namespace dfl
     double getSupply() const { return vdd; }
     /** OTA bias current for a cutoff (amps). */
     double getIabc(double fc) const { return otaIabc(fc); }
+    /** Whether the last sample's Newton solve converged (for the fidelity tools). */
+    bool isConverged() const { return converged; }
 
     //---------------------------------------------------------------------------------------------
     // circuit constants (public for the fidelity tools):
@@ -154,6 +156,11 @@ namespace dfl
 
     // D1 / D2 (1N4148, fitted in the paper)
     static constexpr double D_IS = 2.52e-9, D_N = 1.752;
+
+    // Newton: iterations per sample, the restart from the last sample, the line search (sufficient decrease, halvings,
+    // the squared residual (A^2) below which any step is taken)
+    static constexpr int MAX_IT = 40, RESTART_IT = 25, LS_HALVINGS = 6;
+    static constexpr double LS_ALPHA = 1e-4, LS_FLOOR = 1e-24;
 
     // Character ranges
     static constexpr double BIAS_SHIFT = 0.15, RAIL_SAG = 0.3;
@@ -227,6 +234,7 @@ namespace dfl
     double rest[3] = {};                 // LP / BP / HP at rest (the DC operating point)
     double outDc = 0.0, outDcCoef = 0.0; // output coupling capacitor (C6): DC tracker
     bool dcSolve = false;                // reset(): capacitors open
+    bool converged = true;               // the last solve met its tolerance
 
     // Filter FM (Devilfish) state
     double acCouplingState_ = 0.0;
@@ -382,14 +390,17 @@ namespace dfl
     const double J2 = dcSolve ? 0.0 : gc2 * vC2 + iC2, J3 = dcSolve ? 0.0 : gc3 * vC3 + iC3;
     const double J4 = dcSolve ? 0.0 : gc4 * vC4 + iC4, J7 = dcSolve ? 0.0 : gc7 * vC7 + iC7;
 
-    const int maxIt = dcSolve ? 200 : 30;
-    // predictor: the nodes' linear extrapolation from the last two samples
+    // predictor: the nodes' linear extrapolation from the last two samples, kept inside the rails (past them the
+    // junctions' exponentials throw Newton off)
+    double vLast[NN];
+    for (int k = 0; k < NN; ++k) vLast[k] = v[k];
     if (!dcSolve)
-      for (int k = 0; k < NN; ++k) { const double p = 2.0 * v[k] - vPrev[k]; vPrev[k] = v[k]; v[k] = p; }
-    const double maxStep = dcSolve ? 0.2 : 0.5, tol = dcSolve ? 1e-10 : 1e-6;
-    for (int it = 0; it < maxIt; ++it)
+      for (int k = 0; k < NN; ++k) { v[k] = std::clamp(2.0 * v[k] - vPrev[k], 0.0, vdd); vPrev[k] = vLast[k]; }
+
+    // the KCL residuals at the nodes x (amps) and their Jacobian
+    auto residual = [&](const double (&x)[NN], double (&F)[NN], double (&J)[NN][NN])
     {
-      const double vS = v[0], vHP = v[1], vN3 = v[2], vBP = v[3], vN5 = v[4], vLP = v[5], vX = v[6], vB = v[7];
+      const double vS = x[0], vHP = x[1], vN3 = x[2], vBP = x[3], vN5 = x[4], vLP = x[5], vX = x[6], vB = x[7];
 
       double i1i, i1o, i3i, i3o, i5i, i5o;
       const double inv1 = inverter(vS, vHP, i1i, i1o);
@@ -408,7 +419,7 @@ namespace dfl
 
       const double i2 = c2 * (vLP - vS) - J2, i3 = c3 * (vN3 - vBP) - J3, i4 = c4 * (vN5 - vLP) - J4;
 
-      double F[NN], J[NN][NN] = {};
+      for (auto& row : J) for (double& j : row) j = 0.0;
       F[0] = (e1 - vS) * gr1 + (vLP - vS) * G2 + i2 + (vHP - vS) * G3 + id + (vBP - vS) * gAS + (vB - vS) * gBS - pS;
       J[0][0] = -gr1 - G2 - c2 - G3 - gdd - gAS - gBS - gpS;
       J[0][1] = G3; J[0][3] = gAS; J[0][5] = G2 + c2; J[0][6] = gdd; J[0][7] = gBS;
@@ -434,16 +445,58 @@ namespace dfl
       F[7] = (vX - vB) * G15 + (vBP - vB) * gAB + (vS - vB) * gBS - (c7 * vB - J7);
       J[7][6] = G15; J[7][7] = -G15 - gAB - gBS - c7; J[7][3] = gAB; J[7][0] = gBS;
 
+      double f2 = 0.0;
+      for (int k = 0; k < NN; ++k) f2 += F[k] * F[k];
+      return f2;
+    };
+
+    // Damped Newton: the Newton step, scaled down as a whole so no node moves more than maxStep (keeping its
+    // direction, so ||F|| falls along it), is taken when it reduces ||F|| enough (Armijo), else halved up to
+    // LS_HALVINGS times. Undamped, the iteration cycles between two points near the OTA and inverter rail knees at high
+    // drive. If it has not converged by RESTART_IT and the last sample is the better point, it starts again from there.
+    const int maxIt = dcSolve ? 200 : MAX_IT;
+    const double maxStep = dcSolve ? 0.2 : 0.5, tol = dcSolve ? 1e-10 : 1e-6;
+    double F[NN], J[NN][NN], Ft[NN], Jt[NN][NN], vt[NN];
+    double f2 = residual(v, F, J);
+    auto accept = [&](const double (&x)[NN], double x2)
+    {
+      std::copy(&x[0], &x[0] + NN, &v[0]);
+      std::copy(&Ft[0], &Ft[0] + NN, &F[0]);
+      std::copy(&Jt[0][0], &Jt[0][0] + NN * NN, &J[0][0]);
+      f2 = x2;
+    };
+    converged = false;
+    for (int it = 0; it < maxIt; ++it)
+    {
+      if (it == RESTART_IT && !dcSolve)
+      {
+        const double fl2 = residual(vLast, Ft, Jt);
+        if (fl2 < f2) accept(vLast, fl2);
+      }
       double dx[NN];
       if (dcSolve) solveLinear<NN>(J, F, dx);
       else solveSparse(J, F, dx);
       double mx = 0.0;
-      for (int k = 0; k < NN; ++k)
+      for (int k = 0; k < NN; ++k) mx = std::max(mx, std::fabs(dx[k]));
+      if (mx > maxStep)
       {
-        const double d = std::clamp(dx[k], -maxStep, maxStep);
-        v[k] += d; mx = std::max(mx, std::fabs(d));
+        for (int k = 0; k < NN; ++k) dx[k] *= maxStep / mx;
+        mx = maxStep;
       }
-      if (mx < tol) break;   // quadratic convergence: the error left after a step of tol is ~tol^2
+      if (mx < tol)   // quadratic convergence: the error left after a step of tol is ~tol^2
+      {
+        for (int k = 0; k < NN; ++k) v[k] += dx[k];
+        converged = true;
+        break;
+      }
+      double lambda = 1.0, ft2 = 0.0;
+      for (int h = 0; ; ++h, lambda *= 0.5)
+      {
+        for (int k = 0; k < NN; ++k) vt[k] = v[k] + lambda * dx[k];
+        ft2 = residual(vt, Ft, Jt);
+        if (ft2 <= (1.0 - 2.0 * LS_ALPHA * lambda) * f2 || ft2 < LS_FLOOR || h == LS_HALVINGS) break;
+      }
+      accept(vt, ft2);
     }
 
     if (dcSolve) return;

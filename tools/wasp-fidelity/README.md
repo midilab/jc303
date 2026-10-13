@@ -57,7 +57,7 @@ tools/wasp-fidelity/build.sh      # into tools/wasp-fidelity/build/ (git-ignored
 | `build/probe <edp\|a124> <cutoff> <res\|pot:x> <mode> <f>...` | small-signal magnitude (dB) by sine probe, 4 x 44.1 kHz |
 | `build/render <edp\|a124> <cutoff> <pot> <mode> <amp V> <freq> <secs> [kick V] [node] [bias rail]` | renders in circuit volts (float32 on stdout); node: out, n0..n7 (the circuit nodes); `render dc <rev>` prints the DC operating point |
 | `build/levels <edp\|a124> [noteHz]` | saw output level per mode / pot / drive: the BP / HP trims and the drive make-up were fitted with it |
-| `build/stress` | 960 cases (both revisions, RES 0..1, every mode, drive -3..+24 dB, filter FM, bias 1, rail 0, 20 Hz..20 kHz cutoff sweeps, 4 x and 1 x rate): finite, bounded, rings down; prints ns / sample. Exit 0 = pass |
+| `build/stress` | 960 cases (both revisions, RES 0..1, every mode, drive -3..+24 dB, filter FM, bias 1, rail 0, 20 Hz..20 kHz cutoff sweeps, 4 x and 1 x rate): finite, bounded, rings down; then Newton convergence over 192 fast sweeps (drive 0..+24 dB, bias 0..1): at most 2e-6 of the samples may miss the tolerance; prints ns / sample. Exit 0 = pass |
 | `spice/wasp_vcf.py` | ngspice netlist generator (the same device equations as B-sources) |
 | `spice/compare_ac.py [edp\|a124]` | DSP vs SPICE small-signal response, 5 cutoffs x 6 pot positions, LP / BP / HP with their output trims removed (same Iabc, no fitting) |
 | `spice/tran_compare.py [edp\|a124]` | kick rings, distortion vs level (gain compression, THD, H2), Saturation Bias 1 and Rail 0 |
@@ -76,5 +76,12 @@ Needs ngspice (`brew install ngspice`) and numpy for the `spice/` scripts; run t
 - Large signal (`tran_compare`): gain compression within 0.01 dB and THD / H2 within 0.01 % of SPICE in the passband
   and at the peak from 0.05 to 2 V, also at Bias 1 and Rail 0; the A-124's weak oscillation at 200 Hz within ~2 % in
   amplitude and 0.1 Hz.
-- Stress: 0 of 960 failures; ~235 ns / sample (EDP) and ~280 ns / sample (A-124) at 4 x 44.1 kHz (about 2 Newton
+- Stress: 0 of 960 failures; ~250 ns / sample (EDP) and ~300 ns / sample (A-124) at 4 x 44.1 kHz (about 2 Newton
   iterations per sample with the predictor; the solve eliminates four nodes in closed form, then a 4 x 4).
+- Convergence: the solve is a damped Newton (the step scaled to at most 0.5 V per node, Armijo backtracking on the
+  KCL residual, the predictor kept inside the rails, a restart from the last sample at iteration 25 when that is the
+  better point). Undamped, it cycled between two points near the OTA / inverter rail knees above ~3 kHz at +12 dB and
+  more (fixed cutoffs too): 540549 of 10.6 M sweep samples (5 %) missed the tolerance; now 14, all at 1 x 44.1 kHz,
+  none at 4 x. A +16 dB sweep costs ~315 ns / sample (was ~545). Where the old solve converged the output is
+  unchanged to below -145 dB (the A-124 at full RES on the edge of oscillation aside, which a 1e-12 input change
+  already moves by -50 dB).
