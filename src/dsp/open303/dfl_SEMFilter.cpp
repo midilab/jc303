@@ -56,8 +56,8 @@ void SEMFilter::updateSupply()
 
 void SEMFilter::updateBias()
 {
-  // negative: LP sits above ground, HP below; LP then meets its follower's limit first, as it already does at null
-  // (the knob adds even harmonics rather than first cancelling the circuit's own)
+  // negative: HP sits above ground, LP below. This sign adds to the even harmonics LP's clipping already has at null
+  // (the followers' asymmetry), so the knob grows them rather than first cancelling them
   off1Target = -BIAS_MAX_V * satBias_ / (2.0 * VT);
 }
 

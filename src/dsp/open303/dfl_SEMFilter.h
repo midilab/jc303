@@ -145,7 +145,7 @@ namespace dfl
     static constexpr double D_IS = 2.52e-9, D_N = 1.752;
 
     // Character ranges
-    // Bias 1 = the CA3080's datasheet maximum input offset (5 mV), untrimmed: HP / LP 2.3 V off ground (LP up)
+    // Bias 1 = the CA3080's datasheet maximum input offset (5 mV), untrimmed: HP / LP 2.3 V off ground (LP below)
     static constexpr double BIAS_MAX_V = 5e-3, BIAS_LAG = 0.1, RAIL_SAG = 0.3;
 
     // Input level: volts at R155 for a full-scale (+-1) signal at 0 dB drive: one of the SEM's oscillators (10 V p-p)

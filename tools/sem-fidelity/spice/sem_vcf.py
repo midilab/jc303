@@ -41,7 +41,7 @@ def netlist(pot=0.0, fc=1000.0, analysis="ac", amp=0.1, freq=100.0, tstop=0.1, t
     vcc = 15.0 * (1 - 0.3 * (1 - rail)); vsw = vcc - 1.5; ib = iabc_for(fc)
     a = 1.0 - pot   # the wiper's position from the bottom (RES up = toward ground)
     rup = max((1 - a) * RRES, 1.0); rdn = max(a * RRES, 1.0)
-    off = -bias * 5e-3 / (2 * VT)   # OTA1's input offset in 2 VT units (BIAS_MAX_V = 5 mV, LP up)
+    off = -bias * 5e-3 / (2 * VT)   # OTA1's input offset in 2 VT units (BIAS_MAX_V = 5 mV, LP below ground)
     if analysis == "ac":
         src = f"Vin vin 0 DC 0 AC 1\n.ac dec {ppd} {fstart} {fstop}\n"
     else:
