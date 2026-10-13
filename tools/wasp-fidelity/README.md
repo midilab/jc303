@@ -52,8 +52,9 @@ Saturation Bias moves OTA1's + input divider up by 0.15 of the supply at 1 (the 
 switching point: earlier, asymmetric clipping); Saturation Rail sags the supply by up to 30 % (Rail 0). Open303
 ramps the bias in with Saturation, as on the other models.
 
-The clipping makes DC (asymmetric even at Bias 0; at +16 dB on a 65 Hz saw ~0.05 (EDP) to ~0.2 (A-124) of the output
-RMS, up to ~0.1 / ~0.3 at Bias 1 by cutoff). The circuit's output coupling (C6 10u into 100k, 0.16 Hz) passes it, so
+The clipping makes DC (asymmetric even at Bias 0). At +16 dB on a 65 Hz saw, pot 0.5, cutoff 150..3000 Hz: EDP up
+to 0.09 of the output RMS at Bias 0 and 0.13 at Bias 1; A-124 up to 0.55 and 0.75 (at 150 Hz, where the RMS is low;
+0.07..0.2 above 400 Hz). The circuit's output coupling (C6 10u into 100k, 0.16 Hz) passes it, so
 the model does too; Open303's 24 Hz post-filter highpass, before the VCA, removes it. With the filter envelope moving
 the cutoff the DC moves per note, but a gated 16-step sequence (+16 dB, env mod 30..70, cutoff 400 / 1500, RES 0..80)
 shows no onset thump: the sub-15 Hz share of the output is -27..-28 dB at Bias 0 and 1 alike, the same as the
