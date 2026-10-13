@@ -26,6 +26,7 @@ The 80017A module: the Juno-6 / 60 voice's topology with dksynth's / Open80017a'
 |---|---|---|
 | IR3109 | +-15 V, GND pin on ground | four stages: 68k input / local feedback, 560R shunt, 270 pF (Juno-6 / SH-101: 240 pF) |
 | input | 4.7k (Juno-6: 10k) | VCF in (after C56) into stage 1: stage gain -14.5 |
+| input level | 0.31 V p-p saw at 0 dB (`INPUT_VOLTS`) | 4.5 V p-p at Out4, 0.6 dB under the oscillation, the Juno-6's ratio (the 106 notes give no VCF IN level; see the header) |
 | BA662 (OTA) | - input: 100k / 1.5k from Out4; + input: 24k / 1.5k from VCF in (Juno-6: 47k) | resonance VCA; output current into stage 1; its tanh limits the oscillation |
 | Tr18, R107 27k, VR26 20kB | RES CV (0..+10 V) to the BA662's Iabc | VR26 trimmed for 4.8 V p-p at full RES: Iabc max = 0.233 mA (`juno_vcf.calibrate()`), VR26 ~13k |
 

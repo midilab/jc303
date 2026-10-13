@@ -161,8 +161,17 @@ namespace dfl
     // Character ranges
     static constexpr double BITE_MIRROR = 0.1;
 
-    // Input level: volts at the input node for a full-scale (+-1) signal at 0 dB drive.
-    static constexpr double INPUT_VOLTS = 0.5;
+    // Input level: volts at VCF IN (pin 1) for a full-scale (+-1) signal at 0 dB drive: a 0.31 V p-p saw, 4.5 V p-p at
+    // Out4, 0.6 dB under the 4.8 V p-p self-oscillation. HS-60 / Juno-106S service notes (Jul. 1985): the MC5534 makes
+    // its saw and pulse at ~12 V p-p (p. 11, Sawtooth) and mixes them inside to WAVE Xout (pin 14), which drives VCF IN
+    // through C56 with the sub (SUB LEVEL 0..+10 V through R102 33k / Tr19 / R101 27k / D6) and the noise bus (p. 15,
+    // Module board); VR26 sets 4.8 V p-p of oscillation at TP19 (C4, RESO 10), VR27 then 6 V p-p at the VCA output
+    // TP8, VR32 4 V p-p of noise there (FREQ 10, RES 0: 3.2 V p-p at VCF out) (p. 22, Adjustment 5, 6, 9). The notes
+    // give no level at VCF IN (the MC5534's mix resistors are internal), so the saw / oscillation ratio is the Juno-6's,
+    // whose mix is discrete (service notes May 1982, p. 9: 12 V p-p saw through 15k + 68k into 10k || 10k (its IR3109
+    // input) || 47k || 33k, Out4 3.7 V p-p against its 4 V p-p oscillation, p. 16). It sits between the 106's noise
+    // (3.2 V p-p at VCF out) and the sub's ceiling (0.58 V p-p into VCF IN's ~4k, 8.4 V p-p at Out4).
+    static constexpr double INPUT_VOLTS = 0.155;
     // Drive make-up exponent: the output is divided by driveFactor^exp.
     static constexpr double MAKEUP_EXP = 0.95;
     // Newton: iterations from the last sample, then the fallback's (from it again, steps up to FALLBACK_STEP volts, the
@@ -170,7 +179,7 @@ namespace dfl
     static constexpr int NEWTON_IT = 24, FALLBACK_IT = 40;
     static constexpr double FALLBACK_STEP = 2.0, FALLBACK_OVER = 0.75;
     // BP / HP output trims (dB).
-    static constexpr double BP_TRIM_DB = 0.5, HP_TRIM_DB = 7.0;
+    static constexpr double BP_TRIM_DB = 0.1, HP_TRIM_DB = 5.7;
 
     //=============================================================================================
 
