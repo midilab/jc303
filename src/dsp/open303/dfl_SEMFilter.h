@@ -22,8 +22,8 @@
 // output clamped at its swing. Checked against an ngspice model with the same device equations (tools/sem-fidelity).
 //
 // The LP / BP / HP morph mixes the three outputs (one sign, so the crossfades have no notches); the circuit runs
-// unchanged in every mode. Saturation Bias offsets OTA1's input (its trim, T9), Saturation Rail sags the +-15 V
-// supplies.
+// unchanged in every mode. Saturation Bias turns OTA1's offset trim (T9) off null: the loop holds HP and LP volts off
+// ground, so they meet the rails unevenly. Saturation Rail sags the +-15 V supplies.
 
 // standard-library includes:
 #include <stdlib.h>
@@ -84,9 +84,11 @@ namespace dfl
     /** The RES pot position, 0..1 (the resonance knob with Open303's skew undone; the pot is linear). */
     double getResPot() const { return resPot; }
 
-    /** Saturation bias, 0..1: an input offset of up to BIAS_MAX_VT thermal voltages on OTA1 (its offset trim, T9, off
-        null), its resting current trimmed out as on the MS-20 / IR3109 models: the same slope at rest, unequal
-        current limits once HP drives it. 0 = the circuit, trimmed. */
+    /** Saturation bias, 0..1: OTA1's offset trim (T9) off null, up to BIAS_MAX_V at its input. The loop cancels the
+        offset by holding A12's output at -offset / kDiv (the 100k / 220R divider's 455 x) and LP at the opposite, so
+        HP and LP sit volts off ground and clip unevenly at the rails (even harmonics, DC) once driven; the OTA itself
+        stays at its symmetric point. 0 = the circuit, trimmed. The offset follows the knob through a 0.1 s lag (a trim
+        turned, not a step), and the outputs' rest voltages follow it. */
     void setSaturationBias(double b) { satBias_ = std::clamp(b, 0.0, 1.0); updateBias(); }
     double getSaturationBias() const { return satBias_; }
 
@@ -143,7 +145,8 @@ namespace dfl
     static constexpr double D_IS = 2.52e-9, D_N = 1.752;
 
     // Character ranges
-    static constexpr double BIAS_MAX_VT = 2.0, RAIL_SAG = 0.3;
+    // Bias 1 = the CA3080's datasheet maximum input offset (5 mV), untrimmed: HP / LP 2.3 V off ground (LP up)
+    static constexpr double BIAS_MAX_V = 5e-3, BIAS_LAG = 0.1, RAIL_SAG = 0.3;
 
     // Input level: volts at R155 for a full-scale (+-1) signal at 0 dB drive (the SEM's oscillators, 10 V p-p, mixer
     // at full). The output is divided by driveFactor^MAKEUP_EXP: the SEM is clean up to A12's rails, so full make-up
@@ -201,7 +204,7 @@ namespace dfl
 
     /** CA3080 output current for a differential input vd (in thermal-voltage units already offset) into an output at
         vo; di / dvd, di / dvo. */
-    INLINE double ota(double vd, double vo, double ib, double off, double offT, double& dvd, double& dvo) const;
+    INLINE double ota(double vd, double vo, double ib, double off, double& dvd, double& dvo) const;
 
     /** JFET source follower: drain current for gate vg and source vs; d / dvg (= -d / dvs). */
     INLINE double jfet(double vg, double vs, double& gm) const
@@ -228,7 +231,8 @@ namespace dfl
     // derived
     double vcc = VCC, vSwing = VCC - OPAMP_SWING_DROP;
     double kDiv = R_DIV_LO / (R_DIV + R_DIV_LO), gDiv = 1.0 / (R_DIV + R_DIV_LO);
-    double off1 = 0.0, off1T = 0.0;                   // OTA1's input offset (2 VT units) and its tanh
+    double off1 = 0.0, off1Target = 0.0, offCoef = 0.0;   // OTA1's input offset (2 VT units), its target, its lag
+    double off1Rest = 0.0;                                // the offset rest[] was solved at
     double gBN = 0.0, gNG = 0.0, gBG = 0.0;           // RES star eliminated: BP-C22 node, C22 node-ground, BP-ground
     double h15 = 0.0, gc18 = 0.0, gc20 = 0.0, gc21 = 0.0, gc22 = 0.0;
     double gainLp = 1.0, gainBp = 1.0, gainHp = 1.0;
@@ -308,14 +312,13 @@ namespace dfl
     updatePot();
   }
 
-  INLINE double SEMFilter::ota(double vd, double vo, double ib, double off, double offT, double& dvd, double& dvo) const
+  INLINE double SEMFilter::ota(double vd, double vo, double ib, double off, double& dvd, double& dvo) const
   {
-    // tanh pair (an input offset off, its resting current offT trimmed out, the slope renormalised), then the output's
-    // compliance: junctions OTA_VCLAMP inside either rail
-    const double g = ib / (1.0 - offT * offT);
+    // tanh pair with an input offset off (2 VT units), then the output's compliance: junctions OTA_VCLAMP inside either
+    // rail
     const double t = std::tanh(vd / (2.0 * VT) + off);
-    dvd = g * (1.0 - t * t) / (2.0 * VT);
-    double i = g * (t - offT);
+    dvd = ib * (1.0 - t * t) / (2.0 * VT);
+    double i = ib * t;
     dvo = 0.0;
     const double vHi = vcc - OTA_VCLAMP, vLo = -vcc + OTA_VCLAMP;
     double e;
@@ -362,8 +365,8 @@ namespace dfl
       double dhs, dhh;
       const double dhdt = opamp(vS, h, dhs, dhh);
       double o1d, o1o, o2d, o2o;
-      const double i1 = ota(kDiv * h, vc1, ib, off1, off1T, o1d, o1o);
-      const double i2 = ota(kDiv * vBP, vc2, ib, 0.0, 0.0, o2d, o2o);
+      const double i1 = ota(kDiv * h, vc1, ib, off1, o1d, o1o);
+      const double i2 = ota(kDiv * vBP, vc2, ib, 0.0, o2d, o2o);
       double gm1, gm2;
       const double id1 = jfet(vc1, vBP, gm1), id2 = jfet(vc2, vLP, gm2);
       double dp, dm;
@@ -439,11 +442,14 @@ namespace dfl
       fc *= std::clamp(1.0 + filterFmDepth_ * filterFmScale_ * (in - acCouplingState_), 0.5, 1.5);
     }
 
+    off1 += offCoef * (off1Target - off1);
     solve(in * driveFactor * INPUT_VOLTS, otaIabc(fc));
 
     // the three outputs share A12's inversion (the integrators do not invert), so LP -> BP -> HP keep one sign; the
-    // output is turned back upright
-    const double lp = (v[4] - rest[0]) / gainLp, bp = (v[2] - rest[1]) / gainBp, hpo = (v[8] - rest[2]) / gainHp;
+    // output is turned back upright. The rest voltages follow OTA1's offset: HP sits at -offset / kDiv, LP opposite
+    // (R138 = R139), BP stays at ground (OTA2 holds it there)
+    const double dRest = 2.0 * VT * (off1 - off1Rest) / kDiv;
+    const double lp = (v[4] - rest[0] - dRest) / gainLp, bp = (v[2] - rest[1]) / gainBp, hpo = (v[8] - rest[2] + dRest) / gainHp;
     const double wl = std::max(0.0, 1.0 - 2.0 * mode), wh = std::max(0.0, 2.0 * mode - 1.0), wb = 1.0 - wl - wh;
     return -(wl * lp + wb * bp + wh * hpo) / driveMakeup;
   }

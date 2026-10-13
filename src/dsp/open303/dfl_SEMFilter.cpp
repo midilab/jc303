@@ -33,6 +33,7 @@ void SEMFilter::setSampleRate(double newSampleRate)
   if( newSampleRate > 0.0 )
     sampleRate = newSampleRate;
   T = 1.0 / sampleRate;
+  offCoef = 1.0 - std::exp(-T / BIAS_LAG);
   h15 = T / (2.0 * C15);
   gc18 = 2.0 * C18 / T;
   gc20 = 2.0 * C20 / T;
@@ -55,8 +56,9 @@ void SEMFilter::updateSupply()
 
 void SEMFilter::updateBias()
 {
-  off1 = 0.5 * BIAS_MAX_VT * satBias_;   // in 2 VT units
-  off1T = std::tanh(off1);
+  // negative: LP sits above ground, HP below; LP then meets its follower's limit first, as it already does at null
+  // (the knob adds even harmonics rather than first cancelling the circuit's own)
+  off1Target = -BIAS_MAX_V * satBias_ / (2.0 * VT);
 }
 
 void SEMFilter::updatePot()
@@ -79,6 +81,7 @@ void SEMFilter::updatePot()
 void SEMFilter::reset()
 {
   // DC operating point: capacitors open, from the nodes at ground with the followers' gates a VGS below
+  off1 = off1Rest = off1Target;
   for (int k = 0; k < NN; ++k) v[k] = 0.0;
   v[1] = v[3] = -0.5;
   dcSolve = true;

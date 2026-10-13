@@ -37,12 +37,11 @@ def iabc_for(fc):
 def netlist(pot=0.0, fc=1000.0, analysis="ac", amp=0.1, freq=100.0, tstop=0.1, tstep=2e-6, kick=0.0,
             fstart=5, fstop=80e3, ppd=100, bias=0.0, rail=1.0):
     """The circuit; input 'vin' at R155. analysis 'ac' (1 V AC) or 'tran' (sine amp V at freq, plus a 100 us kick
-    pulse of `kick` V at 1 ms). bias / rail as SEMFilter::setSaturationBias / setRail (2 VT / 30 %)."""
+    pulse of `kick` V at 1 ms). bias / rail as SEMFilter::setSaturationBias / setRail (5 mV at OTA1's input / 30 %)."""
     vcc = 15.0 * (1 - 0.3 * (1 - rail)); vsw = vcc - 1.5; ib = iabc_for(fc)
     a = 1.0 - pot   # the wiper's position from the bottom (RES up = toward ground)
     rup = max((1 - a) * RRES, 1.0); rdn = max(a * RRES, 1.0)
-    off = bias   # OTA1's offset in 2 VT units (BIAS_MAX_VT / 2 = 1 per unit of bias)
-    g1 = ib / (1 - math.tanh(off) ** 2)
+    off = -bias * 5e-3 / (2 * VT)   # OTA1's input offset in 2 VT units (BIAS_MAX_V = 5 mV, LP up)
     if analysis == "ac":
         src = f"Vin vin 0 DC 0 AC 1\n.ac dec {ppd} {fstart} {fstop}\n"
     else:
@@ -68,7 +67,7 @@ Ccmp cmp 0 {OP_CC}
 Eop hp 0 cmp 0 1
 R142 hp p1 {RDIV}
 R144 p1 0 {RDIVLO}
-Bo1 0 c1 I = {g1}*(tanh(V(p1)/(2*{VT}) + {off}) - tanh({off}))
+Bo1 0 c1 I = {ib}*tanh(V(p1)/(2*{VT}) + {off})
 Dh1 c1 vhi DCLMP
 Dl1 vlo c1 DCLMP
 C20 c1 0 {C20}

@@ -230,8 +230,10 @@ void Open303::updateCircuitCharacter()
   //   runaway for a ceiling to tame.
   // - Wasp: Bias offsets OTA1's input divider (IC1 then sits off its switching point), ramping in the same way; Rail is
   //   its supply, 1 = the circuit, lower = sagging (less headroom and inverter gain), see WaspFilter::setRail.
-  // - SEM: Bias offsets OTA1's input (its trim off null, the resting current trimmed out), ramping in the same way; Rail
-  //   sags its +-15 V supplies, see SEMFilter::setRail.
+  // - SEM: Bias turns OTA1's offset trim (T9) off null, up to the CA3080's 5 mV maximum, ramping in the same way. The
+  //   loop cancels the offset by holding HP and LP up to 2.3 V off ground (the 100k / 220R divider's 455 x), so the
+  //   clean filter is unchanged and, once driven, its outputs clip unevenly (even harmonics). Rail sags its +-15 V
+  //   supplies, see SEMFilter::setSaturationBias / setRail.
   const double bias = circuitBias * std::clamp(circuitDriveDb / 16.0, 0.0, 1.0);
   const double clip = 0.5 * circuitRail;
   ms20Filter.setSaturationBias(bias);

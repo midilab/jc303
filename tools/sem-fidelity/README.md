@@ -39,8 +39,12 @@ rails (about 0.25 % THD at 20 V into R155 in the passband); near the peak the di
 volts of BP. Hot HP and BP slew: A12's 0.5 V / us gives ~6 kHz of full-power bandwidth at its 13.5 V swing (8 % THD on
 HP at 8 kHz from 30 V at R155).
 
-Saturation Bias puts an input offset of up to 2 VT on OTA1 (its trim off null) with the resting current trimmed out:
-unequal current limits, even harmonics once the resonance drives it. Saturation Rail sags both supplies by up to 30 %.
+Saturation Bias turns OTA1's offset trim (T9) off null, up to 5 mV at its input (the CA3080's datasheet maximum, as
+if untrimmed). The loop cancels the offset by holding A12's output (HP) at -offset / kDiv and LP at the opposite: the
+100k / 220R divider makes 5 mV into 2.3 V. The OTA stays at its symmetric point, so the small-signal response and the
+clean sound do not change; once driven, HP and LP meet the rails unevenly (even harmonics, DC). The sign puts LP above
+ground, adding to the followers' own asymmetry. The rest voltages the outputs are taken from follow the offset (with a
+0.1 s lag, a trim turned). Saturation Rail sags both supplies by up to 30 %.
 
 The morph is LP / BP / HP (`setMode`: 0 LP, 0.5 BP, 1 HP), mixing the three outputs (they share A12's inversion, so
 the crossfades have no notches); BP and HP are trimmed to sit near LP loudness on a saw. The SEM's own MODE pot (PS19,
