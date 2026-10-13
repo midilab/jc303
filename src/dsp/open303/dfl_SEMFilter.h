@@ -16,10 +16,10 @@
 //    A12's input, so turning RES up (the wiper toward ground) takes damping away; and BP through R159 47k / R158 10k,
 //    D11 / D12 and R156 100k into the same node: the damping that grows with level, which holds the oscillation.
 //
-// Each sample solves eight nodes (A12's input, the two capacitor nodes and their followers, the diode string and the
-// C22 node; trapezoidal capacitors, Newton); the RES pot's wiper is eliminated as a resistive star, A12's output is an
-// explicit function of its input (open-loop gain with soft rails). Checked against an ngspice model with the same
-// device equations (tools/sem-fidelity).
+// Each sample solves nine nodes (A12's input and output, the two capacitor nodes and their followers, the diode string
+// and the C22 node; trapezoidal capacitors, Newton); the RES pot's wiper is eliminated as a resistive star. A12 is a
+// two-stage op amp: its input pair's tanh current into the compensation capacitor (slew rate and gain-bandwidth), the
+// output clamped at its swing. Checked against an ngspice model with the same device equations (tools/sem-fidelity).
 //
 // The LP / BP / HP morph mixes the three outputs (one sign, so the crossfades have no notches); the circuit runs
 // unchanged in every mode. Saturation Bias offsets OTA1's input (its trim, T9), Saturation Rail sags the +-15 V
@@ -100,8 +100,10 @@ namespace dfl
     double getFilterFmDepth() const { return filterFmDepth_; }
 
     /** Circuit node voltages (volts re ground), for the fidelity tools: 0 A12 in, 1 C20, 2 BP, 3 C21, 4 LP, 5 the
-        R159 / R158 node, 6 the D11 / D12 - R156 node, 7 the C22 node; 8 = HP (A12's output). */
-    double getNode(int k) const { return k == 8 ? hp : v[std::clamp(k, 0, NN - 1)]; }
+        R159 / R158 node, 6 the D11 / D12 - R156 node, 7 the C22 node, 8 HP (A12's output). */
+    double getNode(int k) const { return v[std::clamp(k, 0, NN - 1)]; }
+    /** Whether the last sample's Newton solve converged (for the stress test). */
+    bool hasConverged() const { return converged; }
     double getSupply() const { return vcc; }
     /** OTA bias current for a cutoff (amps). */
     double getIabc(double fc) const { return otaIabc(fc); }
@@ -109,7 +111,7 @@ namespace dfl
     //---------------------------------------------------------------------------------------------
     // circuit constants (public for the fidelity tools):
 
-    static constexpr int NN = 8;
+    static constexpr int NN = 9;
     static constexpr double VT = 0.025865;   // thermal voltage at SPICE's 27 C
 
     // Components (SEM-1A schematic)
@@ -122,8 +124,15 @@ namespace dfl
     static constexpr double R159 = 47e3, R158 = 10e3, R156 = 100e3;
     static constexpr double VCC = 15.0;
 
-    // A12 (LM301A): open-loop gain, output swing below the rails (soft)
+    // A12 (LM301A, 30 pF compensation; datasheet: 0.5 V / us, 1 MHz unity gain): open-loop gain, output swing below
+    // the rails. The input stage (the 741's) is a tanh steering its current into the compensation node: OPAMP_SLEW at
+    // full steer, OPAMP_GBW's slope at null (so its width OPAMP_VLIN is 80 mV, ~3 VT). Full-power bandwidth at the
+    // 13.5 V swing is ~6 kHz: hot HP and BP slew. (At 0.77 MHz, the 741's 4 VT, the loop's lag makes full RES
+    // self-oscillate above ~3 kHz; the SEM does not.)
     static constexpr double OPAMP_GAIN = 1e5, OPAMP_SWING_DROP = 1.5;
+    static constexpr double OPAMP_SLEW = 0.5e6, OPAMP_GBW = 1e6, OPAMP_VLIN = OPAMP_SLEW / (2.0 * PI * OPAMP_GBW);
+    // the output stage's clamp on the compensation node at the swing (softplus, V): no wind-up past the rail
+    static constexpr double OPAMP_KNEE = 0.05;
     // CA3080: i = Iabc tanh(v / 2 VT); output compliance VCLAMP from either rail (clamp junctions)
     static constexpr double OTA_VCLAMP = 1.5, CLAMP_IS = 1e-14;
     static constexpr double IABC_MAX = 2e-3;
@@ -167,12 +176,27 @@ namespace dfl
       return std::clamp(w * C20 * 2.0 * VT / kDiv, 1e-13, IABC_MAX);
     }
 
-    /** A12's output for its - input vn (+ input on ground); dHP / dvn. */
-    INLINE double opamp(double vn, double& d) const
+    /** A12's compensation node: dHP / dt for its - input vn (+ input on ground) and its output vo (V / s): the input
+        stage's current, the leak that sets the DC gain, the clamp at the swing; d / dvn, d / dvo. */
+    INLINE double opamp(double vn, double vo, double& dvn, double& dvo) const
     {
-      const double x = -OPAMP_GAIN * vn / vSwing, t = std::tanh(x);
-      d = -OPAMP_GAIN * (1.0 - t * t);
-      return vSwing * t;
+      constexpr double leak = OPAMP_SLEW / (OPAMP_VLIN * OPAMP_GAIN);
+      const double t = std::tanh(-vn / OPAMP_VLIN);
+      dvn = -OPAMP_SLEW * (1.0 - t * t) / OPAMP_VLIN;
+      double sp, dsp, sm, dsm;
+      sp = softplus((vo - vSwing) / OPAMP_KNEE, dsp);
+      sm = softplus((-vo - vSwing) / OPAMP_KNEE, dsm);
+      dvo = -leak - OPAMP_SLEW * (dsp + dsm) / OPAMP_KNEE;
+      return OPAMP_SLEW * (t - sp + sm) - leak * vo;
+    }
+
+    /** log(1 + e^x); its slope. */
+    static INLINE double softplus(double x, double& d)
+    {
+      if (x > 30.0) { d = 1.0; return x; }
+      const double e = std::exp(x);
+      d = e / (1.0 + e);
+      return std::log1p(e);
     }
 
     /** CA3080 output current for a differential input vd (in thermal-voltage units already offset) into an output at
@@ -209,10 +233,10 @@ namespace dfl
     double h15 = 0.0, gc18 = 0.0, gc20 = 0.0, gc21 = 0.0, gc22 = 0.0;
     double gainLp = 1.0, gainBp = 1.0, gainHp = 1.0;
 
-    // state: node voltages, A12's output, capacitor voltages and currents (trapezoidal)
+    // state: node voltages, A12's output (backward Euler), capacitor voltages and currents (trapezoidal)
     double v[NN] = {};
     double vPrev[NN] = {};               // the nodes one sample back (the predictor)
-    double hp = 0.0;
+    double vA12 = 0.0;
     double vC15 = 0.0, iC15 = 0.0, vC18 = 0.0, iC18 = 0.0, vC20 = 0.0, iC20 = 0.0;
     double vC21 = 0.0, iC21 = 0.0, vC22 = 0.0, iC22 = 0.0;
     double rest[3] = {};                 // LP / BP / HP at rest (the DC operating point)
@@ -244,27 +268,30 @@ namespace dfl
 
   namespace sem_detail
   {
-    /** Solves J dx = -F with the SEM's sparsity: C20 (1) hangs on A12's input (0) only, C21 (3) on BP (2), LP (4) on
-        A12's input and C21. Those three go in closed form (pivots: a capacitor's conductance, the follower's), then a
-        5 x 5 in A12's input, BP, the diode string's two nodes and the C22 node. Not for the DC solve. */
-    INLINE void solveSparse(const double (&J)[8][8], const double (&F)[8], double (&dx)[8])
+    /** Solves J dx = -F with the SEM's sparsity: HP (8) hangs on A12's input (0) only, C20 (1) on HP, C21 (3) on BP
+        (2), LP (4) on A12's input and C21. Those four go in closed form (pivots: A12's step, a capacitor's
+        conductance, the follower's), then a 5 x 5 in A12's input, BP, the diode string's two nodes and the C22 node.
+        Not for the DC solve. */
+    INLINE void solveSparse(const double (&J)[9][9], const double (&F)[9], double (&dx)[9])
     {
-      const double a1 = -F[1] / J[1][1], b1 = -J[1][0] / J[1][1];                     // x1 = a1 + b1 x0
+      const double a8 = -F[8] / J[8][8], b8 = -J[8][0] / J[8][8];                     // x8 = a8 + b8 x0
+      const double a1 = (-F[1] - J[1][8] * a8) / J[1][1], b1 = -J[1][8] * b8 / J[1][1];   // x1 = a1 + b1 x0
       const double a3 = -F[3] / J[3][3], c3 = -J[3][2] / J[3][3];                     // x3 = a3 + c3 x2
       const double a4 = (-F[4] - J[4][3] * a3) / J[4][4], b4 = -J[4][0] / J[4][4];
       const double c4 = -J[4][3] * c3 / J[4][4];                                       // x4 = a4 + b4 x0 + c4 x2
       // reduced rows 0, 2, 5, 6, 7 in x0, x2, x5, x6, x7
       double R[5][5] = {
-        { J[0][0] + J[0][4] * b4, J[0][4] * c4, 0.0, 0.0, J[0][7] },
+        { J[0][0] + J[0][4] * b4 + J[0][8] * b8, J[0][4] * c4, 0.0, 0.0, J[0][7] },
         { J[2][1] * b1, J[2][2], J[2][5], 0.0, J[2][7] },
         { 0.0, J[5][2], J[5][5], J[5][6], 0.0 },
         { 0.0, 0.0, J[6][5], J[6][6], J[6][7] },
         { J[7][0], J[7][2], 0.0, J[7][6], J[7][7] } };
-      double G[5] = { F[0] + J[0][4] * a4, F[2] + J[2][1] * a1, F[5], F[6], F[7] };
+      double G[5] = { F[0] + J[0][4] * a4 + J[0][8] * a8, F[2] + J[2][1] * a1, F[5], F[6], F[7] };
       double y[5];
       solveLinear<5>(R, G, y);
       dx[0] = y[0]; dx[2] = y[1]; dx[5] = y[2]; dx[6] = y[3]; dx[7] = y[4];
       dx[1] = a1 + b1 * y[0];
+      dx[8] = a8 + b8 * y[0];
       dx[3] = a3 + c3 * y[1];
       dx[4] = a4 + b4 * y[0] + c4 * y[1];
     }
@@ -323,16 +350,17 @@ namespace dfl
     // predictor: the nodes' linear extrapolation from the last two samples (not after a sample that did not converge)
     if (!dcSolve)
       for (int k = 0; k < NN; ++k) { const double p = converged ? 2.0 * v[k] - vPrev[k] : v[k]; vPrev[k] = v[k]; v[k] = p; }
-    // the range each node can physically reach: A12's input within the input's reach, the rest within the rails
+    // the range each node can physically reach: A12's input and the C22 side of the damping (capacitively coupled to
+    // it, so it follows A12's input off the rails while A12 slews) within the input's reach, the rest within the rails
     const double vMax = vcc + 1.0, sMax = std::fabs(vin) + vcc + 1.0;
     converged = dcSolve;
 
     for (int it = 0; it < maxIt; ++it)
     {
-      const double vS = v[0], vc1 = v[1], vBP = v[2], vc2 = v[3], vLP = v[4], vD = v[5], vM = v[6], vN = v[7];
+      const double vS = v[0], vc1 = v[1], vBP = v[2], vc2 = v[3], vLP = v[4], vD = v[5], vM = v[6], vN = v[7], h = v[8];
 
-      double dh;
-      const double h = opamp(vS, dh);
+      double dhs, dhh;
+      const double dhdt = opamp(vS, h, dhs, dhh);
       double o1d, o1o, o2d, o2o;
       const double i1 = ota(kDiv * h, vc1, ib, off1, off1T, o1d, o1o);
       const double i2 = ota(kDiv * vBP, vc2, ib, 0.0, 0.0, o2d, o2o);
@@ -346,10 +374,10 @@ namespace dfl
 
       double F[NN], J[NN][NN] = {};
       F[0] = (e1 - vS) * gr + (vLP - vS) * G138 + i18 + (h - vS) * G139 + i22;
-      J[0][0] = -gr - G138 - c18 + (dh - 1.0) * G139 - c22; J[0][4] = G138 + c18; J[0][7] = c22;
+      J[0][0] = -gr - G138 - c18 - G139 - c22; J[0][4] = G138 + c18; J[0][7] = c22; J[0][8] = G139;
 
       F[1] = i1 - (c20 * vc1 - J20);
-      J[1][0] = o1d * kDiv * dh; J[1][1] = o1o - c20;
+      J[1][8] = o1d * kDiv; J[1][1] = o1o - c20;
 
       F[2] = id1 - (vBP + vcc) * G147 - vBP * gDiv - (vBP - vD) * G159 - (vBP - vN) * gBN - vBP * gBG;
       J[2][1] = gm1; J[2][2] = -gm1 - G147 - gDiv - G159 - gBN - gBG; J[2][5] = G159; J[2][7] = gBN;
@@ -369,26 +397,30 @@ namespace dfl
       F[7] = (vM - vN) * G156 + (vBP - vN) * gBN - vN * gNG - i22;
       J[7][6] = G156; J[7][2] = gBN; J[7][7] = -G156 - gBN - gNG - c22; J[7][0] = c22;
 
+      // A12's compensation node, backward Euler (its loop closes far above Nyquist; trapezoidal would ring there)
+      F[8] = T * dhdt - (dcSolve ? 0.0 : h - vA12);
+      J[8][0] = T * dhs; J[8][8] = T * dhh - (dcSolve ? 0.0 : 1.0);
+
       double dx[NN];
       if (dcSolve) solveLinear<NN>(J, F, dx);
       else sem_detail::solveSparse(J, F, dx);
       double mx = 0.0;
       for (int k = 0; k < NN; ++k)
       {
-        // A12's input in units of its tanh argument: at most 2 from the linear region, back to it in one step from
-        // saturation (where the slope gives Newton nothing to go on)
-        const double xs = std::fabs(OPAMP_GAIN * v[0] / vSwing);
-        const double lim = k == 0 ? std::max(2.0, xs) * vSwing / OPAMP_GAIN : (k == 5 || k == 6 ? 2.0 * nVtD + 0.5 : 2.0);
+        // A12's input in units of its input stage's tanh argument: at most 2 from the linear region, back to it in one
+        // step from saturation (where the slope gives Newton nothing to go on)
+        const double xs = std::fabs(v[0] / OPAMP_VLIN);
+        const double lim = k == 0 ? std::max(2.0, xs) * OPAMP_VLIN : (k == 5 || k == 6 ? 2.0 * nVtD + 0.5 : 2.0);
         const double d = std::clamp(dx[k], -lim, lim);
-        v[k] = std::clamp(v[k] + d, -(k == 0 ? sMax : vMax), k == 0 ? sMax : vMax); mx = std::max(mx, std::fabs(d) * (k == 0 ? OPAMP_GAIN : 1.0));   // A12 in: as its output step
+        const double r = k == 0 || k == 6 || k == 7 ? sMax : vMax;
+        v[k] = std::clamp(v[k] + d, -r, r); mx = std::max(mx, std::fabs(d));
       }
       if (mx < tol) { converged = true; break; }   // quadratic convergence: the error left after a step of tol is ~tol^2
     }
 
-    double dh;
-    hp = opamp(v[0], dh);
     if (dcSolve) return;
-    // capacitor states
+    // A12's and the capacitors' states
+    vA12 = v[8];
     const double i15n = (e1 - v[0]) * gr;
     vC15 += h15 * (i15n + iC15); iC15 = i15n;
     vC18 = v[4] - v[0]; iC18 = gc18 * vC18 - J18;
@@ -411,7 +443,7 @@ namespace dfl
 
     // the three outputs share A12's inversion (the integrators do not invert), so LP -> BP -> HP keep one sign; the
     // output is turned back upright
-    const double lp = (v[4] - rest[0]) / gainLp, bp = (v[2] - rest[1]) / gainBp, hpo = (hp - rest[2]) / gainHp;
+    const double lp = (v[4] - rest[0]) / gainLp, bp = (v[2] - rest[1]) / gainBp, hpo = (v[8] - rest[2]) / gainHp;
     const double wl = std::max(0.0, 1.0 - 2.0 * mode), wh = std::max(0.0, 2.0 * mode - 1.0), wb = 1.0 - wl - wh;
     return -(wl * lp + wb * bp + wh * hpo) / driveMakeup;
   }

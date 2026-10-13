@@ -3,6 +3,7 @@
   ring:        a kick at 1 ms, then the output over the last 50 ms (p-p, frequency): whether and how it oscillates
   distortion:  sine through the passband and near the peak at rising levels (gain compression, THD, H2), LP output
   character:   the same at Saturation Bias 1 and Rail 0
+  slew:        sine through HP's passband at high frequencies and levels (A12's slew limit), HP output
 
   python3 tran_compare.py      (run from this directory after ../build.sh)"""
 import sys, subprocess, numpy as np
@@ -35,15 +36,15 @@ def ring(t, v, tail=0.05):
 
 th = lambda h: 100 * np.sqrt(sum(x * x for x in h[1:])) / h[0]
 
-def distortion(cases, amps, bias=0.0, rail=1.0):
+def distortion(cases, amps, bias=0.0, rail=1.0, node="n4"):
     worst = 0.0
     for fc, pot, rel in cases:
         freq = round(fc * rel)
         print(f"  fc {fc:.0f} pot {pot} sine {freq} Hz")
         ref = None
         for amp in amps:
-            hs = harmonics(*spice(fc, pot, amp, freq, 0.25, bias=bias, rail=rail), freq, 0.05)
-            hd = harmonics(*dsp(fc, pot, amp, freq, 0.25, bias=bias, rail=rail), freq, 0.05)
+            hs = harmonics(*spice(fc, pot, amp, freq, 0.25, node=node, bias=bias, rail=rail), freq, 0.05)
+            hd = harmonics(*dsp(fc, pot, amp, freq, 0.25, node=node, bias=bias, rail=rail), freq, 0.05)
             gs, gd = 20 * np.log10(hs[0] / amp), 20 * np.log10(hd[0] / amp)
             if ref is None: ref = (gs, gd)
             worst = max(worst, abs((gd - ref[1]) - (gs - ref[0])))
@@ -66,6 +67,8 @@ def main():
     w = max(w, distortion(cases[:2], amps, bias=1.0))
     print("\ncharacter: Rail 0 (supplies sagged 30 %)")
     w = max(w, distortion(cases[:2], amps, rail=0.0))
+    print("\nslew (HP): A12 at 0.5 V / us, full-power bandwidth ~6 kHz at its 13.5 V swing")
+    w = max(w, distortion(((500.0, 0.0, 16.0), (500.0, 0.0, 24.0)), (5.0, 15.0, 30.0), node="n8"))
     print(f"\nworst gain-compression difference {w:.2f} dB")
 
 if __name__ == "__main__":

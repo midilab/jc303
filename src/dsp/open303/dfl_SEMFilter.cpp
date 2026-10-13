@@ -91,7 +91,8 @@ void SEMFilter::reset()
   vC20 = v[1]; iC20 = 0.0;
   vC21 = v[3]; iC21 = 0.0;
   vC22 = v[7] - v[0]; iC22 = 0.0;
-  rest[0] = v[4]; rest[1] = v[2]; rest[2] = hp;
+  vA12 = v[8];
+  rest[0] = v[4]; rest[1] = v[2]; rest[2] = v[8];
   for (int k = 0; k < NN; ++k) vPrev[k] = v[k];
   acCouplingState_ = 0.0;
 }

@@ -19,7 +19,7 @@ int main(int argc, char** argv)
   {
     F f; f.setSampleRate(SR); f.reset();
     printf("vdd %.3f:", f.getSupply());
-    for (int k = 0; k <= F::NN; ++k) printf(" n%d %.4f", k, f.getNode(k));
+    for (int k = 0; k < F::NN; ++k) printf(" n%d %.4f", k, f.getNode(k));
     printf("\n");
     return 0;
   }

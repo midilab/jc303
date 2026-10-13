@@ -10,11 +10,11 @@ Values from the SEM-1A schematic (VCF section):
 - Resonance: BP across PS16 RES 50k to ground, the wiper through R157 33k to the C22 node; BP through R159 47k (R158
   10k to ground), D11 / D12 (1N4148) and R156 100k to the same node; C22 0.33u into A12's input.
 
-Devices as the DSP (dfl_SEMFilter.h): A12 as an ideal amplifier of gain 1e5 with soft rails 1.5 V inside the supply;
+Devices as the DSP (dfl_SEMFilter.h): A12 as a two-stage op amp (its input stage a tanh slewing the 30 pF
+compensation node at 0.5 V / us with 1 MHz unity gain, a leak for the 1e5 DC gain, a softplus clamp 1.5 V inside the supply, a unity buffer);
 the CA3080 as Iabc tanh(v / 2 VT) with clamp junctions 1.5 V inside either rail; the 2N4302 as SPICE's square-law
 JFET (IDSS 2 mA, VTO -1.5 V: a guess); D11 / D12 with IS 2.52n, N 1.752. This checks the DSP's solver (the node
-equations, the RES star, the trapezoidal integration) against SPICE, not the device models against an SEM. The netlist
-adds 1 pF at A12's input so ngspice can step through A12's clipping (it aborts otherwise); the DSP has none.
+equations, the RES star, the integration) against SPICE, not the device models against an SEM.
 
 Run the scripts in this directory from this directory. Requires ngspice (brew install ngspice)."""
 import math, os, sys
@@ -27,6 +27,8 @@ R147 = 15e3; R157, C22, RRES = 33e3, 0.33e-6, 50e3
 R159, R158, R156 = 47e3, 10e3, 100e3
 KDIV = RDIVLO / (RDIV + RDIVLO)
 IDSS, VTO = 2e-3, -1.5
+OP_GAIN, OP_SLEW, OP_KNEE, OP_CC = 1e5, 0.5e6, 0.05, 30e-12
+OP_VLIN = OP_SLEW / (2 * math.pi * 1e6)   # 1 MHz unity gain
 
 def iabc_for(fc):
     """OTA bias for an integrator crossover at fc (dfl::SEMFilter::otaIabc without the prewarp)."""
@@ -51,6 +53,7 @@ def netlist(pot=0.0, fc=1000.0, analysis="ac", amp=0.1, freq=100.0, tstop=0.1, t
 .model J2N4302 NJF (VTO={VTO} BETA={IDSS / VTO ** 2} LAMBDA=0 IS=1e-16)
 .model D1N4148W D (IS=2.52n N=1.752)
 .model DCLMP D (IS=1e-14 N=1)
+.func sp(x) {{x > 30 ? x : ln(1 + exp(x))}}
 Vcc vcc 0 DC {vcc}
 Vee vee 0 DC {-vcc}
 Vhi vhi 0 DC {vcc - 1.5}
@@ -60,7 +63,9 @@ C15 n1 s {C15}
 R138 lp s {R138}
 C18 lp s {C18}
 R139 hp s {R139}
-Bop hp 0 V = {vsw}*tanh(-1e5*V(s)/{vsw})
+Bc 0 cmp I = {OP_CC * OP_SLEW}*(tanh(-V(s)/{OP_VLIN}) - sp((V(cmp)-{vsw})/{OP_KNEE}) + sp((-V(cmp)-{vsw})/{OP_KNEE})) - {OP_CC * OP_SLEW / (OP_VLIN * OP_GAIN)}*V(cmp)
+Ccmp cmp 0 {OP_CC}
+Eop hp 0 cmp 0 1
 R142 hp p1 {RDIV}
 R144 p1 0 {RDIVLO}
 Bo1 0 c1 I = {g1}*(tanh(V(p1)/(2*{VT}) + {off}) - tanh({off}))
@@ -86,7 +91,5 @@ D11 d m D1N4148W
 D12 m d D1N4148W
 R156 m n {R156}
 C22 n s {C22}
-* 1 pF at A12's input (a ~5 MHz pole): lets ngspice step through A12's clipping, where it otherwise aborts
-Cs s 0 1p
 .end
 """
