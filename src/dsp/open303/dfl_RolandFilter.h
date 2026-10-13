@@ -159,6 +159,10 @@ namespace dfl
     static constexpr double INPUT_VOLTS = 0.5;
     // Drive make-up exponent: the output is divided by driveFactor^exp.
     static constexpr double MAKEUP_EXP = 0.95;
+    // Newton: iterations from the last sample, then the fallback's (from it again, steps up to FALLBACK_STEP volts, the
+    // capacitor nodes at most FALLBACK_OVER past the compliance clamps' knees)
+    static constexpr int NEWTON_IT = 24, FALLBACK_IT = 40;
+    static constexpr double FALLBACK_STEP = 2.0, FALLBACK_OVER = 0.75;
     // BP / HP output trims (dB).
     static constexpr double BP_TRIM_DB = 0.5, HP_TRIM_DB = 7.0;
 
@@ -216,6 +220,7 @@ namespace dfl
     double vc[4] = { -VSH, -VSH, -VSH, -VSH };
     double ic[4] = {};
     double y[4] = {};
+    bool converged = true;                // the last sample's Newton converged
     double vcaDc = 0.0, vcaDcCoef = 0.0;  // the VCA input's coupling capacitor (C59): DC tracker
     double preVca = 0.0;                  // last output before the coupling capacitor (normalised)
 
@@ -336,9 +341,17 @@ namespace dfl
     double J[4];
     for (int k = 0; k < 4; ++k) J[k] = gC * vc[k] + ic[k];
 
+    // Newton from the last sample; if it has not converged in NEWTON_IT iterations (a jump of more than their 0.5 V
+    // steps can reach, or a node deep in a clamp junction's exponential), again from the last sample with longer steps
+    // kept out of the junctions
+    double vcLast[4];
+    for (int k = 0; k < 4; ++k) vcLast[k] = vc[k];
+    converged = false;
     double ires = 0.0;
-    for (int it = 0; it < 24; ++it)
+    for (int it = 0; it < NEWTON_IT + FALLBACK_IT; ++it)
     {
+      if (it == NEWTON_IT) for (int k = 0; k < 4; ++k) vc[k] = vcLast[k];   // the fallback start
+      const double lim = it < NEWTON_IT ? 0.5 : FALLBACK_STEP;
       double dy[4];
       for (int k = 0; k < 4; ++k) y[k] = follower(vc[k], dy[k]);
 
@@ -371,10 +384,13 @@ namespace dfl
       double mx = 0.0;
       for (int k = 0; k < 4; ++k)
       {
-        const double d = std::clamp(dx[k], -0.5, 0.5);
+        const double d = std::clamp(dx[k], -lim, lim);
         vc[k] += d; mx = std::max(mx, std::fabs(d));
+        // the fallback keeps the capacitor nodes out of the clamp junctions' far exponential (where Newton crawls back
+        // a VT per step)
+        if (it >= NEWTON_IT) vc[k] = std::clamp(vc[k], V_NEG + VCLAMP - FALLBACK_OVER, V_POS - VCLAMP + FALLBACK_OVER);
       }
-      if (mx < 1e-9) break;
+      if (mx < 1e-9) { converged = true; break; }
     }
 
     double dyk;
