@@ -536,10 +536,10 @@ namespace dfl
     const double lp = (v[5] - rest[0]) / gainLp, bp = (v[3] - rest[1]) / gainBp, hp = (v[1] - rest[2]) / gainHp;
     const double wl = std::max(0.0, 1.0 - 2.0 * mode), wh = std::max(0.0, 2.0 * mode - 1.0), wb = 1.0 - wl - wh;
     double out = -(wl * lp + wb * bp + wh * hp);
-    // C6: the clipping's DC (asymmetric, more so with Saturation Bias; at +16 dB from ~0.1 of the output RMS (EDP) to
-    // more than half of it (A-124, low cutoffs), and it moves with the cutoff) passes it almost whole, as in the circuit; Open303's post-filter highpass (24 Hz, before
-    // the VCA) takes it out. A gated, env-swept sequence shows no onset thump from it (sub-15 Hz content the same at
-    // Bias 0 and 1, and the same share as the TeeBee's).
+    // C6 passes the clipping's DC almost whole, as in the circuit (asymmetric, more so with Saturation Bias; at +16 dB
+    // from ~0.1 of the output RMS (EDP) to more than half of it (A-124, low cutoffs), moving with the cutoff). Open303's
+    // post-filter highpass (24 Hz, before the VCA) takes it out; a gated, env-swept sequence shows no onset thump from
+    // it (sub-15 Hz content the same at Bias 0 and 1, and the same share as the TeeBee's).
     out -= outDc;
     outDc += outDcCoef * out;
     return out / driveMakeup;
