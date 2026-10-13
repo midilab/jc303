@@ -181,7 +181,7 @@ void MS20Filter::updateCutoffTable()
     lf[i] = std::log(k35CornerAt(vbs[i], x) / (2.0 * PI));   // warm start from the previous point
   }
   ctLogF0 = std::log(5.0);
-  ctDLogF = (std::log(40000.0) - ctLogF0) / (CT_N - 1);
+  ctDLogF = (std::log(100000.0) - ctLogF0) / (CT_N - 1);
   int j = 0;
   for (int i = 0; i < CT_N; ++i)
   {
@@ -199,7 +199,7 @@ void MS20Filter::reset()
 {
   // operating point at the current cutoff, capacitors at rest
   double x[4] = { 0.55, 0.0, 0.0, 0.0 };
-  k35CornerAt(k35ControlFor(cutoff), x);
+  k35CornerAt(k35ControlFor(prewarp(cutoff)), x);
   vA = x[0]; vBn = x[1]; vY = x[2]; vZ = x[3]; vZ0 = x[3];
   vN = vI = vO = vIp = 0.0;
   opPrev = 0.0;

@@ -33,18 +33,21 @@ Needs ngspice (`brew install ngspice`) and numpy for the `spice/` scripts; run t
 
 ## Results (current tree)
 
-- Small signal (`compare_ac`): Korg35 within ~1 dB from 470 Hz to 8 kHz at every pot position below oscillation
-  (the very top of a near-oscillating peak can read a few dB off: it is that sharp).
+- Small signal (`compare_ac`): Korg35 within ~1 dB at 470 Hz and 2 kHz at every pot position below oscillation
+  (the very top of a near-oscillating peak can read a few dB off: it is that sharp). At 8 kHz the DSP's corner sits
+  ~1 % above SPICE's (+0.4 dB at pot 0, the peak +1.4 / +2.4 dB at pot 0.5 / 0.6): the model's, not the
+  discretisation's (the corner is prewarped).
 - Distortion (`tran_compare`): passband 0.1..4 V within 0.02 dB / 0.03 % THD, near the peak within 0.15 dB.
 - Self-oscillation: onset near pot 0.73, amplitude within ~2 %, the negative half swinging harder as in the circuit;
-  frequency exact at 470 Hz, 1 % high at 2 kHz, 4.5 % high at 8 kHz.
+  frequency exact at 470 Hz, 1 % high at 2 kHz, 5 % high at 8 kHz.
 - Modes (`mode_compare`): BP / HP shapes within ~0.7 dB.
-- Stress: 0 of 1158 failures, 8437 of 254 M grid samples non-converged; ~450-470 ns / sample at 4 x 44.1 kHz (~8 % of one core).
+- Stress: 0 of 1158 failures, 6990 of 254 M grid samples non-converged; ~450-470 ns / sample at 4 x 44.1 kHz (~8 % of one core).
 
 ## Notes
 
 - Cutoff = the core's small-signal natural frequency at resonance 0: the control voltage at Q1's collector source is
-  found from a DC operating-point table (rebuilt when Sharpness changes).
+  found from a DC operating-point table (rebuilt when Sharpness changes), at the prewarped corner
+  (fs / pi) tan(pi fc / fs), so the trapezoidal solve's corner lands on the cutoff at any sample rate.
 - The Korg35 runs into its forward-path diodes at normal levels (that is its sound); the nominal input is 0.5 V for a
   full-scale signal.
 - At PEAK 1 in BP with Clip / Bite at their extremes the Korg35 self-oscillates near its op amp's rails, about +35 dB

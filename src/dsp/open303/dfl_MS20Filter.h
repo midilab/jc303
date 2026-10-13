@@ -178,6 +178,14 @@ namespace dfl
         (rad/s) for the control voltage vb at Q1's collector source. */
     double k35CornerAt(double vb, double* x);
 
+    /** The analog corner for a cutoff of fc Hz: prewarped, so the trapezoidal solve's corner lands on fc (fc held to
+        0.45 fs, the corner to 0.49 fs, as the other circuit models). */
+    double prewarp(double fc) const
+    {
+      fc = std::min(fc, 0.45 * sampleRate);
+      return std::min(sampleRate / PI * std::tan(PI * fc / sampleRate), 0.49 * sampleRate);
+    }
+
     /** Korg35 control voltage (Q1's collector source) for a corner of fc Hz, from the table. */
     INLINE double k35ControlFor(double fc) const;
 
@@ -223,8 +231,9 @@ namespace dfl
     double vZ0 = 0.0;                // Z at the operating point (the buffer's rest point)
     bool converged = true;
 
-    // Korg35 cutoff table: control voltage vs log corner
-    static constexpr int CT_N = 96;
+    // Korg35 cutoff table: control voltage vs log corner, 5 Hz..100 kHz (the prewarped corner at 0.49 fs at 4 x 44.1 kHz:
+    // 86 kHz)
+    static constexpr int CT_N = 110;
     double ctLogF0 = 0.0, ctDLogF = 1.0;
     double ctVb[CT_N] = {};
 
@@ -299,7 +308,7 @@ namespace dfl
       acCouplingState_ += acAlpha * (in - acCouplingState_);
       fc *= std::clamp(1.0 + filterFmDepth_ * filterFmScale_ * (in - acCouplingState_), 0.5, 1.5);
     }
-    fc = std::min(fc, 0.45 * sampleRate);
+    fc = prewarp(fc);
 
     return getSampleK35(in * driveFactor, fc) / driveMakeup;
   }
