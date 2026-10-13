@@ -148,8 +148,10 @@ namespace dfl
     static constexpr double RAIL_SAG = 0.6;
 
     // Input level: volts at the mixer pot for a full-scale (+-1) signal at 0 dB drive (the Odyssey's VCOs, 10 V p-p:
-    // ~16 mV at the limiter, 0.6 % THD in the passband). The output is divided by driveFactor^MAKEUP_EXP: LP within
-    // +0.6 / -1.9 dB from 0 to +16 dB at RES 0 (tools/arp-fidelity/levels).
+    // ~16 mV at the limiter, 0.6 % THD in the passband). 0 dB is one source at full slider; the mixer's sources sum into
+    // the same pin, so both VCOs full reach +6 dB. +16 dB puts ~104 mV (4 VT) on the limiter: near its hard limit (a
+    // 200 Hz sine at RES 0: 4.5 dB of compression, 14 % THD), the knee's far side. The output is divided by
+    // driveFactor^MAKEUP_EXP: LP within +0.6 / -1.9 dB from 0 to +16 dB at RES 0 (tools/arp-fidelity/levels).
     static constexpr double INPUT_VOLTS = 5.0;
     static constexpr double MAKEUP_EXP = 0.9;
     // BP / HP output trims (dB): the pure modes sit near LP loudness on a saw at a typical resonant setting (pot
