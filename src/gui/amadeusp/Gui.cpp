@@ -104,11 +104,12 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
 void JC303Editor::updateMorphVisibility(int filterTypeIndex)
 {
-    // the same parameter is the HP/BP morph for Diode BP / HP and the bass comp for Diode
-    const bool show = filterTypeIndex >= FILTER_DIODE;
+    // the same parameter is the HP/BP morph for Diode BP / HP and the bass comp for Diode; the MS-20 and IR3109
+    // models have no bass comp (a Sallen-Key passband does not fall with resonance; the IR3109 compensates itself)
+    const bool show = filterTypeIndex == FILTER_DIODE;
     bassCompSlider->setVisible(show);
     bassCompLabel.setVisible(show);
-    bassCompLabel.setText(filterTypeIndex == FILTER_DIODE ? "BASS COMP" : "HP/BP MORPH", juce::dontSendNotification);
+    bassCompLabel.setText(show ? "BASS COMP" : "HP/BP MORPH", juce::dontSendNotification);
 }
 
 void JC303Editor::updateModEnabled(bool modsOn)

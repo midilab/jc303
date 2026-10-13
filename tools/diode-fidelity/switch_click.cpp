@@ -19,7 +19,7 @@ int main(int argc, char** argv)
     std::vector<double> y(total);
     for (int i = 0; i < total; i++)
     {
-      if (i == switchAt) s.setFilterType((dfl::FilterType)(1 - from));
+      if (i == switchAt) s.setFilterType((dfl::FilterType)(from == 0 ? 1 : 0));
       if (i == back)     s.setFilterType((dfl::FilterType)from);
       y[i] = s.getSample();
     }
@@ -29,7 +29,7 @@ int main(int argc, char** argv)
     double refTo = maxStep(back - (int)(0.1 * sr), back);
     double r1 = maxStep(switchAt, switchAt + (int)(0.02 * sr)) / ref;
     double r2 = maxStep(back, back + (int)(0.02 * sr)) / refTo;
-    printf("%d -> %d: step ratio %.2f   %d -> %d: step ratio %.2f\n", from, 1 - from, r1, 1 - from, from, r2);
+    printf("%d -> %d: step ratio %.2f   %d -> %d: step ratio %.2f\n", from, from == 0 ? 1 : 0, r1, from == 0 ? 1 : 0, from, r2);
     worst = fmax(worst, fmax(r1, r2));
   }
   printf("worst %.2f\n", worst);

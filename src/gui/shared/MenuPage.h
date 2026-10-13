@@ -50,6 +50,7 @@ public:
         int altLabelIndex = -1;
         juce::String alsoHiddenWhenId;  // a second condition: also skipped while this choice param equals alsoHiddenWhenIndex
         int alsoHiddenWhenIndex = -1;
+        int alsoHiddenOnlyAtIndex = -1;  // if >= 0, the second condition applies only while hiddenWhenId's index equals this
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
     };
 
@@ -286,12 +287,19 @@ private:
         return item.label;
     }
 
+    /** The choice / int parameter's current index, or -1 if there is no such parameter. */
+    int choiceIndex(const juce::String& id) const
+    {
+        if (auto* p = valueTreeState.getParameter(id))
+            return (int) std::lround(p->convertFrom0to1(p->getValue()));
+        return -1;
+    }
+
     bool isHidden(const Item& item) const
     {
-        if (item.alsoHiddenWhenId.isNotEmpty())
-            if (auto* p = valueTreeState.getParameter(item.alsoHiddenWhenId))
-                if ((int) std::lround(p->convertFrom0to1(p->getValue())) == item.alsoHiddenWhenIndex)
-                    return true;
+        if (item.alsoHiddenWhenId.isNotEmpty() && (item.alsoHiddenOnlyAtIndex < 0 || choiceIndex(item.hiddenWhenId) == item.alsoHiddenOnlyAtIndex))
+            if (choiceIndex(item.alsoHiddenWhenId) == item.alsoHiddenWhenIndex)
+                return true;
         if (item.hiddenWhenId.isEmpty())
             return false;
         auto* p = valueTreeState.getParameter(item.hiddenWhenId);
@@ -639,23 +647,24 @@ public:
         // every Mods-page item is greyed out and inert while the Mods switch is off
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "filterMorph", "Filter Morph",     Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // LP / BP / HP; no effect on TeeBee
-        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "filterQuality", "Filter Quality", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
+        mod.items.add(Item { "filterQuality", "Filter Quality", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
         {
-            Item tension { "filterTension", "Filter Tension", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true };   // no effect on TeeBee
+            Item tension { "filterTension", "Filter Tension", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 };   // Spicy only
             tension.alsoHiddenWhenId = "filterQuality";   // Hi-Fi only: hidden in Standard
             tension.alsoHiddenWhenIndex = 0;
             mod.items.add(tension);
         }
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "filterBias", "Saturation Bias", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });    // no effect on TeeBee
+        mod.items.add(Item { "filterBias", "Saturation Bias", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         {
-            Item rail { "filterRail", "Saturation Rail", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true };   // no effect on TeeBee
+            Item rail { "filterRail", "Saturation Rail", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 };   // Spicy only
             rail.alsoHiddenWhenId = "filterQuality";   // Hi-Fi only: hidden in Standard
             rail.alsoHiddenWhenIndex = 0;
             mod.items.add(rail);
         }
-        mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        mod.items.add(Item { "filterArpMod", "4075 Tail Mod", Type::value, {}, 0.0f, {}, "filterType", 0, 7, true, 7 });   // Oddity only
+        mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, {}, -1, 0, true });

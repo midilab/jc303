@@ -125,6 +125,12 @@ void Open303::setSampleRate(double newSampleRate)
   filter.setSampleRate        (  oversampling*newSampleRate);
   diodeFilter.setSampleRate   (  oversampling*newSampleRate);
   switchStep = 1.0 / (0.005 * newSampleRate);
+  ms20Filter.setSampleRate    (  oversampling*newSampleRate);
+  junoFilter.setSampleRate    (  oversampling*newSampleRate);
+  waspFilter.setSampleRate    (  oversampling*newSampleRate);
+  semNotchFilter.setSampleRate(  oversampling*newSampleRate);
+  hornetFilter.setSampleRate  (  oversampling*newSampleRate);
+  arpFilter.setSampleRate     (  oversampling*newSampleRate);
   sampleRate = newSampleRate;
   updateAccentSweepGain();
 }
@@ -152,6 +158,18 @@ void Open303::setResonance(double newResonance)
   // sweeps up more smoothly and stacks higher on rapid successive accents.
   resonanceSkewed = skewedResonance;
   setAccentAttack(accentAttack);
+  // the MS-20, IR3109 and Wasp models undo the skew (their pots are linear); the knob reaches their pots through a per-model
+  // map, so they resonate alike (dfl_ResonanceMap.h)
+  auto skewedPot = [normalizedResonance](dfl::FilterType type)
+  {
+    return (1.0 - exp(-3.0*dfl::resonancePot(type, normalizedResonance))) / (1.0 - exp(-3.0));
+  };
+  ms20Filter.setResonance(skewedPot(dfl::FILTER_MS20));
+  junoFilter.setResonance(skewedPot(dfl::FILTER_JUNO106));
+  waspFilter.setResonance(skewedPot(dfl::FILTER_WASP));   // the Wasp's RES pot is linear too
+  semNotchFilter.setResonance(skewedPot(dfl::FILTER_SEM_NOTCH));   // the SEM's too
+  hornetFilter.setResonance(skewedPot(dfl::FILTER_WASP_A124));
+  arpFilter.setResonance(skewedPot(dfl::FILTER_ARP4075));        // the Odyssey's R144 is linear
   outputNetwork.setPot(diodeFilter.getResonancePot());
 }
 
@@ -166,6 +184,12 @@ void Open303::resetFilters()
 {
   filter.reset();
   diodeFilter.reset();
+  ms20Filter.reset();
+  junoFilter.reset();
+  waspFilter.reset();
+  semNotchFilter.reset();
+  hornetFilter.reset();
+  arpFilter.reset();
   highpass1.reset();
   diodeInputCoupling.reset();
   highpass2.reset();
@@ -182,6 +206,44 @@ void Open303::setFilterDrive(double newDriveDb)
   // is harmless there but has no audible effect.
   filter.setDrive(newDriveDb);
   diodeFilter.setInputDrive(newDriveDb);
+  ms20Filter.setInputDrive(newDriveDb);
+  junoFilter.setInputDrive(newDriveDb);
+  waspFilter.setInputDrive(newDriveDb);
+  semNotchFilter.setInputDrive(newDriveDb);
+  hornetFilter.setInputDrive(newDriveDb);
+  arpFilter.setInputDrive(newDriveDb);
+  circuitDriveDb = newDriveDb;
+  updateCircuitCharacter();
+}
+
+void Open303::updateCircuitCharacter()
+{
+  // Saturation Bias and Rail on the MS-20 and IR3109 models, each on its own circuit (the diode filter has its own):
+  // - Bias offsets the element the input drives (IR3109 stage 1: the input pair, its resting current trimmed out, the
+  //   diode ladder's bias shape; Korg35: one forward limiter diode), see setSaturationBias. It ramps in with
+  //   Saturation as the diode's does, from none at 0 dB to the knob's value at +16 dB, so the clean filter stays the
+  //   circuit.
+  // - Rail = Clip, the limiter's threshold (MS-20: the limiter diodes; Juno: the BA662's input range): 1 = the circuit, lower = the limiter bends earlier. These circuits have real rails, so there is no
+  //   runaway for a ceiling to tame.
+  // - Wasp: Bias offsets OTA1's input divider (IC1 then sits off its switching point), ramping in the same way; Rail is
+  //   its supply, 1 = the circuit, lower = sagging (less headroom and inverter gain), see WaspFilter::setRail.
+  // - SEM: Bias offsets OTA1's input (its trim off null, the resting current trimmed out), ramping in the same way; Rail
+  //   sags its +-15 V supplies, see SEMFilter::setRail.
+  const double bias = circuitBias * std::clamp(circuitDriveDb / 16.0, 0.0, 1.0);
+  const double clip = 0.5 * circuitRail;
+  ms20Filter.setSaturationBias(bias);
+  ms20Filter.setClipThreshold(clip);
+  junoFilter.setSaturationBias(bias);
+  junoFilter.setClipThreshold(clip);
+  for (auto* f : { &waspFilter, &hornetFilter })
+  {
+    f->setSaturationBias(bias);
+    f->setRail(circuitRail);
+  }
+  arpFilter.setSaturationBias(bias);   // the limiter pair's offset
+  arpFilter.setRail(circuitRail);      // the LM3900s' -14 V supply
+  semNotchFilter.setSaturationBias(bias);
+  semNotchFilter.setRail(circuitRail);
 }
 
 void Open303::setPassbandCompensation(double newCompensation)

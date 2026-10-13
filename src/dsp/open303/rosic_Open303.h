@@ -8,7 +8,13 @@
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
 #include "dfl_DiodeLadderFilter.h"
+#include "dfl_MS20Filter.h"
+#include "dfl_RolandFilter.h"
+#include "dfl_WaspFilter.h"
+#include "dfl_SEMFilter.h"
+#include "dfl_ARP4075Filter.h"
 #include "dfl_FilterType.h"
+#include "dfl_ResonanceMap.h"
 #include "dfl_TB303OutputNetwork.h"
 #include "rosic_AnalogEnvelope.h"
 #include "rosic_DecayEnvelope.h"
@@ -101,7 +107,16 @@ namespace rosic
 
     /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input to modulate filter cutoff frequency. */
-    void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
+    void setFilterFmDepth(double depth)
+    {
+      diodeFilter.setFilterFmDepth(depth);
+      ms20Filter.setFilterFmDepth(depth);
+      junoFilter.setFilterFmDepth(depth);
+      waspFilter.setFilterFmDepth(depth);
+      semNotchFilter.setFilterFmDepth(depth);
+      hornetFilter.setFilterFmDepth(depth);
+      arpFilter.setFilterFmDepth(depth);
+    }
 
     /** Sets the diode models' unit trim (loop-gain scale, 1 = nominal unit). */
     void setResonanceTrim(double trim) { diodeFilter.setLoopGainTrim(trim); }
@@ -121,12 +136,16 @@ namespace rosic
      *  loop gain is the driven filter's push, and near full resonance its crunch: the loop locks onto its own frequency
      *  under the note, see DiodeLadderFilter SAT_BIAS_MAX). Higher = more swell and crunch. In Hi-Fi the range's top
      *  half is rescaled to end at a cap that follows the tension (SAT_BIAS_CAP_*: past it the note chokes). The
-     *  plugin's Saturation Bias parameter. */
-    void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); }
+     *  plugin's Saturation Bias parameter. The MS-20 and IR3109 models offset their input stage, the Wasp OTA1's divider (see
+     *  updateCircuitCharacter). */
+    void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); circuitBias = bias; updateCircuitCharacter(); }
 
     /** Sets the diode filter's rail, 0..1 (Hi-Fi; 1 = unlimited, the full crunch; lower = cleaner, see
-     *  DiodeLadderFilter::setRail). */
-    void setFilterRail(double rail) { diodeFilter.setRail(rail); }
+     *  DiodeLadderFilter::setRail). The MS-20 and IR3109 models take it as their Clip, the Wasp as its supply (see updateCircuitCharacter). */
+    void setFilterRail(double rail) { diodeFilter.setRail(rail); circuitRail = rail; updateCircuitCharacter(); }
+
+    /** Oddity (ARP 4075) only: the 2k2 tail mod (ARP4075Filter::setTailMod). */
+    void setFilterArpMod(bool on) { arpFilter.setTailMod(on); }
 
     /** Returns the Filter FM depth. */
     double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
@@ -381,6 +400,12 @@ namespace rosic
     dfl::DualSubOscillator    subOscillator;
     TeeBeeFilter              filter;
     DiodeLadderFilter         diodeFilter;
+    dfl::MS20Filter           ms20Filter;
+    dfl::RolandFilter         junoFilter;
+    dfl::WaspFilter           waspFilter { dfl::WaspFilter::Revision::EDP };
+    dfl::WaspFilter           hornetFilter { dfl::WaspFilter::Revision::A124 };
+    dfl::ARP4075Filter        arpFilter;
+    dfl::SEMFilter            semNotchFilter;   // its MODE pot (LP -> notch -> HP)
     dfl::TB303OutputNetwork   outputNetwork;   // the diode models' output path, instead of allpass / highpass2 / notch
     AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
@@ -471,7 +496,7 @@ namespace rosic
     // Level per filter model, after the filter chain, so the models sit at equal loudness at resonance 0 (saw, mean
     // over C2 / C3 / C4 and cutoff 400 / 1000 / 2500 Hz, env mod 60; tools/diode-fidelity/model_level). Level matching
     // between models lives here rather than in the filters, which stay at their own (circuit) level.
-    static constexpr double FILTER_LEVEL[dfl::NUM_FILTER_TYPES] = { 1.0, 2.401 };   // TeeBee, Spicy (+7.6 dB)
+    static constexpr double FILTER_LEVEL[dfl::NUM_FILTER_TYPES] = { 1.0, 2.401, 1.661, 1.392, 1.112, 1.265, 1.099, 1.288 };   // TeeBee, Spicy (+7.6 dB), MissBehave (+4.4 dB), JuneBug (+2.9 dB), Wasabi (+0.9 dB), BitterSweet (+2.0 dB: LP at resonance 0), Hornet (+0.8 dB), Oddity (+2.2 dB)
     // The diode models' corner at the knob's end: the coupling pole C27/C25 into Q21 at 46 Hz, Q21 beta about 500 (the
     // 2SC1583's datasheet minimum). Higher betas make the network's ~7 Hz mode motorboat at high resonance (SPICE:
     // beta 800 at full pot), so the knob stops here. The pole is 578.1 rad/s x corner / 115.
@@ -484,6 +509,10 @@ namespace rosic
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
     int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width, 4=filter mode)
+    // Saturation Bias / Rail / drive as last set, for the MS-20, IR3109 and Wasp models (updateCircuitCharacter)
+    double circuitBias = 0.5, circuitRail = 1.0, circuitDriveDb = 0.0;
+    void updateCircuitCharacter();
+
     double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the LFO modulates it
     bool lfoEnabled = false;  // master LFO processing switch
 
@@ -579,6 +608,12 @@ namespace rosic
     }
 
     diodeFilter.setMode(modeBase + modeLfoAdd);   // LFO-modulated when destination 3
+    ms20Filter.setMode(modeBase + modeLfoAdd);
+    junoFilter.setMode(modeBase + modeLfoAdd);
+    waspFilter.setMode(modeBase + modeLfoAdd);
+    semNotchFilter.setMode(modeBase + modeLfoAdd);
+    hornetFilter.setMode(modeBase + modeLfoAdd);
+    arpFilter.setMode(modeBase + modeLfoAdd);
 
     // calculate instantaneous oscillator frequency and set up the oscillator. The portamento slew
     // runs in the log-frequency domain (glide log(freq), then exponentiate back to Hz) so the slide
@@ -624,6 +659,12 @@ namespace rosic
     double instCutoff = smoothedCutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);
     filter.setCutoff(instCutoff);
     diodeFilter.setCutoff(instCutoff);
+    ms20Filter.setCutoff(instCutoff);
+    junoFilter.setCutoff(instCutoff);
+    waspFilter.setCutoff(instCutoff);
+    semNotchFilter.setCutoff(instCutoff);
+    hornetFilter.setCutoff(instCutoff);
+    arpFilter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
@@ -643,6 +684,31 @@ namespace rosic
         tmp = highpass1.getSample(tmp);       // pre-filter highpass
         tmp = filter.getSample(tmp);
       }
+      else if(currentFilterType == dfl::FILTER_MS20)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the MS-20 couples its own output)
+        tmp = ms20Filter.getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_JUNO106)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the IR3109 couples its own output)
+        tmp = junoFilter.getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_WASP || currentFilterType == dfl::FILTER_WASP_A124)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the Wasp couples its own input and output)
+        tmp = (currentFilterType == dfl::FILTER_WASP ? waspFilter : hornetFilter).getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_SEM_NOTCH)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the SEM couples its own input)
+        tmp = semNotchFilter.getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_ARP4075)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the 4075 couples its own input and output)
+        tmp = arpFilter.getSample(tmp);
+      }
       else
       {
         tmp = diodeInputCoupling.getSample(tmp);
@@ -654,8 +720,10 @@ namespace rosic
 
     // these filters may actually operate without oversampling (but only if we reset them in
     // triggerNote - avoid clicks)
-    if(currentFilterType != dfl::FILTER_TEEBEE)
+    if(currentFilterType == dfl::FILTER_DIODE)
       tmp = outputNetwork.getSample(tmp);
+    else if(currentFilterType != dfl::FILTER_TEEBEE)
+      tmp = highpass2.getSample(tmp);         // MS-20 / IR3109 / Wasp / SEM / ARP: the post-filter highpass only (allpass / notch are the 303's)
     else
     {
       tmp  = allpass.getSample(tmp);

@@ -25,6 +25,11 @@ target_sources("${PROJECT_NAME}"
         dsp/open303/rosic_RealFunctions.cpp
         dsp/open303/rosic_TeeBeeFilter.cpp
         dsp/open303/dfl_DiodeLadderFilter.cpp
+        dsp/open303/dfl_MS20Filter.cpp
+        dsp/open303/dfl_RolandFilter.cpp
+        dsp/open303/dfl_WaspFilter.cpp
+        dsp/open303/dfl_SEMFilter.cpp
+        dsp/open303/dfl_ARP4075Filter.cpp
         dsp/open303/dfl_LFO.cpp
 
         gui/${GUI_THEME}/Gui.cpp

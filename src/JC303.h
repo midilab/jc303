@@ -41,6 +41,7 @@ enum Open303Parameters
   FILTER_TENSION,
   FILTER_BIAS,
   FILTER_RAIL,
+  FILTER_ARP_MOD,
   // LFO
   LFO_WAVEFORM,
   LFO_RATE,
@@ -263,6 +264,7 @@ private:
     std::atomic<float>* filterTension = nullptr;
     std::atomic<float>* filterBias = nullptr;
     std::atomic<float>* filterRail = nullptr;
+    std::atomic<float>* filterArpMod = nullptr;
     // generative sequencer
     std::atomic<float>* seqGenerativeFill = nullptr;
     std::atomic<float>* seqGenerativeAccentProbability = nullptr;
