@@ -128,7 +128,7 @@ void Open303::setSampleRate(double newSampleRate)
   ms20Filter.setSampleRate    (  oversampling*newSampleRate);
   junoFilter.setSampleRate    (  oversampling*newSampleRate);
   waspFilter.setSampleRate    (  oversampling*newSampleRate);
-  semNotchFilter.setSampleRate(  oversampling*newSampleRate);
+  semFilter.setSampleRate     (  oversampling*newSampleRate);
   hornetFilter.setSampleRate  (  oversampling*newSampleRate);
   arpFilter.setSampleRate     (  oversampling*newSampleRate);
   sampleRate = newSampleRate;
@@ -167,7 +167,7 @@ void Open303::setResonance(double newResonance)
   ms20Filter.setResonance(skewedPot(dfl::FILTER_MS20));
   junoFilter.setResonance(skewedPot(dfl::FILTER_JUNO106));
   waspFilter.setResonance(skewedPot(dfl::FILTER_WASP));   // the Wasp's RES pot is linear too
-  semNotchFilter.setResonance(skewedPot(dfl::FILTER_SEM_NOTCH));   // the SEM's too
+  semFilter.setResonance(skewedPot(dfl::FILTER_SEM));   // the SEM's too
   hornetFilter.setResonance(skewedPot(dfl::FILTER_WASP_A124));
   arpFilter.setResonance(skewedPot(dfl::FILTER_ARP4075));        // the Odyssey's R144 is linear
   outputNetwork.setPot(diodeFilter.getResonancePot());
@@ -187,7 +187,7 @@ void Open303::resetFilters()
   ms20Filter.reset();
   junoFilter.reset();
   waspFilter.reset();
-  semNotchFilter.reset();
+  semFilter.reset();
   hornetFilter.reset();
   arpFilter.reset();
   highpass1.reset();
@@ -209,7 +209,7 @@ void Open303::setFilterDrive(double newDriveDb)
   ms20Filter.setInputDrive(newDriveDb);
   junoFilter.setInputDrive(newDriveDb);
   waspFilter.setInputDrive(newDriveDb);
-  semNotchFilter.setInputDrive(newDriveDb);
+  semFilter.setInputDrive(newDriveDb);
   hornetFilter.setInputDrive(newDriveDb);
   arpFilter.setInputDrive(newDriveDb);
   circuitDriveDb = newDriveDb;
@@ -242,8 +242,8 @@ void Open303::updateCircuitCharacter()
   }
   arpFilter.setSaturationBias(bias);   // the limiter pair's offset
   arpFilter.setRail(circuitRail);      // the LM3900s' -14 V supply
-  semNotchFilter.setSaturationBias(bias);
-  semNotchFilter.setRail(circuitRail);
+  semFilter.setSaturationBias(bias);
+  semFilter.setRail(circuitRail);
 }
 
 void Open303::setPassbandCompensation(double newCompensation)

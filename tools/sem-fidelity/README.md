@@ -1,7 +1,7 @@
 # Oberheim SEM filter fidelity tools
 
 JUCE-free harnesses for the circuit-native Oberheim SEM filter (`src/dsp/open303/dfl_SEMFilter.*`, the plugin's
-"BitterSweet" model), plus an ngspice model of the circuit to check it against. Run them after any change to the filter.
+"SemiSweet" model), plus an ngspice model of the circuit to check it against. Run them after any change to the filter.
 
 ## Sources
 
@@ -39,10 +39,9 @@ of BP.
 Saturation Bias puts an input offset of up to 2 VT on OTA1 (its trim off null) with the resting current trimmed out:
 unequal current limits, even harmonics once the resonance drives it. Saturation Rail sags both supplies by up to 30 %.
 
-The morph is the SEM's own MODE pot (PS19, `setMode`: 0 LP, 0.5 notch, 1 HP), a crossfade from LP to HP with the
-circuit's gains, untrimmed (their passbands match), so halfway they cancel at the resonance: a 55-65 dB notch at any
-RES, the passband 6 dB down there, as on the SEM. BP is not an output; the tools read it at its node (C21's
-follower, `probe ... bp`, `render ... n2`).
+The morph is LP / BP / HP (`setMode`: 0 LP, 0.5 BP, 1 HP), mixing the three outputs (they share A12's inversion, so
+the crossfades have no notches); BP and HP are trimmed to sit near LP loudness on a saw. The SEM's own MODE pot (PS19,
+LP -> notch -> HP) is not modelled.
 
 ## Build
 
@@ -54,10 +53,10 @@ tools/sem-fidelity/build.sh      # into tools/sem-fidelity/build/ (git-ignored);
 
 | Tool | What it does |
 |---|---|
-| `build/probe <cutoff> <res\|pot:x> <mode\|lp\|bp\|hp> <f>...` | small-signal magnitude (dB) by sine probe, 4 x 44.1 kHz: the output at a MODE position, or a circuit node over the outputs' passband gain |
+| `build/probe <cutoff> <res\|pot:x> <mode\|lp\|bp\|hp> <f>...` | small-signal magnitude (dB) by sine probe, 4 x 44.1 kHz: the output at a mode position, or a circuit node over the outputs' passband gain |
 | `build/render <cutoff> <pot> <mode> <amp V> <freq> <secs> [kick V] [node] [bias rail]` | renders in circuit volts (float32 on stdout); node: out, n0..n8 (the circuit nodes, n8 = HP); `render dc` prints the DC operating point |
-| `build/levels [noteHz]` | saw output level per MODE position / pot / drive: the drive make-up was fitted with it |
-| `build/stress` | 400 cases (RES 0..1, MODE 0 / 0.25 / 0.5 / 0.75 / 1, drive -3..+24 dB, filter FM, bias 1, rail 0, 20 Hz..20 kHz cutoff sweeps, at Open303's fixed 4 x rate): finite, bounded, rings down; prints ns / sample. Exit 0 = pass |
+| `build/levels [noteHz]` | saw output level per mode / pot / drive: the BP / HP trims and the drive make-up were fitted with it |
+| `build/stress` | 400 cases (RES 0..1, mode 0 / 0.25 / 0.5 / 0.75 / 1, drive -3..+24 dB, filter FM, bias 1, rail 0, 20 Hz..20 kHz cutoff sweeps, at Open303's fixed 4 x rate): finite, bounded, rings down; prints ns / sample. Exit 0 = pass |
 | `spice/sem_vcf.py` | ngspice netlist generator (the same device equations) |
 | `spice/compare_ac.py` | DSP vs SPICE small-signal response, 5 cutoffs x 6 pot positions, LP / BP / HP (same Iabc, no fitting) |
 | `spice/tran_compare.py` | kick rings, distortion vs level (gain compression, THD, H2), Saturation Bias 1 and Rail 0 |

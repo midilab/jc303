@@ -58,10 +58,10 @@ int main(int argc, char** argv)
   check<R>("JuneBug",    dfl::FILTER_JUNO106,  [] { return std::make_unique<R>(); }, fc);
   // the Wasp's peak compresses early (0.25 V costs 7 dB at full RES), so it is probed smaller
   check<W>("Wasabi",     dfl::FILTER_WASP,     [] { return std::make_unique<W>(W::Revision::EDP); }, fc, false, 1e-3);
-  // the SEM rings but does not sustain; its D11 / D12 compress the peak from a few volts of BP, so probed small too
-  check<S>("BitterSweet", dfl::FILTER_SEM_NOTCH, [] { return std::make_unique<S>(); }, fc, false, 1e-3);
   // the A-124: higher resonance, oscillating at low cutoffs; its peak compresses like the EDP's
   check<W>("Hornet",     dfl::FILTER_WASP_A124, [] { return std::make_unique<W>(W::Revision::A124); }, fc, false, 1e-3, true);
+  // the SEM rings but does not sustain; its D11 / D12 compress the peak from a few volts of BP, so probed small too
+  check<S>("SemiSweet",  dfl::FILTER_SEM,       [] { return std::make_unique<S>(); }, fc, false, 1e-3);
   // the 4075's limiter compresses from ~10 mV at its input: probed small
   check<A>("Oddity",     dfl::FILTER_ARP4075,   [] { return std::make_unique<A>(); }, fc, true, 1e-3);
   // with the 2k2 tail mod (the same map: its law barely moves)

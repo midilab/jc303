@@ -1,5 +1,5 @@
-// Output level (RMS dB re a resonance-0 LP render at 0 dB drive) of the SEM filter on a band-limited saw, per MODE pot
-// position (0 LP, 0.5 notch, 1 HP), pot and drive: for the drive make-up and the morph's loudness.
+// Output level (RMS dB re a resonance-0 LP render at 0 dB drive) of the SEM filter on a band-limited saw, per mode
+// (0 LP, 0.5 BP, 1 HP), pot and drive: for the BP / HP output gains and the drive make-up.
 // usage: levels [noteHz=110]
 #include "dfl_SEMFilter.h"
 #include <cstdio>

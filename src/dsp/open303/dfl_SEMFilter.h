@@ -21,9 +21,8 @@
 // explicit function of its input (open-loop gain with soft rails). Checked against an ngspice model with the same
 // device equations (tools/sem-fidelity).
 //
-// The morph is the SEM's own MODE pot (PS19): LP -> notch -> HP, a crossfade between the LP and HP outputs, whose
-// passbands match, so halfway they cancel at the resonance; the circuit runs unchanged in every mode (BP stays inside,
-// a node for the fidelity tools). Saturation Bias offsets OTA1's input (its trim, T9), Saturation Rail sags the +-15 V
+// The LP / BP / HP morph mixes the three outputs (one sign, so the crossfades have no notches); the circuit runs
+// unchanged in every mode. Saturation Bias offsets OTA1's input (its trim, T9), Saturation Rail sags the +-15 V
 // supplies.
 
 // standard-library includes:
@@ -58,8 +57,7 @@ namespace dfl
     INLINE void setCutoff(double newCutoff, bool updateCoefficients = true);
     INLINE void setResonance(double newResonance, bool updateCoefficients = true);
     void setInputDrive(double newDrive);
-    /** The MODE pot (PS19), 0 = LP, 0.5 = notch, 1 = HP: crossfades the LP and HP outputs, untrimmed. Cheap, so it
-        may change per sample. */
+    /** Response mode, 0 = LP, 0.5 = BP, 1 = HP (mixes the outputs). Cheap, so it may change per sample. */
     void setMode(double newMode) { mode = std::clamp(newMode, 0.0, 1.0); }
 
     //---------------------------------------------------------------------------------------------
@@ -145,6 +143,10 @@ namespace dfl
     static constexpr double MAKEUP_EXP = 1.0;
     // The outputs' passband gain (LP and HP alike: R138 / R155 = R139 / R155), divided out to unity at 0 dB drive
     static constexpr double OUT_GAIN = INPUT_VOLTS * R139 / R155;
+    // BP / HP output trims (dB): the pure modes sit near LP loudness on a saw at a typical resonant setting (pot
+    // 0.5..0.8, cutoff 1 kHz, tools/sem-fidelity/levels), as the other circuit models'; large, as the SEM's damping
+    // at low RES is heavy (Q ~1/3)
+    static constexpr double BP_TRIM_DB = 9.0, HP_TRIM_DB = 8.8;
 
     //=============================================================================================
 
@@ -205,6 +207,7 @@ namespace dfl
     double off1 = 0.0, off1T = 0.0;                   // OTA1's input offset (2 VT units) and its tanh
     double gBN = 0.0, gNG = 0.0, gBG = 0.0;           // RES star eliminated: BP-C22 node, C22 node-ground, BP-ground
     double h15 = 0.0, gc18 = 0.0, gc20 = 0.0, gc21 = 0.0, gc22 = 0.0;
+    double gainLp = 1.0, gainBp = 1.0, gainHp = 1.0;
 
     // state: node voltages, A12's output, capacitor voltages and currents (trapezoidal)
     double v[NN] = {};
@@ -406,10 +409,11 @@ namespace dfl
 
     solve(in * driveFactor * INPUT_VOLTS, otaIabc(fc));
 
-    // PS19 between the LP and HP outputs (each through 1k into the pot: a plain crossfade), each re its rest voltage;
-    // the circuit gains, untrimmed, so the notch stays deep. The outputs share A12's inversion (the integrators do not
-    // invert): the mix is turned back upright
-    return -((1.0 - mode) * (v[4] - rest[0]) + mode * (hp - rest[2])) / OUT_GAIN / driveMakeup;
+    // the three outputs share A12's inversion (the integrators do not invert), so LP -> BP -> HP keep one sign; the
+    // output is turned back upright
+    const double lp = (v[4] - rest[0]) / gainLp, bp = (v[2] - rest[1]) / gainBp, hpo = (hp - rest[2]) / gainHp;
+    const double wl = std::max(0.0, 1.0 - 2.0 * mode), wh = std::max(0.0, 2.0 * mode - 1.0), wb = 1.0 - wl - wh;
+    return -(wl * lp + wb * bp + wh * hpo) / driveMakeup;
   }
 
 } // end namespace dfl

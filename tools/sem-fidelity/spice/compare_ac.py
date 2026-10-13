@@ -1,7 +1,7 @@
 """Small-signal comparison of the SEM DSP filter (build/probe) against the SPICE model.
 
 Same Iabc in both (sem_vcf.iabc_for; the DSP prewarps it for its trapezoidal integrators), no fitting. Levels are
-relative to the LP passband (fc / 20) at RES 0; LP (the output at MODE 0), BP / HP at their circuit nodes (probe bp / hp).
+relative to the LP passband (fc / 20) at RES 0; LP (the output at mode 0), BP / HP at their circuit nodes (probe bp / hp).
 
   python3 compare_ac.py      (run from this directory after ../build.sh)"""
 import sys, subprocess, numpy as np

@@ -18,7 +18,7 @@ static double rmsDb(dfl::FilterType ft, double cutoff, double res, int note)
 int main()
 {
   const int notes[3] = { 36, 48, 60 }; const double cuts[3] = { 400.0, 1000.0, 2500.0 };
-  const char* names[dfl::NUM_FILTER_TYPES] = { "TeeBee", "Spicy", "MissBehave", "JuneBug", "Wasabi", "BitterSweet", "Hornet", "Oddity" };
+  const char* names[dfl::NUM_FILTER_TYPES] = { "TeeBee", "Spicy", "MissBehave", "JuneBug", "Wasabi", "Hornet", "SemiSweet", "Oddity" };
   bool ok = true;
   for (int ft = dfl::FILTER_DIODE; ft < dfl::NUM_FILTER_TYPES; ++ft)
   {

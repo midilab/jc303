@@ -1,6 +1,6 @@
 # Resonance map
 
-Makes the resonance knob behave alike on the circuit-native models (MissBehave, JuneBug, Wasabi, BitterSweet, Hornet,
+Makes the resonance knob behave alike on the circuit-native models (MissBehave, JuneBug, Wasabi, Hornet, SemiSweet,
 Oddity): the same small-signal peak height above the passband at the same knob position, and self-oscillation from
 the same point. Each circuit's own pot law differs widely (raw onsets: Korg35 0.73, ARP 4075 0.84, Juno 0.89), so the
 knob reaches each pot through a per-model monotone map (`src/dsp/open303/dfl_ResonanceMap.h`, applied in
@@ -29,7 +29,7 @@ Hornet (the A-124) takes the same branch: no self-oscillation at 1 kHz (it oscil
 law; its own Q gives ~+2.5 dB at pot 0, so the knob's first sixth stays at the pot's start. Measured at 1e-3 too:
 `./build/measure 1000 1e-3 hornet`.
 
-The SEM (BitterSweet; the map measures LP, its MODE pot's start) does not self-oscillate either:
+The SEM (SemiSweet; the map measures LP) does not self-oscillate either:
 it rings at full RES (~+41 dB of small-signal peak at 1 kHz) and gives almost no peak over its pot's first 60 %; it
 is probed at 1e-3 (its D11 / D12 compress the peak from a few volts of BP).
 

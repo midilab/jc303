@@ -1,8 +1,8 @@
 // Small-signal magnitude (dB) of the SEM filter by sine probe, for comparison with the SPICE model.
 // usage: probe <cutoff Hz> <resonance 0..1 (skewed, as Open303 passes it)> <mode> <f1> [f2 ...]
 //   or:  probe <cutoff> pot:<pot 0..1> <mode> <f1> ...   (pot position directly)
-//   mode: the MODE pot 0..1 (0 LP, 0.5 notch, 1 HP: the filter's output), or lp / bp / hp: that circuit node re rest,
-//   over the outputs' passband gain (OUT_GAIN), so on the same scale as the output (BP is not an output)
+//   mode: 0..1 (0 LP, 0.5 BP, 1 HP: the filter's output), or lp / bp / hp: that circuit node re rest, over the
+//   outputs' passband gain (OUT_GAIN), untrimmed
 #include "dfl_SEMFilter.h"
 #include <cstdio>
 #include <cstdlib>

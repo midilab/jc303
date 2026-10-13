@@ -36,15 +36,15 @@ int main(int argc, char** argv)
   if (argc > 2) probeAmp = atof(argv[2]);
   using M = dfl::MS20Filter; using R = dfl::RolandFilter; using W = dfl::WaspFilter; using S = dfl::SEMFilter; using A = dfl::ARP4075Filter;
   const std::string only = argc > 3 ? argv[3] : "";
-  // the SEM: the map measures LP (its MODE pot's start)
+  // the SEM: the map measures LP
   if (only == "arp") { run<A>("Oddity", [] { return std::make_unique<A>(); }, fc); return 0; }
-  if (only == "sem") { run<S>("BitterSweet", [] { return std::make_unique<S>(); }, fc); return 0; }
+  if (only == "sem") { run<S>("SemiSweet", [] { return std::make_unique<S>(); }, fc); return 0; }
   if (only == "hornet") { run<W>("Hornet", [] { return std::make_unique<W>(W::Revision::A124); }, fc); return 0; }
   if (!only.empty()) { run<W>("Wasabi", [] { return std::make_unique<W>(W::Revision::EDP); }, fc); return 0; }
   run<M>("MissBehave", [] { return std::make_unique<M>(); }, fc);
   run<R>("JuneBug",    [] { return std::make_unique<R>(); }, fc);
   run<W>("Wasabi",     [] { return std::make_unique<W>(W::Revision::EDP); }, fc);
-  run<S>("BitterSweet", [] { return std::make_unique<S>(); }, fc);
   run<W>("Hornet",     [] { return std::make_unique<W>(W::Revision::A124); }, fc);
+  run<S>("SemiSweet",  [] { return std::make_unique<S>(); }, fc);
   run<A>("Oddity",     [] { return std::make_unique<A>(); }, fc);
 }

@@ -10,6 +10,11 @@ using namespace dfl;
 SEMFilter::SEMFilter()
 {
   setSampleRate(44100.0);
+  // passbands: HP and LP at R139 / R155 = R138 / R155 of the input; BP's peak at the RES-0 damping (Q ~1/3), lifted
+  // by the trim
+  gainLp = gainBp = gainHp = OUT_GAIN;
+  gainBp /= dB2amp(BP_TRIM_DB);
+  gainHp /= dB2amp(HP_TRIM_DB);
   updateSupply();
   updateBias();
   updatePot();

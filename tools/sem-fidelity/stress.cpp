@@ -1,5 +1,5 @@
 // Stress / stability / CPU test of the SEM filter. Exit code 0 when every case passes.
-//  * RES 0..1, the MODE pot (LP / notch / HP), drive -3..+24 dB, filter FM, saturation bias 0 / 1, rail 0 / 1, fast exponential cutoff
+//  * RES 0..1, every mode (LP / BP / HP), drive -3..+24 dB, filter FM, saturation bias 0 / 1, rail 0 / 1, fast exponential cutoff
 //    sweeps 20 Hz..20 kHz, saw input, at 4 x 44.1 kHz (Open303's fixed rate): no non-finite sample, peak below a
 //    bound, and after the input stops the output's ring (second difference, 1.6 s after) is below 1e-7
 //  * CPU: ns per sample at 4 x 44.1 kHz on a resonant saw

@@ -33,7 +33,7 @@ namespace dfl
                                                             { 0.0000, 0.2528, 0.3310, 0.4178, 0.5031, 0.6055, 0.6831, 0.7636, 0.8117, 0.8936, 1.0000 } };
   inline constexpr ResonanceMap RESONANCE_MAP_WASP     = { { 0.00, 0.15, 0.30, 0.45, 0.58, 0.70, 0.76, 0.82, 0.88, 0.94, 1.00 },
                                                             { 0.0000, 0.0119, 0.1355, 0.2954, 0.4746, 0.6934, 0.8326, 0.9391, 0.9594, 0.9797, 1.0000 } };
-  // the SEM (the map measures LP, its MODE pot's start): its damper gives almost no peak over the pot's first 60 %
+  // the SEM (the map measures LP): its damper gives almost no peak over the pot's first 60 %
   inline constexpr ResonanceMap RESONANCE_MAP_SEM      = { { 0.00, 0.15, 0.30, 0.45, 0.58, 0.70, 0.76, 0.82, 0.88, 0.94, 1.00 },
                                                             { 0.0000, 0.5962, 0.7018, 0.7893, 0.8529, 0.9090, 0.9413, 0.9680, 0.9786, 0.9893, 1.0000 } };
 
@@ -78,7 +78,7 @@ namespace dfl
       case FILTER_WASP:     return evalResonanceMap(RESONANCE_MAP_WASP, knob);
       case FILTER_WASP_A124: return evalResonanceMap(RESONANCE_MAP_WASP_A124, knob);
       case FILTER_ARP4075:  return evalResonanceMap(RESONANCE_MAP_ARP4075, knob);
-      case FILTER_SEM_NOTCH: return evalResonanceMap(RESONANCE_MAP_SEM, knob);
+      case FILTER_SEM:      return evalResonanceMap(RESONANCE_MAP_SEM, knob);
       default:              return std::clamp(knob, 0.0, 1.0);
     }
   }
