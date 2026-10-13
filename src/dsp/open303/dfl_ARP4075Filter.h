@@ -88,7 +88,10 @@ namespace dfl
 
     /** Saturation bias, 0..1: the limiter pair gets an input offset of 2 VT b with its resting output current trimmed
         out, i = I (tanh(u + b) - tanh b) / (1 - tanh^2 b): the same slope at rest, unequal current limits (even
-        harmonics once it is driven). 0 = the circuit. */
+        harmonics once it is driven). 0 = the circuit. Driven, it rectifies: its mean current follows the level (an
+        output DC that moves with each note's envelope, and, through C6, a limiter offset that settles over ~1 s).
+        Intended: Open303's 24 Hz output highpass leaves it as an even-order sub-40 Hz part 29..36 dB under the
+        signal on a gated sequence (a 2..3 % pulse over a note's first ~20 ms), as the Wasp's and MS-20's bias. */
     void setSaturationBias(double b) { satBias_ = std::clamp(b, 0.0, 1.0); satBiasT = std::tanh(satBias_); }
     double getSaturationBias() const { return satBias_; }
 

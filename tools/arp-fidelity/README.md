@@ -62,6 +62,15 @@ The stages' swing shrinks with their signals, and Q14's headroom with the refere
 -18.1 dB at pot 0.75, compression within 0.06 dB at rail 0. Open303 ramps the bias in with Saturation, as on the
 other models.
 
+The driven, biased limiter rectifies: its mean current follows the level, so the output carries a DC that moves with
+each note's envelope (sine at +16 dB, bias 1, knob 0.3, cutoff 2 kHz: -0.06 at 200 Hz, -0.23 at 1.5 kHz, re ~0.6
+peak), and C6 (1 s into the RES pot) passes its steps back to the limiter as an offset that settles over a second.
+This is kept as the circuit's own coupling. In Open303, after its 24 Hz output highpass, a gated 303 sequence
+(130 BPM sixteenths with accents, +16 dB, bias 1, cutoff 300..1500 Hz, RES 0..80 %) carries it as an even-order
+sub-40 Hz part 29..36 dB under the signal (separated by rendering with the oscillator's polarity flipped), a 2..3 %
+pulse over a note's first ~20 ms and nothing slower (-36..-44 dB below 8 Hz): no thump or swell, on a par with the
+Wasp's (-30..-31 dB) and MS-20's (-34..-37 dB) bias.
+
 The LP / BP / HP morph mixes the stage outputs (BP = -(y2 - 2 y3 + y4), HP = u - 4 y1 + 6 y2 - 4 y3 + y4, u the
 stage-1 equivalent input), signed so the crossfades have no notches. The Odyssey's own HPF (a passive one-pole after
 the VCF) is not modelled.
