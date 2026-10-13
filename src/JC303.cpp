@@ -63,6 +63,17 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.03f),
+            std::make_unique<juce::AudioParameterFloat> ("accentSweep",
+                                                        "Accent Sweep",
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.0f,   // 0 = stock 303
+                                                        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                            [] (float v, int) -> juce::String
+                                                            {
+                                                                const double ms = accentSweepMs (v);
+                                                                return ms < 1000.0 ? juce::String (juce::roundToInt (ms)) + " ms"
+                                                                                   : juce::String (ms / 1000.0, 2) + " s";
+                                                            })),
             std::make_unique<juce::AudioParameterFloat> ("feedbackFilter",
                                                         "Filt. FeedBack",
                                                         0.0f,
@@ -250,6 +261,7 @@ JC303::JC303()
     switchModState = parameters.getRawParameterValue("switchModState");
     normalDecay = parameters.getRawParameterValue("normalDecay");
     accentDecay = parameters.getRawParameterValue("accentDecay");
+    accentSweep = parameters.getRawParameterValue("accentSweep");
     feedbackFilter = parameters.getRawParameterValue("feedbackFilter");
     softAttack = parameters.getRawParameterValue("softAttack");
     slideTime = parameters.getRawParameterValue("slideTime");
@@ -325,6 +337,7 @@ JC303::JC303()
     parameters.addParameterListener("volume", this);
     parameters.addParameterListener("normalDecay", this);
     parameters.addParameterListener("accentDecay", this);
+    parameters.addParameterListener("accentSweep", this);
     parameters.addParameterListener("feedbackFilter", this);
     parameters.addParameterListener("softAttack", this);
     parameters.addParameterListener("slideTime", this);
@@ -394,6 +407,7 @@ JC303::~JC303()
     parameters.removeParameterListener("volume", this);
     parameters.removeParameterListener("normalDecay", this);
     parameters.removeParameterListener("accentDecay", this);
+    parameters.removeParameterListener("accentSweep", this);
     parameters.removeParameterListener("feedbackFilter", this);
     parameters.removeParameterListener("softAttack", this);
     parameters.removeParameterListener("slideTime", this);
@@ -465,6 +479,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     }
     else if (parameterID == "accentDecay" && *switchModState) {
         setParameter(ACCENT_DECAY, newValue);
+    }
+    else if (parameterID == "accentSweep" && *switchModState) {
+        setParameter(ACCENT_SWEEP, newValue);
     }
     else if (parameterID == "feedbackFilter" && *switchModState) {
         setParameter(FEEDBACK_HPF, newValue);
@@ -698,6 +715,10 @@ void JC303::setParameter (Open303Parameters index, float value)
             linToLin(value, 0.0, 1.0, 30.0,      3000.0)
         );
         break;
+    case ACCENT_SWEEP:
+        // accent capacitor time constant: 15 ms is the stock 303, slower builds up over consecutive accents
+        open303Core.setAccentSweep(accentSweepMs(value));
+        break;
     case FEEDBACK_HPF:
         open303Core.setFeedbackHighpass(
             linToExp(value, 0.0, 1.0,  350.0,    100.0)
@@ -780,6 +801,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(DECAY, *decay);
         setParameter(NORMAL_DECAY, *normalDecay);
         setParameter(ACCENT_DECAY, *accentDecay);
+        setParameter(ACCENT_SWEEP, *accentSweep);
         setParameter(FEEDBACK_HPF, *feedbackFilter);
         setParameter(SOFT_ATTACK, *softAttack);
         setParameter(SLIDE_TIME, *slideTime);
@@ -809,6 +831,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(DECAY, *decay);   // main DECAY knob re-maps into the core range right away
         open303Core.setAmpDecay(1230.0);
         open303Core.setAccentDecay(200.0);
+        open303Core.setAccentSweep(15.0);
         open303Core.setFeedbackHighpass(150.0);
         open303Core.setNormalAttack(3.0);
         open303Core.setSlideTime(60.0);

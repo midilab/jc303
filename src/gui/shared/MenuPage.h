@@ -41,6 +41,7 @@ public:
         juce::StringArray options;  // select type only
         float step = 0.0f;          // value type only; 0 = auto (0.01 for 0..1 floats, 1 for ints/bools)
         juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
+        bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
     };
 
     struct Page
@@ -356,6 +357,9 @@ private:
         if (! item.valueNames.isEmpty())
             if (auto* p = intParam(item.id))
                 return item.valueNames[juce::jlimit(0, item.valueNames.size() - 1, p->get())];
+        if (item.showParamText)
+            if (auto* p = valueTreeState.getParameter(item.id))
+                return p->getCurrentValueAsText();
         return valueString(valueTreeState.getParameter(item.id));
     }
 
@@ -514,16 +518,16 @@ public:
         Page mod; mod.title = "Modifications";
         static const juce::Identifier modItemIDs[] =
         {
-            "normalDecay", "accentDecay", "feedbackFilter",
-            "softAttack", "slideTime",
-            "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination",
+            "normalDecay", "accentDecay", "accentSweep", "feedbackFilter",
+            "softAttack", "slideTime", "lfoRate", 
+            "lfoDepth", "lfoWaveform", "lfoDestination",
             "lfoPhase", "lfoSync"
         };
         static const juce::String modItemLabels[] =
         {
-            "Normal decay", "Accent decay", "Filter Feedback",
-            "Soft attack", "Slide time",
-            "LFO rate", "LFO depth", "LFO wave", "LFO dest",
+            "Normal decay", "Accent decay", "Accent sweep", "Filter Feedback",
+            "Soft attack", "Slide time", "LFO rate", 
+            "LFO depth", "LFO wave", "LFO dest",
             "LFO phase", "LFO key sync"
         };
 
@@ -536,13 +540,17 @@ public:
         mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f });
         mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f });
 
-        static constexpr uint8_t numModItems = 11;
+        static constexpr uint8_t numModItems = 13;
         for (uint8_t i = 0; i < numModItems; ++i)
             mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
 
         for (auto& it : mod.items)
+        {
             if (it.id == "lfoWaveform" || it.id == "lfoDestination")
                 it.step = 1.0f;   // Choice params step one index at a time
+            if (it.id == "accentSweep")
+                it.showParamText = true;   // shows the time constant
+        }
 
         pages.add(mod);
 
