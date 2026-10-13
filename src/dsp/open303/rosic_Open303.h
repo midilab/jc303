@@ -3,7 +3,7 @@
 
 #include <climits>
 #include "rosic_MidiNoteEvent.h"
-#include "rosic_BlendOscillator.h"
+#include "dfl_BlendOscillator.h"
 #include "dfl_DualSubOscillator.h"
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
@@ -33,6 +33,13 @@ namespace rosic
     FILTER_DIODE_BP,        // Diode ladder, bandpass response (12/12 dB/oct)
     FILTER_DIODE_HP,        // Diode ladder, highpass response (24 dB/oct)
     NUM_FILTER_TYPES
+  };
+
+  enum SquareModel
+  {
+    SQUARE_OPEN303 = 0,     // Open303's pre-rendered wavetable square (fixed duty, tanh edge drive)
+    SQUARE_CIRCUIT,         // pitch-tracked pulse width and waveshaper sag, from a model of the TB-303 circuit
+    NUM_SQUARE_MODELS
   };
 
   /**
@@ -126,13 +133,34 @@ namespace rosic
     and 100% of the full volume. In the normal 303, this parameter was fixed to zero. */
     void setAmpSustain(double newAmpSustain) { ampEnv.setSustainInDecibels(newAmpSustain); }
 
-    /** Sets the drive (in dB) for the tanh-shaper for 303-square waveform - internal parameter, to
-    be scrapped eventually. */
+    /** Sets the drive (in dB) for the tanh-shaper that forms the 303-square waveform (the Open303 square
+    model; the circuit model's pulse is fully saturated at any drive). */
     void setTanhShaperDrive(double newDrive)
     { waveTable2.setTanhShaperDriveFor303Square(newDrive); }
 
-    /** Sets the offset (as raw value for the tanh-shaper for 303-square waveform - internal
-    parameter, to be scrapped eventually. */
+    /** Switches the TB-303 waveshaper envelope on the square (slow rise in the bottom octaves, sloped top, level
+    change with pitch; see dfl::BlendOscillator::ENV_TABLE). Off by default; the pitch-tracked pulse width applies
+    either way. */
+    void setCircuitPulseShape(bool on) { oscillator.setCircuitPulseShape(on); }
+
+    /** Selects the square: Open303's wavetable (the default) or the circuit model. */
+    void setSquareModel(SquareModel newModel) { oscillator.setClassicSquare(newModel == SQUARE_OPEN303); }
+
+    /** Scales the waveshaper envelope: 0 = flat top, 1 = the circuit (default), 2 = exaggerated. */
+    void setPulseSag(double newSag) { oscillator.setPulseSag(newSag); }
+
+    /** Maps a 0..1 square-drive knob to the pulse sag, in the TeeBee drive's direction (up = cleaner square):
+    2 at 0, linear to the circuit (1) at the default 0.25, then ((1-k)/0.75)^1.5 to flat at 1. The power spreads
+    the spectral change evenly; most of it happens between a slight sag and flat. */
+    static double sagForSquareDrive(double knob)
+    {
+      if( knob <= 0.25 )
+        return 2.0 - 4.0*knob;
+      const double u = (1.0 - knob) / 0.75;
+      return u*std::sqrt(u);
+    }
+
+    /** Sets the offset (raw value) for the tanh-shaper that forms the 303-square waveform. */
     void setTanhShaperOffset(double newOffset)
     { waveTable2.setTanhShaperOffsetFor303Square(newOffset); }
 
@@ -308,7 +336,7 @@ namespace rosic
     // embedded objects:
 
     MipMappedWaveTable        waveTable1, waveTable2, waveTable3;
-    BlendOscillator           oscillator;
+    dfl::BlendOscillator      oscillator;
     dfl::DualSubOscillator    subOscillator;
     TeeBeeFilter              filter;
     DiodeLadderFilter         diodeFilter;
@@ -388,7 +416,7 @@ namespace rosic
     double lfoDepth;    // LFO depth (0.0 to 1.0)
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
-    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch)
+    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width)
     bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;
@@ -444,6 +472,7 @@ namespace rosic
     double lfoFilterMod = 0.0;
     double volumeModFactor = 1.0;
     double pitchModFactor = 1.0;
+    double pwmDepth = 0.0, pwmLfo = 0.0;
 
     if (lfoEnabled && lfoDepth > 0.0)
     {
@@ -460,9 +489,16 @@ namespace rosic
             volumeModFactor = 1.0 - lfoDepth + (lfoValue * lfoDepth);
             break;
         case 2:
+        {
             // Apply LFO pitch modulation (in semitones, converted to frequency multiplier, +/- 12 semitones max)
             double semitones = lfoValue * lfoDepth * 12.0;
             pitchModFactor = pow(2.0, semitones / 12.0);
+            break;
+        }
+        case 3:
+            // Pulse width (circuit square only), unipolar towards narrow; applied with the pitch-tracked width below
+            pwmDepth = lfoDepth;
+            pwmLfo   = 0.5 * (lfoValue + 1.0);
             break;
       }
     }
@@ -474,6 +510,24 @@ namespace rosic
     oscillator.calculateIncrement();
     subOscillator.setFrequency(instFreq*pitchWheelFactor);
     subOscillator.calculateIncrement();
+
+    // TB-303 pulse width tracks pitch: the square comes from the saw through the Q8 waveshaper, whose
+    // RC-coupled bias makes the duty depend on frequency: 58% at C1, 50% near 65 Hz, 41.7% at C4, 36% at C5.
+    // Cubic fit in octaves above C1 to an ngspice model of the stage (service-manual values), within
+    // 1.1 points from 10 Hz to 2 kHz; it agrees with ~50% at 85 Hz measured on a real unit. The input is
+    // clamped to that range so the cubic cannot run away under pitch bend or LFO.
+    {
+      double x  = clip(log2(instFreq*pitchWheelFactor / 32.703), -1.71, 5.93);   // octaves above C1, 10 Hz..2 kHz
+      double pw = clip(58.164 + x*(-7.543 + x*(0.812 - x*0.071)), 25.0, 75.0);
+      // PWM, unipolar towards narrow: depth first pulls centers above 50% down to 50% (a width and its complement
+      // sound alike, so sweeping through 50% would fold the motion over), then the LFO sweeps towards 10%
+      if( pwmDepth > 0.0 )
+      {
+        const double centre = pw - pwmDepth*std::max(pw - 50.0, 0.0);
+        pw = clip(centre - pwmDepth*pwmLfo*(centre - 10.0), 10.0, 75.0);
+      }
+      oscillator.setPulseWidth(pw);
+    }
 
     // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
     // set up the filter:

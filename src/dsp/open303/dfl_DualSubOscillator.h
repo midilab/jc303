@@ -12,7 +12,8 @@ namespace dfl
   - -2 octaves (0.25x frequency) with 25% pulse width
   - -1 octave  (0.5x frequency) with 50% pulse width (square)
   Blend morphs between both octave and timbre. Pulses are made by subtracting two phase-shifted
-  band-limited saws from a mip-mapped wavetable, then shaped with the 303-style tanh stage.
+  band-limited saws from a mip-mapped wavetable: a flat-topped, band-limited pulse (like the hard digital
+  divider sub of an SH-101).
   */
 
   class DualSubOscillator
@@ -76,7 +77,9 @@ namespace dfl
         phaseB -= tableLength;
       double sawB = getSaw(phaseB, tableNumber);
 
-      return -std::tanh(tanhDrive * (sawB - sawA) + tanhOffset) * 0.5;
+      // the saw table is linear, so sawB - sawA is a band-limited step between 2*pw - 2 (inside the wrapped
+      // segment) and 2*pw; map it to +/-0.5 directly. A tanh on it would clip the step's ripple and alias.
+      return 0.5 - 0.5*(sawB - sawA - (2.0*pulseWidth - 2.0));
     }
 
     double getSaw(double phase, int tableNumber)
@@ -88,8 +91,6 @@ namespace dfl
     static constexpr double tableLength = 2048.0;  // MipMappedWaveTable::tableLength
     static constexpr double pulseWidth1 = 0.25;
     static constexpr double pulseWidth2 = 0.5;
-    static constexpr double tanhDrive   = 69.98;   // 36.9 dB, 303-style
-    static constexpr double tanhOffset  = 4.37;
 
     double phaseIndex1   = 0.0;
     double phaseIndex2   = 0.0;
