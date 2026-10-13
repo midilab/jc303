@@ -62,6 +62,8 @@ namespace dfl
     double getResonance() const { return resonance; }
     double getDrive() const { return drive; }
     double getMode() const { return mode; }
+    /** The last sample's Newton solve converged. */
+    bool isConverged() const { return converged; }
 
     //---------------------------------------------------------------------------------------------
     // audio processing:
@@ -183,6 +185,10 @@ namespace dfl
         Vd / R + Ia (exp(u) - 1) - Ib (exp(-u) - 1) = i,  u = vd / (n VT). */
     INLINE void solveLimiter(double i, double R, double nVt, double& vd, double& dvdi) const;
 
+    /** SPICE's junction voltage limiting for the limiter diodes: the voltage vNew a Newton step proposes, from vOld, held
+        to a logarithmic advance past the critical voltage vCrit (where the diode's current outgrows its linearisation). */
+    static INLINE double pnjlim(double vNew, double vOld, double nVt, double vCrit);
+
     /** Follower with a bias-starved level shift (warmth), normalised to unity small-signal gain. A follower's level
         shift grows as the square root of its current, and a load resistor ties the current to the output: in units of
         the swing xs that cuts the bias off, u = z - lambda (sqrt(1 + u) - 1), solved exactly. Monotonic; the negative
@@ -219,6 +225,7 @@ namespace dfl
     double gCd = 0.0, vCd = 0.0, iCd = 0.0;   // diode capacitance across R117
     double vIp = 0.0, opPrev = 0.0;           // op amp internal node and A0 (v+ - v-) - vI, previous sample
     double vZ0 = 0.0;                // Z at the operating point (the buffer's rest point)
+    bool converged = true;
 
     // Korg35 cutoff table: control voltage vs log corner
     static constexpr int CT_N = 96;
@@ -279,6 +286,20 @@ namespace dfl
     dvdi = 1.0 / (1.0 / R + (diodeIa * ep + diodeIb / ep) / nVt);
   }
 
+  INLINE double MS20Filter::pnjlim(double vNew, double vOld, double nVt, double vCrit)
+  {
+    // antiparallel pair: the negative side mirrored
+    const double sg = vNew < 0.0 ? -1.0 : 1.0;
+    const double vn = sg * vNew, vo = sg * vOld;
+    if (vn <= vCrit || std::fabs(vn - vo) <= 2.0 * nVt) return vNew;
+    if (vo > 0.0)
+    {
+      const double arg = 1.0 + (vn - vo) / nVt;
+      return sg * (arg > 0.0 ? vo + nVt * std::log(arg) : vCrit);
+    }
+    return sg * nVt * std::log(vn / nVt);
+  }
+
   INLINE double MS20Filter::buffer(double x, double xs, double& dydx) const
   {
     if (warmth_ <= 0.0) { dydx = 1.0; return x; }
@@ -331,7 +352,9 @@ namespace dfl
     const double gR = 1.0 / (R116 + h31);
 
     double vth = 0.0, ic29 = 0.0, iR = 0.0, vP = 0.0;
-    for (int it = 0; it < 16; ++it)
+    const double vCritA = nVtD * std::log(nVtD / (std::sqrt(2.0) * diodeIa)), vCritB = nVtD * std::log(nVtD / (std::sqrt(2.0) * diodeIb));
+    converged = false;
+    for (int it = 0; it < 32; ++it)
     {
       // JFET follower into the op amp's + input
       double dbuf;
@@ -401,11 +424,21 @@ namespace dfl
 
       double dx[6];
       solveLinear<6>(Jm, F, dx);
-      // step limiting (junctions, and the diodes across R117)
+      // step limiting. The limiter diodes (SPICE's pnjlim): a step that carries their voltage O - N far into
+      // conduction is shortened, along the Newton direction, to the voltage of the current the linearised diode
+      // predicts (else Newton walks back down the exponential by n VT per iteration). Then the junction nodes by 0.1 V
+      // and the op amp's nodes N / I by 2 V, so they cross the diodes' gap and reach the rails in a few steps.
+      const double dvd = dO * dx[5] - dx[4];
+      const double vdNew = pnjlim(vd + dvd, vd, nVtD, vd + dvd > 0.0 ? vCritA : vCritB);
+      if (dvd != 0.0) { const double sc = std::clamp((vdNew - vd) / dvd, 0.0, 1.0); for (double& d : dx) d *= sc; }
       double mx = 0.0;
-      for (int k = 0; k < 6; ++k) { dx[k] = std::clamp(dx[k], -0.1, 0.1); mx = std::max(mx, std::fabs(dx[k])); }
+      for (int k = 0; k < 6; ++k)
+      {
+        const double lim = k < 4 ? 0.1 : 2.0;
+        dx[k] = std::clamp(dx[k], -lim, lim); mx = std::max(mx, std::fabs(dx[k]));
+      }
       vA += dx[0]; vBn += dx[1]; vY += dx[2]; vZ += dx[3]; vN += dx[4]; vI += dx[5];
-      if (mx < 1e-9) break;
+      if (mx < 1e-9) { converged = true; break; }
     }
 
     // capacitor and op amp histories

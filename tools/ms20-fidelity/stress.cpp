@@ -2,13 +2,17 @@
 //  * every knob at its extremes (the saturation bias 0 / 1), PEAK 0..1, fast exponential cutoff sweeps 20 Hz..20 kHz, saw input with drive,
 //    at 4 x and 1 x 44.1 kHz: no non-finite sample, peak below a bound, and after the input stops at PEAK below the
 //    oscillation threshold the output's ring (second difference, 1.6 s after) is below 1e-7
+//  * Newton lock-up at the op amp's rails: BP, knob 0.95, drive +16 dB, saturation bias 0.5, full-scale saw, a 3 Hz
+//    cutoff sweep and fixed 6 / 10 kHz cutoffs: peak below 4 (normal 1.5..2.2) and under 1 % of samples non-converged
 //  * CPU: ns per sample at 4 x 44.1 kHz on a resonant saw
 #include "dfl_MS20Filter.h"
+#include "dfl_ResonanceMap.h"
 #include <cstdio>
 #include <cmath>
 #include <chrono>
 using F = dfl::MS20Filter;
 static int fails = 0, cases = 0;
+static long gridNonConv = 0, gridSamples = 0;   // Newton solves that did not converge over the knob grid
 static double gBias = 0.0;   // saturation bias for the current pass
 static void run(double sr, double pot, double mode, double drive, double sharp, double warm,
                 double clip, double bite, double fm)
@@ -25,6 +29,8 @@ static void run(double sr, double pot, double mode, double drive, double sharp, 
     double y = f.getSample(x);
     if (!std::isfinite(y)) { peak = INFINITY; break; }
     peak = std::max(peak, std::fabs(y));
+    if (!f.isConverged()) ++gridNonConv;
+    ++gridSamples;
     // ring: second difference (removes the coupling capacitors' slow DC drift, as the circuit has)
     const double d = y - yPrev; if (n > N - (long)(0.05 * sr)) tail = std::max(tail, std::fabs(d - dPrev)); dPrev = d; yPrev = y;
   }
@@ -41,8 +47,36 @@ static void run(double sr, double pot, double mode, double drive, double sharp, 
            sr, pot, mode, drive, sharp, warm, clip, bite, fm, gBias, peak, tail);
   }
 }
+// sweepHz > 0: 20 Hz..20 kHz exponential sweep at that rate, else a fixed cutoff
+static void lockup(double sr, double sweepHz, double cut)
+{
+  F f; f.setSampleRate(sr); f.setCutoff(cut);
+  f.setResonance((1.0 - exp(-3.0 * dfl::resonancePot(dfl::FILTER_MS20, 0.95))) / 0.950213);
+  f.setMode(0.5); f.setInputDrive(16.0); f.setSaturationBias(0.5); f.setClipThreshold(0.5); f.reset();
+  const long N = (long)(1.0 * sr); double ph = 0.0, peak = 0.0; long nc = 0;
+  for (long n = 0; n < N; ++n)
+  {
+    if (sweepHz > 0.0) f.setCutoff(20.0 * pow(1000.0, 0.5 + 0.5 * sin(2 * M_PI * sweepHz * n / sr)));
+    double x = 2.0 * ph - 1.0; ph += 110.0 / sr; if (ph >= 1.0) ph -= 1.0;
+    double y = f.getSample(x);
+    if (!std::isfinite(y)) { peak = INFINITY; break; }
+    peak = std::max(peak, std::fabs(y));
+    if (!f.isConverged()) ++nc;
+  }
+  ++cases;
+  const bool ok = std::isfinite(peak) && peak < 4.0 && nc < N / 100;
+  if (!ok) ++fails;
+  printf("%s lock-up sr %.0f %s %.0f: peak %.2f, non-converged %ld of %ld\n", ok ? "ok  " : "FAIL", sr,
+         sweepHz > 0.0 ? "sweep Hz" : "cutoff", sweepHz > 0.0 ? sweepHz : cut, peak, nc, N);
+}
 int main()
 {
+  for (double sr : { 4 * 44100.0, 44100.0 })
+  {
+    lockup(sr, 3.0, 1000.0);
+    lockup(sr, 0.0, 6000.0);
+    lockup(sr, 0.0, 10000.0);
+  }
   for (double bias : { 0.0, 1.0 })
     for (double sr : { 4 * 44100.0, 44100.0 })
       for (double pot : { 0.0, 0.6, 1.0 })
@@ -55,7 +89,7 @@ int main()
                   gBias = bias;
                   run(sr, pot, mode, drive, sharp, warm, clip, clip, drive > 0 ? 1.0 : 0.0);
                 }
-  printf("%d of %d cases failed\n", fails, cases);
+  printf("%d of %d cases failed; non-converged samples over the grid: %ld of %ld\n", fails, cases, gridNonConv, gridSamples);
   {
     F f; f.setSampleRate(4 * 44100.0); f.setCutoff(800); f.setResonance(0.8); f.reset();
     const long N = 4 * 44100 * 2; double ph = 0.0, acc = 0.0;

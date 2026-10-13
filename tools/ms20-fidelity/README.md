@@ -23,7 +23,7 @@ tools/ms20-fidelity/build.sh      # into tools/ms20-fidelity/build/ (git-ignored
 | `build/probe <cutoff> <res\|pot:x> <mode> <f>...` | small-signal magnitude (dB) by sine probe, 4 x 44.1 kHz |
 | `build/render <cutoff> <pot> <mode> <amp V> <freq> <secs> [kick V] [bias] [clip]` | renders in circuit volts (float32 on stdout) for SPICE comparisons |
 | `build/levels [noteHz]` | saw output level per mode / pot / drive: the BP / HP trims and the drive make-up were fitted with it |
-| `build/stress` | 1152 cases (every knob at its extremes, drive -3..+16 dB, 20 Hz..20 kHz cutoff sweeps, 4 x and 1 x rate): finite, bounded, rings down below the oscillation threshold; prints ns / sample. Exit 0 = pass |
+| `build/stress` | 1152 grid cases (every knob at its extremes, drive -3..+16 dB, 20 Hz..20 kHz cutoff sweeps, 4 x and 1 x rate): finite, bounded, rings down below the oscillation threshold; plus 6 Newton lock-up cases (BP, knob 0.95, +16 dB, bias 0.5: sweep and 6 / 10 kHz): peak < 4, < 1 % non-converged; prints the grid's non-converged count and ns / sample. Exit 0 = pass |
 | `spice/ms20_k35.py` | ngspice netlist generator (the header lists the unverified guesses) |
 | `spice/compare_ac.py` | DSP vs SPICE small-signal response, 4 cutoffs x pot positions, at SPICE's own natural frequency (no fitting) |
 | `spice/tran_compare.py` | self-oscillation (onset, frequency, amplitude, asymmetry) and distortion vs level |
@@ -39,7 +39,7 @@ Needs ngspice (`brew install ngspice`) and numpy for the `spice/` scripts; run t
 - Self-oscillation: onset near pot 0.73, amplitude within ~2 %, the negative half swinging harder as in the circuit;
   frequency exact at 470 Hz, 1 % high at 2 kHz, 4.5 % high at 8 kHz.
 - Modes (`mode_compare`): BP / HP shapes within ~0.7 dB.
-- Stress: 0 of 1152 failures; ~450-470 ns / sample at 4 x 44.1 kHz (~8 % of one core).
+- Stress: 0 of 1158 failures, 8437 of 254 M grid samples non-converged; ~450-470 ns / sample at 4 x 44.1 kHz (~8 % of one core).
 
 ## Notes
 
