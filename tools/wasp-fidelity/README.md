@@ -27,8 +27,18 @@ any change to the filter.
 Unverified guesses: the device models are the paper's fits at +12 V (a CD4069 and CA3080 of theirs), used unchanged
 at +5 V (the CA3080's rail knees placed the same distance from the rails); the CMOS protection diodes as ideal
 1e-14 A junctions; the level pot at full (no source resistance); ideal OTA Iabc (the exponential converter is not
-modelled); the output coupling C6 into 100k. The input level (1 V peak at R1 for a full-scale signal) is a guess
-for the Wasp's logic-level oscillators through its mixer.
+modelled); the output coupling C6 into 100k. The input level (volts at R1 for a full-scale signal at 0 dB
+drive) is per revision:
+
+- EDP 0.46 V: a 5 V p-p CMOS logic square (+-2.5 V after the input capacitor) through the input network of the EDP
+  Gnat, the Wasp's sibling (same designer, oscillators and filter topology): 180k into a 33k summing node, x 0.18
+  (T. Stinchcombe's Gnat schematics, sheets 6 and 8, https://www.timstinchcombe.co.uk/index.php?pge=gnat). The Wasp's
+  own mixer is not documented; this is the closest drawn circuit. 0.01 % THD at 200 Hz in the passband, the dirt
+  from ~1 V (+7 dB drive) up.
+- A-124 5 V: Eurorack audio is 10 V p-p (+-5 V, Doepfer's A-100 technical notes), through the Level pot (50k) into
+  C1 / R1 (DAFx 2022, Hin); the model has no Level pot, so it is fully up. That is ~3 % THD at 200 Hz in the
+  passband on +12 V (~15 % at 1.5 kHz near a 5 kHz cutoff): Doepfer's manual says to turn Level down if the output
+  distorts. A lower Level setting is a lower Filter Saturation.
 
 ## Behaviour and character controls
 
@@ -78,10 +88,10 @@ Needs ngspice (`brew install ngspice`) and numpy for the `spice/` scripts; run t
   amplitude and 0.1 Hz.
 - Stress: 0 of 960 failures; ~250 ns / sample (EDP) and ~300 ns / sample (A-124) at 4 x 44.1 kHz (about 2 Newton
   iterations per sample with the predictor; the solve eliminates four nodes in closed form, then a 4 x 4).
-- Convergence: the solve is a damped Newton (the step scaled to at most 0.5 V per node, Armijo backtracking on the
-  KCL residual, the predictor kept inside the rails, a restart from the last sample at iteration 25 when that is the
-  better point). Undamped, it cycled between two points near the OTA / inverter rail knees above ~3 kHz at +12 dB and
-  more (fixed cutoffs too): 540549 of 10.6 M sweep samples (5 %) missed the tolerance; now 14, all at 1 x 44.1 kHz,
-  none at 4 x. A +16 dB sweep costs ~315 ns / sample (was ~545). Where the old solve converged the output is
-  unchanged to below -145 dB (the A-124 at full RES on the edge of oscillation aside, which a 1e-12 input change
-  already moves by -50 dB).
+- Convergence: the solve is a damped Newton (the step scaled to at most 0.2 of the supply per node, Armijo
+  backtracking on the KCL residual, the predictor kept inside the rails, a restart from the last sample at iteration
+  30 when that is the better point; up to 50 iterations). Undamped, it cycled between two points near the OTA /
+  inverter rail knees above ~3 kHz at +12 dB and more (fixed cutoffs too): 540549 of 10.6 M sweep samples (5 %)
+  missed the tolerance; now 16 (at the input levels above), all at 1 x 44.1 kHz, none at 4 x. A +16 dB sweep costs
+  ~315 ns / sample (was ~545). Where the old solve converged the output is unchanged to below -145 dB (the A-124 at
+  full RES on the edge of oscillation aside, which a 1e-12 input change already moves by -50 dB).

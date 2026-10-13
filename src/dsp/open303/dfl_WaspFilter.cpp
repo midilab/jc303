@@ -55,7 +55,8 @@ void WaspFilter::setRevision(Revision newRevision)
   k1 = R6 * gd1;
   k2 = R10 * gd2;
   // passbands: LP and HP at R2 / R1 = R3 / R1 of the input, BP's peak at the RES-0 Q (~1)
-  gainLp = gainBp = gainHp = INPUT_VOLTS * R3 / R1;
+  inputVolts = INPUT_VOLTS[r];
+  gainLp = gainBp = gainHp = inputVolts * R3 / R1;
   gainBp /= dB2amp(BP_TRIM_DB[r]);
   gainHp /= dB2amp(HP_TRIM_DB[r]);
 

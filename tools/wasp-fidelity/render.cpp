@@ -43,7 +43,7 @@ int main(int argc, char** argv)
   {
     double t = n / SR;
     double v = amp * sin(2 * M_PI * fr * t) + ((t >= 1e-3 && t < 1.1e-3) ? kick : 0.0);
-    double o = f.getSample(v / F::INPUT_VOLTS) * outScale;
+    double o = f.getSample(v / f.getInputVolts()) * outScale;
     if (node[0] == 'n' && node[1] >= '0' && node[1] <= '7') o = f.getNode(node[1] - '0');
     float y = (float)o;
     fwrite(&y, sizeof(float), 1, stdout);

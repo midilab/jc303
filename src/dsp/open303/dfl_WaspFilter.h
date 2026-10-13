@@ -118,6 +118,8 @@ namespace dfl
     double getSupply() const { return vdd; }
     /** OTA bias current for a cutoff (amps). */
     double getIabc(double fc) const { return otaIabc(fc); }
+    /** Volts at R1 for a full-scale input at 0 dB drive. */
+    double getInputVolts() const { return inputVolts; }
     /** Whether the last sample's Newton solve converged (for the fidelity tools). */
     bool isConverged() const { return converged; }
 
@@ -157,23 +159,30 @@ namespace dfl
     // D1 / D2 (1N4148, fitted in the paper)
     static constexpr double D_IS = 2.52e-9, D_N = 1.752;
 
-    // Newton: iterations per sample, the restart from the last sample, the line search (sufficient decrease, halvings,
-    // the squared residual (A^2) below which any step is taken)
-    static constexpr int MAX_IT = 40, RESTART_IT = 25, LS_HALVINGS = 6;
-    static constexpr double LS_ALPHA = 1e-4, LS_FLOOR = 1e-24;
+    // Newton: iterations per sample, the restart from the last sample, the largest node step (a fraction of the supply),
+    // the line search (sufficient decrease, halvings, the squared residual (A^2) below which any step is taken)
+    static constexpr int MAX_IT = 50, RESTART_IT = 30, LS_HALVINGS = 6;
+    static constexpr double MAX_STEP = 0.2, LS_ALPHA = 1e-4, LS_FLOOR = 1e-24;
 
     // Character ranges
     static constexpr double BIAS_SHIFT = 0.15, RAIL_SAG = 0.3;
 
-    // Input level: volts at R1 for a full-scale (+-1) signal at 0 dB drive (a guess: the Wasp's 5 V logic oscillators
-    // through its mixer; the passband shows ~0.25 % THD there, clipping from ~2 V). The output is divided by
-    // driveFactor^MAKEUP_EXP (per revision): LP within ~+-2.5 dB from 0 to +16 dB at RES 0 (tools/wasp-fidelity/levels;
-    // the A-124 clips later, so it needs more).
-    static constexpr double INPUT_VOLTS = 1.0;
-    static constexpr double MAKEUP_EXP[2] = { 0.85, 0.95 };
+    // Input level: volts at R1 for a full-scale (+-1) signal at 0 dB drive, per revision (the model has R1 as the
+    // circuit's input; R3 / R1 = 1, so these are also the volts of the equivalent unity-gain input):
+    //  * EDP: the oscillators are 5 V CMOS logic; a full square is 5 V p-p, +-2.5 V after the input capacitor. The EDP
+    //    Gnat (same designer, oscillators and filter topology; T. Stinchcombe's schematics, sheets 6 and 8) feeds it
+    //    through 180k into the 33k summing node, x 0.18, so +-0.46 V at a unity-gain input. Clean (0.01 % THD in the
+    //    passband), the dirt from ~1 V (+7 dB drive) up.
+    //  * A-124: Eurorack audio is 10 V p-p (+-5 V, Doepfer's A-100 technical notes), into the Level pot (50k) and C1 / R1
+    //    (DAFx 2022, Hin); at full Level (the model has no pot) that is +-5 V at R1, ~3 % THD in the passband on its
+    //    +12 V rail: Doepfer's manual says to turn Level down if the output distorts.
+    // The output is divided by driveFactor^MAKEUP_EXP (per revision): LP within ~+-2.5 dB from 0 to +16 dB at RES 0
+    // (tools/wasp-fidelity/levels).
+    static constexpr double INPUT_VOLTS[2] = { 0.46, 5.0 };
+    static constexpr double MAKEUP_EXP[2] = { 0.92, 0.40 };
     // BP / HP output trims (dB, per revision): the pure modes sit near LP loudness on a saw at a typical resonant
     // setting (pot 0.5..0.8, cutoff 1 kHz, tools/wasp-fidelity/levels), as the MS-20's and IR3109's
-    static constexpr double BP_TRIM_DB[2] = { 6.2, 5.3 }, HP_TRIM_DB[2] = { 6.9, 6.4 };
+    static constexpr double BP_TRIM_DB[2] = { 6.2, 4.0 }, HP_TRIM_DB[2] = { 6.9, 6.7 };
 
     //=============================================================================================
 
@@ -224,7 +233,8 @@ namespace dfl
     double k1 = 0.0, k2 = 0.0, gd1 = 0.0, gd2 = 0.0;    // OTA input divider gains, loads
     double gAB = 0.0, gAS = 0.0, gBS = 0.0;             // RES star eliminated: BP-C7 node, BP-IC1 in, C7 node-IC1 in
     double h1 = 0.0, gc2 = 0.0, gc3 = 0.0, gc4 = 0.0, gc7 = 0.0;
-    double gainLp = INPUT_VOLTS, gainBp = INPUT_VOLTS, gainHp = INPUT_VOLTS;
+    double inputVolts = INPUT_VOLTS[0];
+    double gainLp = 1.0, gainBp = 1.0, gainHp = 1.0;
 
     // state: node voltages, capacitor voltages and currents (trapezoidal)
     double v[NN] = {};
@@ -455,7 +465,7 @@ namespace dfl
     // LS_HALVINGS times. Undamped, the iteration cycles between two points near the OTA and inverter rail knees at high
     // drive. If it has not converged by RESTART_IT and the last sample is the better point, it starts again from there.
     const int maxIt = dcSolve ? 200 : MAX_IT;
-    const double maxStep = dcSolve ? 0.2 : 0.5, tol = dcSolve ? 1e-10 : 1e-6;
+    const double maxStep = dcSolve ? 0.2 : MAX_STEP * vdd, tol = dcSolve ? 1e-10 : 1e-6;
     double F[NN], J[NN][NN], Ft[NN], Jt[NN][NN], vt[NN];
     double f2 = residual(v, F, J);
     auto accept = [&](const double (&x)[NN], double x2)
@@ -519,7 +529,7 @@ namespace dfl
       fc *= std::clamp(1.0 + filterFmDepth_ * filterFmScale_ * (in - acCouplingState_), 0.5, 1.5);
     }
 
-    solve(in * driveFactor * INPUT_VOLTS, otaIabc(fc));
+    solve(in * driveFactor * inputVolts, otaIabc(fc));
 
     // the three outputs share IC1's inversion (each integrator's OTA divider inverts again), so LP -> BP -> HP keep one
     // sign; the output is turned back upright
