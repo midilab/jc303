@@ -686,27 +686,27 @@ namespace rosic
       }
       else if(currentFilterType == dfl::FILTER_MS20)
       {
-        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the MS-20 couples its own output)
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
         tmp = ms20Filter.getSample(tmp);
       }
       else if(currentFilterType == dfl::FILTER_JUNO106)
       {
-        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the IR3109 couples its own output)
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
         tmp = junoFilter.getSample(tmp);
       }
       else if(currentFilterType == dfl::FILTER_WASP || currentFilterType == dfl::FILTER_WASP_A124)
       {
-        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the Wasp couples its own input and output)
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
         tmp = (currentFilterType == dfl::FILTER_WASP ? waspFilter : hornetFilter).getSample(tmp);
       }
       else if(currentFilterType == dfl::FILTER_SEM)
       {
-        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the SEM couples its own input)
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
         tmp = semFilter.getSample(tmp);
       }
       else if(currentFilterType == dfl::FILTER_ARP4075)
       {
-        tmp = highpass1.getSample(tmp);       // pre-filter highpass (the 4075 couples its own input and output)
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
         tmp = arpFilter.getSample(tmp);
       }
       else
