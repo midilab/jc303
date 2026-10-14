@@ -239,6 +239,7 @@ public:
         _tickCounter  = 0;
         _sampleAccum  = 0.0;
         _lastHostTick = -1;
+        _pitchPlayhead = -1;
         _running      = true;
     }
 
@@ -246,6 +247,7 @@ public:
     {
         if (! _running) return;
         _running = false;
+        _pitchPlayhead = -1;
         clearStackInternal (true);
     }
 
@@ -430,6 +432,11 @@ public:
         _data.pitchLength = static_cast<uint8_t>(juce::jmin<int> (length, SEQ303_STEP_MAX));
     }
     uint8_t getPitchLength() const { return _data.pitchLength; }
+
+    /** Pitch playhead: the step whose stored pitch the last started note
+     *  used (differs from the step position with Pitch Rotate / Pitch
+     *  Length).  Holds through ties and rests; -1 while stopped. */
+    int getPitchPlayhead() const { return _pitchPlayhead.load (std::memory_order_relaxed); }
 
     /** setTune / getTune
      *  0   = harmonizer off (raw MIDI note)
@@ -995,8 +1002,10 @@ private:
             gateLength = std::max (1, gateLength + shufflePulses);
 
         // ── Note resolution ───────────────────────────────────────────────────
-        uint8_t note = (_data.pitchRotate != 0 || _data.pitchLength != 0)
-                           ? resolvePitch (stepTick, stepLen) : cur.note;
+        const int pitchStep = (_data.pitchRotate != 0 || _data.pitchLength != 0)
+                                  ? resolvePitchStep (stepTick, stepLen) : stepPos;
+        _pitchPlayhead.store (pitchStep, std::memory_order_relaxed);
+        uint8_t note = _data.step[pitchStep].note;
         if (_data.tune > 0)
             note = _harmonizer.harmonize (note) + static_cast<uint8_t>(_data.tune - 1);
 
@@ -1055,24 +1064,25 @@ private:
     // ── Utility ──────────────────────────────────────────────────────────────
     // =========================================================================
 
-    /** Pitch for the note step played at clock step `stepTick`.  The pitch
-     *  list is the note steps' pitches in the active length.  Pitch Rotate
-     *  offsets into it; with Pitch Length N the note steps cycle through the
-     *  first N pitches, counted from the play position across loops. */
-    uint8_t resolvePitch (uint32_t stepTick, uint8_t stepLen) const
+    /** Step whose pitch the note step at clock step `stepTick` plays.  The
+     *  pitch list is the note steps in the active length, in order.  Pitch
+     *  Rotate offsets into it; with Pitch Length N the note steps cycle
+     *  through the first N entries, counted from the play position across
+     *  loops. */
+    int resolvePitchStep (uint32_t stepTick, uint8_t stepLen) const
     {
         const uint64_t shifted = static_cast<uint64_t>(stepTick)
                                  + static_cast<uint64_t>(static_cast<int64_t>(_data.shift)
                                                          + static_cast<int64_t>(stepLen) * 1024);
         const uint8_t  stepPos = static_cast<uint8_t>(shifted % stepLen);
 
-        uint8_t notes[SEQ303_STEP_MAX];
+        uint8_t noteSteps[SEQ303_STEP_MAX];
         int n = 0, k = 0;
         for (uint8_t i = 0; i < stepLen; ++i)
         {
             if (_data.step[i].rest) continue;
             if (i == stepPos) k = n;
-            notes[n++] = _data.step[i].note;
+            noteSteps[n++] = i;
         }
 
         int64_t index = k;
@@ -1083,7 +1093,7 @@ private:
             index = static_cast<int64_t>(shifted / stepLen - 1024) * n + k;
         }
         const int64_t idx = ((index + _data.pitchRotate) % len + len) % len;
-        return notes[idx];
+        return noteSteps[idx];
     }
 
     inline void emit (const Acid303Event& ev) const
@@ -1364,6 +1374,8 @@ private:
     std::array<Steps, kUndoDepth> _redo {};
     std::atomic<int>       _undoCount { 0 };
     std::atomic<int>       _redoCount { 0 };
+
+    std::atomic<int>       _pitchPlayhead { -1 }; // step whose pitch the last note used (display)
 
     std::atomic<bool>      _cpuTiming  { false };
     std::atomic<int>       _swingTicks { 0 };

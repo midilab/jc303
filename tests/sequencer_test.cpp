@@ -506,6 +506,28 @@ static void testUndoHistoryIsBounded()
     CHECK (n == AcidSequencer303::kUndoDepth);
 }
 
+static void testPitchPlayhead()
+{
+    Rig r;
+    setSevenNotes (r);                               // note steps 0,1,2,4,5,6,7
+    r.seq.setPitchLength (5);
+    CHECK (r.seq.getPitchPlayhead() == -1);          // stopped
+    r.seq.start();
+    r.run (12 * kStep + kStep / 2);                  // second pass, step 4 = 4th note
+    CHECK (r.seq.getCurrentStep() == 4);
+    CHECK (r.seq.getPitchPlayhead() == 0);           // note index 7 + 3 = 10 -> pitch entry 0 -> step 0
+
+    r.run (kStep);                                   // step 5 = 5th note: index 11 -> entry 1 -> step 1
+    CHECK (r.seq.getPitchPlayhead() == 1);
+
+    r.seq.setPitchLength (0);
+    r.run (kStep);                                   // off: pitch playhead follows the step
+    CHECK (r.seq.getPitchPlayhead() == r.seq.getCurrentStep());
+
+    r.seq.stop();
+    CHECK (r.seq.getPitchPlayhead() == -1);
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -603,6 +625,7 @@ int main()
     testPitchLengthCyclesAcrossBars();
     testPitchLengthOffAndRotate();
     testPitchLengthFollowsHostPosition();
+    testPitchPlayhead();
     testUndoRedoPattern();
     testUndoHistoryIsBounded();
     testStopReleasesNote();

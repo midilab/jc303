@@ -415,7 +415,12 @@ void JC303Editor::timerCallback()
         // LED indicates the active pattern length + the selected step (blinking);
         // note/rest and the per-step flags are shown by the buttons below/above. The
         // playing current step is state 2 (overrides the blink).
-        const int ledState = isCurrent ? 2 : ((isSelected && blinkOn) || (!isSelected && i < length) ? 1 : 0);
+        // Two playheads: red = the step playing, amber = the step whose pitch is sounding
+        // (Pitch Rotate / Pitch Length move it). Red wins when they coincide.
+        const bool isPitchPlayhead = playing && i == seq.getPitchPlayhead();
+        const int ledState = isCurrent ? 2
+                           : isPitchPlayhead ? SequencerStepSelector::kPitchPlayhead
+                           : ((isSelected && blinkOn) || (!isSelected && i < length) ? 1 : 0);
         stepSelectors[i]->setState(ledState);
 
         // note step button: ON == note active, rest == OFF
