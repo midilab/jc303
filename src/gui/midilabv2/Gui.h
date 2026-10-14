@@ -111,6 +111,7 @@ private:
     // sequencer step toggles (note/rest editing), per-step accent and slide/tie toggles,
     // and click-to-select display LEDs
     SwitchButton* seqStepButtons[16];
+    juce::Label* seqStepNoteLabels[16];   // stored pitch name overlaid on each step button
     SequencerStepSelector* seqAccentButtons[16];
     SequencerStepSelector* seqSlideButtons[16];
     SequencerStepSelector* stepSelectors[16];

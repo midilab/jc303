@@ -138,6 +138,24 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         addAndMakeVisible(stepSelectors[i] = new SequencerStepSelector());
     }
 
+    // pitch name (C2, F#6, ...) overlaid on each step button, in the display's pixel font
+    {
+        juce::Font noteFont(juce::Typeface::createSystemTypefaceFor(BinaryData::PressStart2PRegular_ttf,
+                                                                    BinaryData::PressStart2PRegular_ttfSize));
+        noteFont.setHeight(9.0f);
+        for (int i = 0; i < 16; ++i)
+        {
+            auto* lbl = new juce::Label();
+            seqStepNoteLabels[i] = lbl;
+            addAndMakeVisible(lbl);
+            lbl->setFont(noteFont);
+            lbl->setJustificationType(juce::Justification::centred);
+            lbl->setMinimumHorizontalScale(0.7f);
+            lbl->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+            lbl->setInterceptsMouseClicks(false, false);
+        }
+    }
+
     // per-step accent and slide/tie micro toggles (small sequencer-button art),
     // one stacked column below each note button, in that order (top to bottom)
     for (int i = 0; i < 16; ++i)
@@ -404,6 +422,15 @@ void JC303Editor::timerCallback()
         const bool noteOn = (i < length) && seq.stepOn(i);
         if (seqStepButtons[i]->getToggleState() != noteOn)
             seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
+
+        // stored pitch name: black on a lit note step, dim on a rest (what it plays if switched on);
+        // middle C (60) = C4, so 36 = C2
+        const auto noteName = juce::MidiMessage::getMidiNoteName(seq.getRawNote(i), true, true, 4);
+        const auto noteColour = noteOn ? juce::Colours::black : juce::Colour(0xff7a7a7a);
+        if (seqStepNoteLabels[i]->getText() != noteName)
+            seqStepNoteLabels[i]->setText(noteName, juce::dontSendNotification);
+        if (seqStepNoteLabels[i]->findColour(juce::Label::textColourId) != noteColour)
+            seqStepNoteLabels[i]->setColour(juce::Label::textColourId, noteColour);
 
         // per-step accent and slide/tie toggles: ON == flag active (steps beyond the
         // active pattern length show OFF, but stay editable). The shared toggle shows
@@ -766,6 +793,7 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
     {
         const int stepX = switchStepX0 + i * (switchStepWidth + switchStepGap);
         seqStepButtons[i]->setBounds(stepX, stepToggleY, switchStepWidth, switchStepHeight);
+        seqStepNoteLabels[i]->setBounds(stepX, stepToggleY, switchStepWidth, switchStepHeight);
         stepSelectors[i]->setBounds(stepX + (switchStepWidth - ledWidth) / 2, ledY, ledWidth, ledHeight);
         seqAccentButtons[i]->setBounds(stepX, accentButtonY, switchStepWidth, microButtonHeight);
         seqSlideButtons[i]->setBounds(stepX, slideButtonY, switchStepWidth, microButtonHeight);
