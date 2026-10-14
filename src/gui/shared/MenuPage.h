@@ -580,6 +580,11 @@ public:
             Item rotate { "seqPitchRotate", "Pitch Rot", Type::value, {}, 1.0f };
             rotate.wrap = true;
             seq.items.add(rotate);
+            Item pitchLen { "seqPitchLength", "Pitch Len", Type::value, {}, 1.0f };
+            pitchLen.valueNames.add("Off");
+            for (int i = 1; i <= 16; ++i)
+                pitchLen.valueNames.add(juce::String(i));
+            seq.items.add(pitchLen);
         }
         seq.items.add(Item { "seqSwing", "Swing", Type::value, {}, 1.0f });
         {

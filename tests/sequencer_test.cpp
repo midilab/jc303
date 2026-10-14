@@ -397,6 +397,60 @@ static void testRerollRhythmKeepsPitchOrder()
     }
 }
 
+// ---- pitch length (polymeter) ------------------------------------------------
+
+static void setSevenNotes (Rig& r)                   // 7 note steps in 8, pitches 40..46, step 3 rests
+{
+    const int at[] = { 0, 1, 2, 4, 5, 6, 7 };
+    for (int k = 0; k < 7; ++k) r.step (at[k], 40 + k);
+    r.seq.setTrackLength (8);
+}
+
+static void testPitchLengthCyclesAcrossBars()
+{
+    Rig r;
+    setSevenNotes (r);
+    r.seq.setPitchLength (5);
+    r.seq.start();
+    r.run (3 * 8 * kStep);
+    const auto n = playedNotes (r);
+    CHECK (n.size() >= 21);
+    for (size_t i = 0; i < 21 && i < n.size(); ++i)
+        CHECK (n[i] == 40 + static_cast<int> (i % 5));   // 5-pitch loop over 7 note steps, carried across bars
+}
+
+static void testPitchLengthOffAndRotate()
+{
+    Rig off, rot;
+    for (Rig* r : { &off, &rot }) setSevenNotes (*r);
+    rot.seq.setPitchLength (5);
+    rot.seq.setPitchRotate (2);
+    for (Rig* r : { &off, &rot }) { r->seq.start(); r->run (2 * 8 * kStep); }
+    const auto a = playedNotes (off), b = playedNotes (rot);
+    for (size_t i = 0; i < 14 && i < a.size(); ++i)
+        CHECK (a[i] == 40 + static_cast<int> (i % 7));  // off: each step plays its own pitch
+    for (size_t i = 0; i < 14 && i < b.size(); ++i)
+        CHECK (b[i] == 40 + static_cast<int> ((i + 2) % 5));
+}
+
+static void testPitchLengthFollowsHostPosition()
+{
+    Rig r;
+    setSevenNotes (r);
+    r.seq.setPitchLength (5);
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::Host);
+    juce::MidiBuffer empty;
+    r.seq.processBlock (empty, 512, true, 0.0, 120.0);   // enter Host mode while playing
+    r.evs.clear();
+    // jump to bar 3 (8-step pattern = 2 quarters; step 24 = start of the 4th loop)
+    const double ppq = 24.0 / 4.0;
+    r.seq.processBlock (empty, 512, true, ppq, 120.0);
+    const auto n = playedNotes (r);
+    CHECK (n.size() >= 1);
+    if (! n.empty())
+        CHECK (n[0] == 40 + (3 * 7) % 5);            // 3 loops x 7 notes = note index 21
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -491,6 +545,9 @@ int main()
     testSwingTieEndsInItsStep();
     testRerollPitchesKeepsRhythm();
     testRerollRhythmKeepsPitchOrder();
+    testPitchLengthCyclesAcrossBars();
+    testPitchLengthOffAndRotate();
+    testPitchLengthFollowsHostPosition();
     testStopReleasesNote();
     testTempoClamp();
     testRandomizeFillAndFlags();

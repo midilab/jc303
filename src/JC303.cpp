@@ -245,6 +245,11 @@ JC303::JC303()
                                                         0,
                                                         15,
                                                         0),
+            std::make_unique<juce::AudioParameterInt> ("seqPitchLength",
+                                                        "Seq Pitch Length",
+                                                        0,
+                                                        16,
+                                                        0),
             std::make_unique<juce::AudioParameterChoice> ("seqSwing",
                                                         "Seq Swing",
                                                         juce::StringArray{ "50%", "54%", "58%", "62%", "66%", "71%", "75%" },
@@ -325,6 +330,7 @@ JC303::JC303()
     seqShift = parameters.getRawParameterValue("seqShift");
     seqPitchRotate = parameters.getRawParameterValue("seqPitchRotate");
     seqSwing = parameters.getRawParameterValue("seqSwing");
+    seqPitchLength = parameters.getRawParameterValue("seqPitchLength");
     seqGenerate = parameters.getRawParameterValue("seqGenerate");
     seqClear = parameters.getRawParameterValue("seqClear");
     subOscGain = parameters.getRawParameterValue("subOscGain");
@@ -1045,6 +1051,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     if (_sequencer.getTranspose() != transpose)     _sequencer.setTranspose (transpose);
     if (_sequencer.getShiftPos() != shift)          _sequencer.setShiftPos (shift);
     if (_sequencer.getPitchRotate() != rotate)      _sequencer.setPitchRotate (rotate);
+    const auto pitchLen  = static_cast<uint8_t>(std::lround (seqPitchLength->load()));
+    if (_sequencer.getPitchLength() != pitchLen)    _sequencer.setPitchLength (pitchLen);
 
     // Swing signatures as in aciduino: off-beat 16ths late by 0, 2 ... 12 ticks
     _sequencer.setSwingTicks (2 * static_cast<int>(std::lround (seqSwing->load())));

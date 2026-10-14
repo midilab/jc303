@@ -88,6 +88,7 @@ struct TrackData303
     int8_t      transpose  { 0 };
     uint8_t     tune       { 0 };  // 0=off; 1+N = harmonize + N semitone offset
     int8_t      pitchRotate { 0 }; // note steps play the pitch N note steps later
+    uint8_t     pitchLength { 0 }; // 0 = off; N = loop the first N pitches across bars
 };
 
 // =============================================================================
@@ -143,6 +144,7 @@ public:
             _data.transpose  = 0;
             _data.tune       = 0;
             _data.pitchRotate = 0;
+            _data.pitchLength = 0;
             clearStepDataInternal (/*fillWithRests=*/false);
         }
         _stepLocation = 0;
@@ -417,6 +419,16 @@ public:
         _data.pitchRotate = rotate;
     }
     int8_t getPitchRotate() const { return _data.pitchRotate; }
+
+    /** setPitchLength / getPitchLength — 0 = off; N = the note steps cycle
+     *  through the first N pitches, carried across bars (polymeter).  The
+     *  pitch is derived from the play position, so host seeks stay in phase. */
+    void    setPitchLength (uint8_t length)
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        _data.pitchLength = static_cast<uint8_t>(juce::jmin<int> (length, SEQ303_STEP_MAX));
+    }
+    uint8_t getPitchLength() const { return _data.pitchLength; }
 
     /** setTune / getTune
      *  0   = harmonizer off (raw MIDI note)
@@ -960,7 +972,8 @@ private:
             gateLength = std::max (1, gateLength + shufflePulses);
 
         // ── Note resolution ───────────────────────────────────────────────────
-        uint8_t note = _data.pitchRotate != 0 ? rotatedPitch (stepPos, stepLen) : cur.note;
+        uint8_t note = (_data.pitchRotate != 0 || _data.pitchLength != 0)
+                           ? resolvePitch (stepTick, stepLen) : cur.note;
         if (_data.tune > 0)
             note = _harmonizer.harmonize (note) + static_cast<uint8_t>(_data.tune - 1);
 
@@ -1019,9 +1032,17 @@ private:
     // ── Utility ──────────────────────────────────────────────────────────────
     // =========================================================================
 
-    /** Pitch of the note step `pitchRotate` note steps after `stepPos`. */
-    uint8_t rotatedPitch (uint8_t stepPos, uint8_t stepLen) const
+    /** Pitch for the note step played at clock step `stepTick`.  The pitch
+     *  list is the note steps' pitches in the active length.  Pitch Rotate
+     *  offsets into it; with Pitch Length N the note steps cycle through the
+     *  first N pitches, counted from the play position across loops. */
+    uint8_t resolvePitch (uint32_t stepTick, uint8_t stepLen) const
     {
+        const uint64_t shifted = static_cast<uint64_t>(stepTick)
+                                 + static_cast<uint64_t>(static_cast<int64_t>(_data.shift)
+                                                         + static_cast<int64_t>(stepLen) * 1024);
+        const uint8_t  stepPos = static_cast<uint8_t>(shifted % stepLen);
+
         uint8_t notes[SEQ303_STEP_MAX];
         int n = 0, k = 0;
         for (uint8_t i = 0; i < stepLen; ++i)
@@ -1030,7 +1051,15 @@ private:
             if (i == stepPos) k = n;
             notes[n++] = _data.step[i].note;
         }
-        const int idx = ((k + _data.pitchRotate) % n + n) % n;
+
+        int64_t index = k;
+        int     len   = n;
+        if (_data.pitchLength != 0)
+        {
+            len   = juce::jmin<int> (_data.pitchLength, n);
+            index = static_cast<int64_t>(shifted / stepLen - 1024) * n + k;
+        }
+        const int64_t idx = ((index + _data.pitchRotate) % len + len) % len;
         return notes[idx];
     }
 
