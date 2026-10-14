@@ -424,8 +424,8 @@ void JC303Editor::timerCallback()
             seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
 
         // stored pitch name: black on a lit note step, dim on a rest (what it plays if switched on);
-        // middle C (60) = C4, so 36 = C2
-        const auto noteName = juce::MidiMessage::getMidiNoteName(seq.getRawNote(i), true, true, 4);
+        // octave = note / 12 (middle C = C5), matching the keyboard and aciduino
+        const auto noteName = juce::MidiMessage::getMidiNoteName(seq.getRawNote(i), true, true, 5);
         const auto noteColour = noteOn ? juce::Colours::black : juce::Colour(0xff7a7a7a);
         if (seqStepNoteLabels[i]->getText() != noteName)
             seqStepNoteLabels[i]->setText(noteName, juce::dontSendNotification);
