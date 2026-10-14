@@ -597,26 +597,8 @@ public:
                         uint8_t lowerNote,
                         uint8_t rangeNote)
     {
-        // Build the chromatic-quantisation correction table (mirrors fix_tones[])
-        int8_t fixTones[12] = {};
-        if (numberOfTones > 0)
-        {
-            const int8_t fixMod = static_cast<int8_t>(12 / numberOfTones);
-            int8_t fixCounter   = 0;
-            for (uint8_t i = 0; i < 12; ++i)
-            {
-                if ((i % fixMod) == 0 || i == 0)
-                {
-                    fixTones[i] = 0;
-                    fixCounter  = 0;
-                }
-                else
-                {
-                    --fixCounter;
-                    fixTones[i] = fixCounter;
-                }
-            }
-        }
+        int8_t fixTones[12];
+        makeFixTones (numberOfTones, fixTones);
 
         // Clear the track: mutes, sends NoteOff for any held note (fires
         // onAllNotesOff), clears all steps, then unmutes.
@@ -624,52 +606,56 @@ public:
 
         {
             juce::SpinLock::ScopedLockType lk (_dataLock);
-
             for (int i = 0; i < SEQ303_STEP_MAX; ++i)
-            {
-                const bool isOn = (randPercent() < fill);
-                _data.step[i].rest = ! isOn;
-
-                if (! isOn)
-                {
-                    // REST step
-                    _data.step[i].accent = false;
-                    _data.step[i].slide  = false;
-                    _data.step[i].tie    = false;
-
-                    // Tie: only probable when previous step had a note or a tie
-                    const int lastIdx = (i == 0) ? SEQ303_STEP_MAX - 1 : i - 1;
-                    if (! _data.step[lastIdx].rest || _data.step[lastIdx].tie)
-                        _data.step[i].tie = (randPercent() < tieProbability);
-
-                    continue;
-                }
-
-                // ON step — pick a note
-                const uint8_t highNote = static_cast<uint8_t>(
-                    juce::jlimit (0, 127, static_cast<int>(lowerNote) + rangeNote));
-
-                const uint8_t noteRange = (highNote > lowerNote)
-                                            ? static_cast<uint8_t>(highNote - lowerNote)
-                                            : 1;
-
-                uint8_t note = static_cast<uint8_t>(
-                    lowerNote + (randPercent() % noteRange));
-
-                if (numberOfTones > 0)
-                {
-                    const int fixed = static_cast<int>(note) + fixTones[note % 12];
-                    note = static_cast<uint8_t>(juce::jlimit (0, 127, fixed));
-                }
-
-                _data.step[i].note   = note;
-                _data.step[i].accent = (randPercent() < accentProbability);
-                _data.step[i].slide  = (randPercent() < slideProbability);
-                _data.step[i].tie    = false;
-            }
+                if (rollRhythmStep (i, fill, accentProbability, slideProbability, tieProbability))
+                    _data.step[i].note = randomNote (fixTones, numberOfTones, lowerNote, rangeNote);
         }
 
         // clearTrack() already called setMute(false) — no need to unmute again.
+    }
+
+    /** New random pitches on the note steps; rests, ties, accents and slides stay. */
+    void randomizePitches (uint8_t numberOfTones, uint8_t lowerNote, uint8_t rangeNote)
+    {
+        int8_t fixTones[12];
+        makeFixTones (numberOfTones, fixTones);
+
+        setMute (true);
+        clearStackInternal (true);
+        {
+            juce::SpinLock::ScopedLockType lk (_dataLock);
+            for (auto& st : _data.step)
+                if (! st.rest)
+                    st.note = randomNote (fixTones, numberOfTones, lowerNote, rangeNote);
+        }
+        setMute (false);
+    }
+
+    /** New random rests, ties, accents and slides; the pattern's pitches are
+     *  kept in order and laid onto the new note steps (wrapping), like
+     *  editing the time list on a TB-303. */
+    void randomizeRhythm (uint8_t fill,
+                          uint8_t accentProbability,
+                          uint8_t slideProbability,
+                          uint8_t tieProbability)
+    {
+        setMute (true);
+        clearStackInternal (true);
+        {
+            juce::SpinLock::ScopedLockType lk (_dataLock);
+
+            uint8_t pitches[SEQ303_STEP_MAX];
+            int n = 0;
+            for (int i = 0; i < _data.stepLength; ++i)
+                if (! _data.step[i].rest)
+                    pitches[n++] = _data.step[i].note;
+
+            int k = 0;
+            for (int i = 0; i < SEQ303_STEP_MAX; ++i)
+                if (rollRhythmStep (i, fill, accentProbability, slideProbability, tieProbability) && n > 0)
+                    _data.step[i].note = pitches[k++ % n];
+        }
+        setMute (false);
     }
 
     // =========================================================================
@@ -1141,6 +1127,77 @@ private:
         // Notify JC303 to reset its held-note tracking whenever we silence the stack
         if (sendNoteOffs && sentAny && onAllNotesOff)
             onAllNotesOff();
+    }
+
+    /** Chromatic-quantisation correction table (mirrors fix_tones[]). */
+    static void makeFixTones (uint8_t numberOfTones, int8_t (&fixTones)[12])
+    {
+        std::fill (std::begin (fixTones), std::end (fixTones), int8_t { 0 });
+        if (numberOfTones == 0)
+            return;
+
+        const int8_t fixMod = static_cast<int8_t>(12 / numberOfTones);
+        int8_t fixCounter   = 0;
+        for (uint8_t i = 0; i < 12; ++i)
+        {
+            if ((i % fixMod) == 0 || i == 0)
+            {
+                fixTones[i] = 0;
+                fixCounter  = 0;
+            }
+            else
+            {
+                --fixCounter;
+                fixTones[i] = fixCounter;
+            }
+        }
+    }
+
+    /** Random note in [lowerNote, lowerNote + rangeNote), snapped to the tone grid. */
+    uint8_t randomNote (const int8_t (&fixTones)[12], uint8_t numberOfTones,
+                        uint8_t lowerNote, uint8_t rangeNote)
+    {
+        const uint8_t highNote = static_cast<uint8_t>(
+            juce::jlimit (0, 127, static_cast<int>(lowerNote) + rangeNote));
+
+        const uint8_t noteRange = (highNote > lowerNote)
+                                    ? static_cast<uint8_t>(highNote - lowerNote)
+                                    : 1;
+
+        uint8_t note = static_cast<uint8_t>(lowerNote + (randPercent() % noteRange));
+
+        if (numberOfTones > 0)
+        {
+            const int fixed = static_cast<int>(note) + fixTones[note % 12];
+            note = static_cast<uint8_t>(juce::jlimit (0, 127, fixed));
+        }
+        return note;
+    }
+
+    /** Roll one step's rest / tie / accent / slide.  Returns true for a note
+     *  step.  A tie is only possible on a rest after a note or a tie.
+     *  Must be called with _dataLock held. */
+    bool rollRhythmStep (int i, uint8_t fill, uint8_t accentProbability,
+                         uint8_t slideProbability, uint8_t tieProbability)
+    {
+        auto& st = _data.step[i];
+        const bool isOn = (randPercent() < fill);
+        st.rest = ! isOn;
+        st.tie  = false;
+
+        if (! isOn)
+        {
+            st.accent = false;
+            st.slide  = false;
+            const auto& last = _data.step[(i == 0) ? SEQ303_STEP_MAX - 1 : i - 1];
+            if (! last.rest || last.tie)
+                st.tie = (randPercent() < tieProbability);
+            return false;
+        }
+
+        st.accent = (randPercent() < accentProbability);
+        st.slide  = (randPercent() < slideProbability);
+        return true;
     }
 
     /** Returns a pseudo-random integer 0–99 inclusive. */

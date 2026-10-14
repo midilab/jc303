@@ -135,7 +135,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
     // row labels for the accent and slide/tie micro toggles (right-aligned, 4px left of each row)
     {
-        const char* texts[4] = { "step", "rest", "accent", "slide/tie" };
+        const char* texts[4] = { "step", "rest", "accent", "slide" };
         juce::Label** labels[4] = { &seqStepLabel, &seqRestLabel, &seqAccentLabel, &seqSlideLabel };
         for (int r = 0; r < 4; ++r)
         {
@@ -169,6 +169,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
         };
         // shared slide/tie toggle, as in aciduino: slide on a note, tie on a rest
+        // (labelled "slide": on the TB-303 both are the same hold-into-next-step flag)
         seqSlideButtons[i]->onClick = [this, step]
         {
             auto& seq = processorRef.getSequencer();
@@ -200,7 +201,15 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         if (seq.isRecOn())
             seq.setRecStep(static_cast<uint8_t>(selectedStep));
     };
-    seqGenerateButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Generate); };
+    // gen: new pattern; Shift: new pitches, same rhythm; Alt: new rhythm, same pitches
+    seqGenerateButton->setTooltip("gen: new pattern\nShift: new pitches, same rhythm\nAlt: new rhythm, same pitches");
+    seqGenerateButton->onPress = [this]
+    {
+        const auto mods = juce::ModifierKeys::currentModifiers;
+        processorRef.seqCommand(mods.isShiftDown() ? JC303::SeqCommand::GeneratePitches
+                                : mods.isAltDown() ? JC303::SeqCommand::GenerateRhythm
+                                                   : JC303::SeqCommand::Generate);
+    };
     seqClearButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Clear); };
     // Play/Stop goes straight to the sequencer command channel instead of the
     // seqPlayState param latch: the sequencer may be started/stopped by the host

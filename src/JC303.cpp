@@ -645,6 +645,27 @@ void JC303::applySeqCommands()
         _sequencerMuted.store (false, std::memory_order_release);
         break;
 
+    case SeqCommand::GeneratePitches:
+        _sequencerMuted.store (true, std::memory_order_release);
+        for (int i = 0; i <= 127; i++)
+            open303Core.noteOn (i, 0, 0);
+        _sequencer.randomizePitches (static_cast<uint8_t>(*numberOfTones),
+                                     static_cast<uint8_t>(*lowerNote),
+                                     static_cast<uint8_t>(*rangeNote));
+        _sequencerMuted.store (false, std::memory_order_release);
+        break;
+
+    case SeqCommand::GenerateRhythm:
+        _sequencerMuted.store (true, std::memory_order_release);
+        for (int i = 0; i <= 127; i++)
+            open303Core.noteOn (i, 0, 0);
+        _sequencer.randomizeRhythm (static_cast<uint8_t>(*seqGenerativeFill),
+                                    static_cast<uint8_t>(*seqGenerativeAccentProbability),
+                                    static_cast<uint8_t>(*seqGenerativeSlideProbability),
+                                    static_cast<uint8_t>(*seqGenerativeTieProbability));
+        _sequencerMuted.store (false, std::memory_order_release);
+        break;
+
     case SeqCommand::None:
     default:
         break;

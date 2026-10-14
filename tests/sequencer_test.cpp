@@ -349,6 +349,54 @@ static void testSwingTieEndsInItsStep()
     CHECK (r.offAfter (40, ons[0].at) - ons[0].at == (36 + 8) * kTick);   // half way through the late tie step
 }
 
+// ---- re-roll ----------------------------------------------------------------
+
+static void testRerollPitchesKeepsRhythm()
+{
+    AcidSequencer303 seq;
+    for (int run = 0; run < 20; ++run)
+    {
+        seq.acidRandomize (60, 50, 50, 50, 0, 36, 12);
+        bool rest[SEQ303_STEP_MAX], tie[SEQ303_STEP_MAX], acc[SEQ303_STEP_MAX], sld[SEQ303_STEP_MAX];
+        for (int i = 0; i < SEQ303_STEP_MAX; ++i)
+        {
+            rest[i] = ! seq.stepOn (i); tie[i] = seq.tieOn (i);
+            acc[i] = seq.accentOn (i);  sld[i] = seq.slideOn (i);
+        }
+        seq.randomizePitches (0, 60, 12);            // a range the old notes cannot be in
+        for (int i = 0; i < SEQ303_STEP_MAX; ++i)
+        {
+            CHECK (rest[i] == ! seq.stepOn (i) && tie[i] == seq.tieOn (i));
+            CHECK (acc[i] == seq.accentOn (i) && sld[i] == seq.slideOn (i));
+            if (seq.stepOn (i))
+                CHECK (seq.getRawNote (i) >= 60 && seq.getRawNote (i) < 72);
+        }
+    }
+}
+
+static void testRerollRhythmKeepsPitchOrder()
+{
+    const int pitches[] = { 40, 43, 45, 47 };
+    for (int run = 0; run < 20; ++run)
+    {
+        AcidSequencer303 seq;
+        seq.clearStepData (true);
+        const int at[] = { 0, 2, 5, 9 };
+        for (int k = 0; k < 4; ++k) { seq.setStepData (at[k], (uint8_t) pitches[k]); seq.setRest (at[k], false); }
+        seq.setTrackLength (12);
+
+        seq.randomizeRhythm (run < 10 ? 50 : 100, 50, 50, 50);
+        int k = 0;
+        for (int i = 0; i < SEQ303_STEP_MAX; ++i)
+        {
+            if (! seq.stepOn (i)) continue;
+            CHECK (seq.getRawNote (i) == pitches[k % 4]);   // same pitches, same order, wrapping
+            ++k;
+        }
+        if (run >= 10) CHECK (k == SEQ303_STEP_MAX);       // fill 100: every step plays
+    }
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -441,6 +489,8 @@ int main()
     testSwingDelaysOffbeats();
     testSwingKeepsSlideLegato();
     testSwingTieEndsInItsStep();
+    testRerollPitchesKeepsRhythm();
+    testRerollRhythmKeepsPitchOrder();
     testStopReleasesNote();
     testTempoClamp();
     testRandomizeFillAndFlags();

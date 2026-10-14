@@ -119,6 +119,7 @@ private:
     juce::Label* seqStepLabel;
     juce::Label* seqRestLabel;
     int selectedStep = 0;
+    juce::TooltipWindow tooltipWindow { this, 700 };
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;
