@@ -192,7 +192,7 @@ JC303::JC303()
                                                         "Saturation Bias",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f),   // Diode: Q12's asymmetry and driven swell; MS-20 / IR3109: their input stage; Wasp: OTA1's divider; SEM: OTA1's offset; acts above 0 dB Saturation (0 = symmetric)
+                                                        0.5f),   // Diode: Q12's asymmetry and driven swell; MS-20: its input stage; Wasp: OTA1's divider; ARP 4075: its limiter pair; not on JuneBug / SemiSweet; acts above 0 dB Saturation (0 = symmetric)
             std::make_unique<juce::AudioParameterFloat> ("filterRail",
                                                         "Saturation Rail",
                                                         0.0f,
@@ -785,8 +785,8 @@ void JC303::setParameter (Open303Parameters index, float value)
         break;
     case FILTER_BIAS:
         // 0..1: Q12's asymmetry and driven swell, ramping in above 0 dB Saturation (DiodeLadderFilter::setSaturationBias;
-        // the DT level tables are fitted at the default 0.5; higher = more swell and crunch near full resonance). MS-20 /
-        // IR3109: the same offset on their input stage, ramping in the same way (Open303::updateCircuitCharacter)
+        // the DT level tables are fitted at the default 0.5; higher = more swell and crunch near full resonance). MS-20:
+        // the same offset on its input stage, ramping in the same way (Open303::updateCircuitCharacter)
         open303Core.setFilterBias(value);
         break;
     case FILTER_RAIL:

@@ -222,7 +222,7 @@ void Open303::updateCircuitCharacter()
   // - Bias offsets the element the input drives (IR3109 stage 1: the input pair, its resting current trimmed out, the
   //   diode ladder's bias shape; Korg35: one forward limiter diode), see setSaturationBias. It ramps in with
   //   Saturation as the diode's does, from none at 0 dB to the knob's value at +16 dB, so the clean filter stays the
-  //   circuit.
+  //   circuit. The IR3109 and SEM keep Bias at 0: even at +16 dB it changed them by under -14 dB.
   // - MS-20: Rail = Clip, the limiter diodes' threshold: 1 = the circuit, lower = the limiter bends earlier. That is a
   //   softer limiter, not a harder one: the earlier diodes already conduct at rest, so the x58 stage's gain falls and
   //   its curve rounds off (at 0 dB a full-scale sine's THD falls from ~4 % to ~3 %, at +16 dB from ~28 % to ~16 %).
@@ -231,10 +231,8 @@ void Open303::updateCircuitCharacter()
   //   RolandFilter::setRail.
   // - Wasp: Bias offsets OTA1's input divider (IC1 then sits off its switching point), ramping in the same way; Rail is
   //   its supply, 1 = the circuit, lower = sagging (less headroom and inverter gain), see WaspFilter::setRail.
-  // - SEM: Bias turns OTA1's offset trim (T9) off null, up to the CA3080's 5 mV maximum, ramping in the same way. The
-  //   loop cancels the offset by holding HP and LP up to 2.3 V off ground (the 100k / 220R divider's 455 x), so the
-  //   clean filter is unchanged and, once driven, its outputs clip unevenly (even harmonics). Rail sags its +-15 V
-  //   supplies, see SEMFilter::setSaturationBias / setRail.
+  // - SEM: Rail sags its +-15 V supplies, see SEMFilter::setRail. (SEMFilter::setSaturationBias would turn OTA1's offset
+  //   trim T9 off null; it is held nulled.)
   // - ARP 4075: Bias offsets the limiter pair, ramping in the same way; Rail sags its +15 / -14 V supplies, the
   //   limiter's tail with the +15 V: a quieter, less resonant filter rather than an earlier limit (its threshold is
   //   the pair's 2 VT), see ARP4075Filter::setRail.
@@ -242,7 +240,7 @@ void Open303::updateCircuitCharacter()
   const double clip = 0.5 * circuitRail;
   ms20Filter.setSaturationBias(bias);
   ms20Filter.setClipThreshold(clip);
-  junoFilter.setSaturationBias(bias);
+  junoFilter.setSaturationBias(0.0);   // Bias held at 0 (trimmed out): too faint on the IR3109 to be worth a knob
   junoFilter.setRail(circuitRail);     // the IR3109's +-15 V supplies
   for (auto* f : { &waspFilter, &hornetFilter })
   {
@@ -251,7 +249,7 @@ void Open303::updateCircuitCharacter()
   }
   arpFilter.setSaturationBias(bias);   // the limiter pair's offset
   arpFilter.setRail(circuitRail);      // its +15 / -14 V supplies: quieter and less resonant, see ARP4075Filter::setRail
-  semFilter.setSaturationBias(bias);
+  semFilter.setSaturationBias(0.0);    // Bias held at 0 (T9 nulled): too faint on the SEM to be worth a knob
   semFilter.setRail(circuitRail);
 }
 

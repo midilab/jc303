@@ -51,6 +51,7 @@ public:
         juce::String alsoHiddenWhenId;  // a second condition: also skipped while this choice param equals alsoHiddenWhenIndex
         int alsoHiddenWhenIndex = -1;
         int alsoHiddenOnlyAtIndex = -1;  // if >= 0, the second condition applies only while hiddenWhenId's index equals this
+        juce::Array<int> alsoHiddenAtIndices;  // also skipped while hiddenWhenId's choice index is one of these
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
     };
 
@@ -306,7 +307,8 @@ private:
         if (p == nullptr)
             return false;
         const int index = (int) std::lround(p->convertFrom0to1(p->getValue()));
-        return index == item.hiddenWhenIndex || index < item.shownFromIndex || index > item.shownUntilIndex;
+        return index == item.hiddenWhenIndex || index < item.shownFromIndex || index > item.shownUntilIndex
+            || item.alsoHiddenAtIndices.contains(index);
     }
 
     bool modsOn() const
@@ -656,7 +658,11 @@ public:
             mod.items.add(tension);
         }
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "filterBias", "Saturation Bias", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        {
+            Item bias { "filterBias", "Saturation Bias", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true };   // no effect on TeeBee
+            bias.alsoHiddenAtIndices = { 3, 6 };   // JuneBug, SemiSweet: too faint to hear, held at 0
+            mod.items.add(bias);
+        }
         {
             Item rail { "filterRail", "Saturation Rail", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 };   // Spicy only
             rail.alsoHiddenWhenId = "filterQuality";   // Hi-Fi only: hidden in Standard

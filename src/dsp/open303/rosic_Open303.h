@@ -136,7 +136,7 @@ namespace rosic
      *  loop gain is the driven filter's push, and near full resonance its crunch: the loop locks onto its own frequency
      *  under the note, see DiodeLadderFilter SAT_BIAS_MAX). Higher = more swell and crunch. In Hi-Fi the range's top
      *  half is rescaled to end at a cap that follows the tension (SAT_BIAS_CAP_*: past it the note chokes). The
-     *  plugin's Saturation Bias parameter. The MS-20 and IR3109 models offset their input stage, the Wasp OTA1's divider (see
+     *  plugin's Saturation Bias parameter. The MS-20 offsets its input stage, the Wasp OTA1's divider, the ARP 4075 its limiter pair; the IR3109 and SEM ignore it (see
      *  updateCircuitCharacter). */
     void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); circuitBias = bias; updateCircuitCharacter(); }
 
