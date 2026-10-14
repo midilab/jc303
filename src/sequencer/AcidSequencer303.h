@@ -87,6 +87,7 @@ struct TrackData303
     uint8_t     stepLength { SEQ303_STEP_MAX };
     int8_t      transpose  { 0 };
     uint8_t     tune       { 0 };  // 0=off; 1+N = harmonize + N semitone offset
+    int8_t      pitchRotate { 0 }; // note steps play the pitch N note steps later
 };
 
 // =============================================================================
@@ -141,6 +142,7 @@ public:
             _data.stepLength = SEQ303_STEP_MAX;
             _data.transpose  = 0;
             _data.tune       = 0;
+            _data.pitchRotate = 0;
             clearStepDataInternal (/*fillWithRests=*/false);
         }
         _stepLocation = 0;
@@ -398,6 +400,15 @@ public:
         _data.shift = shift;
     }
     int8_t getShiftPos() const { return _data.shift; }
+
+    /** setPitchRotate / getPitchRotate — rotate the pitches through the note
+     *  steps; rests, ties, accents and slides stay on their steps. */
+    void   setPitchRotate (int8_t rotate)
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        _data.pitchRotate = rotate;
+    }
+    int8_t getPitchRotate() const { return _data.pitchRotate; }
 
     /** setTune / getTune
      *  0   = harmonizer off (raw MIDI note)
@@ -939,7 +950,7 @@ private:
             gateLength = std::max (1, gateLength + shufflePulses);
 
         // ── Note resolution ───────────────────────────────────────────────────
-        uint8_t note = cur.note;
+        uint8_t note = _data.pitchRotate != 0 ? rotatedPitch (stepPos, stepLen) : cur.note;
         if (_data.tune > 0)
             note = _harmonizer.harmonize (note) + static_cast<uint8_t>(_data.tune - 1);
 
@@ -997,6 +1008,21 @@ private:
     // =========================================================================
     // ── Utility ──────────────────────────────────────────────────────────────
     // =========================================================================
+
+    /** Pitch of the note step `pitchRotate` note steps after `stepPos`. */
+    uint8_t rotatedPitch (uint8_t stepPos, uint8_t stepLen) const
+    {
+        uint8_t notes[SEQ303_STEP_MAX];
+        int n = 0, k = 0;
+        for (uint8_t i = 0; i < stepLen; ++i)
+        {
+            if (_data.step[i].rest) continue;
+            if (i == stepPos) k = n;
+            notes[n++] = _data.step[i].note;
+        }
+        const int idx = ((k + _data.pitchRotate) % n + n) % n;
+        return notes[idx];
+    }
 
     inline void emit (const Acid303Event& ev) const
     {

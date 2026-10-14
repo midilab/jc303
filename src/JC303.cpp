@@ -230,6 +230,21 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("seqPlayState",
                                                         "Seq Play State",
                                                         false),
+            std::make_unique<juce::AudioParameterInt> ("seqTranspose",
+                                                        "Seq Transpose",
+                                                        -24,
+                                                        24,
+                                                        0),
+            std::make_unique<juce::AudioParameterInt> ("seqShift",
+                                                        "Seq Shift",
+                                                        0,
+                                                        15,
+                                                        0),
+            std::make_unique<juce::AudioParameterInt> ("seqPitchRotate",
+                                                        "Seq Pitch Rotate",
+                                                        0,
+                                                        15,
+                                                        0),
             std::make_unique<juce::AudioParameterBool> ("seqCpuTiming",
                                                         "Seq CPU Timing",
                                                         true),
@@ -302,6 +317,9 @@ JC303::JC303()
     seqTempo = parameters.getRawParameterValue("seqTempo");
     seqPlayState = parameters.getRawParameterValue("seqPlayState");
     seqCpuTiming = parameters.getRawParameterValue("seqCpuTiming");
+    seqTranspose = parameters.getRawParameterValue("seqTranspose");
+    seqShift = parameters.getRawParameterValue("seqShift");
+    seqPitchRotate = parameters.getRawParameterValue("seqPitchRotate");
     seqGenerate = parameters.getRawParameterValue("seqGenerate");
     seqClear = parameters.getRawParameterValue("seqClear");
     subOscGain = parameters.getRawParameterValue("subOscGain");
@@ -994,6 +1012,14 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // 303 CPU interrupt timing is a mod: only active with the mod switch on
     _sequencer.setCpuTiming (*switchModState > 0.5f && *seqCpuTiming > 0.5f);
 
+    // Transpose / Shift / Pitch Rotate params are the source of truth
+    const auto transpose = static_cast<int8_t>(std::lround (seqTranspose->load()));
+    const auto shift     = static_cast<int8_t>(std::lround (seqShift->load()));
+    const auto rotate    = static_cast<int8_t>(std::lround (seqPitchRotate->load()));
+    if (_sequencer.getTranspose() != transpose)     _sequencer.setTranspose (transpose);
+    if (_sequencer.getShiftPos() != shift)          _sequencer.setShiftPos (shift);
+    if (_sequencer.getPitchRotate() != rotate)      _sequencer.setPitchRotate (rotate);
+
     _sequencer.processBlock (midiMessages,
                              numSamples,
                              hostIsPlaying,
@@ -1294,7 +1320,6 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
     _sequencer.copyTrackData (td);
 
     seqXml->setAttribute ("stepLength",  td.stepLength);
-    seqXml->setAttribute ("transpose",   td.transpose);
     //seqXml->setAttribute ("tune",        _sequencer.getTune());
     //seqXml->setAttribute ("temperament", _sequencer.getTemperamentId());
 
@@ -1350,8 +1375,6 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                 if (auto* lp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqLength")))
                     *lp = _sequencer.getTrackLength();
 
-                _sequencer.setTranspose (static_cast<int8_t>
-                                            (seqXml->getIntAttribute ("transpose", 0)));
                 //_sequencer.setTune      (static_cast<uint8_t>
                 //                            (seqXml->getIntAttribute ("tune",      0)));
                 //_sequencer.setTemperament (static_cast<uint8_t>

@@ -42,6 +42,9 @@ public:
         float step = 0.0f;          // value type only; 0 = auto (0.01 for 0..1 floats, 1 for ints/bools)
         juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
+        juce::String shiftId;          // value type only: param the dec/inc buttons step while Shift is held
+        juce::String shiftLabel;       // label shown while editing shiftId
+        bool wrap = false;             // value type only: dec/inc wrap around the param range (int params)
     };
 
     struct Page
@@ -117,6 +120,7 @@ public:
         pageCursor.getReference(currentPage) = cursor;
         currentPage = idx;
         cursor = pageCursor.getReference(idx);
+        showShiftAlt = false;
         updateDisplay();
         notifyCurrentItemChanged();
     }
@@ -136,6 +140,7 @@ public:
 
         cursor = juce::jlimit(0, pageList.getReference(currentPage).items.size() - 1, cursor + delta);
         pageCursor.getReference(currentPage) = cursor;
+        showShiftAlt = false;
         updateDisplay();
         notifyCurrentItemChanged();
     }
@@ -146,7 +151,8 @@ public:
         auto& item = currentItem();
         if (item.type != Type::value)
             return;
-        changeValue(direction);
+        showShiftAlt = item.shiftId.isNotEmpty() && juce::ModifierKeys::currentModifiers.isShiftDown();
+        changeValue(showShiftAlt ? item.shiftId : item.id, item.step, direction, item.wrap);
     }
 
     // Called by the theme's value knob. Same 0..100 scale as the display;
@@ -162,6 +168,7 @@ public:
         param->beginChangeGesture();
         param->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, percentage / 100.0f));
         param->endChangeGesture();
+        showShiftAlt = false;
         updateDisplay();
     }
 
@@ -318,16 +325,28 @@ private:
         updateDisplay();
     }
 
-    void changeValue(float direction)
+    void changeValue(const juce::String& paramID, float itemStep, float direction, bool wrap)
     {
-        auto& item = currentItem();
-        auto* param = valueTreeState.getParameter(item.id);
+        auto* param = valueTreeState.getParameter(paramID);
         if (param == nullptr)
             return;
 
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(param); p != nullptr && wrap)
+        {
+            const int lo = p->getRange().getStart();
+            const int span = p->getRange().getLength() + 1;
+            const int next = lo + (((p->get() - lo + (int) direction) % span) + span) % span;
+            p->beginChangeGesture();
+            *p = next;
+            p->endChangeGesture();
+            updateDisplay();
+            notifyCurrentItemChanged();
+            return;
+        }
+
         const auto range = param->getNormalisableRange();
-        float step = item.step > 0.0f
-                         ? item.step
+        float step = itemStep > 0.0f
+                         ? itemStep
                          : (dynamic_cast<juce::AudioParameterInt*>(param) != nullptr
                             || dynamic_cast<juce::AudioParameterBool*>(param) != nullptr)
                                ? 1.0f
@@ -385,7 +404,12 @@ private:
         titleLabel.setText(page.title, juce::dontSendNotification);
 
         auto& item = currentItem();
-        if (item.type == Type::value)
+        if (item.type == Type::value && showShiftAlt)
+        {
+            itemLabel.setText(item.shiftLabel, juce::dontSendNotification);
+            valueLabel.setText(valueString(valueTreeState.getParameter(item.shiftId)), juce::dontSendNotification);
+        }
+        else if (item.type == Type::value)
         {
             itemLabel.setText(item.label, juce::dontSendNotification);
             valueLabel.setText(displayValue(item), juce::dontSendNotification);
@@ -477,6 +501,7 @@ private:
 
         cursor = juce::jlimit(0, pageList.getReference(currentPage).items.size() - 1, pick);
         pageCursor.getReference(currentPage) = cursor;
+        showShiftAlt = false;
         updateDisplay();
         notifyCurrentItemChanged();
     }
@@ -559,6 +584,17 @@ public:
         seq.items.add(Item { "seqTempo",     "Tempo",      Type::value, {}, 0.0f });
         seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 1.0f });
         seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 1.0f });
+        seq.items.add(Item { "seqTranspose", "Transpose",  Type::value, {}, 1.0f });
+        {
+            Item shift { "seqShift", "Shift", Type::value, {}, 1.0f };
+            shift.shiftId    = "seqPitchRotate";
+            shift.shiftLabel = "Pitch Rot";
+            shift.wrap       = true;
+            seq.items.add(shift);
+            Item rotate { "seqPitchRotate", "Pitch Rot", Type::value, {}, 1.0f };
+            rotate.wrap = true;
+            seq.items.add(rotate);
+        }
         seq.items.add(Item { "seqCpuTiming", "CPU Timing", Type::value, {}, 1.0f });
         pages.add(seq);
 
@@ -572,6 +608,7 @@ private:
     AssignableSlot assignableSlots[numAssignableSlots];
     int currentPage = 0;
     int cursor = 0;
+    bool showShiftAlt = false;   // last dec/inc edited the current item's shiftId
     juce::Array<int> pageCursor;
     int modPageIndex = -1;
 

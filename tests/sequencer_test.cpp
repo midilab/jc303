@@ -241,6 +241,59 @@ static void testCpuTimingStopFlushesQueue()
     CHECK (r.ons().empty());                         // a queued NoteOn is dropped on stop
 }
 
+static std::vector<int> playedNotes (Rig& r)
+{
+    std::vector<int> n;
+    for (auto& e : r.ons()) n.push_back (e.note);
+    return n;
+}
+
+static void testPitchRotateKeepsRhythm()
+{
+    Rig plain, rot, back;
+    rot.seq.setPitchRotate (1);
+    back.seq.setPitchRotate (-1);
+    for (Rig* r : { &plain, &rot, &back })
+    {
+        r->step (0, 40); r->step (2, 43, /*accent=*/true); r->step (3, 45);   // step 1 rests
+        r->seq.setTrackLength (4);
+        r->seq.start();
+        r->run (4 * kStep);
+    }
+    CHECK ((playedNotes (plain) == std::vector<int> { 40, 43, 45 }));
+    CHECK ((playedNotes (rot)   == std::vector<int> { 43, 45, 40 }));
+    CHECK ((playedNotes (back)  == std::vector<int> { 45, 40, 43 }));
+    for (size_t i = 0; i < 3; ++i)
+    {
+        CHECK (rot.ons()[i].at == plain.ons()[i].at);    // rhythm unchanged
+        CHECK (rot.ons()[i].vel == plain.ons()[i].vel);  // accent stays on its step
+    }
+}
+
+static void testShiftRotatesPattern()
+{
+    Rig r;
+    r.seq.setShiftPos (1);
+    r.step (0, 40); r.step (1, 43);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    r.run (4 * kStep);
+    CHECK ((playedNotes (r) == std::vector<int> { 43, 40 }));   // starts on step 1
+    CHECK (r.ons()[1].at - r.ons()[0].at == 3 * kStep);
+}
+
+static void testTransposeOffsetsNotes()
+{
+    Rig r;
+    r.seq.setTranspose (-5);
+    r.step (0, 40); r.step (1, 43);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    r.run (4 * kStep);
+    CHECK ((playedNotes (r) == std::vector<int> { 35, 38 }));
+    CHECK (r.seq.getRawNote (0) == 40);              // stored pattern untouched
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -327,6 +380,9 @@ int main()
     testPlayedStepDropsTie();
     testCpuTimingDelaysGate();
     testCpuTimingStopFlushesQueue();
+    testPitchRotateKeepsRhythm();
+    testShiftRotatesPattern();
+    testTransposeOffsetsNotes();
     testStopReleasesNote();
     testTempoClamp();
     testRandomizeFillAndFlags();
