@@ -382,14 +382,6 @@ JC303::JC303()
             _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset };
     };
 
-    // Reset held-note tracking whenever the sequencer silences its note stack
-    // (stop, mute, clearTrack, acidRandomize) so no stale gate is left open.
-    _sequencer.onAllNotesOff = [this]
-    {
-        _heldNote         = -1;
-        _lastStepHadSlide = false;
-    };
-
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
     // and the AcidSeq303 child (stepLength) on state restore.
     _sequencer.setTrackLength (16);
@@ -596,14 +588,10 @@ void JC303::applySeqCommands()
     switch (static_cast<SeqCommand>(cmd))
     {
     case SeqCommand::Play:
-        _heldNote         = -1;
-        _lastStepHadSlide = false;
         _sequencer.start();
         break;
 
     case SeqCommand::Stop:
-        _heldNote         = -1;
-        _lastStepHadSlide = false;
         _sequencer.stop();
         break;
 
@@ -616,8 +604,6 @@ void JC303::applySeqCommands()
 
         for (int i = 0; i <= 127; i++)
             open303Core.noteOn (i, 0, 0);
-        _heldNote         = -1;
-        _lastStepHadSlide = false;
 
         _sequencer.acidRandomize(
             static_cast<uint8_t>(*seqGenerativeFill),
@@ -918,8 +904,6 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     _sequencer.prepare (sampleRate, 960.0);
     _pendingCount     = 0;
     _wasHostPlaying   = false;
-    _heldNote         = -1;
-    _lastStepHadSlide = false;
     _recHeldNote      = -1;
     _sustainArmed     = true;
     _recWasOn         = false;
@@ -989,8 +973,6 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         else if (! hostIsPlaying && _wasHostPlaying)
         {
             _sequencer.stop();
-            _heldNote         = -1;
-            _lastStepHadSlide = false;
         }
     }
     _wasHostPlaying = hostIsPlaying;
@@ -1030,28 +1012,12 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     //
     // Bridges sequencer note events to Open303.
     //
-    // TIE (rest+tie steps):
-    //   The sequencer never emits a NoteOn for a tied rest — it just extends
-    //   the gate countdown of the previous note.  Ties are fully transparent
-    //   here; no special handling is needed.
-    //
-    // SLIDE:
-    //   The slide flag lives on the step that *sends* the glide, not the one
-    //   that receives it.  We save it in _lastStepHadSlide after each NoteOn
-    //   so the next NoteOn can pass slide=1 to Open303, which performs the
-    //   portamento without retriggering the envelope.
-    //
-    // WRAP-AROUND TIE (same pitch re-firing at pattern boundary):
-    //   If the last step(s) of a pattern are rest+tie, the sequencer extends
-    //   the gate past the pattern end.  When step 0 then fires with the same
-    //   pitch still ringing, we skip the re-trigger so there is no click.
-    //   _lastStepHadSlide is preserved so the glide carry still works.
-    //
-    // NoteOff:
-    //   Always forwarded unconditionally.  This is the key fix — suppressing
-    //   NoteOffs to handle slide caused stuck notes because it prevented the
-    //   gate from closing.  Open303 handles note-stealing internally; we just
-    //   need to close every gate we opened.
+    // TIE / SLIDE:
+    //   The sequencer owns gate timing.  Ties extend a note's gate; a slide
+    //   overlaps the next note's gate, and Open303 glides (no retrigger)
+    //   whenever a NoteOn arrives while a note is still held.  A same-pitch
+    //   overlap is handed over inside the sequencer, so every NoteOn and
+    //   NoteOff is forwarded as is.
     //
     // MIDI output buffer — built up during rendering, replaces midiMessages
     // at the end so the DAW receives sample-accurate note events on the
@@ -1067,42 +1033,19 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             if (_sequencerMuted.load(std::memory_order_acquire))
                 return;
 
-            if (_heldNote >= 0 && ev.note == static_cast<uint8_t>(_heldNote))
-            {
-                // Wrap-around tie: same pitch already ringing from a gate
-                // extension across the pattern boundary — do not re-trigger.
-                // Keep _lastStepHadSlide as-is so slide carry is unaffected.
-            }
-            else
-            {
-                // Normal new note, or slide into a different pitch.
-                // _lastStepHadSlide was set by the previous NoteOn dispatch.
-                const int slide = _lastStepHadSlide ? 1 : 0;
-                open303Core.noteOn (ev.note, ev.velocity, slide);
-                _heldNote = static_cast<int>(ev.note);
+            open303Core.noteOn (ev.note, ev.velocity, 0);
 
-                // MIDI out: NoteOn
-                midiOut.addEvent (juce::MidiMessage::noteOn  (1, ev.note, static_cast<uint8_t>(ev.velocity)),
-                                  samplePos);
-            }
-
-            // Save the slide flag of the step we just played so the *next*
-            // NoteOn dispatch knows whether to use slide=1.
-            _lastStepHadSlide = _sequencer.slideOn (_sequencer.getCurrentStep());
+            // MIDI out: NoteOn
+            midiOut.addEvent (juce::MidiMessage::noteOn  (1, ev.note, static_cast<uint8_t>(ev.velocity)),
+                              samplePos);
         }
-        else // NoteOff — always forward, never drop
+        else // NoteOff
         {
             open303Core.noteOn (ev.note, 0, 0);
 
             // MIDI out: NoteOff
             midiOut.addEvent (juce::MidiMessage::noteOff (1, ev.note),
                               samplePos);
-
-            if (ev.note == static_cast<uint8_t>(_heldNote))
-            {
-                _heldNote         = -1;
-                _lastStepHadSlide = false;
-            }
         }
     };
 

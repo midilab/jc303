@@ -144,6 +144,41 @@ static void testTieHoldsAcrossRest()
     CHECK (off >= ons[0].at + kStep);                // gate spans into the tied step
 }
 
+static void testSameNoteSlideIsOneGate()
+{
+    Rig r;
+    r.step (0, 40, false, /*slide=*/true); r.step (1, 40, /*accent=*/true);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    r.run (2 * kStep);
+    const auto ons = r.ons();
+    CHECK (ons.size() == 2);
+    CHECK (ons[1].vel == SEQ303_ACCENT_VELOCITY);    // the slid-into step keeps its accent
+
+    int offs = 0;
+    for (auto& e : r.evs) if (! e.on && e.note == 40) ++offs;
+    CHECK (offs == 1);                               // one gate: step 0's release is dropped
+    const long off = r.offAfter (40, ons[0].at);
+    CHECK (off > ons[1].at + 10 * kTick);            // ...and step 1 owns the release
+    CHECK (off <= ons[1].at + 12 * kTick);
+}
+
+static void testSlideCarriesAcrossTie()
+{
+    Rig r;
+    r.step (0, 40, false, /*slide=*/true);
+    r.seq.setTie (1, true);
+    r.step (2, 43);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    r.run (3 * kStep);
+    const auto ons = r.ons();
+    CHECK (ons.size() == 2 && ons[1].note == 43);
+    const long off0 = r.offAfter (40, ons[0].at);
+    CHECK (off0 > ons[1].at);                        // legato into the note after the tie
+    CHECK (off0 < ons[1].at + kStep);
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -225,6 +260,8 @@ int main()
     testSlideOverlapsNextNote();
     testRestIsSilent();
     testTieHoldsAcrossRest();
+    testSameNoteSlideIsOneGate();
+    testSlideCarriesAcrossTie();
     testStopReleasesNote();
     testTempoClamp();
     testRandomizeFillAndFlags();

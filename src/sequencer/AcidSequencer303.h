@@ -117,8 +117,7 @@ public:
     std::function<void(const Acid303Event&)> onNoteEvent;
 
     /** Called whenever the sequencer clears its note stack (stop, mute, clearTrack,
-     *  acidRandomize).  JC303 uses this to reset _heldNote / _lastStepHadSlide so
-     *  Open303 receives a clean all-notes-off and no hung notes are left behind. */
+     *  acidRandomize), after the NoteOffs for held notes have been emitted. */
     std::function<void()> onAllNotesOff;
 
     // ── Constructor ──────────────────────────────────────────────────────────
@@ -579,7 +578,7 @@ public:
         }
 
         // Clear the track: mutes, sends NoteOff for any held note (fires
-        // onAllNotesOff so JC303 resets _heldNote), clears all steps, then unmutes.
+        // onAllNotesOff), clears all steps, then unmutes.
         clearTrack();
 
         {
@@ -888,8 +887,10 @@ private:
         if (cur.rest) return;
 
         // ── Gate length in 96-PPQN ticks: slide / tie lookahead ──────────────
-        // Identical to the original engine_303 logic.
         // _noteLengthTicks = 12 (50% of 24 ticks), _slideExtraTicks = 20.
+        // Each tied rest adds one full step.  A slide belongs to the note, as
+        // on the TB-303, so it carries across tied rests: the gate overlaps
+        // the next played note by the same overhang as a direct slide.
         int32_t       gateLength     = _noteLengthTicks;
         const uint8_t lookaheadBound = static_cast<uint8_t>(stepLen);
         uint8_t       nextStep       = stepPos;
@@ -897,25 +898,19 @@ private:
         for (uint8_t i = 1; i <= lookaheadBound; ++i)
         {
             nextStep = static_cast<uint8_t>((nextStep + 1) % lookaheadBound);
+            const StepData303& next = _data.step[nextStep];
 
-            // Slide overhang only applies to the immediate next step.  Once a
-            // tied rest has been consumed the accumulated tie gate owns the
-            // length; re-applying the slide overhang there truncates the note.
-            if (cur.slide && i == 1 && ! _data.step[nextStep].rest)
+            if (next.rest && next.tie)
             {
-                gateLength = _noteLengthTicks + _slideExtraTicks;
-                break;
-            }
-            else if (_data.step[nextStep].tie && _data.step[nextStep].rest)
-            {
-                // Each tied rest adds one full step (24 ticks)
                 gateLength = _noteLengthTicks
                              + static_cast<int32_t>(i) * static_cast<int32_t>(_ticksPerStep);
+                continue;
             }
-            else if (! _data.step[nextStep].rest || ! _data.step[nextStep].tie)
-            {
-                break;
-            }
+
+            if (cur.slide && ! next.rest)
+                gateLength = static_cast<int32_t>(i - 1) * static_cast<int32_t>(_ticksPerStep)
+                             + _noteLengthTicks + _slideExtraTicks;
+            break;
         }
 
         if (shufflePulses != 0)
@@ -930,6 +925,14 @@ private:
         if (finalNote < 0 || finalNote > 127) return;
 
         note = static_cast<uint8_t>(finalNote);
+
+        // ── Same-pitch handover ──────────────────────────────────────────────
+        // A slide or wrap-around overlap into the same pitch is one gate, as on
+        // the TB-303.  Drop the earlier entry without a NoteOff; otherwise its
+        // release would land after this NoteOn and end the new note early.
+        for (int i = 0; i < SEQ303_NOTE_STACK_SIZE; ++i)
+            if (_stack[i].length > 0 && _stack[i].note == note)
+                _stack[i].length = -1;
 
         // ── Place in note stack (gate length in 96-PPQN ticks) ───────────────
         for (int i = 0; i < SEQ303_NOTE_STACK_SIZE; ++i)
