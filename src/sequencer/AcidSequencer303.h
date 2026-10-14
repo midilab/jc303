@@ -33,6 +33,7 @@
  */
 
 #include <JuceHeader.h>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <cmath>
@@ -626,6 +627,28 @@ public:
         // clearTrack() already called setMute(false) — no need to unmute again.
     }
 
+    // =========================================================================
+    // ── Pattern undo / redo (step data only; settings live in their params) ──
+    // =========================================================================
+
+    static constexpr int kUndoDepth = 16;
+
+    /** Snapshot the steps before a destructive edit; clears the redo history. */
+    void pushUndo()
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        pushSnapshot (_undo, _undoCount);
+        _redoCount = 0;
+    }
+
+    bool undo() { return swapHistory (_undo, _undoCount, _redo, _redoCount); }
+    bool redo() { return swapHistory (_redo, _redoCount, _undo, _undoCount); }
+
+    int  undoCount() const { return _undoCount.load (std::memory_order_relaxed); }
+    int  redoCount() const { return _redoCount.load (std::memory_order_relaxed); }
+    bool canUndo()   const { return undoCount() > 0; }
+    bool canRedo()   const { return redoCount() > 0; }
+
     /** New random pitches on the note steps; rests, ties, accents and slides stay. */
     void randomizePitches (uint8_t numberOfTones, uint8_t lowerNote, uint8_t rangeNote)
     {
@@ -1158,6 +1181,42 @@ private:
             onAllNotesOff();
     }
 
+    using Steps = std::array<StepData303, SEQ303_STEP_MAX>;
+
+    /** Push the current steps onto `stack`, dropping the oldest when full.
+     *  Must be called with _dataLock held. */
+    void pushSnapshot (std::array<Steps, kUndoDepth>& stack, std::atomic<int>& count)
+    {
+        int n = count.load (std::memory_order_relaxed);
+        if (n == kUndoDepth)
+        {
+            std::move (stack.begin() + 1, stack.end(), stack.begin());
+            --n;
+        }
+        std::copy (std::begin (_data.step), std::end (_data.step), stack[n].begin());
+        count.store (n + 1, std::memory_order_relaxed);
+    }
+
+    /** Pop `from`, saving the current steps onto `to`; silences held notes. */
+    bool swapHistory (std::array<Steps, kUndoDepth>& from, std::atomic<int>& fromCount,
+                      std::array<Steps, kUndoDepth>& to,   std::atomic<int>& toCount)
+    {
+        if (fromCount.load (std::memory_order_relaxed) == 0)
+            return false;
+
+        setMute (true);
+        clearStackInternal (true);
+        {
+            juce::SpinLock::ScopedLockType lk (_dataLock);
+            pushSnapshot (to, toCount);
+            const int n = fromCount.load (std::memory_order_relaxed) - 1;
+            std::copy (from[n].begin(), from[n].end(), std::begin (_data.step));
+            fromCount.store (n, std::memory_order_relaxed);
+        }
+        setMute (false);
+        return true;
+    }
+
     /** Chromatic-quantisation correction table (mirrors fix_tones[]). */
     static void makeFixTones (uint8_t numberOfTones, int8_t (&fixTones)[12])
     {
@@ -1299,6 +1358,12 @@ private:
     static constexpr double kGateOffLatencyMs = 2.35;
     static constexpr int    kQueueSize        = 16;
     struct QueuedEvent { Acid303Event ev; int64_t at; };
+
+    // Pattern undo / redo history (audio thread writes, UI reads the counts)
+    std::array<Steps, kUndoDepth> _undo {};
+    std::array<Steps, kUndoDepth> _redo {};
+    std::atomic<int>       _undoCount { 0 };
+    std::atomic<int>       _redoCount { 0 };
 
     std::atomic<bool>      _cpuTiming  { false };
     std::atomic<int>       _swingTicks { 0 };

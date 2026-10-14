@@ -108,13 +108,26 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             if (editor == nullptr)
                 return;
             const bool editable = (v >= 0.0f);
+            const bool stepable = editable || editor->menuPage->currentItemIsAction();
             if (editor->menuKnob != nullptr)      editor->menuKnob->setEnabled(editable);
-            if (editor->menuDecButton != nullptr) editor->menuDecButton->setEnabled(editable);
-            if (editor->menuIncButton != nullptr) editor->menuIncButton->setEnabled(editable);
+            if (editor->menuDecButton != nullptr) editor->menuDecButton->setEnabled(stepable);
+            if (editor->menuIncButton != nullptr) editor->menuIncButton->setEnabled(stepable);
             if (editable && editor->menuKnob != nullptr)
                 editor->menuKnob->setValue(v, juce::dontSendNotification);
         };
     }
+
+    // Sequencer > Undo: - undoes, + redoes the last gen / re-roll / clear
+    menuPage->setAction("seqUndo", {
+        [this] (float direction)
+        {
+            processorRef.seqCommand(direction < 0 ? JC303::SeqCommand::Undo : JC303::SeqCommand::Redo);
+        },
+        [this]
+        {
+            auto& seq = processorRef.getSequencer();
+            return "-" + juce::String(seq.undoCount()) + " +" + juce::String(seq.redoCount());
+        } });
 
     selectMenu(2);   // default menu page; after the callback is set so the knob syncs
 
@@ -316,6 +329,15 @@ JC303Editor::~JC303Editor()
 
 bool JC303Editor::keyPressed (const juce::KeyPress& key)
 {
+    // Cmd/Ctrl+Z: undo the last gen / re-roll / clear; with Shift: redo
+    if (key.getModifiers().isCommandDown()
+        && juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) key.getKeyCode()) == 'Z')
+    {
+        processorRef.seqCommand (key.getModifiers().isShiftDown() ? JC303::SeqCommand::Redo
+                                                                  : JC303::SeqCommand::Undo);
+        return true;
+    }
+
     if (key != juce::KeyPress::spaceKey)
         return false;
 
@@ -349,6 +371,7 @@ void JC303Editor::resized()
 void JC303Editor::timerCallback()
 {
     auto& seq = processorRef.getSequencer();
+    menuPage->refreshAction();
 
     const int length = seq.getTrackLength();
     const bool playing = seq.isRunning();

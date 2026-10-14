@@ -31,7 +31,7 @@ class MenuPage : public juce::Component,
                  public juce::AudioProcessorValueTreeState::Listener
 {
 public:
-    enum class Type { value, select, placeholder };
+    enum class Type { value, select, placeholder, action };
 
     struct Item
     {
@@ -83,7 +83,7 @@ public:
             for (auto& it : pg.items)
             {
                 juce::String id = it.id.trim();
-                if (id.isEmpty() || paramIDs.contains(id))
+                if (id.isEmpty() || it.type == Type::action || paramIDs.contains(id))
                     continue;
                 paramIDs.add(id);
                 valueTreeState.addParameterListener(id, this);
@@ -145,6 +145,13 @@ public:
     void valueStep(float direction)
     {
         auto& item = currentItem();
+        if (item.type == Type::action)
+        {
+            auto it = actions.find(item.id);
+            if (it != actions.end() && it->second.step)
+                it->second.step(direction);
+            return;
+        }
         if (item.type != Type::value)
             return;
         changeValue(item.id, item.step, direction, item.wrap);
@@ -164,6 +171,28 @@ public:
         param->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, percentage / 100.0f));
         param->endChangeGesture();
         updateDisplay();
+    }
+
+    // ---- action items: not parameters; dec/inc call step(), the value text comes from text() ----
+    struct Action
+    {
+        std::function<void(float)> step;
+        std::function<juce::String()> text;
+    };
+
+    void setAction(const juce::String& id, Action action)
+    {
+        actions[id] = std::move(action);
+        updateDisplay();
+    }
+
+    bool currentItemIsAction() { return currentItem().type == Type::action; }
+
+    // Polled by the theme's timer: action values can change outside the menu.
+    void refreshAction()
+    {
+        if (currentItemIsAction() && valueLabel.getText() != actionText(currentItem()))
+            updateDisplay();
     }
 
     // Fired when the cursor/page changes. Carries the current item's value in the
@@ -398,7 +427,12 @@ private:
         titleLabel.setText(page.title, juce::dontSendNotification);
 
         auto& item = currentItem();
-        if (item.type == Type::value)
+        if (item.type == Type::action)
+        {
+            itemLabel.setText(item.label, juce::dontSendNotification);
+            valueLabel.setText(actionText(item), juce::dontSendNotification);
+        }
+        else if (item.type == Type::value)
         {
             itemLabel.setText(item.label, juce::dontSendNotification);
             valueLabel.setText(displayValue(item), juce::dontSendNotification);
@@ -592,6 +626,7 @@ public:
             cpuTiming.showParamText = true;   // On / Off
             seq.items.add(cpuTiming);
         }
+        seq.items.add(Item { "seqUndo", "Undo", Type::action, {}, 0.0f });
         pages.add(seq);
 
         return pages;
@@ -604,6 +639,13 @@ private:
     AssignableSlot assignableSlots[numAssignableSlots];
     int currentPage = 0;
     int cursor = 0;
+    std::map<juce::String, Action> actions;
+
+    juce::String actionText(const Item& item)
+    {
+        auto it = actions.find(item.id);
+        return (it != actions.end() && it->second.text) ? it->second.text() : juce::String();
+    }
     juce::Array<int> pageCursor;
     int modPageIndex = -1;
 

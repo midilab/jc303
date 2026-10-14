@@ -123,7 +123,7 @@ public:
     void sequencerStop()  { _sequencer.stop();  }
 
     // ── Sequencer UI→audio command channel ────────────────────────────────────
-    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm };
+    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm, Undo, Redo };
     void seqCommand (SeqCommand command) { _seqCommand.store (static_cast<int>(command), std::memory_order_release); }
 
 private:

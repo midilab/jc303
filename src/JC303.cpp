@@ -629,10 +629,12 @@ void JC303::applySeqCommands()
         break;
 
     case SeqCommand::Clear:
+        _sequencer.pushUndo();
         _sequencer.clearTrack();
         break;
 
     case SeqCommand::Generate:
+        _sequencer.pushUndo();
         _sequencerMuted.store (true, std::memory_order_release);
 
         for (int i = 0; i <= 127; i++)
@@ -652,6 +654,7 @@ void JC303::applySeqCommands()
         break;
 
     case SeqCommand::GeneratePitches:
+        _sequencer.pushUndo();
         _sequencerMuted.store (true, std::memory_order_release);
         for (int i = 0; i <= 127; i++)
             open303Core.noteOn (i, 0, 0);
@@ -662,6 +665,7 @@ void JC303::applySeqCommands()
         break;
 
     case SeqCommand::GenerateRhythm:
+        _sequencer.pushUndo();
         _sequencerMuted.store (true, std::memory_order_release);
         for (int i = 0; i <= 127; i++)
             open303Core.noteOn (i, 0, 0);
@@ -669,6 +673,16 @@ void JC303::applySeqCommands()
                                     static_cast<uint8_t>(*seqGenerativeAccentProbability),
                                     static_cast<uint8_t>(*seqGenerativeSlideProbability),
                                     static_cast<uint8_t>(*seqGenerativeTieProbability));
+        _sequencerMuted.store (false, std::memory_order_release);
+        break;
+
+    case SeqCommand::Undo:
+    case SeqCommand::Redo:
+        _sequencerMuted.store (true, std::memory_order_release);
+        for (int i = 0; i <= 127; i++)
+            open303Core.noteOn (i, 0, 0);
+        if (static_cast<SeqCommand>(cmd) == SeqCommand::Undo) _sequencer.undo();
+        else                                                  _sequencer.redo();
         _sequencerMuted.store (false, std::memory_order_release);
         break;
 

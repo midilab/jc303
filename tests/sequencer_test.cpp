@@ -451,6 +451,61 @@ static void testPitchLengthFollowsHostPosition()
         CHECK (n[0] == 40 + (3 * 7) % 5);            // 3 loops x 7 notes = note index 21
 }
 
+// ---- undo -----------------------------------------------------------------------
+
+static std::vector<int> stepSignature (const AcidSequencer303& seq)
+{
+    std::vector<int> v;
+    for (int i = 0; i < SEQ303_STEP_MAX; ++i)
+        v.push_back (seq.getRawNote (i) * 16 + seq.stepOn (i) * 8 + seq.tieOn (i) * 4
+                     + seq.accentOn (i) * 2 + seq.slideOn (i));
+    return v;
+}
+
+static void testUndoRedoPattern()
+{
+    AcidSequencer303 seq;
+    CHECK (! seq.canUndo() && ! seq.canRedo());
+    seq.acidRandomize (60, 50, 50, 50, 0, 36, 24);
+    const auto a = stepSignature (seq);
+
+    seq.pushUndo();
+    seq.acidRandomize (60, 50, 50, 50, 0, 36, 24);
+    const auto b = stepSignature (seq);
+    CHECK (a != b);
+
+    seq.pushUndo();
+    seq.randomizePitches (0, 60, 12);
+    const auto c = stepSignature (seq);
+
+    CHECK (seq.undoCount() == 2 && seq.canUndo());
+    CHECK (seq.undo() && stepSignature (seq) == b);
+    CHECK (seq.undo() && stepSignature (seq) == a);
+    CHECK (! seq.undo() && stepSignature (seq) == a);  // nothing left
+    CHECK (seq.redoCount() == 2);
+    CHECK (seq.redo() && stepSignature (seq) == b);
+    CHECK (seq.redo() && stepSignature (seq) == c);
+    CHECK (! seq.redo());
+
+    seq.undo();
+    seq.pushUndo();                                    // a new edit clears redo
+    CHECK (! seq.canRedo());
+}
+
+static void testUndoHistoryIsBounded()
+{
+    AcidSequencer303 seq;
+    for (int i = 0; i < 40; ++i)
+    {
+        seq.pushUndo();
+        seq.acidRandomize (60, 50, 50, 50, 0, 36, 24);
+    }
+    CHECK (seq.undoCount() == AcidSequencer303::kUndoDepth);
+    int n = 0;
+    while (seq.undo()) ++n;
+    CHECK (n == AcidSequencer303::kUndoDepth);
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -548,6 +603,8 @@ int main()
     testPitchLengthCyclesAcrossBars();
     testPitchLengthOffAndRotate();
     testPitchLengthFollowsHostPosition();
+    testUndoRedoPattern();
+    testUndoHistoryIsBounded();
     testStopReleasesNote();
     testTempoClamp();
     testRandomizeFillAndFlags();
