@@ -892,12 +892,15 @@ private:
 
     inline void fireTick (uint32_t tick, int sampleOffset, int shufflePulses)
     {
+        // Note-off stack: check every tick (1-pulse resolution, same as original).
+        // Count down before the step fires, so a note started on this tick
+        // keeps its full length (12 ticks = 50%) and a release on this tick
+        // is sent before the new NoteOn.
+        onTick (sampleOffset);
+
         // Step boundary: every _ticksPerStep (= 24) ticks
         if ((tick % static_cast<uint32_t>(_ticksPerStep)) == 0)
             onStep (tick / static_cast<uint32_t>(_ticksPerStep), sampleOffset, shufflePulses);
-
-        // Note-off stack: check every tick (1-pulse resolution, same as original)
-        onTick (sampleOffset);
     }
 
     // ── onStep — fires once per 16th-note step (every 24 ticks) ──────────────

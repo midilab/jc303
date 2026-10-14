@@ -89,9 +89,9 @@ static void testStepSpacingAndGate()
     for (size_t i = 1; i < ons.size(); ++i)
         CHECK (ons[i].at - ons[i - 1].at == kStep);  // exactly one 16th apart
 
-    // Plain note: gate is at most 50% of a step (12 ticks) and not shorter than 10
+    // Plain note: gate is exactly 50% of a step (12 ticks)
     const long off = r.offAfter (40, ons[0].at);
-    CHECK (off > ons[0].at + 10 * kTick - 1 && off <= ons[0].at + 12 * kTick);
+    CHECK (off == ons[0].at + 12 * kTick);
     CHECK (off < ons[1].at);                         // released before the next note
 }
 
