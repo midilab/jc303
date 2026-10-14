@@ -49,13 +49,13 @@ struct Rig
         seq.setSlide (i, slide);
     }
 
-    void run (long samples)
+    void run (long samples, int block = 512)
     {
         juce::MidiBuffer empty;
-        for (long done = 0; done < samples; done += 512)
+        for (long done = 0; done < samples; done += block)
         {
-            seq.processBlock (empty, 512, false, 0.0, 120.0);
-            pos += 512;
+            seq.processBlock (empty, block, false, 0.0, 120.0);
+            pos += block;
         }
     }
 
@@ -188,6 +188,59 @@ static void testPlayedStepDropsTie()
     CHECK (! seq.tieOn (3));                         // as in aciduino: a played step is never tied
 }
 
+// CPU timing: events land on a free-running 1.8 ms interrupt grid, NoteOn
+// ~1.0 ms and NoteOff ~2.35 ms after the interrupt (Schmidt, uPD650C-133).
+static constexpr double kMs = 48.0;                  // samples per ms at 48 kHz
+
+static void testCpuTimingDelaysGate()
+{
+    Rig plain, cpu;
+    cpu.seq.setCpuTiming (true);
+    for (Rig* r : { &plain, &cpu })
+    {
+        r->step (0, 40); r->step (1, 43); r->step (2, 45); r->step (3, 47);
+        r->seq.setTrackLength (4);
+        r->seq.start();
+        r->run (8 * kStep + 1024);
+    }
+
+    CHECK (plain.evs.size() == cpu.evs.size());
+    CHECK (plain.evs.size() >= 16);
+    long firstOnDelay = -1;
+    bool varies = false;
+    for (size_t i = 0; i < plain.evs.size() && i < cpu.evs.size(); ++i)
+    {
+        const auto& p = plain.evs[i];
+        const auto& c = cpu.evs[i];
+        CHECK (p.on == c.on && p.note == c.note);    // same events, same order
+        const long delay = c.at - p.at;
+        if (c.on)
+        {
+            CHECK (delay >= 1.0 * kMs && delay <= 2.8 * kMs + 1);
+            if (firstOnDelay < 0) firstOnDelay = delay;
+            else if (delay != firstOnDelay) varies = true;
+        }
+        else
+        {
+            CHECK (delay >= 2.35 * kMs && delay <= 4.15 * kMs + 1);
+        }
+    }
+    CHECK (varies);                                  // the grid beats against the tempo
+}
+
+static void testCpuTimingStopFlushesQueue()
+{
+    Rig r;
+    r.seq.setCpuTiming (true);
+    r.step (0, 40);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    r.run (16, 16);                                  // NoteOn is queued, not yet due
+    r.seq.stop();
+    r.run (kStep);
+    CHECK (r.ons().empty());                         // a queued NoteOn is dropped on stop
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -272,6 +325,8 @@ int main()
     testSameNoteSlideIsOneGate();
     testSlideCarriesAcrossTie();
     testPlayedStepDropsTie();
+    testCpuTimingDelaysGate();
+    testCpuTimingStopFlushesQueue();
     testStopReleasesNote();
     testTempoClamp();
     testRandomizeFillAndFlags();

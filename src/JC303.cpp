@@ -230,6 +230,9 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("seqPlayState",
                                                         "Seq Play State",
                                                         false),
+            std::make_unique<juce::AudioParameterBool> ("seqCpuTiming",
+                                                        "Seq CPU Timing",
+                                                        true),
             std::make_unique<juce::AudioParameterBool> ("seqGenerate",
                                                         "Seq Generate",
                                                         false),
@@ -298,6 +301,7 @@ JC303::JC303()
     seqStartMode = parameters.getRawParameterValue("seqStartMode");
     seqTempo = parameters.getRawParameterValue("seqTempo");
     seqPlayState = parameters.getRawParameterValue("seqPlayState");
+    seqCpuTiming = parameters.getRawParameterValue("seqCpuTiming");
     seqGenerate = parameters.getRawParameterValue("seqGenerate");
     seqClear = parameters.getRawParameterValue("seqClear");
     subOscGain = parameters.getRawParameterValue("subOscGain");
@@ -986,6 +990,9 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // (including the note-alls-off flush on generate/clear) on the audio
     // thread and inside this buffer's event queue.
     applySeqCommands();
+
+    // 303 CPU interrupt timing is a mod: only active with the mod switch on
+    _sequencer.setCpuTiming (*switchModState > 0.5f && *seqCpuTiming > 0.5f);
 
     _sequencer.processBlock (midiMessages,
                              numSamples,

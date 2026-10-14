@@ -559,6 +559,7 @@ public:
         seq.items.add(Item { "seqTempo",     "Tempo",      Type::value, {}, 0.0f });
         seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 1.0f });
         seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 1.0f });
+        seq.items.add(Item { "seqCpuTiming", "CPU Timing", Type::value, {}, 1.0f });
         pages.add(seq);
 
         return pages;

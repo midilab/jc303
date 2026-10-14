@@ -179,6 +179,8 @@ public:
         _tickCounter     = 0;
         _lastHostTick    = -1;
         _lastMode        = _syncMode.load (std::memory_order_relaxed);
+        _blockStart      = 0;
+        _queueCount      = 0;
     }
 
     // =========================================================================
@@ -202,6 +204,16 @@ public:
         _internalBpm.store (juce::jlimit (20.f, 300.f, bpm), std::memory_order_relaxed);
     }
     float getTempo() const { return _internalBpm.load (std::memory_order_relaxed); }
+
+    // =========================================================================
+    // CPU timing (TB-303 uPD650C-133 interrupt latency)
+    // =========================================================================
+    /** When on, every gate edge lands on a free-running 1.8 ms interrupt grid
+     *  that is not synced to the tempo, NoteOn ~1.0 ms and NoteOff ~2.35 ms
+     *  after the interrupt (J. Schmidt, "Analysis of the uPD650C-133 CPU
+     *  timing").  Gates run slightly long and beat against the tempo. */
+    void setCpuTiming (bool on) { _cpuTiming.store (on, std::memory_order_relaxed); }
+    bool getCpuTiming() const   { return _cpuTiming.load (std::memory_order_relaxed); }
 
     // =========================================================================
     // Transport control
@@ -318,6 +330,9 @@ public:
             case SyncMode::MidiClock:
                 break; // handled above per-message
         }
+
+        flushQueue (numSamples);
+        _blockStart += numSamples;
     }
 
     // =========================================================================
@@ -948,7 +963,7 @@ private:
             {
                 _stack[i].note   = note;
                 _stack[i].length = gateLength;
-                emit ({ Acid303EventType::NoteOn,
+                send ({ Acid303EventType::NoteOn,
                         note,
                         cur.accent ? SEQ303_ACCENT_VELOCITY : SEQ303_NOTE_VELOCITY,
                         sampleOffset });
@@ -969,7 +984,7 @@ private:
                 --_stack[i].length;
                 if (_stack[i].length == 0)
                 {
-                    emit ({ Acid303EventType::NoteOff,
+                    send ({ Acid303EventType::NoteOff,
                             _stack[i].note,
                             0,
                             sampleOffset });
@@ -986,6 +1001,46 @@ private:
     inline void emit (const Acid303Event& ev) const
     {
         if (onNoteEvent) onNoteEvent (ev);
+    }
+
+    /** Emit now, or queue on the CPU-timing interrupt grid. */
+    void send (const Acid303Event& ev)
+    {
+        if (! _cpuTiming.load (std::memory_order_relaxed) || _queueCount == kQueueSize)
+        {
+            emit (ev);
+            return;
+        }
+
+        const double msToSamples = _sampleRate / 1000.0;
+        const double period      = kIrqPeriodMs * msToSamples;
+        const double latency     = (ev.type == Acid303EventType::NoteOn ? kGateOnLatencyMs
+                                                                       : kGateOffLatencyMs) * msToSamples;
+        const double t           = static_cast<double>(_blockStart + ev.sampleOffset);
+        const double irq         = std::ceil (t / period) * period;
+
+        _queue[_queueCount++] = { ev, static_cast<int64_t>(std::llround (irq + latency)) };
+    }
+
+    /** Emit queued events that fall inside the current block. */
+    void flushQueue (int numSamples)
+    {
+        const int64_t blockEnd = _blockStart + numSamples;
+        int kept = 0;
+        for (int i = 0; i < _queueCount; ++i)
+        {
+            auto q = _queue[i];
+            if (q.at < blockEnd)
+            {
+                q.ev.sampleOffset = static_cast<int>(std::max<int64_t> (0, q.at - _blockStart));
+                emit (q.ev);
+            }
+            else
+            {
+                _queue[kept++] = q;
+            }
+        }
+        _queueCount = kept;
     }
 
     /** Must be called with _dataLock already held. */
@@ -1006,6 +1061,15 @@ private:
     void clearStackInternal (bool sendNoteOffs)
     {
         bool sentAny = false;
+        for (int i = 0; i < _queueCount; ++i)
+        {
+            if (sendNoteOffs && _queue[i].ev.type == Acid303EventType::NoteOff)
+            {
+                emit ({ Acid303EventType::NoteOff, _queue[i].ev.note, 0, 0 });
+                sentAny = true;
+            }
+        }
+        _queueCount = 0;
         for (int i = 0; i < SEQ303_NOTE_STACK_SIZE; ++i)
         {
             if (_stack[i].length != -1)
@@ -1086,6 +1150,18 @@ private:
     int32_t                _slideExtraTicks { 0 };   // = 20 ticks
 
     std::atomic<float>     _internalBpm { 120.f };
+
+    // CPU timing: absolute sample clock and events waiting for their interrupt
+    static constexpr double kIrqPeriodMs      = 1.8;
+    static constexpr double kGateOnLatencyMs  = 1.0;
+    static constexpr double kGateOffLatencyMs = 2.35;
+    static constexpr int    kQueueSize        = 16;
+    struct QueuedEvent { Acid303Event ev; int64_t at; };
+
+    std::atomic<bool>      _cpuTiming  { false };
+    int64_t                _blockStart { 0 };
+    QueuedEvent            _queue[kQueueSize] {};
+    int                    _queueCount { 0 };
 
     // RNG (portable std::mt19937 replaces Arduino random())
     std::mt19937           _rng;
