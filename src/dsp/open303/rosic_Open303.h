@@ -144,9 +144,6 @@ namespace rosic
      *  DiodeLadderFilter::setRail). The MS-20 and IR3109 models take it as their Clip, the Wasp as its supply (see updateCircuitCharacter). */
     void setFilterRail(double rail) { diodeFilter.setRail(rail); circuitRail = rail; updateCircuitCharacter(); }
 
-    /** Oddity (ARP 4075) only: the 2k2 tail mod (ARP4075Filter::setTailMod). */
-    void setFilterArpMod(bool on) { arpFilter.setTailMod(on); }
-
     /** Returns the Filter FM depth. */
     double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
 

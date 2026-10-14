@@ -9,7 +9,7 @@ change to the filter.
 - ARP 4075 Voltage Controlled Low-Pass Filter schematic, rev. E (ARP Instruments / J. Verghese, ARPtech), with the
   Odyssey Mk III VCF and controls page: https://till.com/arptech/pdf/4075.pdf (submodule index:
   https://till.com/arptech/modmain.htm). Its note 7 (R2 / R7 / R12 / R17 to 2k2) is the optional tail mod
-  (`setTailMod`, the plugin's "4075 Tail Mod"); note 8 (C6) is not modelled.
+  (`setTailMod`; the plugin runs stock); note 8 (C6) is not modelled.
 - YuSynth ARP 4072 / 4075 clone (the same stage topology, drawn more legibly):
   https://yusynth.net/Modular/EN/ARPVCF/index.html
 
@@ -45,8 +45,8 @@ RES, as the Moog's), self-oscillation from RES pot ~0.84 at 1 kHz (0.83 at 300 H
 entering the filter passes the limiter's tanh first, so the stages stay near-linear: the 4075 stays fairly clean
 (1-3 % THD at the peak, mostly H2), and its oscillation is a clean ~1.8 V p-p sine.
 
-The 2k2 tail mod lifts the cutoff ceiling past 20 kHz. In the plugin the knob tops out at the 303's 2.4 kHz, so it
-only shows where the envelope peaks (env mod and accent near their maximum reach 20 kHz): ~+0.3 dB of top octave on
+The 2k2 tail mod (tools only; the plugin runs stock) lifts the cutoff ceiling past 20 kHz. The knob tops out at the
+303's 2.4 kHz, so it would only show where the envelope peaks (env mod and accent near their maximum reach 20 kHz): ~+0.3 dB of top octave on
 those sweeps, and the resonance follows them above 12 kHz. The resonance map holds with it (within 0.02 at 300 Hz
 to 3 kHz).
 

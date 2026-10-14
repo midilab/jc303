@@ -198,10 +198,6 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         1.0f),   // Diode Hi-Fi: ceiling on the ladder's stage voltages; 1 = unlimited (the full crunch), lower = cleaner; MS-20 / IR3109: resonance limiter, Wasp / SEM: supply sag, 1 = the circuit
-            std::make_unique<juce::AudioParameterChoice> ("filterArpMod",
-                                                        "4075 Tail Mod",
-                                                        juce::StringArray{ "Stock", "2k2" },
-                                                        0),      // Oddity (ARP 4075) only: Stock = 4k7 tails (~12 kHz ceiling), 2k2 = the schematic's note-7 mod
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -324,7 +320,6 @@ JC303::JC303()
     filterTension = parameters.getRawParameterValue("filterTension");
     filterBias = parameters.getRawParameterValue("filterBias");
     filterRail = parameters.getRawParameterValue("filterRail");
-    filterArpMod = parameters.getRawParameterValue("filterArpMod");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -407,7 +402,6 @@ JC303::JC303()
     parameters.addParameterListener("filterTension", this);
     parameters.addParameterListener("filterBias", this);
     parameters.addParameterListener("filterRail", this);
-    parameters.addParameterListener("filterArpMod", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -484,7 +478,6 @@ JC303::~JC303()
     parameters.removeParameterListener("filterTension", this);
     parameters.removeParameterListener("filterBias", this);
     parameters.removeParameterListener("filterRail", this);
-    parameters.removeParameterListener("filterArpMod", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -795,10 +788,6 @@ void JC303::setParameter (Open303Parameters index, float value)
         // resonance limiter's threshold (their Clip), 1 = the circuit, lower = earlier. Wasp: its supply, sagging
         open303Core.setFilterRail(value);
         break;
-    case FILTER_ARP_MOD:
-        // Oddity only: 0 = the 4075's stock 4k7 tail resistors, 1 = the 2k2 mod (ARP4075Filter::setTailMod)
-        open303Core.setFilterArpMod(value > 0.5f);
-        break;
 
     // LFO parameters
     case LFO_WAVEFORM:
@@ -858,7 +847,6 @@ void JC303::setDevilMod(bool mode)
         setParameter(FILTER_TENSION, *filterTension);
         setParameter(FILTER_BIAS, *filterBias);
         setParameter(FILTER_RAIL, *filterRail);
-        setParameter(FILTER_ARP_MOD, *filterArpMod);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
         setParameter(LFO_WAVEFORM, *lfoWaveform);

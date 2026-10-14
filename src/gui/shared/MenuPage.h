@@ -669,7 +669,6 @@ public:
             rail.alsoHiddenWhenIndex = 0;
             mod.items.add(rail);
         }
-        mod.items.add(Item { "filterArpMod", "4075 Tail Mod", Type::value, {}, 0.0f, {}, "filterType", 0, 7, true, 7 });   // Oddity only
         mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
