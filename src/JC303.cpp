@@ -152,7 +152,7 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
                                                         "Square Model",
                                                         juce::StringArray{ "Open303", "Circuit" },
-                                                        SQUARE_OPEN303),
+                                                        SQUARE_CIRCUIT),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
                                                         "Filter Saturation",
                                                         0.0f,
