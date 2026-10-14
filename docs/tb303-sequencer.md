@@ -37,7 +37,7 @@ Each step stores:
 | Accent | on / off |
 | Hold | on / off: keep the gate high into the next step |
 
-Pattern-level markers: a pattern shorter than 16 steps ends early; triplet mode uses 12 steps of 8 clocks.
+Pattern-level markers: a pattern shorter than 16 steps ends early. Triplet mode (8th-note triplets, 8 clocks per step) is marked in the last step slot, so a triplet pattern has at most 15 steps; 12 steps make one bar. **[firmware]**
 
 **Hold is the only legato mechanism.** Slide and tie are both the hold flag:
 
@@ -108,13 +108,16 @@ The machine stores only the per-step data above. The pitch list (notes with octa
 ### 5.2 Consequences
 
 - **Re-flow:** changing the time list (e.g. turning a rest into a note) makes every later note take a different pitch-list entry. The melody shifts onto different steps. This is the familiar "edit the rhythm, get a new line" behaviour.
+- **A slide into a rest is dropped.** When the pitch list is rebuilt, a note with slide followed by a rest loses its slide flag. (It has no audible effect at playback either: see the gate-off rule.) **[firmware]**
 - **Same-pitch slide collapses into a tie.** After an edit pass, a slide into the same pitch is read back as a tie: the second step becomes a copy of the first note (its own accent and slide flags are replaced by the first note's), and the pitch-list entry it used is passed on to the following notes.
 
 ### 5.3 Tie after a rest
 
 Entering a tie in Time Mode marks the **previous** step as holding and rewrites it as a note, without checking whether it was a rest. So a tie entered straight after a rest turns that rest into a note: the result is a two-step tied note starting on the former rest step, which takes the next pitch-list entry (later pitches shift by one). **[firmware]**
 
-This looks like an unintended side effect rather than a designed feature. Implementations may reasonably keep a tie after a rest silent instead.
+A tie entered on the very first step is written as a plain note. **[firmware]**
+
+The rest-to-note rewrite looks like an unintended side effect rather than a designed feature. Implementations may reasonably keep a tie after a rest silent instead.
 
 ### 5.4 Tap write while running
 
@@ -134,4 +137,5 @@ For sequencers that store accent / slide / tie per step (aciduino, JC303) at 96 
 ## 7. Open questions
 
 - The exact difference between the two end-of-pattern markers (one also selects triplet mode).
-- Whether the slide line is purely the slide control or also the pitch-latch strobe (the waveform is as described either way).
+- Whether the slide line is purely the slide control or also the pitch-latch strobe.
+- The firmware re-latches pitch and accent at clock 2 of a sounding note and appears to drop the slide line there, which would end a glide after about a third of the step. Schmidt measured the slide line high for the whole slid step, and this spec follows the measurement; a scope check of the slide line and the slide CV would settle it.
