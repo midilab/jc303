@@ -14,6 +14,9 @@ set(LIB_JUCE_TAG "8.0.15")
 set(LIB_CLAP_TAG "55525c9858d4b25687be7759a5e0f70eccef218e")
 set(LIB_CHOWDSP_UTILS_TAG "ffc70ba399f9afaeefb996eb14e55a1d487270b8")
 
+### Tests (see tests/CMakeLists.txt) ###
+option(JC303_BUILD_TESTS "Build unit tests" OFF)
+
 ### Gui setup
 # check if the GUI variable is set
 if(NOT DEFINED GUI)
@@ -70,6 +73,11 @@ FetchContent_Declare(chowdsp_utils
     GIT_CONFIG     advice.detachedHead=false)
 
 FetchContent_MakeAvailable(juce juce-clap-extensions chowdsp_utils)
+
+if(JC303_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # gui resources BinaryData via CMakeLists.txt
 add_subdirectory(src/gui/${GUI})
