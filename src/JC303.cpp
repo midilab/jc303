@@ -245,6 +245,10 @@ JC303::JC303()
                                                         0,
                                                         15,
                                                         0),
+            std::make_unique<juce::AudioParameterChoice> ("seqSwing",
+                                                        "Seq Swing",
+                                                        juce::StringArray{ "50%", "54%", "58%", "62%", "66%", "71%", "75%" },
+                                                        0),
             std::make_unique<juce::AudioParameterBool> ("seqCpuTiming",
                                                         "Seq CPU Timing",
                                                         true),
@@ -320,6 +324,7 @@ JC303::JC303()
     seqTranspose = parameters.getRawParameterValue("seqTranspose");
     seqShift = parameters.getRawParameterValue("seqShift");
     seqPitchRotate = parameters.getRawParameterValue("seqPitchRotate");
+    seqSwing = parameters.getRawParameterValue("seqSwing");
     seqGenerate = parameters.getRawParameterValue("seqGenerate");
     seqClear = parameters.getRawParameterValue("seqClear");
     subOscGain = parameters.getRawParameterValue("subOscGain");
@@ -1019,6 +1024,9 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     if (_sequencer.getTranspose() != transpose)     _sequencer.setTranspose (transpose);
     if (_sequencer.getShiftPos() != shift)          _sequencer.setShiftPos (shift);
     if (_sequencer.getPitchRotate() != rotate)      _sequencer.setPitchRotate (rotate);
+
+    // Swing signatures as in aciduino: off-beat 16ths late by 0, 2 ... 12 ticks
+    _sequencer.setSwingTicks (2 * static_cast<int>(std::lround (seqSwing->load())));
 
     _sequencer.processBlock (midiMessages,
                              numSamples,

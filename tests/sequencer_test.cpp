@@ -294,6 +294,61 @@ static void testTransposeOffsetsNotes()
     CHECK (r.seq.getRawNote (0) == 40);              // stored pattern untouched
 }
 
+// Swing: MPC60 / 909 signatures as in aciduino, off-beat 16ths late by 0..12 ticks.
+static void testSwingDelaysOffbeats()
+{
+    Rig plain, swung;
+    swung.seq.setSwingTicks (8);                     // 66%
+    for (Rig* r : { &plain, &swung })
+    {
+        r->step (0, 40); r->step (1, 43); r->step (2, 45); r->step (3, 47);
+        r->seq.setTrackLength (4);
+        r->seq.start();
+        r->run (4 * kStep + 1024);
+    }
+    const auto p = plain.ons(), w = swung.ons();
+    CHECK (p.size() == w.size() && w.size() >= 4);
+    for (size_t i = 0; i < 4 && i < w.size(); ++i)
+    {
+        const long late = (i % 2) ? 8 * kTick : 0;
+        CHECK (w[i].at - p[i].at == late);           // only off-beats move
+        CHECK (w[i].note == p[i].note);
+        const long gate = swung.offAfter (w[i].note, w[i].at) - w[i].at;
+        CHECK (gate == 12 * kTick);                  // plain notes keep their 12 ticks
+    }
+}
+
+static void testSwingKeepsSlideLegato()
+{
+    for (int from : { 0, 1 })                        // slide out of an on-beat and out of an off-beat
+    {
+        Rig r;
+        r.seq.setSwingTicks (12);                    // 75%
+        r.step (from, 40, false, /*slide=*/true); r.step (from + 1, 43);
+        r.seq.setTrackLength (4);
+        r.seq.start();
+        r.run (4 * kStep);
+        const auto ons = r.ons();
+        CHECK (ons.size() == 2);
+        if (ons.size() == 2)
+            CHECK (r.offAfter (40, ons[0].at) > ons[1].at);   // still overlaps the next note
+    }
+}
+
+static void testSwingTieEndsInItsStep()
+{
+    Rig r;
+    r.seq.setSwingTicks (8);
+    r.step (0, 40);
+    r.seq.setTie (1, true);                          // tie lands on the late off-beat
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    r.run (2 * kStep);
+    const auto ons = r.ons();
+    CHECK (ons.size() == 1);
+    CHECK (r.offAfter (40, ons[0].at) - ons[0].at == (36 + 8) * kTick);   // half way through the late tie step
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -383,6 +438,9 @@ int main()
     testPitchRotateKeepsRhythm();
     testShiftRotatesPattern();
     testTransposeOffsetsNotes();
+    testSwingDelaysOffbeats();
+    testSwingKeepsSlideLegato();
+    testSwingTieEndsInItsStep();
     testStopReleasesNote();
     testTempoClamp();
     testRandomizeFillAndFlags();

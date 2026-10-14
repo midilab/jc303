@@ -581,6 +581,7 @@ public:
             rotate.wrap = true;
             seq.items.add(rotate);
         }
+        seq.items.add(Item { "seqSwing", "Swing", Type::value, {}, 1.0f });
         {
             Item cpuTiming { "seqCpuTiming", "CPU Timing", Type::value, {}, 1.0f };
             cpuTiming.showParamText = true;   // On / Off

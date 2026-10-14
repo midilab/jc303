@@ -218,6 +218,14 @@ public:
     bool getCpuTiming() const   { return _cpuTiming.load (std::memory_order_relaxed); }
 
     // =========================================================================
+    // Swing (aciduino / uClock shuffle signatures)
+    // =========================================================================
+    /** Off-beat 16ths start `ticks` 96-PPQN ticks late: 0, 2, 4 ... 12 are the
+     *  MPC60 / 909 signatures 50, 54, 58, 62, 66, 71, 75 %. */
+    void setSwingTicks (int ticks) { _swingTicks.store (juce::jlimit (0, 12, ticks), std::memory_order_relaxed); }
+    int  getSwingTicks() const     { return _swingTicks.load (std::memory_order_relaxed); }
+
+    // =========================================================================
     // Transport control
     // =========================================================================
 
@@ -898,9 +906,13 @@ private:
         // is sent before the new NoteOn.
         onTick (sampleOffset);
 
-        // Step boundary: every _ticksPerStep (= 24) ticks
-        if ((tick % static_cast<uint32_t>(_ticksPerStep)) == 0)
-            onStep (tick / static_cast<uint32_t>(_ticksPerStep), sampleOffset, shufflePulses);
+        // Step boundary: every _ticksPerStep (= 24) ticks; swung steps fire late.
+        // Swing is latched per pair of 16ths so a change can't skip or repeat a step.
+        const uint32_t step = tick / static_cast<uint32_t>(_ticksPerStep);
+        if (tick % (2u * static_cast<uint32_t>(_ticksPerStep)) == 0)
+            _swingLatched = _swingTicks.load (std::memory_order_relaxed);
+        if (static_cast<int>(tick % static_cast<uint32_t>(_ticksPerStep)) == swingDelay (step))
+            onStep (step, sampleOffset, shufflePulses);
     }
 
     // ── onStep — fires once per 16th-note step (every 24 ticks) ──────────────
@@ -930,6 +942,7 @@ private:
         int32_t       gateLength     = _noteLengthTicks;
         const uint8_t lookaheadBound = static_cast<uint8_t>(stepLen);
         uint8_t       nextStep       = stepPos;
+        uint32_t      endStep        = stepTick;   // clock step the gate ends in
 
         for (uint8_t i = 1; i <= lookaheadBound; ++i)
         {
@@ -940,14 +953,22 @@ private:
             {
                 gateLength = _noteLengthTicks
                              + static_cast<int32_t>(i) * static_cast<int32_t>(_ticksPerStep);
+                endStep    = stepTick + i;
                 continue;
             }
 
             if (cur.slide && ! next.rest)
+            {
                 gateLength = static_cast<int32_t>(i - 1) * static_cast<int32_t>(_ticksPerStep)
                              + _noteLengthTicks + _slideExtraTicks;
+                endStep    = stepTick + i;
+            }
             break;
         }
+
+        // Swing: a gate that ends in a later, swung step stretches by that
+        // step's delay, so ties and slides still reach it.  Never shortened.
+        gateLength += std::max (0, swingDelay (endStep) - swingDelay (stepTick));
 
         if (shufflePulses != 0)
             gateLength = std::max (1, gateLength + shufflePulses);
@@ -1030,6 +1051,12 @@ private:
     inline void emit (const Acid303Event& ev) const
     {
         if (onNoteEvent) onNoteEvent (ev);
+    }
+
+    /** Delay of a clock step in ticks: off-beat 16ths are swung. */
+    int swingDelay (uint32_t step) const
+    {
+        return (step & 1u) ? _swingLatched : 0;
     }
 
     /** Emit now, or queue on the CPU-timing interrupt grid. */
@@ -1188,6 +1215,8 @@ private:
     struct QueuedEvent { Acid303Event ev; int64_t at; };
 
     std::atomic<bool>      _cpuTiming  { false };
+    std::atomic<int>       _swingTicks { 0 };
+    int                    _swingLatched { 0 };   // audio thread: swing for the current pair of 16ths
     int64_t                _blockStart { 0 };
     QueuedEvent            _queue[kQueueSize] {};
     int                    _queueCount { 0 };

@@ -236,6 +236,7 @@ private:
     std::atomic<float>* seqTranspose = nullptr;
     std::atomic<float>* seqShift = nullptr;
     std::atomic<float>* seqPitchRotate = nullptr;
+    std::atomic<float>* seqSwing = nullptr;
     std::atomic<float>* seqGenerate = nullptr;
     std::atomic<float>* seqClear = nullptr;
     //std::atomic<float>* seqHarmonizer = nullptr;
