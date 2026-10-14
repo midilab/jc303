@@ -324,8 +324,15 @@ public:
     // ── Per-step setters / getters — UI-thread-safe ───────────────────────────
     // =========================================================================
 
-    /** rest(step, state) — mirrors Engine303::rest() */
-    void setRest   (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].rest   = v; }
+    /** rest(step, state) — mirrors Engine303::rest().  A played step drops its
+     *  tie, as in the aciduino step editor. */
+    void setRest (int step, bool v)
+    {
+        juce::SpinLock::ScopedLockType lk(_dataLock);
+        _data.step[step].rest = v;
+        if (! v)
+            _data.step[step].tie = false;
+    }
     /** setAccent(step, state) */
     void setAccent (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].accent = v; }
     /** setSlide(step, state) */

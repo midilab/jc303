@@ -125,20 +125,19 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         addAndMakeVisible(stepSelectors[i] = new SequencerStepSelector());
     }
 
-    // per-step accent/slide/tie micro toggles (small sequencer-button art),
+    // per-step accent and slide/tie micro toggles (small sequencer-button art),
     // one stacked column below each note button, in that order (top to bottom)
     for (int i = 0; i < 16; ++i)
     {
         addAndMakeVisible(seqAccentButtons[i] = new SequencerStepSelector());
         addAndMakeVisible(seqSlideButtons[i] = new SequencerStepSelector());
-        addAndMakeVisible(seqTieButtons[i] = new SequencerStepSelector());
     }
 
-    // row labels for the accent/slide/tie micro toggles (right-aligned, 4px left of each row)
+    // row labels for the accent and slide/tie micro toggles (right-aligned, 4px left of each row)
     {
-        const char* texts[5] = { "step", "rest", "accent", "slide", "tie" };
-        juce::Label** labels[5] = { &seqStepLabel, &seqRestLabel, &seqAccentLabel, &seqSlideLabel, &seqTieLabel };
-        for (int r = 0; r < 5; ++r)
+        const char* texts[4] = { "step", "rest", "accent", "slide/tie" };
+        juce::Label** labels[4] = { &seqStepLabel, &seqRestLabel, &seqAccentLabel, &seqSlideLabel };
+        for (int r = 0; r < 4; ++r)
         {
             auto* lbl = new juce::Label();
             *labels[r] = lbl;
@@ -165,18 +164,19 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         // micro toggles write their flag directly (button ON == feature active)
         seqAccentButtons[i]->setClickTogglesState(true);
         seqSlideButtons[i]->setClickTogglesState(true);
-        seqTieButtons[i]->setClickTogglesState(true);
         seqAccentButtons[i]->onClick = [this, step]
         {
             processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
         };
+        // shared slide/tie toggle, as in aciduino: slide on a note, tie on a rest
         seqSlideButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setSlide(step, seqSlideButtons[step]->getState() != 0);
-        };
-        seqTieButtons[i]->onClick = [this, step]
-        {
-            processorRef.getSequencer().setTie(step, seqTieButtons[step]->getState() != 0);
+            auto& seq = processorRef.getSequencer();
+            const bool on = seqSlideButtons[step]->getState() != 0;
+            if (seq.stepOn(step))
+                seq.setSlide(step, on);
+            else
+                seq.setTie(step, on);
         };
         // clicking an LED selects the step to edit
         stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
@@ -373,17 +373,15 @@ void JC303Editor::timerCallback()
         if (seqStepButtons[i]->getToggleState() != noteOn)
             seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
 
-        // per-step accent/slide/tie toggles: ON == flag active (steps beyond the
-        // active pattern length show OFF, but stay editable)
+        // per-step accent and slide/tie toggles: ON == flag active (steps beyond the
+        // active pattern length show OFF, but stay editable). The shared toggle shows
+        // slide on a note step and tie on a rest.
         const bool accentOn = (i < length) && seq.accentOn(i);
-        const bool slideOn  = (i < length) && seq.slideOn(i);
-        const bool tieOn    = (i < length) && seq.tieOn(i);
+        const bool slideOn  = (i < length) && (seq.stepOn(i) ? seq.slideOn(i) : seq.tieOn(i));
         if (seqAccentButtons[i]->getState() != accentOn)
             seqAccentButtons[i]->setState(accentOn ? 1 : 0);
         if (seqSlideButtons[i]->getState() != slideOn)
             seqSlideButtons[i]->setState(slideOn ? 1 : 0);
-        if (seqTieButtons[i]->getState() != tieOn)
-            seqTieButtons[i]->setState(tieOn ? 1 : 0);
     }
 
     updateKeyboardForSelectedStep();
@@ -608,7 +606,7 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> lfoDestinationLocation = {720, 60};
 
 // step toggles (note/rest editing), display LEDs above,and per-step
-    // accent/slide/tie micro toggles below (click-to-select LEDs)
+    // accent and slide/tie micro toggles below (click-to-select LEDs)
     const int switchStepWidth =  45;
     const int switchStepHeight =  45;
     const int switchStepGap =  8;
@@ -621,7 +619,6 @@ void JC303Editor::setControlsLayout()
     const int microButtonGap    =  2;
     const int accentButtonY     = 468;   // just below the step toggles
     const int slideButtonY      = accentButtonY + (microButtonHeight + microButtonGap);
-    const int tieButtonY        = slideButtonY  + (microButtonHeight + microButtonGap);
     // menu navigation controls (top row), same width/aspect as the step selector
     // buttons: width = switchStepWidth, height keeps the step-selector art frame
     // aspect (62x34), 2px gaps between buttons
@@ -731,7 +728,7 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
     //lfoDepthSlider->setBounds(lfoDepthLocation.first, lfoDepthLocation.second, sliderSmallSize, sliderSmallSize);
     //lfoDestinationSlider->setBounds(lfoDestinationLocation.first, lfoDestinationLocation.second, sliderSmallSize, sliderSmallSize);
 
-    // step toggles, display LEDs(just above each toggle)and per-step accent/slide/tie
+    // step toggles, display LEDs(just above each toggle)and per-step accent and slide/tie
     // micro toggles (stacked below each toggle)
     for (int i =  0; i < 16; ++i)
     {
@@ -740,20 +737,19 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
         stepSelectors[i]->setBounds(stepX + (switchStepWidth - ledWidth) / 2, ledY, ledWidth, ledHeight);
         seqAccentButtons[i]->setBounds(stepX, accentButtonY, switchStepWidth, microButtonHeight);
         seqSlideButtons[i]->setBounds(stepX, slideButtonY, switchStepWidth, microButtonHeight);
-        seqTieButtons[i]->setBounds(stepX, tieButtonY, switchStepWidth, microButtonHeight);
     }
 
-    // row labels for step LED / note-rest / accent/slide/tie rows (right-aligned,
+    // row labels for step LED / note-rest / accent / slide-tie rows (right-aligned,
     // 4px left of each row)
     {
         const int labelGap = 2;
-        juce::Label* rowLabels[5] = { seqStepLabel, seqRestLabel, seqAccentLabel, seqSlideLabel, seqTieLabel };
-        const int rowYs[5] = { ledY, stepToggleY, accentButtonY, slideButtonY, tieButtonY };
-        const int rowHs[5] = { ledHeight, switchStepHeight, microButtonHeight, microButtonHeight, microButtonHeight };
+        juce::Label* rowLabels[4] = { seqStepLabel, seqRestLabel, seqAccentLabel, seqSlideLabel };
+        const int rowYs[4] = { ledY, stepToggleY, accentButtonY, slideButtonY };
+        const int rowHs[4] = { ledHeight, switchStepHeight, microButtonHeight, microButtonHeight };
         int labelW = 12;
-        for (int r = 0; r < 5; ++r)
+        for (int r = 0; r < 4; ++r)
             labelW = juce::jmax(labelW, 12 + (int) juce::TextLayout::getStringWidth(rowLabels[r]->getFont(), rowLabels[r]->getText()));
-        for (int r = 0; r < 5; ++r)
+        for (int r = 0; r < 4; ++r)
         {
             auto* lbl = rowLabels[r];
             lbl->setBounds(switchStepX0 - labelGap - labelW, rowYs[r], labelW, rowHs[r]);

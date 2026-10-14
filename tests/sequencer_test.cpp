@@ -179,6 +179,15 @@ static void testSlideCarriesAcrossTie()
     CHECK (off0 < ons[1].at + kStep);
 }
 
+static void testPlayedStepDropsTie()
+{
+    AcidSequencer303 seq;
+    seq.clearStepData (true);
+    seq.setTie (3, true);
+    seq.setRest (3, false);
+    CHECK (! seq.tieOn (3));                         // as in aciduino: a played step is never tied
+}
+
 static void testStopReleasesNote()
 {
     Rig r;
@@ -262,6 +271,7 @@ int main()
     testTieHoldsAcrossRest();
     testSameNoteSlideIsOneGate();
     testSlideCarriesAcrossTie();
+    testPlayedStepDropsTie();
     testStopReleasesNote();
     testTempoClamp();
     testRandomizeFillAndFlags();
