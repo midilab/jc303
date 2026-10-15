@@ -294,6 +294,50 @@ static void testTransposeOffsetsNotes()
     CHECK (r.seq.getRawNote (0) == 40);              // stored pattern untouched
 }
 
+// TB-303 owner's manual p.88: TRANSPOSE DOWN bottoms out at 1V = 32.7 Hz (MIDI 24).
+// Notes below it fold up by octaves, keeping the pitch name.
+static void testStepNotesFoldIntoRange()
+{
+    AcidSequencer303 seq;
+    seq.setStepData (0, 12);
+    CHECK (seq.getRawNote (0) == 24);
+    seq.setStepData (1, 5);
+    CHECK (seq.getRawNote (1) == 29);
+    seq.setStepData (2, 24);
+    CHECK (seq.getRawNote (2) == 24);
+    seq.recNote (10, false, false);
+    CHECK (seq.getRawNote (0) == 34);
+    seq.recNoteKeepFlags (0);
+    CHECK (seq.getRawNote (1) == 24);
+}
+
+static void testTransposeFoldsIntoRange()
+{
+    Rig r;
+    r.seq.setTranspose (-24);
+    r.step (0, 30); r.step (1, 50);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    r.run (4 * kStep);
+    CHECK ((playedNotes (r) == std::vector<int> { 30, 26 }));  // 6 folds up to 30
+
+    Rig hi;
+    hi.seq.setTranspose (24);
+    hi.step (0, 120);
+    hi.seq.setTrackLength (4);
+    hi.seq.start();
+    hi.run (4 * kStep);
+    CHECK ((playedNotes (hi) == std::vector<int> { 120 }));    // 144 folds down to 120
+}
+
+static void testRandomizeStaysInRange()
+{
+    AcidSequencer303 seq;
+    seq.acidRandomize (100, 0, 0, 0, 0, 0, 12);
+    for (int i = 0; i < SEQ303_STEP_MAX; ++i)
+        CHECK (seq.getRawNote (i) >= SEQ303_NOTE_MIN && seq.getRawNote (i) < SEQ303_NOTE_MIN + 12);
+}
+
 // Swing: MPC60 / 909 signatures as in aciduino, off-beat 16ths late by 0..12 ticks.
 static void testSwingDelaysOffbeats()
 {
@@ -617,6 +661,9 @@ int main()
     testPitchRotateKeepsRhythm();
     testShiftRotatesPattern();
     testTransposeOffsetsNotes();
+    testStepNotesFoldIntoRange();
+    testTransposeFoldsIntoRange();
+    testRandomizeStaysInRange();
     testSwingDelaysOffbeats();
     testSwingKeepsSlideLegato();
     testSwingTieEndsInItsStep();

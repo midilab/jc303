@@ -291,7 +291,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     {
         auto& seq = processorRef.getSequencer();
         seq.setStepData (selectedStep,
-                         static_cast<uint8_t> (juce::jlimit (0, 127, seq.getRawNote (selectedStep) + deltaSemitones)));
+                         static_cast<uint8_t> (juce::jlimit (static_cast<int> (SEQ303_NOTE_MIN), 127, seq.getRawNote (selectedStep) + deltaSemitones)));
         updateKeyboardForSelectedStep();
     };
 
@@ -429,8 +429,8 @@ void JC303Editor::timerCallback()
             seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
 
         // stored pitch name: black on a lit note step, dim on a rest (what it plays if switched on);
-        // octave = note / 12 (middle C = C5), matching the keyboard and aciduino
-        const auto noteName = juce::MidiMessage::getMidiNoteName(seq.getRawNote(i), true, true, 5);
+        // DAW octave numbering (middle C = C3), matching the keyboard; steps start at C0
+        const auto noteName = juce::MidiMessage::getMidiNoteName(seq.getRawNote(i), true, true, 3);
         const auto noteColour = noteOn ? juce::Colours::black : juce::Colour(0xff7a7a7a);
         if (seqStepNoteLabels[i]->getText() != noteName)
             seqStepNoteLabels[i]->setText(noteName, juce::dontSendNotification);
