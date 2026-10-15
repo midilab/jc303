@@ -305,11 +305,12 @@ static void testTransposeKeepsPatternInRange()
     CHECK (r.seq.transposeNotes (-2) && r.seq.getRawNote (0) == SEQ303_NOTE_MIN);
 }
 
-// Swing: MPC60 / 909 signatures as in aciduino, off-beat 16ths late by 0..12 ticks.
+// Swing, MPC style: the off-beat 16th lands at swing % of the 8th-note pair,
+// so 75 % is 12 ticks late. Continuous, not limited to whole ticks.
 static void testSwingDelaysOffbeats()
 {
     Rig plain, swung;
-    swung.seq.setSwingTicks (8);                     // 66%
+    swung.seq.setSwingPercent (62.5f);              // 6 ticks
     for (Rig* r : { &plain, &swung })
     {
         r->step (0, 40); r->step (1, 43); r->step (2, 45); r->step (3, 47);
@@ -321,7 +322,7 @@ static void testSwingDelaysOffbeats()
     CHECK (p.size() == w.size() && w.size() >= 4);
     for (size_t i = 0; i < 4 && i < w.size(); ++i)
     {
-        const long late = (i % 2) ? 8 * kTick : 0;
+        const long late = (i % 2) ? 6 * kTick : 0;
         CHECK (w[i].at - p[i].at == late);           // only off-beats move
         CHECK (w[i].note == p[i].note);
         const long gate = swung.offAfter (w[i].note, w[i].at) - w[i].at;
@@ -329,27 +330,47 @@ static void testSwingDelaysOffbeats()
     }
 }
 
+static void testSwingIsContinuous()
+{
+    Rig r;
+    r.seq.setSwingPercent (60.0f);                   // 4.8 ticks = 1200 samples
+    r.step (0, 40); r.step (1, 43);
+    r.seq.setTrackLength (2);
+    r.seq.start();
+    r.run (2 * kStep - 512);
+    const auto ons = r.ons();
+    CHECK (ons.size() == 2);
+    if (ons.size() == 2)
+    {
+        CHECK (ons[1].at - ons[0].at == kStep + 1200);
+        CHECK (r.offAfter (43, ons[1].at) - ons[1].at == 12 * kTick);
+    }
+}
+
 static void testSwingKeepsSlideLegato()
 {
-    for (int from : { 0, 1 })                        // slide out of an on-beat and out of an off-beat
-    {
-        Rig r;
-        r.seq.setSwingTicks (12);                    // 75%
-        r.step (from, 40, false, /*slide=*/true); r.step (from + 1, 43);
-        r.seq.setTrackLength (4);
-        r.seq.start();
-        r.run (4 * kStep);
-        const auto ons = r.ons();
-        CHECK (ons.size() == 2);
-        if (ons.size() == 2)
-            CHECK (r.offAfter (40, ons[0].at) > ons[1].at);   // still overlaps the next note
-    }
+    for (float pct : { 66.0f, 75.0f })
+        for (int from : { 0, 1 })                    // slide out of an on-beat and out of an off-beat
+        {
+            Rig r;
+            r.seq.setSwingPercent (pct);
+            r.step (from, 40, false, /*slide=*/true); r.step (from + 1, 43);
+            r.seq.setTrackLength (4);
+            r.seq.start();
+            r.run (4 * kStep);
+            const auto ons = r.ons();
+            CHECK (ons.size() == 2);
+            if (ons.size() != 2) continue;
+            const long off40 = r.offAfter (40, ons[0].at);
+            CHECK (off40 - ons[1].at == 8 * kTick);  // same 8-tick overhang as unswung
+            CHECK (off40 < r.offAfter (43, ons[1].at));   // no glide back to the slide source
+        }
 }
 
 static void testSwingTieEndsInItsStep()
 {
     Rig r;
-    r.seq.setSwingTicks (8);
+    r.seq.setSwingPercent (62.5f);
     r.step (0, 40);
     r.seq.setTie (1, true);                          // tie lands on the late off-beat
     r.seq.setTrackLength (4);
@@ -357,7 +378,75 @@ static void testSwingTieEndsInItsStep()
     r.run (2 * kStep);
     const auto ons = r.ons();
     CHECK (ons.size() == 1);
-    CHECK (r.offAfter (40, ons[0].at) - ons[0].at == (36 + 8) * kTick);   // half way through the late tie step
+    CHECK (r.offAfter (40, ons[0].at) - ons[0].at == (36 + 6) * kTick);   // half way through the late tie step
+}
+
+// At 75 % an off-beat gate ends on the next onset; CPU Timing's longer NoteOff
+// latency must not push the release past the next NoteOn.
+static void testSwingReleasesBeforeNextNoteWithCpuTiming()
+{
+    for (bool tie : { false, true })
+    {
+        Rig r;
+        r.seq.setSwingPercent (75.0f);
+        r.seq.setCpuTiming (true);
+        r.step (0, 40); r.step (1, 40); r.step (2, 40); r.step (3, 40);
+        if (tie) { r.seq.setRest (1, true); r.seq.setTie (1, true); }
+        r.seq.setTrackLength (4);
+        r.seq.start();
+        r.run (8 * kStep);
+        const auto ons = r.ons();
+        CHECK (ons.size() >= (tie ? 5u : 7u));
+        for (size_t i = 1; i < ons.size(); ++i)
+        {
+            const long off = r.offAfter (40, ons[i - 1].at);
+            CHECK (off != -1 && off <= ons[i].at);
+        }
+    }
+}
+
+static void testSwingHostStartMidPair()
+{
+    Rig r;
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::Host);
+    r.seq.setSwingPercent (75.0f);
+    r.step (0, 40); r.step (1, 43);
+    r.seq.setTrackLength (2);
+    r.seq.start();
+    juce::MidiBuffer empty;
+    double ppq = 0.25;                               // starts on the off-beat step
+    for (int b = 0; b < 8; ++b)
+    {
+        r.seq.processBlock (empty, 512, true, ppq, 120.0);
+        r.pos += 512;
+        ppq += 512.0 / 24000.0;
+    }
+    const auto ons = r.ons();
+    CHECK (! ons.empty());
+    if (! ons.empty())
+        CHECK (ons[0].note == 43 && ons[0].at == 12 * kTick);
+}
+
+static void testSwingMidiClockNotQuantised()
+{
+    Rig r;
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::MidiClock);
+    r.seq.setSwingPercent (54.0f);                   // 1.92 ticks = 480 samples
+    r.step (0, 40); r.step (1, 43);
+    r.seq.setTrackLength (2);
+    constexpr int kClock = 1000;                     // 24 PPQN at 120 bpm, 48 kHz
+    for (int b = 0; b < 2 * 6 + 2; ++b)
+    {
+        juce::MidiBuffer mb;
+        if (b == 0) mb.addEvent (juce::MidiMessage::midiStart(), 0);
+        mb.addEvent (juce::MidiMessage::midiClock(), 0);
+        r.seq.processBlock (mb, kClock, false, 0.0, 120.0);
+        r.pos += kClock;
+    }
+    const auto ons = r.ons();
+    CHECK (ons.size() >= 2);
+    if (ons.size() >= 2)
+        CHECK (ons[1].at - ons[0].at == kStep + 480);
 }
 
 // ---- re-roll ----------------------------------------------------------------
@@ -630,8 +719,12 @@ int main()
     testTransposeRewritesNotes();
     testTransposeKeepsPatternInRange();
     testSwingDelaysOffbeats();
+    testSwingIsContinuous();
     testSwingKeepsSlideLegato();
     testSwingTieEndsInItsStep();
+    testSwingReleasesBeforeNextNoteWithCpuTiming();
+    testSwingHostStartMidPair();
+    testSwingMidiClockNotQuantised();
     testRerollPitchesKeepsRhythm();
     testRerollRhythmKeepsPitchOrder();
     testPitchLengthCyclesAcrossBars();

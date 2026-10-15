@@ -245,10 +245,14 @@ JC303::JC303()
                                                         0,
                                                         16,
                                                         0),
-            std::make_unique<juce::AudioParameterChoice> ("seqSwing",
+            std::make_unique<juce::AudioParameterFloat> ("seqSwing",
                                                         "Seq Swing",
-                                                        juce::StringArray{ "50%", "54%", "58%", "62%", "66%", "71%", "75%" },
-                                                        0),
+                                                        juce::NormalisableRange<float> (50.0f, 75.0f, 0.1f),
+                                                        50.0f,
+                                                        juce::AudioParameterFloatAttributes()
+                                                            .withLabel ("%")
+                                                            .withStringFromValueFunction ([] (float v, int)
+                                                                { return juce::String (v, 1) + "%"; })),
             std::make_unique<juce::AudioParameterBool> ("seqCpuTiming",
                                                         "Seq CPU Timing",
                                                         true),
@@ -1072,15 +1076,14 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     const auto pitchLen  = static_cast<uint8_t>(std::lround (seqPitchLength->load()));
     if (_sequencer.getPitchLength() != pitchLen)    _sequencer.setPitchLength (pitchLen);
 
-    // Swing signatures as in aciduino: off-beat 16ths late by 0, 2 ... 12 ticks
-    _sequencer.setSwingTicks (2 * static_cast<int>(std::lround (seqSwing->load())));
+    // MPC-style swing: off-beat 16ths land at seqSwing % of the 8th-note pair
+    _sequencer.setSwingPercent (seqSwing->load());
 
     _sequencer.processBlock (midiMessages,
                              numSamples,
                              hostIsPlaying,
                              ppqAtStart,
-                             hostBpm,
-                             /*shufflePulses=*/ 0);
+                             hostBpm);
 
     // ── Sort pending sequencer events by sample position ──────────────────────
     // Typically 0–2 events per buffer; insertion sort is ideal here.

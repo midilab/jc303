@@ -620,7 +620,11 @@ public:
                 pitchLen.valueNames.add(juce::String(i));
             seq.items.add(pitchLen);
         }
-        seq.items.add(Item { "seqSwing", "Swing", Type::value, {}, 1.0f });
+        {
+            Item swing { "seqSwing", "Swing", Type::value, {}, 0.5f };
+            swing.showParamText = true;   // e.g. 62.5%
+            seq.items.add(swing);
+        }
         {
             Item cpuTiming { "seqCpuTiming", "CPU Timing", Type::value, {}, 1.0f };
             cpuTiming.showParamText = true;   // On / Off
