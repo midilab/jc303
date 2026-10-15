@@ -426,6 +426,7 @@ JC303::JC303()
 
 JC303::~JC303()
 {
+    cancelPendingUpdate();
     parameters.removeParameterListener("waveform", this);
     parameters.removeParameterListener("tuning", this);
     parameters.removeParameterListener("cutoff", this);
@@ -620,6 +621,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
 // semitone at a time where a note would leave SEQ303_NOTE_MIN..127.
 void JC303::applySeqRewrites()
 {
+    if (_seqOffsetReset.load (std::memory_order_acquire) != 0)
+        return;
+
     const int transpose = static_cast<int>(std::lround (seqTranspose->load()));
     int applied = _appliedTranspose.load();
     while (applied != transpose)
@@ -637,6 +641,32 @@ void JC303::applySeqRewrites()
     const int rotate = static_cast<int>(std::lround (seqPitchRotate->load()));
     if (const int delta = rotate - _appliedPitchRotate.exchange (rotate); delta != 0)
         _sequencer.rotatePitches (delta);
+}
+
+// Audio thread: a new or cleared pattern starts its offsets at 0
+void JC303::resetSeqOffsets (int mask)
+{
+    _seqOffsetReset.fetch_or (mask, std::memory_order_acq_rel);
+    triggerAsyncUpdate();
+}
+
+void JC303::handleAsyncUpdate()
+{
+    const int mask = _seqOffsetReset.load (std::memory_order_acquire);
+    const std::pair<SeqOffset, const char*> offsets[] {
+        { OffsetTranspose, "seqTranspose" }, { OffsetShift, "seqShift" }, { OffsetPitchRotate, "seqPitchRotate" } };
+    for (const auto& [bit, id] : offsets)
+        if ((mask & bit) != 0)
+            if (auto* p = parameters.getParameter (id))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (p->convertTo0to1 (0.0f));
+                p->endChangeGesture();
+            }
+    if ((mask & OffsetTranspose) != 0)   _appliedTranspose.store (0);
+    if ((mask & OffsetShift) != 0)       _appliedShift.store (0);
+    if ((mask & OffsetPitchRotate) != 0) _appliedPitchRotate.store (0);
+    _seqOffsetReset.fetch_and (~mask, std::memory_order_acq_rel);
 }
 
 void JC303::applySeqCommands()
@@ -659,6 +689,7 @@ void JC303::applySeqCommands()
     case SeqCommand::Clear:
         _sequencer.pushUndo();
         _sequencer.clearTrack();
+        resetSeqOffsets (OffsetTranspose | OffsetShift | OffsetPitchRotate);
         break;
 
     case SeqCommand::Generate:
@@ -677,6 +708,7 @@ void JC303::applySeqCommands()
             static_cast<uint8_t>(*lowerNote),
             static_cast<uint8_t>(*rangeNote)
         );
+        resetSeqOffsets (OffsetTranspose | OffsetShift | OffsetPitchRotate);
 
         _sequencerMuted.store (false, std::memory_order_release);
         break;
@@ -689,6 +721,7 @@ void JC303::applySeqCommands()
         _sequencer.randomizePitches (static_cast<uint8_t>(*numberOfTones),
                                      static_cast<uint8_t>(*lowerNote),
                                      static_cast<uint8_t>(*rangeNote));
+        resetSeqOffsets (OffsetTranspose | OffsetPitchRotate);
         _sequencerMuted.store (false, std::memory_order_release);
         break;
 
@@ -701,6 +734,7 @@ void JC303::applySeqCommands()
                                     static_cast<uint8_t>(*seqGenerativeAccentProbability),
                                     static_cast<uint8_t>(*seqGenerativeSlideProbability),
                                     static_cast<uint8_t>(*seqGenerativeTieProbability));
+        resetSeqOffsets (OffsetShift | OffsetPitchRotate);
         _sequencerMuted.store (false, std::memory_order_release);
         break;
 
