@@ -123,7 +123,7 @@ public:
     void sequencerStop()  { _sequencer.stop();  }
 
     // ── Sequencer UI→audio command channel ────────────────────────────────────
-    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm, Undo, Redo, TransposeDown, TransposeUp };
+    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm, Undo, Redo };
     void seqCommand (SeqCommand command) { _seqCommand.store (static_cast<int>(command), std::memory_order_release); }
 
 private:
@@ -136,6 +136,7 @@ private:
     // flushes) always run on the audio thread.  Setting it from the message
     // thread keeps sequencer + Open303 state single-threaded while running.
     void applySeqCommands();
+    void applySeqRewrites();
 
     // presets and overdrive models user data management
     void setupDataDirectories();
@@ -233,6 +234,7 @@ private:
     std::atomic<float>* rangeNote = nullptr;
     std::atomic<float>* seqPlayState = nullptr;
     std::atomic<float>* seqCpuTiming = nullptr;
+    std::atomic<float>* seqTranspose = nullptr;
     std::atomic<float>* seqShift = nullptr;
     std::atomic<float>* seqPitchRotate = nullptr;
     std::atomic<float>* seqSwing = nullptr;
@@ -257,6 +259,11 @@ private:
     // Pending sequencer command set by parameterChanged, applied by the audio
     // thread in renderMidi (see applySeqCommands).
     std::atomic<int> _seqCommand { static_cast<int>(SeqCommand::None) };
+
+    // Transpose / Shift / Pitch Rotate values already written into the pattern
+    std::atomic<int> _appliedTranspose { 0 };
+    std::atomic<int> _appliedShift { 0 };
+    std::atomic<int> _appliedPitchRotate { 0 };
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

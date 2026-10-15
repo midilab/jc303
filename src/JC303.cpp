@@ -230,14 +230,19 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("seqPlayState",
                                                         "Seq Play State",
                                                         false),
+            std::make_unique<juce::AudioParameterInt> ("seqTranspose",
+                                                        "Seq Transpose",
+                                                        -24,
+                                                        24,
+                                                        0),
             std::make_unique<juce::AudioParameterInt> ("seqShift",
                                                         "Seq Shift",
-                                                        0,
+                                                        -15,
                                                         15,
                                                         0),
             std::make_unique<juce::AudioParameterInt> ("seqPitchRotate",
                                                         "Seq Pitch Rotate",
-                                                        0,
+                                                        -15,
                                                         15,
                                                         0),
             std::make_unique<juce::AudioParameterInt> ("seqPitchLength",
@@ -325,6 +330,7 @@ JC303::JC303()
     seqTempo = parameters.getRawParameterValue("seqTempo");
     seqPlayState = parameters.getRawParameterValue("seqPlayState");
     seqCpuTiming = parameters.getRawParameterValue("seqCpuTiming");
+    seqTranspose = parameters.getRawParameterValue("seqTranspose");
     seqShift = parameters.getRawParameterValue("seqShift");
     seqPitchRotate = parameters.getRawParameterValue("seqPitchRotate");
     seqSwing = parameters.getRawParameterValue("seqSwing");
@@ -609,6 +615,30 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
 // Consumes a sequencer command queued by the UI thread.  Must run on the audio
 // thread, after _pendingCount has been reset, so all Open303 calls and sequencer
 // emits stay on the audio thread while the device is rendering.
+// Transpose / Shift / Pitch Rotate are offsets: a change rewrites the stored
+// pattern by the difference from the last applied value.  Transpose stops a
+// semitone at a time where a note would leave SEQ303_NOTE_MIN..127.
+void JC303::applySeqRewrites()
+{
+    const int transpose = static_cast<int>(std::lround (seqTranspose->load()));
+    int applied = _appliedTranspose.load();
+    while (applied != transpose)
+    {
+        const int dir = transpose > applied ? 1 : -1;
+        if (! _sequencer.transposeNotes (dir)) break;
+        applied += dir;
+    }
+    _appliedTranspose.store (applied);
+
+    const int shift = static_cast<int>(std::lround (seqShift->load()));
+    if (const int delta = shift - _appliedShift.exchange (shift); delta != 0)
+        _sequencer.shiftSteps (delta);
+
+    const int rotate = static_cast<int>(std::lround (seqPitchRotate->load()));
+    if (const int delta = rotate - _appliedPitchRotate.exchange (rotate); delta != 0)
+        _sequencer.rotatePitches (delta);
+}
+
 void JC303::applySeqCommands()
 {
     const int cmd = _seqCommand.exchange (static_cast<int>(SeqCommand::None),
@@ -683,18 +713,6 @@ void JC303::applySeqCommands()
         else                                                  _sequencer.redo();
         _sequencerMuted.store (false, std::memory_order_release);
         break;
-
-    case SeqCommand::TransposeDown:
-    case SeqCommand::TransposeUp:
-    {
-        const int semitones = static_cast<SeqCommand>(cmd) == SeqCommand::TransposeUp ? 1 : -1;
-        if (_sequencer.canTransposeNotes (semitones))
-        {
-            _sequencer.pushUndo();
-            _sequencer.transposeNotes (semitones);
-        }
-        break;
-    }
 
     case SeqCommand::None:
     default:
@@ -1068,11 +1086,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // 303 CPU interrupt timing is a mod: only active with the mod switch on
     _sequencer.setCpuTiming (*switchModState > 0.5f && *seqCpuTiming > 0.5f);
 
-    // Shift / Pitch Rotate params are the source of truth
-    const auto shift     = static_cast<int8_t>(std::lround (seqShift->load()));
-    const auto rotate    = static_cast<int8_t>(std::lround (seqPitchRotate->load()));
-    if (_sequencer.getShiftPos() != shift)          _sequencer.setShiftPos (shift);
-    if (_sequencer.getPitchRotate() != rotate)      _sequencer.setPitchRotate (rotate);
+    applySeqRewrites();
+
     const auto pitchLen  = static_cast<uint8_t>(std::lround (seqPitchLength->load()));
     if (_sequencer.getPitchLength() != pitchLen)    _sequencer.setPitchLength (pitchLen);
 
@@ -1452,6 +1467,11 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                     }
                 }
             }
+
+            // The restored pattern already carries its offsets
+            _appliedTranspose.store   (static_cast<int>(std::lround (seqTranspose->load())));
+            _appliedShift.store       (static_cast<int>(std::lround (seqShift->load())));
+            _appliedPitchRotate.store (static_cast<int>(std::lround (seqPitchRotate->load())));
         }
     }
 }

@@ -251,12 +251,18 @@ static std::vector<int> playedNotes (Rig& r)
 static void testPitchRotateKeepsRhythm()
 {
     Rig plain, rot, back;
-    rot.seq.setPitchRotate (1);
-    back.seq.setPitchRotate (-1);
     for (Rig* r : { &plain, &rot, &back })
     {
         r->step (0, 40); r->step (2, 43, /*accent=*/true); r->step (3, 45);   // step 1 rests
+        r->seq.setStepData (1, 50);
         r->seq.setTrackLength (4);
+    }
+    rot.seq.rotatePitches (1);
+    back.seq.rotatePitches (-1);
+    CHECK (rot.seq.getRawNote (0) == 43 && rot.seq.getRawNote (2) == 45 && rot.seq.getRawNote (3) == 40);
+    CHECK (rot.seq.getRawNote (1) == 50);                // a rest keeps its stored pitch
+    for (Rig* r : { &plain, &rot, &back })
+    {
         r->seq.start();
         r->run (4 * kStep);
     }
@@ -273,13 +279,19 @@ static void testPitchRotateKeepsRhythm()
 static void testShiftRotatesPattern()
 {
     Rig r;
-    r.seq.setShiftPos (1);
-    r.step (0, 40); r.step (1, 43);
+    r.step (0, 40); r.step (1, 43, /*accent=*/true);
+    r.step (5, 60);                                      // outside the length: untouched
     r.seq.setTrackLength (4);
+    r.seq.shiftSteps (1);
+    CHECK (r.seq.getRawNote (0) == 43 && r.seq.accentOn (0));
+    CHECK (r.seq.getRawNote (3) == 40 && ! r.seq.accentOn (3));
+    CHECK (r.seq.getRawNote (5) == 60);
     r.seq.start();
     r.run (4 * kStep);
-    CHECK ((playedNotes (r) == std::vector<int> { 43, 40 }));   // starts on step 1
+    CHECK ((playedNotes (r) == std::vector<int> { 43, 40 }));   // starts on the old step 1
     CHECK (r.ons()[1].at - r.ons()[0].at == 3 * kStep);
+    r.seq.shiftSteps (-1);
+    CHECK (r.seq.getRawNote (0) == 40 && r.seq.getRawNote (1) == 43);
 }
 
 static void testTransposeRewritesNotes()
@@ -523,14 +535,14 @@ static void testPitchLengthOffAndRotate()
 {
     Rig off, rot;
     for (Rig* r : { &off, &rot }) setSevenNotes (*r);
+    rot.seq.rotatePitches (2);                         // rewrites all 7 pitches, then loops the first 5
     rot.seq.setPitchLength (5);
-    rot.seq.setPitchRotate (2);
     for (Rig* r : { &off, &rot }) { r->seq.start(); r->run (2 * 8 * kStep); }
     const auto a = playedNotes (off), b = playedNotes (rot);
     for (size_t i = 0; i < 14 && i < a.size(); ++i)
         CHECK (a[i] == 40 + static_cast<int> (i % 7));  // off: each step plays its own pitch
     for (size_t i = 0; i < 14 && i < b.size(); ++i)
-        CHECK (b[i] == 40 + static_cast<int> ((i + 2) % 5));
+        CHECK (b[i] == 42 + static_cast<int> (i % 5));
 }
 
 static void testPitchLengthFollowsHostPosition()
