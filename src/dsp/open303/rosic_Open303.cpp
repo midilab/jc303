@@ -188,7 +188,7 @@ void Open303::setSlideTime(double newSlideTime)
     // through R = 100 kOhm (stock) up to ~603 kOhm (with the Devil Fish slide pot), so the RC time
     // constant tau = R*C runs from ~22 ms stock to ~133 ms at maximum (~6x). Because the pitch CV is
     // volts/octave, this lag acts in the log-frequency domain (see getSample / triggerNote), which
-    // is why the glide is even in pitch and takes the same time regardless of interval.
+    // is why the glide is symmetric in pitch and has the same time constant for every interval.
     //
     // slideTime is the full slide time in ms; the stock 303 is ~60 ms, which corresponds to the
     // ~22 ms RC constant (about 3 tau to settle). tau = slideTime * (22/60) keeps the digital

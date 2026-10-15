@@ -444,7 +444,7 @@ namespace rosic
 
     // calculate instantaneous oscillator frequency and set up the oscillator. The portamento slew
     // runs in the log-frequency domain (glide log(freq), then exponentiate back to Hz) so the slide
-    // is linear in pitch/cents rather than in Hz - this matches how a real 303 slews its pitch CV
+    // is an exponential in pitch/cents rather than in Hz - this matches how a real 303 slews its pitch CV
     // (volts/octave) and keeps octave slides from lingering in the low end.
     // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO.
     double instFreq = exp( pitchSlewLimiter.getSample( log(oscFreq) ) ) * pitchModFactor;
