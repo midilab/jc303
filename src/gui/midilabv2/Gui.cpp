@@ -129,6 +129,22 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             return "-" + juce::String(seq.undoCount()) + " +" + juce::String(seq.redoCount());
         } });
 
+    // Sequencer > Transpose: -/+ rewrites every stored note a semitone down/up
+    // (undoable); shows the pattern's lowest note, which stops at the C0 floor
+    menuPage->setAction("seqTranspose", {
+        [this] (float direction)
+        {
+            processorRef.seqCommand(direction < 0 ? JC303::SeqCommand::TransposeDown : JC303::SeqCommand::TransposeUp);
+        },
+        [this]
+        {
+            auto& seq = processorRef.getSequencer();
+            uint8_t lowest = 127;
+            for (int i = 0; i < SEQ303_STEP_MAX; ++i)
+                lowest = std::min(lowest, seq.getRawNote(i));
+            return juce::MidiMessage::getMidiNoteName(lowest, true, true, 3);
+        } });
+
     selectMenu(2);   // default menu page; after the callback is set so the knob syncs
 
     // sequencer step toggles (note/rest editing) and click-to-select display LEDs

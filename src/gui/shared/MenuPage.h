@@ -606,7 +606,7 @@ public:
         seq.items.add(Item { "seqTempo",     "Tempo",      Type::value, {}, 0.0f });
         seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 1.0f });
         seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 1.0f });
-        seq.items.add(Item { "seqTranspose", "Transpose",  Type::value, {}, 1.0f });
+        seq.items.add(Item { "seqTranspose", "Transpose",  Type::action, {}, 0.0f });
         {
             Item shift { "seqShift", "Shift", Type::value, {}, 1.0f };
             shift.wrap = true;

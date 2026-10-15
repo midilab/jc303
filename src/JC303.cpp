@@ -230,11 +230,6 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("seqPlayState",
                                                         "Seq Play State",
                                                         false),
-            std::make_unique<juce::AudioParameterInt> ("seqTranspose",
-                                                        "Seq Transpose",
-                                                        -24,
-                                                        24,
-                                                        0),
             std::make_unique<juce::AudioParameterInt> ("seqShift",
                                                         "Seq Shift",
                                                         0,
@@ -326,7 +321,6 @@ JC303::JC303()
     seqTempo = parameters.getRawParameterValue("seqTempo");
     seqPlayState = parameters.getRawParameterValue("seqPlayState");
     seqCpuTiming = parameters.getRawParameterValue("seqCpuTiming");
-    seqTranspose = parameters.getRawParameterValue("seqTranspose");
     seqShift = parameters.getRawParameterValue("seqShift");
     seqPitchRotate = parameters.getRawParameterValue("seqPitchRotate");
     seqSwing = parameters.getRawParameterValue("seqSwing");
@@ -685,6 +679,18 @@ void JC303::applySeqCommands()
         else                                                  _sequencer.redo();
         _sequencerMuted.store (false, std::memory_order_release);
         break;
+
+    case SeqCommand::TransposeDown:
+    case SeqCommand::TransposeUp:
+    {
+        const int semitones = static_cast<SeqCommand>(cmd) == SeqCommand::TransposeUp ? 1 : -1;
+        if (_sequencer.canTransposeNotes (semitones))
+        {
+            _sequencer.pushUndo();
+            _sequencer.transposeNotes (semitones);
+        }
+        break;
+    }
 
     case SeqCommand::None:
     default:
@@ -1058,11 +1064,9 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // 303 CPU interrupt timing is a mod: only active with the mod switch on
     _sequencer.setCpuTiming (*switchModState > 0.5f && *seqCpuTiming > 0.5f);
 
-    // Transpose / Shift / Pitch Rotate params are the source of truth
-    const auto transpose = static_cast<int8_t>(std::lround (seqTranspose->load()));
+    // Shift / Pitch Rotate params are the source of truth
     const auto shift     = static_cast<int8_t>(std::lround (seqShift->load()));
     const auto rotate    = static_cast<int8_t>(std::lround (seqPitchRotate->load()));
-    if (_sequencer.getTranspose() != transpose)     _sequencer.setTranspose (transpose);
     if (_sequencer.getShiftPos() != shift)          _sequencer.setShiftPos (shift);
     if (_sequencer.getPitchRotate() != rotate)      _sequencer.setPitchRotate (rotate);
     const auto pitchLen  = static_cast<uint8_t>(std::lround (seqPitchLength->load()));

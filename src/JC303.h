@@ -123,7 +123,7 @@ public:
     void sequencerStop()  { _sequencer.stop();  }
 
     // ── Sequencer UI→audio command channel ────────────────────────────────────
-    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm, Undo, Redo };
+    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm, Undo, Redo, TransposeDown, TransposeUp };
     void seqCommand (SeqCommand command) { _seqCommand.store (static_cast<int>(command), std::memory_order_release); }
 
 private:
@@ -233,7 +233,6 @@ private:
     std::atomic<float>* rangeNote = nullptr;
     std::atomic<float>* seqPlayState = nullptr;
     std::atomic<float>* seqCpuTiming = nullptr;
-    std::atomic<float>* seqTranspose = nullptr;
     std::atomic<float>* seqShift = nullptr;
     std::atomic<float>* seqPitchRotate = nullptr;
     std::atomic<float>* seqSwing = nullptr;

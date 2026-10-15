@@ -282,16 +282,27 @@ static void testShiftRotatesPattern()
     CHECK (r.ons()[1].at - r.ons()[0].at == 3 * kStep);
 }
 
-static void testTransposeOffsetsNotes()
+static void testTransposeRewritesNotes()
 {
     Rig r;
-    r.seq.setTranspose (-5);
     r.step (0, 40); r.step (1, 43);
+    r.seq.setStepData (2, 50);                       // a rest's stored pitch moves too
+    CHECK (r.seq.transposeNotes (-5));
+    CHECK (r.seq.getRawNote (0) == 35 && r.seq.getRawNote (1) == 38 && r.seq.getRawNote (2) == 45);
     r.seq.setTrackLength (4);
     r.seq.start();
     r.run (4 * kStep);
     CHECK ((playedNotes (r) == std::vector<int> { 35, 38 }));
-    CHECK (r.seq.getRawNote (0) == 40);              // stored pattern untouched
+}
+
+static void testTransposeKeepsPatternInRange()
+{
+    Rig r;
+    r.step (0, SEQ303_NOTE_MIN + 2); r.step (1, 120);
+    CHECK (! r.seq.transposeNotes (-3));             // would drop below the C0 floor
+    CHECK (! r.seq.transposeNotes (8));              // would pass MIDI 127
+    CHECK (r.seq.getRawNote (0) == SEQ303_NOTE_MIN + 2 && r.seq.getRawNote (1) == 120);
+    CHECK (r.seq.transposeNotes (-2) && r.seq.getRawNote (0) == SEQ303_NOTE_MIN);
 }
 
 // Swing: MPC60 / 909 signatures as in aciduino, off-beat 16ths late by 0..12 ticks.
@@ -616,7 +627,8 @@ int main()
     testCpuTimingStopFlushesQueue();
     testPitchRotateKeepsRhythm();
     testShiftRotatesPattern();
-    testTransposeOffsetsNotes();
+    testTransposeRewritesNotes();
+    testTransposeKeepsPatternInRange();
     testSwingDelaysOffbeats();
     testSwingKeepsSlideLegato();
     testSwingTieEndsInItsStep();

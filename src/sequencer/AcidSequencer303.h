@@ -91,7 +91,6 @@ struct TrackData303
     StepData303 step[SEQ303_STEP_MAX];
     int8_t      shift      { 0 };
     uint8_t     stepLength { SEQ303_STEP_MAX };
-    int8_t      transpose  { 0 };
     uint8_t     tune       { 0 };  // 0=off; 1+N = harmonize + N semitone offset
     int8_t      pitchRotate { 0 }; // note steps play the pitch N note steps later
     uint8_t     pitchLength { 0 }; // 0 = off; N = loop the first N pitches across bars
@@ -147,7 +146,6 @@ public:
             juce::SpinLock::ScopedLockType lk (_dataLock);
             _data.shift      = 0;
             _data.stepLength = SEQ303_STEP_MAX;
-            _data.transpose  = 0;
             _data.tune       = 0;
             _data.pitchRotate = 0;
             _data.pitchLength = 0;
@@ -453,13 +451,26 @@ public:
     }
     uint8_t getTune() const { return _data.tune; }
 
-    /** setTranspose / getTranspose — global semitone offset applied at note-on */
-    void   setTranspose (int8_t t)
+    /** True if every stored step note (rests included) stays in SEQ303_NOTE_MIN..127
+     *  after shifting by `semitones`. */
+    bool canTransposeNotes (int semitones) const
+    {
+        for (const auto& s : _data.step)
+            if (s.note + semitones < SEQ303_NOTE_MIN || s.note + semitones > 127)
+                return false;
+        return true;
+    }
+
+    /** Shift every stored step note by `semitones`; refused, leaving the pattern
+     *  untouched, unless canTransposeNotes(). */
+    bool transposeNotes (int semitones)
     {
         juce::SpinLock::ScopedLockType lk (_dataLock);
-        _data.transpose = t;
+        if (! canTransposeNotes (semitones)) return false;
+        for (auto& s : _data.step)
+            s.note = static_cast<uint8_t>(s.note + semitones);
+        return true;
     }
-    int8_t getTranspose() const { return _data.transpose; }
 
     /** getCurrentStep — last-played step index.
      *  Written on the audio thread; UI reads are an acceptable approximation. */
@@ -1013,11 +1024,6 @@ private:
         uint8_t note = _data.step[pitchStep].note;
         if (_data.tune > 0)
             note = _harmonizer.harmonize (note) + static_cast<uint8_t>(_data.tune - 1);
-
-        const int finalNote = static_cast<int>(note) + static_cast<int>(_data.transpose);
-        if (finalNote < 0 || finalNote > 127) return;
-
-        note = static_cast<uint8_t>(finalNote);
 
         // ── Same-pitch handover ──────────────────────────────────────────────
         // A slide or wrap-around overlap into the same pitch is one gate, as on
