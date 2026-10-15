@@ -413,6 +413,15 @@ public:
     // ── Track-level getters / setters — mirrors engine_303 API ───────────────
     // =========================================================================
 
+    /** `delta` taken the shorter way round a cycle of `len` values, in
+     *  (-len/2, len/2]: a menu value wrapping at len reads as one step. */
+    static int shortestTurn (int delta, int len)
+    {
+        int d = ((delta % len) + len) % len;
+        if (d > len / 2) d -= len;
+        return d;
+    }
+
     /** Rotate the steps in the active length `n` places earlier: step n
      *  becomes step 0.  Steps past the length are untouched. */
     void shiftSteps (int n)

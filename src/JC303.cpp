@@ -237,12 +237,12 @@ JC303::JC303()
                                                         0),
             std::make_unique<juce::AudioParameterInt> ("seqShift",
                                                         "Seq Shift",
-                                                        -15,
+                                                        0,
                                                         15,
                                                         0),
             std::make_unique<juce::AudioParameterInt> ("seqPitchRotate",
                                                         "Seq Pitch Rotate",
-                                                        -15,
+                                                        0,
                                                         15,
                                                         0),
             std::make_unique<juce::AudioParameterInt> ("seqPitchLength",
@@ -618,7 +618,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
 // emits stay on the audio thread while the device is rendering.
 // Transpose / Shift / Pitch Rotate are offsets: a change rewrites the stored
 // pattern by the difference from the last applied value.  Transpose stops a
-// semitone at a time where a note would leave SEQ303_NOTE_MIN..127.
+// semitone at a time where a note would leave SEQ303_NOTE_MIN..127.  Shift and
+// Pitch Rotate wrap at the pattern length on the menu, so their difference is
+// read the shorter way round it.
 void JC303::applySeqRewrites()
 {
     if (_seqOffsetReset.load (std::memory_order_acquire) != 0)
@@ -634,13 +636,15 @@ void JC303::applySeqRewrites()
     }
     _appliedTranspose.store (applied);
 
+    const int len = _sequencer.getTrackLength();
+
     const int shift = static_cast<int>(std::lround (seqShift->load()));
-    if (const int delta = shift - _appliedShift.exchange (shift); delta != 0)
-        _sequencer.shiftSteps (delta);
+    if (const int turn = AcidSequencer303::shortestTurn (shift - _appliedShift.exchange (shift), len); turn != 0)
+        _sequencer.shiftSteps (turn);
 
     const int rotate = static_cast<int>(std::lround (seqPitchRotate->load()));
-    if (const int delta = rotate - _appliedPitchRotate.exchange (rotate); delta != 0)
-        _sequencer.rotatePitches (delta);
+    if (const int turn = AcidSequencer303::shortestTurn (rotate - _appliedPitchRotate.exchange (rotate), len); turn != 0)
+        _sequencer.rotatePitches (turn);
 }
 
 // Audio thread: a new or cleared pattern starts its offsets at 0

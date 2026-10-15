@@ -43,6 +43,7 @@ public:
         juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
         bool wrap = false;             // value type only: dec/inc wrap around the param range (int params)
+        juce::String wrapAtParam;      // with wrap: wrap at this int param's value (0..value-1) instead
     };
 
     struct Page
@@ -154,7 +155,11 @@ public:
         }
         if (item.type != Type::value)
             return;
-        changeValue(item.id, item.step, direction, item.wrap);
+        int wrapSpan = 0;
+        if (item.wrap)
+            if (auto* p = intParam(item.wrapAtParam.isEmpty() ? item.id : item.wrapAtParam))
+                wrapSpan = item.wrapAtParam.isEmpty() ? p->getRange().getLength() + 1 : p->get();
+        changeValue(item.id, item.step, direction, wrapSpan);
     }
 
     // Called by the theme's value knob. Same 0..100 scale as the display;
@@ -348,16 +353,17 @@ private:
         updateDisplay();
     }
 
-    void changeValue(const juce::String& paramID, float itemStep, float direction, bool wrap)
+    // wrapSpan > 0: dec/inc wrap over that many values from the range start
+    void changeValue(const juce::String& paramID, float itemStep, float direction, int wrapSpan)
     {
         auto* param = valueTreeState.getParameter(paramID);
         if (param == nullptr)
             return;
 
-        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(param); p != nullptr && wrap)
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(param); p != nullptr && wrapSpan > 0)
         {
             const int lo = p->getRange().getStart();
-            const int span = p->getRange().getLength() + 1;
+            const int span = wrapSpan;
             const int next = lo + (((p->get() - lo + (int) direction) % span) + span) % span;
             p->beginChangeGesture();
             *p = next;
@@ -607,9 +613,16 @@ public:
         seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 1.0f });
         seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 1.0f });
         seq.items.add(Item { "seqTranspose", "Transpose",  Type::value, {}, 1.0f });
-        seq.items.add(Item { "seqShift",     "Shift",      Type::value, {}, 1.0f });
-        seq.items.add(Item { "seqPitchRotate", "Pitch Rot", Type::value, {}, 1.0f });
         {
+            // wrap at the pattern length: the engine reads each change the shorter way round it
+            Item shift { "seqShift", "Shift", Type::value, {}, 1.0f };
+            shift.wrap = true;
+            shift.wrapAtParam = "seqLength";
+            seq.items.add(shift);
+            Item rotate { "seqPitchRotate", "Pitch Rot", Type::value, {}, 1.0f };
+            rotate.wrap = true;
+            rotate.wrapAtParam = "seqLength";
+            seq.items.add(rotate);
             Item pitchLen { "seqPitchLength", "Pitch Len", Type::value, {}, 1.0f };
             pitchLen.valueNames.add("Off");
             for (int i = 1; i <= 16; ++i)

@@ -294,6 +294,17 @@ static void testShiftRotatesPattern()
     CHECK (r.seq.getRawNote (0) == 40 && r.seq.getRawNote (1) == 43);
 }
 
+static void testShortestTurn()
+{
+    CHECK (AcidSequencer303::shortestTurn (-6, 7) == 1);    // menu wrap 6 -> 0 on 7 steps is one step on
+    CHECK (AcidSequencer303::shortestTurn (6, 7) == -1);
+    CHECK (AcidSequencer303::shortestTurn (3, 7) == 3);
+    CHECK (AcidSequencer303::shortestTurn (-3, 7) == -3);
+    CHECK (AcidSequencer303::shortestTurn (-15, 16) == 1);
+    CHECK (AcidSequencer303::shortestTurn (8, 16) == 8);
+    CHECK (AcidSequencer303::shortestTurn (5, 1) == 0);
+}
+
 static void testTransposeRewritesNotes()
 {
     Rig r;
@@ -728,6 +739,7 @@ int main()
     testCpuTimingStopFlushesQueue();
     testPitchRotateKeepsRhythm();
     testShiftRotatesPattern();
+    testShortestTurn();
     testTransposeRewritesNotes();
     testTransposeKeepsPatternInRange();
     testSwingDelaysOffbeats();
