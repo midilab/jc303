@@ -51,16 +51,10 @@ static constexpr uint8_t  SEQ303_NOTE_VELOCITY     = 70;   // NOTE_VELOCITY_303
 static constexpr uint8_t  SEQ303_ACCENT_VELOCITY   = 127;  // ACCENT_VELOCITY_303
 static constexpr uint8_t  SEQ303_DEFAULT_NOTE      = 36;   // C1 (DAW numbering)
 
-// Lowest step note: TB-303 owner's manual p.88, TRANSPOSE DOWN starts at
-// 1V = 32.7 Hz (MIDI 24, C0 in DAW numbering). Lower notes fold up by octaves.
+// Lowest note the sequencer GUI enters: TB-303 owner's manual p.88, TRANSPOSE
+// DOWN starts at 1V = 32.7 Hz (MIDI 24, C0 in DAW numbering). The engine itself
+// accepts any MIDI note.
 static constexpr uint8_t  SEQ303_NOTE_MIN          = 24;
-
-static inline uint8_t seq303FoldNote (int note)
-{
-    while (note < SEQ303_NOTE_MIN) note += 12;
-    while (note > 127)             note -= 12;
-    return static_cast<uint8_t> (note);
-}
 
 // MIDI velocity at/above which a recorded step is marked accented — matches
 // Open303::noteOn() (`velocity >= 100` triggers accent on the synth side).
@@ -385,7 +379,7 @@ public:
     void setStepData (int step, uint8_t note)
     {
         juce::SpinLock::ScopedLockType lk (_dataLock);
-        _data.step[step].note = seq303FoldNote (note);
+        _data.step[step].note = note;
     }
 
     /** getStepData(step) — mirrors Engine303::getStepData(): returns the
@@ -531,7 +525,7 @@ public:
         juce::SpinLock::ScopedLockType lk (_dataLock);
         const uint8_t st = _recStep.load (std::memory_order_relaxed);
         auto& s = _data.step[st];
-        s.note   = seq303FoldNote (note);
+        s.note   = note;
         s.rest   = false;
         s.accent = accent;
         s.slide  = legato;
@@ -547,7 +541,7 @@ public:
         juce::SpinLock::ScopedLockType lk (_dataLock);
         const uint8_t st = _recStep.load (std::memory_order_relaxed);
         auto& s = _data.step[st];
-        s.note = seq303FoldNote (note);
+        s.note = note;
         s.rest = false;
         _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
@@ -1020,7 +1014,10 @@ private:
         if (_data.tune > 0)
             note = _harmonizer.harmonize (note) + static_cast<uint8_t>(_data.tune - 1);
 
-        note = seq303FoldNote (static_cast<int>(note) + static_cast<int>(_data.transpose));
+        const int finalNote = static_cast<int>(note) + static_cast<int>(_data.transpose);
+        if (finalNote < 0 || finalNote > 127) return;
+
+        note = static_cast<uint8_t>(finalNote);
 
         // ── Same-pitch handover ──────────────────────────────────────────────
         // A slide or wrap-around overlap into the same pitch is one gate, as on
@@ -1277,7 +1274,7 @@ private:
             const int fixed = static_cast<int>(note) + fixTones[note % 12];
             note = static_cast<uint8_t>(juce::jlimit (0, 127, fixed));
         }
-        return seq303FoldNote (note);
+        return note;
     }
 
     /** Roll one step's rest / tie / accent / slide.  Returns true for a note
