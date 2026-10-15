@@ -651,8 +651,9 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case TUNING:
+        // TB-303 service notes: TUNING approx. +/-700 cents (perfect fifth)
         open303Core.setTuning(
-            linToLin(value, 0.0, 1.0,  400.0,    480.0)
+            440.0 * std::pow(2.0, (value - 0.5) * 1400.0 / 1200.0)
         );
         break;
     case CUTOFF:
