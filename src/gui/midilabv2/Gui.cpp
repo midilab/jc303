@@ -145,7 +145,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         noteFont.setHeight(9.0f);
         for (int i = 0; i < 16; ++i)
         {
-            auto* lbl = new juce::Label();
+            auto* lbl = new StepNoteLabel();
             seqStepNoteLabels[i] = lbl;
             addAndMakeVisible(lbl);
             lbl->setFont(noteFont);
@@ -170,7 +170,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         juce::Label** labels[4] = { &seqStepLabel, &seqRestLabel, &seqAccentLabel, &seqSlideLabel };
         for (int r = 0; r < 4; ++r)
         {
-            auto* lbl = new juce::Label();
+            auto* lbl = new StepNoteLabel();
             *labels[r] = lbl;
             addAndMakeVisible(lbl);
             lbl->setText(texts[r], juce::dontSendNotification);
