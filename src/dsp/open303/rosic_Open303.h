@@ -444,8 +444,10 @@ namespace rosic
 
   INLINE double Open303::getSample()
   {
-    //if( sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached() )
-    //  return 0.0;
+    // 'idle' short-circuits output before the first note is ever triggered (it starts true and is
+    // cleared on the first trigger). Note it is never set back to true afterwards, so this is only a
+    // pre-first-note guard; re-enabling end-of-note detection here to save CPU on silence is a
+    // possible future optimization but needs click-free retrigger testing.
     if( idle )
       return 0.0;
 
@@ -556,7 +558,7 @@ namespace rosic
     if( accentGain > 0.0 )
       tmp2 = mainEnvOut;
     tmp2 = n2 * rc2.getSample(tmp2) * accentSweepGain;
-    tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
+    tmp1 = envScaler * ( tmp1 - envOffset );  // main env-mod scaling (Schmidt's measured mapping)
     tmp2 = accentGain*tmp2;
     // Anti-zipper: dynamically smooth the (block-rate) cutoff parameter before it drives the filter
     double smoothedCutoff = cutoffSmoother.getSample(cutoff);
@@ -595,11 +597,6 @@ namespace rosic
     tmp *= ampEnvOut;                       // amplified
     tmp *= ampScaler;
     tmp *= volumeModFactor;                 // LFO volume modulation
-
-    // find out whether we may switch ourselves off for the next call:
-    idle = false;
-    //idle = (sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached()
-    //        && fabs(tmp) < 0.000001); // ampEnvOut < 0.000001;
 
     return tmp;
   }
