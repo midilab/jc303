@@ -556,14 +556,15 @@ void JC303Editor::setControlsLayout()
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {45, 80};
-    pair<int, int> cutoffFreqLocation = {156, 80};
-    pair<int, int> resonanceLocation = {267, 80};
-    pair<int, int> envelopeLocation = {378, 80};
-    pair<int, int> decayLocation = {489, 80};
-    pair<int, int> accentLocation = {600, 80};
-    pair<int, int> tuningLocation = {840, 80};
-    pair<int, int> volumeLocation = {722, 80};
+    // tuning far left, as on the TB-303 panel
+    pair<int, int> tuningLocation = {45, 80};
+    pair<int, int> waveFormLocation = {156, 80};
+    pair<int, int> cutoffFreqLocation = {267, 80};
+    pair<int, int> resonanceLocation = {378, 80};
+    pair<int, int> envelopeLocation = {489, 80};
+    pair<int, int> decayLocation = {600, 80};
+    pair<int, int> accentLocation = {722, 80};
+    pair<int, int> volumeLocation = {840, 80};
     // MODs knobs row
     //pair<int, int> normalDecayLocation = {147, 380};
     //pair<int, int> accentDecayLocation = {208, 380};
