@@ -618,9 +618,9 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
 // emits stay on the audio thread while the device is rendering.
 // Transpose / Shift / Pitch Rotate are offsets: a change rewrites the stored
 // pattern by the difference from the last applied value.  Transpose stops a
-// semitone at a time where a note would leave SEQ303_NOTE_MIN..127.  Shift and
-// Pitch Rotate wrap at the pattern length on the menu, so their difference is
-// read the shorter way round it.
+// semitone at a time where a note would leave 0..127 (it may go below the
+// GUI's C0 floor).  Shift and Pitch Rotate wrap at the pattern length on the
+// menu, so their difference is read the shorter way round it.
 void JC303::applySeqRewrites()
 {
     if (_seqOffsetReset.load (std::memory_order_acquire) != 0)

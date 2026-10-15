@@ -321,11 +321,13 @@ static void testTransposeRewritesNotes()
 static void testTransposeKeepsPatternInRange()
 {
     Rig r;
-    r.step (0, SEQ303_NOTE_MIN + 2); r.step (1, 120);
-    CHECK (! r.seq.transposeNotes (-3));             // would drop below the C0 floor
-    CHECK (! r.seq.transposeNotes (8));              // would pass MIDI 127
-    CHECK (r.seq.getRawNote (0) == SEQ303_NOTE_MIN + 2 && r.seq.getRawNote (1) == 120);
-    CHECK (r.seq.transposeNotes (-2) && r.seq.getRawNote (0) == SEQ303_NOTE_MIN);
+    r.step (0, SEQ303_NOTE_MIN); r.step (1, 120);
+    CHECK (r.seq.transposeNotes (-SEQ303_NOTE_MIN));  // below the GUI's C0 floor, down to MIDI 0
+    CHECK (r.seq.getRawNote (0) == 0 && r.seq.getRawNote (1) == 120 - SEQ303_NOTE_MIN);
+    CHECK (! r.seq.transposeNotes (-1));              // would pass MIDI 0
+    r.seq.transposeNotes (SEQ303_NOTE_MIN);
+    CHECK (! r.seq.transposeNotes (8));               // would pass MIDI 127
+    CHECK (r.seq.getRawNote (0) == SEQ303_NOTE_MIN && r.seq.getRawNote (1) == 120);
 }
 
 // Swing, MPC style: the off-beat 16th lands at swing % of the 8th-note pair,

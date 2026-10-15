@@ -478,12 +478,12 @@ public:
     }
     uint8_t getTune() const { return _data.tune; }
 
-    /** True if every stored step note (rests included) stays in SEQ303_NOTE_MIN..127
+    /** True if every stored step note (rests included) stays in 0..127
      *  after shifting by `semitones`. */
     bool canTransposeNotes (int semitones) const
     {
         for (const auto& s : _data.step)
-            if (s.note + semitones < SEQ303_NOTE_MIN || s.note + semitones > 127)
+            if (s.note + semitones < 0 || s.note + semitones > 127)
                 return false;
         return true;
     }
