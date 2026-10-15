@@ -76,6 +76,20 @@ public:
 
     void setDevilMod(bool mode);
 
+    // Bipolar (-1..1) parameters: a centre detent snaps |v| < bipolarDetentZone to exactly 0 and the rest of the travel
+    // is stretched so the ends still reach +-1 (as the web UI's sticky zero, with a narrower zone so the Mods menu's
+    // 2 % steps leave it in two clicks).
+    static constexpr float bipolarDetentZone = 0.05f;
+    static float bipolarDetent (float v)
+    {
+        const float a = std::abs (v);
+        return a < bipolarDetentZone ? 0.0f : std::copysign ((a - bipolarDetentZone) / (1.0f - bipolarDetentZone), v);
+    }
+
+    // TB-303 service notes: TUNING approx. +/-700 cents (perfect fifth)
+    static constexpr float tuningRangeCents = 700.0f;
+    static float tuningCents (float v) { return tuningRangeCents * bipolarDetent (v); }
+
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;

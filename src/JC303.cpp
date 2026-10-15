@@ -19,9 +19,14 @@ JC303::JC303()
                                                         1.0f),
             std::make_unique<juce::AudioParameterFloat> ("tuning",
                                                         "Tuning",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.5f),
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,    // centre detent = A4 440 Hz
+                                                        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                            [] (float v, int)
+                                                            {
+                                                                const int c = juce::roundToInt (tuningCents (v));
+                                                                return (c > 0 ? "+" : "") + juce::String (c) + " ct";
+                                                            })),
             std::make_unique<juce::AudioParameterFloat> ("cutoff",
                                                         "Cutoff",
                                                         0.0f,
@@ -651,10 +656,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case TUNING:
-        // TB-303 service notes: TUNING approx. +/-700 cents (perfect fifth)
-        open303Core.setTuning(
-            440.0 * std::pow(2.0, (value - 0.5) * 1400.0 / 1200.0)
-        );
+        open303Core.setTuning(440.0 * std::pow(2.0, tuningCents(value) / 1200.0));
         break;
     case CUTOFF:
         open303Core.setCutoff(
