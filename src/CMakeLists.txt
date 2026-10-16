@@ -32,6 +32,8 @@ target_sources("${PROJECT_NAME}"
         dsp/open303/dfl_ARP4075Filter.cpp
         dsp/open303/dfl_LFO.cpp
 
+        dsp/tuning/TuningFileLoader.cpp
+
         gui/${GUI_THEME}/Gui.cpp
 
         JC303.cpp
