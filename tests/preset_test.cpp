@@ -101,7 +101,76 @@ static void testHoover (JC303& p)
     CHECK (p.getCurrentProgram() == hoover, "current program %d", p.getCurrentProgram());
 }
 
-int main()
+// Two slid notes through processBlock; returns the rendered stereo buffer.
+static juce::AudioBuffer<float> render (JC303& p, const juce::String& program)
+{
+    const double sr = 44100.0;
+    const int block = 512, blocks = (int) (3.0 * sr / block);
+    p.setCurrentProgram (programIndex (p, program));
+    setParam (p, "tuning", 0.0f);   // presets keep the tuning; an earlier test detuned it
+    p.setPlayConfigDetails (0, 2, sr, block);
+    p.prepareToPlay (sr, block);
+
+    juce::AudioBuffer<float> out (2, block * blocks);
+    juce::AudioBuffer<float> buffer (2, block);
+    for (int b = 0; b < blocks; ++b)
+    {
+        juce::MidiBuffer midi;
+        if (b == 0)                         midi.addEvent (juce::MidiMessage::noteOn (1, 33, (juce::uint8) 100), 0);
+        if (b == blocks / 3)                midi.addEvent (juce::MidiMessage::noteOn (1, 45, (juce::uint8) 100), 0);   // overlapping: slide
+        if (b == blocks / 3 + 1)            midi.addEvent (juce::MidiMessage::noteOff (1, 33), 0);
+        if (b == 2 * blocks / 3)            midi.addEvent (juce::MidiMessage::noteOff (1, 45), 0);
+        buffer.clear();
+        p.processBlock (buffer, midi);
+        for (int c = 0; c < 2; ++c)
+            out.copyFrom (c, b * block, buffer, c, 0, block);
+    }
+    p.releaseResources();
+    return out;
+}
+
+static double rmsDb (const juce::AudioBuffer<float>& out, int from, int to)
+{
+    double sum = 0.0;
+    for (int i = from; i < to; ++i)
+        sum += out.getSample (0, i) * out.getSample (0, i);
+    return 10.0 * std::log10 (sum / (to - from) + 1e-30);
+}
+
+// Hoover starts at about the stock 303 sound's level (Init) and, unlike it, holds that level
+static void testHooverRenders (JC303& p, const char* wavPath)
+{
+    const double sr = 44100.0;
+    const auto init = render (p, "Init");
+    const auto out = render (p, "Hoover");
+    const int attack = (int) (0.15 * sr), held = (int) (1.9 * sr);
+    const double hooverDb = rmsDb (out, 0, attack), initDb = rmsDb (init, 0, attack);
+    const double hooverLateDb = rmsDb (out, held - attack, held), initLateDb = rmsDb (init, held - attack, held);
+    std::printf ("attack: Hoover %.1f dBFS, Init %.1f dBFS; end of held note: Hoover %.1f, Init %.1f\n",
+                 hooverDb, initDb, hooverLateDb, initLateDb);
+
+    bool finite = true;
+    for (int i = 0; i < out.getNumSamples(); ++i)
+        finite = finite && std::isfinite (out.getSample (0, i));
+    CHECK (finite, "hoover render has NaN/inf");
+    CHECK (std::abs (hooverDb - initDb) < 6.0, "Hoover attack %.1f dB vs Init %.1f dB", hooverDb, initDb);
+    CHECK (hooverLateDb > hooverDb - 9.0, "Hoover dies away while held (%.1f -> %.1f dB)", hooverDb, hooverLateDb);
+
+    if (wavPath != nullptr)
+    {
+        juce::File file (juce::File::getCurrentWorkingDirectory().getChildFile (wavPath));
+        file.deleteFile();
+        juce::WavAudioFormat wav;
+        if (auto stream = file.createOutputStream())
+            if (auto writer = std::unique_ptr<juce::AudioFormatWriter> (wav.createWriterFor (stream.get(), sr, 2, 24, {}, 0)))
+            {
+                stream.release();
+                writer->writeFromAudioSampleBuffer (out, 0, out.getNumSamples());
+            }
+    }
+}
+
+int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     {
@@ -110,6 +179,7 @@ int main()
         testPresetIdsExist (p);
         testInitResetsSoundOnly (p);
         testHoover (p);
+        testHooverRenders (p, argc > 1 ? argv[1] : nullptr);
     }
 
     if (failures == 0)
