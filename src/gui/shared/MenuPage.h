@@ -24,8 +24,8 @@ private:
 // Generic LCD-style menu page component, shared across GUI themes.
 // Pure view/controller: reads and writes parameters through the value tree state.
 // Item types:
-//   select      - prev/next changes the selection (triggers the param), inc/dec does nothing
-//   value       - prev/next moves the cursor between items, inc/dec edits the current item's param
+//   select      - prev/next moves the cursor between items, inc/dec and the knob change the selection
+//   value       - prev/next moves the cursor between items, inc/dec and the knob edit the current item's param
 //   placeholder - inert row ("Soon to be implemented")
 class MenuPage : public juce::Component,
                  public juce::AudioProcessorValueTreeState::Listener
@@ -41,6 +41,17 @@ public:
         juce::StringArray options;  // select type only
         float step = 0.0f;          // value type only; 0 = auto (0.01 for 0..1 floats, 1 for ints/bools)
         juce::StringArray valueNames;  // value type only: index = integer value -> display name (empty = show number)
+        juce::String hiddenWhenId;     // item is skipped while this choice/int param equals hiddenWhenIndex
+        int hiddenWhenIndex = -1;
+        int shownFromIndex = 0;        // item is skipped while hiddenWhenId's choice index is below this
+        bool needsMod = false;         // greyed out and inert while the Mods switch is off
+        int shownUntilIndex = 1 << 30; // item is skipped while hiddenWhenId's choice index is above this
+        juce::String altLabel;         // shown instead of label while hiddenWhenId's choice index equals altLabelIndex
+        int altLabelIndex = -1;
+        juce::String alsoHiddenWhenId;  // a second condition: also skipped while this choice param equals alsoHiddenWhenIndex
+        int alsoHiddenWhenIndex = -1;
+        int alsoHiddenOnlyAtIndex = -1;  // if >= 0, the second condition applies only while hiddenWhenId's index equals this
+        juce::Array<int> alsoHiddenAtIndices;  // also skipped while hiddenWhenId's choice index is one of these
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
         bool wrap = false;             // value type only: dec/inc wrap around the param range (int params)
         juce::String wrapAtParam;      // with wrap: wrap at this int param's value (0..value-1) instead
@@ -79,6 +90,9 @@ public:
         valueLabel.setColour(juce::Label::textColourId, juce::Colour(0xff9bea81));
         valueLabel.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
         valueLabel.setInterceptsMouseClicks(false, false);
+
+        paramIDs.add("switchModState");
+        valueTreeState.addParameterListener("switchModState", this);
 
         for (auto& pg : pageList)
             for (auto& it : pg.items)
@@ -130,19 +144,16 @@ public:
         if (item.type == Type::placeholder)
             return;
 
-        if (item.type == Type::select)
-        {
-            changeSelection(delta);
+        const int next = nextVisibleIndex(cursor, delta < 0 ? -1 : 1);
+        if (next == cursor)
             return;
-        }
-
-        cursor = juce::jlimit(0, pageList.getReference(currentPage).items.size() - 1, cursor + delta);
+        cursor = next;
         pageCursor.getReference(currentPage) = cursor;
         updateDisplay();
         notifyCurrentItemChanged();
     }
 
-    // Called by the theme's dec/inc buttons. No-op on select/placeholder pages.
+    // Called by the theme's dec/inc buttons. No-op on placeholder items.
     void valueStep(float direction)
     {
         auto& item = currentItem();
@@ -153,7 +164,12 @@ public:
                 it->second.step(direction);
             return;
         }
-        if (item.type != Type::value)
+        if (item.type == Type::select)
+        {
+            changeSelection(direction < 0.0f ? -1 : 1);
+            return;
+        }
+        if (item.type != Type::value || ! isItemEnabled(item))
             return;
         int wrapSpan = 0;
         if (item.wrap)
@@ -167,7 +183,18 @@ public:
     void setValue(float percentage)
     {
         auto& item = currentItem();
-        if (item.type != Type::value)
+        if (item.type == Type::select)
+        {
+            if (auto* p = intParam(item.id))
+            {
+                const int index = p->getRange().getStart()
+                                  + juce::roundToInt(percentage / 100.0f * (float) p->getRange().getLength());
+                if (index != p->get())
+                    changeSelection(index - p->get());
+            }
+            return;
+        }
+        if (item.type != Type::value || ! isItemEnabled(item))
             return;
         auto* param = valueTreeState.getParameter(item.id);
         if (param == nullptr)
@@ -201,7 +228,7 @@ public:
     }
 
     // Fired when the cursor/page changes. Carries the current item's value in the
-    // knob's 0..100 scale, or -1 when the knob has nothing to edit (select/placeholder).
+    // knob's 0..100 scale, or -1 when the knob has nothing to edit (placeholder).
     std::function<void(float)> onCurrentItemChanged;
 
     // ---- assignable macro knobs ----
@@ -268,7 +295,7 @@ public:
         for (auto& pg : pageList)
             for (auto& it : pg.items)
                 if (it.id == id)
-                    return it.label;
+                    return labelOf(it);
         return {};
     }
 
@@ -278,6 +305,14 @@ public:
     void parameterChanged(const juce::String& parameterID, float newValue) override
     {
         ignoreUnused(parameterID, newValue);
+        refreshAssignableEnabled();
+        if (isHidden(currentItem()))
+        {
+            cursor = nextVisibleIndex(cursor, -1);
+            if (isHidden(currentItem()))
+                cursor = nextVisibleIndex(cursor, 1);
+            pageCursor.getReference(currentPage) = cursor;
+        }
         updateDisplay();
         notifyCurrentItemChanged();
     }
@@ -289,6 +324,85 @@ public:
     }
 
 private:
+    juce::String labelOf(const Item& item) const
+    {
+        if (item.altLabel.isNotEmpty())
+            if (auto* p = valueTreeState.getParameter(item.hiddenWhenId))
+                if ((int) std::lround(p->convertFrom0to1(p->getValue())) == item.altLabelIndex)
+                    return item.altLabel;
+        return item.label;
+    }
+
+    /** The choice / int parameter's current index, or -1 if there is no such parameter. */
+    int choiceIndex(const juce::String& id) const
+    {
+        if (auto* p = valueTreeState.getParameter(id))
+            return (int) std::lround(p->convertFrom0to1(p->getValue()));
+        return -1;
+    }
+
+    bool isHidden(const Item& item) const
+    {
+        if (item.alsoHiddenWhenId.isNotEmpty() && (item.alsoHiddenOnlyAtIndex < 0 || choiceIndex(item.hiddenWhenId) == item.alsoHiddenOnlyAtIndex))
+            if (choiceIndex(item.alsoHiddenWhenId) == item.alsoHiddenWhenIndex)
+                return true;
+        if (item.hiddenWhenId.isEmpty())
+            return false;
+        auto* p = valueTreeState.getParameter(item.hiddenWhenId);
+        if (p == nullptr)
+            return false;
+        const int index = (int) std::lround(p->convertFrom0to1(p->getValue()));
+        return index == item.hiddenWhenIndex || index < item.shownFromIndex || index > item.shownUntilIndex
+            || item.alsoHiddenAtIndices.contains(index);
+    }
+
+    bool modsOn() const
+    {
+        auto* p = valueTreeState.getParameter("switchModState");
+        return p != nullptr && p->getValue() > 0.5f;
+    }
+
+    bool isItemEnabled(const Item& item) const
+    {
+        return ! item.needsMod || modsOn();
+    }
+
+    void refreshAssignableEnabled()
+    {
+        for (int i = 0; i < numAssignableSlots; ++i)
+        {
+            auto& s = assignableSlots[i];
+            const bool bound = s.attachment != nullptr;
+            const bool enabled = bound && isItemEnabledForParam(s.id);
+            if (s.slider != nullptr)
+                s.slider->setEnabled(enabled);
+            if (s.label != nullptr)
+            {
+                s.label->setText(bound ? assignableLabel(i) : juce::String(), juce::dontSendNotification);
+                s.label->setAlpha(bound && ! enabled ? 0.4f : 1.0f);
+            }
+        }
+    }
+
+    bool isItemEnabledForParam(const juce::String& id) const
+    {
+        for (auto& pg : pageList)
+            for (auto& it : pg.items)
+                if (it.id == id)
+                    return isItemEnabled(it);
+        return true;
+    }
+
+    // Next visible item in the given direction; stays put when there is none.
+    int nextVisibleIndex(int from, int dir) const
+    {
+        auto& items = pageList.getReference(currentPage).items;
+        for (int i = from + dir; i >= 0 && i < items.size(); i += dir)
+            if (! isHidden(items.getReference(i)))
+                return i;
+        return from;
+    }
+
     Item& currentItem()
     {
         static Item placeholderItem;
@@ -303,7 +417,7 @@ private:
         if (!onCurrentItemChanged)
             return;
         float v = -1.0f;
-        if (currentItem().type == Type::value)
+        if (currentItem().type != Type::placeholder)
             if (auto* param = valueTreeState.getParameter(currentItem().id))
                 v = param->getValue() * 100.0f;
         onCurrentItemChanged(v);
@@ -329,9 +443,12 @@ private:
             s.attachment.reset(new juce::AudioProcessorValueTreeState::SliderAttachment(valueTreeState, s.id, *s.slider));
 
         if (s.slider != nullptr)
-            s.slider->setEnabled(bound);
+            s.slider->setEnabled(bound && isItemEnabledForParam(s.id));
         if (s.label != nullptr)
+        {
             s.label->setText(bound ? assignableLabel(slot) : juce::String(), juce::dontSendNotification);
+            s.label->setAlpha(bound && ! isItemEnabledForParam(s.id) ? 0.4f : 1.0f);
+        }
         if (onAssignableChanged)
             onAssignableChanged(slot);
     }
@@ -391,6 +508,8 @@ private:
 
     static juce::String valueString(juce::RangedAudioParameter* param)
     {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(param); p != nullptr && p->range.start < 0.0f)
+            return p->getCurrentValueAsText();   // bipolar: the parameter's own signed text (e.g. "+24%")
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(param))
             return juce::String(p->get());
         if (auto* p = dynamic_cast<juce::AudioParameterBool*>(param))
@@ -424,7 +543,7 @@ private:
             return item.options[juce::jlimit(0, item.options.size() - 1, p->get())];
         }
 
-        return item.label;
+        return labelOf(item);
     }
 
     void updateDisplay()
@@ -440,7 +559,7 @@ private:
         }
         else if (item.type == Type::value)
         {
-            itemLabel.setText(item.label, juce::dontSendNotification);
+            itemLabel.setText(labelOf(item), juce::dontSendNotification);
             valueLabel.setText(displayValue(item), juce::dontSendNotification);
         }
         else
@@ -448,6 +567,10 @@ private:
             itemLabel.setText(itemText(item), juce::dontSendNotification);
             valueLabel.setText({}, juce::dontSendNotification);
         }
+
+        const float alpha = isItemEnabled(item) ? 1.0f : 0.4f;
+        itemLabel.setAlpha(alpha);
+        valueLabel.setAlpha(alpha);
 
         const juce::Font f = fontToFitRow(itemLabel.getText(), valueLabel.getText(), getWidth() - 8);
         itemLabel.setFont(f);
@@ -502,8 +625,10 @@ private:
         for (int i = 0; i < page.items.size(); ++i)
         {
             auto& it = page.items.getReference(i);
-            juce::String text = it.type == Type::placeholder ? "Soon to be implemented" : it.label;
-            menu.addItem(1 + i, text, true, i == cursor);
+            if (isHidden(it))
+                continue;
+            juce::String text = it.type == Type::placeholder ? "Soon to be implemented" : labelOf(it);
+            menu.addItem(1 + i, text, isItemEnabled(it), i == cursor);
         }
         menu.setLookAndFeel(&popupLookAndFeel);
         menu.showMenuAsync(juce::PopupMenu::Options()
@@ -566,6 +691,9 @@ public:
 
         Page ovd; ovd.title = "Overdrive";
         ovd.items.add(Item { "overdriveModelIndex", "Model", Type::select, overdriveModelNames, 0.0f });
+        Item disperse { "overdriveDisperse", "Disperse", Type::value, {}, 0.0f };   // allpass corner before the overdrive
+        disperse.showParamText = true;
+        ovd.items.add(disperse);
         pages.add(ovd);
 
         Page mod; mod.title = "Modifications";
@@ -584,18 +712,39 @@ public:
             "LFO phase", "LFO key sync"
         };
 
-        mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f });
-        mod.items.add(Item { "filterDrive", "Filter Drive",     Type::value, {}, 0.0f });
-        mod.items.add(Item { "bassComp",    "Filter Bass Comp", Type::value, {}, 0.0f });
-        mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f });
-        mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f });
-        mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f });
-        mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f });
-        mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f });
+        // every Mods-page item is greyed out and inert while the Mods switch is off
+        mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "filterMorph", "Filter Morph",     Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // LP / BP / HP; no effect on TeeBee
+        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
+        mod.items.add(Item { "filterQuality", "Filter Quality", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
+        {
+            Item tension { "filterTension", "Filter Tension", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 };   // Spicy only
+            tension.alsoHiddenWhenId = "filterQuality";   // Hi-Fi only: hidden in Standard
+            tension.alsoHiddenWhenIndex = 0;
+            mod.items.add(tension);
+        }
+        mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        {
+            Item bias { "filterBias", "Saturation Bias", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true };   // no effect on TeeBee
+            bias.alsoHiddenAtIndices = { 3, 6 };   // JuneBug, SemiSweet: too faint to hear, held at 0
+            mod.items.add(bias);
+        }
+        {
+            Item rail { "filterRail", "Saturation Rail", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 };   // Spicy only
+            rail.alsoHiddenWhenId = "filterQuality";   // Hi-Fi only: hidden in Standard
+            rail.alsoHiddenWhenIndex = 0;
+            mod.items.add(rail);
+        }
+        mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
+        mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f, {}, {}, -1, 0, true });
 
         static constexpr uint8_t numModItems = juce::numElementsInArray (modItemIDs);
         for (uint8_t i = 0; i < numModItems; ++i)
-            mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f });
+            mod.items.add(Item { modItemIDs[i].toString(), modItemLabels[i], Type::value, {}, 0.0f, {}, {}, -1, 0, true });
 
         for (auto& it : mod.items)
         {

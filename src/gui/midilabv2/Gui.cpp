@@ -318,6 +318,21 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     switchOverdriveButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchOverdriveState", *switchOverdriveButton));
+    // shift-click: toggle the overdrive between post-VCA and pre-VCA (red), switching it on
+    switchOverdriveButton->onShiftClick = [this]
+    {
+        auto* preVca = valueTreeState.getParameter("overdrivePreVca");
+        const bool toPre = preVca->getValue() < 0.5f;
+        preVca->setValueNotifyingHost(toPre ? 1.0f : 0.0f);
+        if (toPre)
+            switchOverdriveButton->setToggleState(true, juce::sendNotification);
+    };
+    // switching the overdrive off leaves pre-VCA mode, so the next click turns it back on post-VCA
+    switchOverdriveButton->onClick = [this]
+    {
+        if (! switchOverdriveButton->getToggleState())
+            valueTreeState.getParameter("overdrivePreVca")->setValueNotifyingHost(0.0f);
+    };
 
     // generative sequencer attachments
     seqGenerativeFillAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeFill", *seqGenerativeFillSlider));
@@ -390,6 +405,8 @@ void JC303Editor::resized()
 
 void JC303Editor::timerCallback()
 {
+    switchOverdriveButton->setAltState(*valueTreeState.getRawParameterValue("overdrivePreVca") > 0.5f);
+
     auto& seq = processorRef.getSequencer();
     menuPage->refreshAction();
 
