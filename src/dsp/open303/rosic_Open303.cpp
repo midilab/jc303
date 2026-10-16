@@ -56,6 +56,9 @@ Open303::Open303()
   currentNoteMuted = false;
   nextNoteMuted    = false;
   nextNoteHammer   = false;
+  nextNoteReverse  = false;
+  currentNoteReverse = false;
+  reverseNoteMorph = 0.0;
   muteMorph        =   0.0;   // start unmuted
   muteMorphCoeff   =   0.0;   // will be set in setSampleRate
 
@@ -363,10 +366,11 @@ void Open303::renderBlock(double* out, int numSamples)
   }
 }
 
-void Open303::setNextNoteModifiers(bool muted, bool hammer)
+void Open303::setNextNoteModifiers(bool muted, bool hammer, bool reversed)
 {
-  nextNoteMuted  = muted;
-  nextNoteHammer = hammer;
+  nextNoteMuted   = muted;
+  nextNoteHammer  = hammer;
+  nextNoteReverse = reversed;
 }
 
 void Open303::noteOn(int noteNumber, int velocity, double detune)
@@ -417,7 +421,10 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
     // trigger a new note, otherwise, slide to the new note:
     const bool hasAccent = velocity >= 100 && !nextNoteMuted;
     if( noteList.empty() )
+    {
       triggerNote(noteNumber, hasAccent);
+      currentNoteReverse = nextNoteReverse;   // a legato group keeps its first note's flag
+    }
     else if( nextNoteHammer )
       hammerToNote(noteNumber, hasAccent);
     else
@@ -426,6 +433,7 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
     currentNoteMuted = nextNoteMuted;
     nextNoteMuted    = false;
     nextNoteHammer   = false;
+    nextNoteReverse  = false;
 
     currentNote = noteNumber;
     currentVel  = 64;
@@ -620,9 +628,10 @@ void Open303::hammerToNote(int noteNumber, bool hasAccent)
   oscFreq = pitchToFreq(noteNumber, tuning);
   pitchSlewLimiter.setState(log(oscFreq));  // Instant pitch change, no slew (the slew runs on log(freq))
 
-  // reverse mode: snap the inverse portamento to the new pitch too
-  reverseFreqFrom = oscFreq;
-  reverseLogRatio = 0.0;
+  // reverse mode: no inverse portamento either - the pitch is already at the target
+  reverseFreqFrom  = oscFreq;
+  reverseGlideBase = reverseSwellNow;
+  reverseLogRatio  = 0.0;
 
   // Handle accent (same as slideToNote)
   if( hasAccent )

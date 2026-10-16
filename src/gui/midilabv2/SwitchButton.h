@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "BlueGlow.h"
 
 class SwitchButton : public juce::Button
 {
@@ -19,6 +20,8 @@ public:
                 auto c = pixels.getPixelColour(x, y);
                 pixels.setPixelColour(x, y, juce::Colour(c.getGreen(), c.getRed(), c.getBlue(), c.getAlpha()));
             }
+
+        imageSecondary = makeBlueGlowFrame(imageSwitch, 2, 0, 1);
     }
 
     // Shift-click calls onShiftClick instead of toggling, when set
@@ -34,10 +37,26 @@ public:
         }
     }
 
+    // Lit frame shows blue while the secondary state is set
+    void setSecondary(bool on)
+    {
+        if (secondary == on) return;
+        secondary = on;
+        repaint();
+    }
+
     void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
     {
         int frameHeight = imageSwitch.getHeight() / 2;
         int sourceY = getToggleState() ? frameHeight : 0;
+
+        if (getToggleState() && secondary && imageSecondary.isValid())
+        {
+            g.drawImage(imageSecondary, 0, 0, getWidth(), getHeight(),
+                        0, 0, imageSecondary.getWidth(), imageSecondary.getHeight(),
+                        false);
+            return;
+        }
 
         juce::Rectangle<int> sourceRect(0, sourceY, imageSwitch.getWidth(), frameHeight);
 
@@ -60,5 +79,7 @@ public:
 private:
     juce::Image imageSwitch;
     juce::Image imageSwitchAlt;
+    juce::Image imageSecondary;
     bool altState = false;
+    bool secondary = false;
 };

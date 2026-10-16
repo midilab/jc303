@@ -486,7 +486,7 @@ JC303::JC303()
     _sequencer.onNoteEvent = [this] (const Acid303Event& ev)
     {
         if (_pendingCount < kPendingMax)
-            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.hammer };
+            _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.reverse, ev.hammerInto };
     };
 
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
@@ -1268,7 +1268,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             if (_sequencerMuted.load(std::memory_order_acquire))
                 return;
 
-            open303Core.setNextNoteModifiers (ev.mute, ev.hammer);
+            open303Core.setNextNoteModifiers (ev.mute, ev.hammerInto, ev.reverse);
             open303Core.noteOn (ev.note, ev.velocity, 0);
 
             // MIDI out: NoteOn
@@ -1550,6 +1550,7 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
         stepXml->setAttribute ("tie",    td.step[i].tie    ? 1 : 0);
         stepXml->setAttribute ("mute",   td.step[i].mute   ? 1 : 0);
         stepXml->setAttribute ("hammer", td.step[i].hammer ? 1 : 0);
+        stepXml->setAttribute ("reverse", td.step[i].reverse ? 1 : 0);
         seqXml->addChildElement (stepXml.release());
     }
 
@@ -1611,6 +1612,7 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                         _sequencer.setTie    (i, stepXml->getIntAttribute ("tie",    0) != 0);
                         _sequencer.setMute   (i, stepXml->getIntAttribute ("mute",   0) != 0);
                         _sequencer.setHammer (i, stepXml->getIntAttribute ("hammer", 0) != 0);
+                        _sequencer.setReverse(i, stepXml->getIntAttribute ("reverse", 0) != 0);
                     }
                 }
             }

@@ -21,7 +21,7 @@ static int failures = 0;
 static constexpr int kStep = 6000;
 static constexpr int kTick = 250;
 
-struct Ev { bool on; int note; int vel; long at; };
+struct Ev { bool on; int note; int vel; long at; bool reverse; bool hammerInto; };
 
 // Runs a sequencer and records the note events it emits.
 struct Rig
@@ -34,7 +34,7 @@ struct Rig
     Rig()
     {
         seq.onNoteEvent = [this] (const Acid303Event& e)
-        { evs.push_back ({ e.type == Acid303EventType::NoteOn, e.note, e.velocity, pos + e.sampleOffset }); };
+        { evs.push_back ({ e.type == Acid303EventType::NoteOn, e.note, e.velocity, pos + e.sampleOffset, e.reverse, e.hammerInto }); };
         seq.onAllNotesOff = [this] { ++allNotesOffCalls; };
         seq.prepare (48000.0, 960.0);
         seq.setTempo (120.0f);
@@ -727,9 +727,59 @@ static void testRandomizeSilencesHeldNote()
     CHECK (r.offAfter (40, 0) != -1);
 }
 
+static void testReversePlaybackRunsBackwards()
+{
+    Rig r;
+    r.step (0, 40); r.step (1, 43); r.step (2, 45); r.step (3, 47);
+    r.seq.setReverse (2, true);
+    r.seq.setTrackLength (4);
+    r.seq.setReversePlayback (true);
+    r.seq.start();
+    r.run (4 * kStep);
+
+    const auto ons = r.ons();
+    CHECK (ons.size() >= 4);
+    CHECK (ons[0].note == 47 && ons[1].note == 45 && ons[2].note == 43 && ons[3].note == 40);
+    CHECK (ons[0].reverse && ! ons[1].reverse);     // a reverse-flagged step plays forward in reverse
+}
+
+static void testReversePlaybackStartsTiedRunAtFarEnd()
+{
+    Rig r;
+    r.step (0, 40);
+    r.seq.setTie (1, true); r.seq.setTie (2, true);  // step 0 holds through steps 1-2
+    r.step (3, 47);
+    r.seq.setTrackLength (4);
+    r.seq.setReversePlayback (true);
+    r.seq.start();
+    r.run (4 * kStep);
+
+    const auto ons = r.ons();
+    CHECK (ons.size() == 2);
+    CHECK (ons[0].note == 47 && ons[1].note == 40);
+    CHECK (ons[1].at - ons[0].at == kStep);          // the run starts on its last tied rest
+    CHECK (r.offAfter (40, ons[1].at) == ons[1].at + 2 * kStep + 12 * kTick);
+}
+
+static void testHammerIntoFlagsTheReceivingNote()
+{
+    Rig r;
+    r.step (0, 40); r.seq.setHammer (0, true); r.step (1, 43);
+    r.seq.setTrackLength (2);
+    r.seq.start();
+    r.run (2 * kStep);
+
+    const auto ons = r.ons();
+    CHECK (! ons[0].hammerInto && ons[1].hammerInto);
+    CHECK (r.offAfter (40, ons[0].at) > ons[1].at);  // hammer overlaps like a slide
+}
+
 int main()
 {
     testStepSpacingAndGate();
+    testReversePlaybackRunsBackwards();
+    testReversePlaybackStartsTiedRunAtFarEnd();
+    testHammerIntoFlagsTheReceivingNote();
     testAccentVelocity();
     testSlideOverlapsNextNote();
     testRestIsSilent();

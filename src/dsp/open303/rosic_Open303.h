@@ -416,7 +416,7 @@ namespace rosic
 
     /** Flags the next note-on (via noteOn) as muted and/or a hammer (instant-pitch legato when
     a note is already held). Cleared once that note-on has been handled. */
-    void setNextNoteModifiers(bool muted, bool hammer);
+    void setNextNoteModifiers(bool muted, bool hammer, bool reversed = false);
 
     /** Turns all possibly running notes off. */
     void allNotesOff();
@@ -568,6 +568,9 @@ namespace rosic
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     bool   nextNoteMuted;    // set by setNextNoteModifiers, consumed by the next noteOn
     bool   nextNoteHammer;   // likewise: legato note-on snaps pitch instead of gliding
+    bool   nextNoteReverse;  // likewise: a triggered (non-legato) note plays time-reversed
+    bool   currentNoteReverse; // reversed flag of the note (or legato group) currently sounding
+    double reverseNoteMorph; // smoothed 0..1 per-note reverse amount (click-free switching)
     bool   currentNoteMuted; // flag indicating the current note is muted (shorter gate, darker, quieter)
 
     // TT-303 mute parameters
@@ -740,6 +743,11 @@ namespace rosic
     // back-loaded the curve is; reverseDen == e^reverseShape - 1 normalizes it to 0..1. Computed
     // before the oscillator frequency because in reverse mode the swell also shapes the pitch glide.
     double mainEnvFwd = mainEnv.getSample();  // forward main envelope: decays 1 -> 0
+    // effective reverse depth: the global toggle, or a note flagged reversed in the sequencer
+    // (smoothed so the contour crossfade doesn't click); identical to reverseGate when no step is flagged
+    const double reverseNoteTarget = currentNoteReverse ? 1.0 : 0.0;
+    reverseNoteMorph = reverseNoteTarget + muteMorphCoeff * (reverseNoteMorph - reverseNoteTarget);
+    const double revDepth = reverseGate > reverseNoteMorph ? reverseGate : reverseNoteMorph;
     double rPos  = reversePhase / reverseLength;                  // 0..1 over the note, then clamped
     if( rPos > 1.0 ) rPos = 1.0;
     // The swell completes slightly early (at reverseHoldAt of the predicted length) and then HOLDS
@@ -778,7 +786,7 @@ namespace rosic
     // (volts/octave) and keeps octave slides from lingering in the low end.
     // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO.
     double slewFreq = exp( pitchSlewLimiter.getSample( log(oscFreq) ) );
-    if( reverseGate > 0.0 )
+    if( revDepth > 0.0 )
     {
       // inverse portamento: the forward slew glides old->new at the note's silent head, so in reverse
       // mode it is inaudible. Instead glide from the current pitch to the target along the remaining
@@ -789,7 +797,7 @@ namespace rosic
       if( gp < 0.0 ) gp = 0.0;
       if( gp > 1.0 ) gp = 1.0;
       double glideFreq = reverseFreqFrom * exp(gp * reverseLogRatio);
-      slewFreq = slewFreq + reverseGate * (glideFreq - slewFreq);
+      slewFreq = slewFreq + revDepth * (glideFreq - slewFreq);
     }
     reverseInstFreq = slewFreq;   // remember current pitch so a following slide can glide from here
     double instFreq = slewFreq * pitchModFactor;
@@ -821,7 +829,7 @@ namespace rosic
     // filter- & accent-modulation driver: crossfade forward (1->0) to the reversed main-env swell
     // (e^-Km -> 1) so the cutoff opens on the mirrored curve of the forward Decay sweep and the
     // accent emphasis lands on the peak, mirroring reversed audio.
-    double mainEnvOut = mainEnvFwd + reverseGate * (swellMain - mainEnvFwd);
+    double mainEnvOut = mainEnvFwd + revDepth * (swellMain - mainEnvFwd);
     double tmp1       = n1 * rc1.getSample(mainEnvOut);
     double tmp2       = 0.0;
     if( accentGain > 0.0 )
@@ -854,7 +862,7 @@ namespace rosic
 
     // amplitude contour: crossfade the forward amp envelope with the reversed swell.
     double ampFwd    = ampEnv.getSample();
-    double ampEnvOut = ampFwd + reverseGate * (revAmp - ampFwd);
+    double ampEnvOut = ampFwd + revDepth * (revAmp - ampFwd);
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
     if( ampEnv.isNoteOn() )
       ampEnvOut += 0.45*mainEnvOut + accentGain*4.0*mainEnvOut;
