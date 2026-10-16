@@ -1,13 +1,18 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "BlueGlow.h"
 
 // Small LED used to visualise the sequencer step state; clicking it selects the
 // step to edit. The image is a 3-frame vertical strip: OFF (top), ON (middle),
 // and playing (bottom). setState() repaints only when the state actually changes.
+// kPitchPlayhead draws the ON frame's glow in amber: the step whose pitch is
+// sounding, when Pitch Rotate / Pitch Length move it away from the (red) step playhead.
 class SequencerStepSelector : public juce::Component
 {
 public:
+    static constexpr int kPitchPlayhead = 4;
+
     enum class Mode
     {
         Toggle,
@@ -95,17 +100,26 @@ public:
         if (imageLed.isValid())
         {
             const int frameHeight = imageLed.getHeight() / 3;
-            const int sourceY = ledState * frameHeight;
             const int drawHeight = (label != nullptr) ? jmax(0, getHeight() - 16) : getHeight();
 
+            if (ledState == kPitchPlayhead)
+            {
+                if (! imageAmber.isValid())
+                    imageAmber = makeBlueGlowFrame(imageLed, 3, 0, 1, juce::Colour::fromFloatRGBA(1.0f, 0.62f, 0.1f, 1.0f));
+                g.drawImage(imageAmber, 0, 0, getWidth(), drawHeight,
+                            0, 0, imageAmber.getWidth(), imageAmber.getHeight(), false);
+                return;
+            }
+
             g.drawImage(imageLed, 0,  0, getWidth(), drawHeight,
-                        0, sourceY, imageLed.getWidth(), frameHeight,
+                        0, ledState * frameHeight, imageLed.getWidth(), frameHeight,
                         false);
         }
     }
 
 private:
     juce::Image imageLed;
+    juce::Image imageAmber;   // built on first use
     std::unique_ptr<juce::Label> label;
     int ledState = 0;
     bool clickToggles = false;

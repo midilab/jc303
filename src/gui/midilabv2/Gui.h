@@ -7,6 +7,7 @@
 #include "SwitchButton.h"
 #include "SwitchStepSeqButton.h"
 #include "SequencerStepSelector.h"
+#include "StepNoteLabel.h"
 #include "../shared/MenuPage.h"
 #include "../shared/SeqKeyboard.h"
 
@@ -108,19 +109,19 @@ private:
     juce::Label* modAssign1Label;
     juce::Label* modAssign2Label;
     int menuMode = 0;
-    // sequencer step toggles (note/rest editing), per-step accent/slide/tie toggles,
+    // sequencer step toggles (note/rest editing), per-step accent and slide/tie toggles,
     // and click-to-select display LEDs
     SwitchButton* seqStepButtons[16];
+    StepNoteLabel* seqStepNoteLabels[16];   // stored pitch name overlaid on each step button
     SequencerStepSelector* seqAccentButtons[16];
     SequencerStepSelector* seqSlideButtons[16];
-    SequencerStepSelector* seqTieButtons[16];
     SequencerStepSelector* stepSelectors[16];
     juce::Label* seqAccentLabel;
     juce::Label* seqSlideLabel;
-    juce::Label* seqTieLabel;
     juce::Label* seqStepLabel;
     juce::Label* seqRestLabel;
     int selectedStep = 0;
+    juce::TooltipWindow tooltipWindow { this, 700 };
 
     // declare the attchaments
     std::unique_ptr<SliderAttachment> waveformAttachment;

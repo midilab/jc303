@@ -164,7 +164,8 @@ enum Open303Parameters
 inline double accentSweepMs (float value) { return linToExp (value, 0.0, 1.0, 15.0, 2000.0); }
 
 class JC303  :  public juce::AudioProcessor,
-                public juce::AudioProcessorValueTreeState::Listener
+                public juce::AudioProcessorValueTreeState::Listener,
+                private juce::AsyncUpdater
 {
 public:
     //==============================================================================
@@ -191,6 +192,11 @@ public:
         const float a = std::abs (v);
         return a < bipolarDetentZone ? 0.0f : std::copysign ((a - bipolarDetentZone) / (1.0f - bipolarDetentZone), v);
     }
+
+    // TB-303 service notes: TUNING approx. +/-700 cents (perfect fifth)
+    static constexpr float tuningRangeCents = 700.0f;
+    static float tuningCents (float v) { return tuningRangeCents * bipolarDetent (v); }
+
     static juce::String signedPercent (float v)
     {
         const int pct = juce::roundToInt (v * 100.0f);
@@ -244,7 +250,7 @@ public:
     void sequencerStop()  { _sequencer.stop();  }
 
     // ── Sequencer UI→audio command channel ────────────────────────────────────
-    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear };
+    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm, Undo, Redo };
     void seqCommand (SeqCommand command) { _seqCommand.store (static_cast<int>(command), std::memory_order_release); }
 
 private:
@@ -261,6 +267,9 @@ private:
     // flushes) always run on the audio thread.  Setting it from the message
     // thread keeps sequencer + Open303 state single-threaded while running.
     void applySeqCommands();
+    void applySeqRewrites();
+    void resetSeqOffsets (int mask);
+    void handleAsyncUpdate() override;
 
     // presets and overdrive models user data management
     void setupDataDirectories();
@@ -296,15 +305,6 @@ private:
 
     // Tracks host play state across buffers to detect start/stop edges
     bool _wasHostPlaying { false };
-
-    // Currently held note from the sequencer (-1 = none).
-    // Prevents stale NoteOffs from closing a new note after a slide,
-    // and detects wrap-around ties (same pitch re-firing at pattern start).
-    int  _heldNote         { -1    };
-
-    // Slide flag from the last dispatched step, carried across buffer
-    // boundaries so the *receiving* step's NoteOn gets slide=1 correctly.
-    bool _lastStepHadSlide { false };
 
     // Mute flag for sequencer (used during acidRandomize to prevent note triggering)
     std::atomic<bool> _sequencerMuted { false };
@@ -380,6 +380,12 @@ private:
     std::atomic<float>* lowerNote = nullptr;
     std::atomic<float>* rangeNote = nullptr;
     std::atomic<float>* seqPlayState = nullptr;
+    std::atomic<float>* seqCpuTiming = nullptr;
+    std::atomic<float>* seqTranspose = nullptr;
+    std::atomic<float>* seqShift = nullptr;
+    std::atomic<float>* seqPitchRotate = nullptr;
+    std::atomic<float>* seqSwing = nullptr;
+    std::atomic<float>* seqPitchLength = nullptr;
     std::atomic<float>* seqGenerate = nullptr;
     std::atomic<float>* seqClear = nullptr;
     //std::atomic<float>* seqHarmonizer = nullptr;
@@ -400,6 +406,16 @@ private:
     // Pending sequencer command set by parameterChanged, applied by the audio
     // thread in renderMidi (see applySeqCommands).
     std::atomic<int> _seqCommand { static_cast<int>(SeqCommand::None) };
+
+    // Transpose / Shift / Pitch Rotate values already written into the pattern
+    std::atomic<int> _appliedTranspose { 0 };
+    std::atomic<int> _appliedShift { 0 };
+    std::atomic<int> _appliedPitchRotate { 0 };
+
+    // Offsets a new or cleared pattern zeroes; the message thread resets the
+    // params, and rewrites wait until it has
+    enum SeqOffset : int { OffsetTranspose = 1, OffsetShift = 2, OffsetPitchRotate = 4 };
+    std::atomic<int> _seqOffsetReset { 0 };
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

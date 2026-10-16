@@ -31,7 +31,7 @@ class MenuPage : public juce::Component,
                  public juce::AudioProcessorValueTreeState::Listener
 {
 public:
-    enum class Type { value, select, placeholder };
+    enum class Type { value, select, placeholder, action };
 
     struct Item
     {
@@ -53,6 +53,8 @@ public:
         int alsoHiddenOnlyAtIndex = -1;  // if >= 0, the second condition applies only while hiddenWhenId's index equals this
         juce::Array<int> alsoHiddenAtIndices;  // also skipped while hiddenWhenId's choice index is one of these
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
+        bool wrap = false;             // value type only: dec/inc wrap around the param range (int params)
+        juce::String wrapAtParam;      // with wrap: wrap at this int param's value (0..value-1) instead
     };
 
     struct Page
@@ -96,7 +98,7 @@ public:
             for (auto& it : pg.items)
             {
                 juce::String id = it.id.trim();
-                if (id.isEmpty() || paramIDs.contains(id))
+                if (id.isEmpty() || it.type == Type::action || paramIDs.contains(id))
                     continue;
                 paramIDs.add(id);
                 valueTreeState.addParameterListener(id, this);
@@ -155,6 +157,13 @@ public:
     void valueStep(float direction)
     {
         auto& item = currentItem();
+        if (item.type == Type::action)
+        {
+            auto it = actions.find(item.id);
+            if (it != actions.end() && it->second.step)
+                it->second.step(direction);
+            return;
+        }
         if (item.type == Type::select)
         {
             changeSelection(direction < 0.0f ? -1 : 1);
@@ -162,7 +171,11 @@ public:
         }
         if (item.type != Type::value || ! isItemEnabled(item))
             return;
-        changeValue(direction);
+        int wrapSpan = 0;
+        if (item.wrap)
+            if (auto* p = intParam(item.wrapAtParam.isEmpty() ? item.id : item.wrapAtParam))
+                wrapSpan = item.wrapAtParam.isEmpty() ? p->getRange().getLength() + 1 : p->get();
+        changeValue(item.id, item.step, direction, wrapSpan);
     }
 
     // Called by the theme's value knob. Same 0..100 scale as the display;
@@ -190,6 +203,28 @@ public:
         param->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, percentage / 100.0f));
         param->endChangeGesture();
         updateDisplay();
+    }
+
+    // ---- action items: not parameters; dec/inc call step(), the value text comes from text() ----
+    struct Action
+    {
+        std::function<void(float)> step;
+        std::function<juce::String()> text;
+    };
+
+    void setAction(const juce::String& id, Action action)
+    {
+        actions[id] = std::move(action);
+        updateDisplay();
+    }
+
+    bool currentItemIsAction() { return currentItem().type == Type::action; }
+
+    // Polled by the theme's timer: action values can change outside the menu.
+    void refreshAction()
+    {
+        if (currentItemIsAction() && valueLabel.getText() != actionText(currentItem()))
+            updateDisplay();
     }
 
     // Fired when the cursor/page changes. Carries the current item's value in the
@@ -435,16 +470,29 @@ private:
         updateDisplay();
     }
 
-    void changeValue(float direction)
+    // wrapSpan > 0: dec/inc wrap over that many values from the range start
+    void changeValue(const juce::String& paramID, float itemStep, float direction, int wrapSpan)
     {
-        auto& item = currentItem();
-        auto* param = valueTreeState.getParameter(item.id);
+        auto* param = valueTreeState.getParameter(paramID);
         if (param == nullptr)
             return;
 
+        if (auto* p = dynamic_cast<juce::AudioParameterInt*>(param); p != nullptr && wrapSpan > 0)
+        {
+            const int lo = p->getRange().getStart();
+            const int span = wrapSpan;
+            const int next = lo + (((p->get() - lo + (int) direction) % span) + span) % span;
+            p->beginChangeGesture();
+            *p = next;
+            p->endChangeGesture();
+            updateDisplay();
+            notifyCurrentItemChanged();
+            return;
+        }
+
         const auto range = param->getNormalisableRange();
-        float step = item.step > 0.0f
-                         ? item.step
+        float step = itemStep > 0.0f
+                         ? itemStep
                          : (dynamic_cast<juce::AudioParameterInt*>(param) != nullptr
                             || dynamic_cast<juce::AudioParameterBool*>(param) != nullptr)
                                ? 1.0f
@@ -504,7 +552,12 @@ private:
         titleLabel.setText(page.title, juce::dontSendNotification);
 
         auto& item = currentItem();
-        if (item.type == Type::value)
+        if (item.type == Type::action)
+        {
+            itemLabel.setText(item.label, juce::dontSendNotification);
+            valueLabel.setText(actionText(item), juce::dontSendNotification);
+        }
+        else if (item.type == Type::value)
         {
             itemLabel.setText(labelOf(item), juce::dontSendNotification);
             valueLabel.setText(displayValue(item), juce::dontSendNotification);
@@ -717,6 +770,34 @@ public:
         seq.items.add(Item { "seqTempo",     "Tempo",      Type::value, {}, 0.0f });
         seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 1.0f });
         seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 1.0f });
+        seq.items.add(Item { "seqTranspose", "Transpose",  Type::value, {}, 1.0f });
+        {
+            // wrap at the pattern length: the engine reads each change the shorter way round it
+            Item shift { "seqShift", "Shift", Type::value, {}, 1.0f };
+            shift.wrap = true;
+            shift.wrapAtParam = "seqLength";
+            seq.items.add(shift);
+            Item rotate { "seqPitchRotate", "Pitch Rot", Type::value, {}, 1.0f };
+            rotate.wrap = true;
+            rotate.wrapAtParam = "seqLength";
+            seq.items.add(rotate);
+            Item pitchLen { "seqPitchLength", "Pitch Len", Type::value, {}, 1.0f };
+            pitchLen.valueNames.add("Off");
+            for (int i = 1; i <= 16; ++i)
+                pitchLen.valueNames.add(juce::String(i));
+            seq.items.add(pitchLen);
+        }
+        {
+            Item swing { "seqSwing", "Swing", Type::value, {}, 0.5f };
+            swing.showParamText = true;   // e.g. 62.5%
+            seq.items.add(swing);
+        }
+        {
+            Item cpuTiming { "seqCpuTiming", "CPU Timing", Type::value, {}, 1.0f };
+            cpuTiming.showParamText = true;   // On / Off
+            seq.items.add(cpuTiming);
+        }
+        seq.items.add(Item { "seqUndo", "Undo", Type::action, {}, 0.0f });
         pages.add(seq);
 
         return pages;
@@ -729,6 +810,13 @@ private:
     AssignableSlot assignableSlots[numAssignableSlots];
     int currentPage = 0;
     int cursor = 0;
+    std::map<juce::String, Action> actions;
+
+    juce::String actionText(const Item& item)
+    {
+        auto it = actions.find(item.id);
+        return (it != actions.end() && it->second.text) ? it->second.text() : juce::String();
+    }
     juce::Array<int> pageCursor;
     int modPageIndex = -1;
 

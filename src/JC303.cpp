@@ -63,9 +63,14 @@ JC303::JC303()
                                                         1.0f),
             std::make_unique<juce::AudioParameterFloat> ("tuning",
                                                         "Tuning",
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.5f),
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,    // centre detent = A4 440 Hz
+                                                        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                            [] (float v, int)
+                                                            {
+                                                                const int c = juce::roundToInt (tuningCents (v));
+                                                                return (c > 0 ? "+" : "") + juce::String (c) + " ct";
+                                                            })),
             std::make_unique<juce::AudioParameterFloat> ("cutoff",
                                                         "Cutoff",
                                                         0.0f,
@@ -323,9 +328,9 @@ JC303::JC303()
                                                     4.0f),
             std::make_unique<juce::AudioParameterFloat> ("lowerNote",
                                                     "Lower Note",
-                                                    0.0f,
+                                                    static_cast<float> (SEQ303_NOTE_MIN),
                                                     127.0f,
-                                                    20.0f),
+                                                    static_cast<float> (SEQ303_NOTE_MIN)),
             std::make_unique<juce::AudioParameterFloat> ("rangeNote",
                                                     "Range Note",
                                                     0.0f,
@@ -357,6 +362,37 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("seqPlayState",
                                                         "Seq Play State",
                                                         false),
+            std::make_unique<juce::AudioParameterInt> ("seqTranspose",
+                                                        "Seq Transpose",
+                                                        -24,
+                                                        24,
+                                                        0),
+            std::make_unique<juce::AudioParameterInt> ("seqShift",
+                                                        "Seq Shift",
+                                                        0,
+                                                        15,
+                                                        0),
+            std::make_unique<juce::AudioParameterInt> ("seqPitchRotate",
+                                                        "Seq Pitch Rotate",
+                                                        0,
+                                                        15,
+                                                        0),
+            std::make_unique<juce::AudioParameterInt> ("seqPitchLength",
+                                                        "Seq Pitch Length",
+                                                        0,
+                                                        16,
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("seqSwing",
+                                                        "Seq Swing",
+                                                        juce::NormalisableRange<float> (50.0f, 75.0f, 0.1f),
+                                                        50.0f,
+                                                        juce::AudioParameterFloatAttributes()
+                                                            .withLabel ("%")
+                                                            .withStringFromValueFunction ([] (float v, int)
+                                                                { return juce::String (v, 1) + "%"; })),
+            std::make_unique<juce::AudioParameterBool> ("seqCpuTiming",
+                                                        "Seq CPU Timing",
+                                                        true),
             std::make_unique<juce::AudioParameterBool> ("seqGenerate",
                                                         "Seq Generate",
                                                         false),
@@ -442,6 +478,12 @@ JC303::JC303()
     seqStartMode = parameters.getRawParameterValue("seqStartMode");
     seqTempo = parameters.getRawParameterValue("seqTempo");
     seqPlayState = parameters.getRawParameterValue("seqPlayState");
+    seqCpuTiming = parameters.getRawParameterValue("seqCpuTiming");
+    seqTranspose = parameters.getRawParameterValue("seqTranspose");
+    seqShift = parameters.getRawParameterValue("seqShift");
+    seqPitchRotate = parameters.getRawParameterValue("seqPitchRotate");
+    seqSwing = parameters.getRawParameterValue("seqSwing");
+    seqPitchLength = parameters.getRawParameterValue("seqPitchLength");
     seqGenerate = parameters.getRawParameterValue("seqGenerate");
     seqClear = parameters.getRawParameterValue("seqClear");
     subOscGain = parameters.getRawParameterValue("subOscGain");
@@ -543,14 +585,6 @@ JC303::JC303()
             _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset };
     };
 
-    // Reset held-note tracking whenever the sequencer silences its note stack
-    // (stop, mute, clearTrack, acidRandomize) so no stale gate is left open.
-    _sequencer.onAllNotesOff = [this]
-    {
-        _heldNote         = -1;
-        _lastStepHadSlide = false;
-    };
-
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
     // and the AcidSeq303 child (stepLength) on state restore.
     _sequencer.setTrackLength (16);
@@ -558,6 +592,7 @@ JC303::JC303()
 
 JC303::~JC303()
 {
+    cancelPendingUpdate();
     parameters.removeParameterListener("waveform", this);
     parameters.removeParameterListener("tuning", this);
     parameters.removeParameterListener("cutoff", this);
@@ -688,6 +723,63 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
 // Consumes a sequencer command queued by the UI thread.  Must run on the audio
 // thread, after _pendingCount has been reset, so all Open303 calls and sequencer
 // emits stay on the audio thread while the device is rendering.
+// Transpose / Shift / Pitch Rotate are offsets: a change rewrites the stored
+// pattern by the difference from the last applied value.  Transpose stops a
+// semitone at a time where a note would leave 0..127 (it may go below the
+// GUI's C0 floor).  Shift and Pitch Rotate wrap at the pattern length on the
+// menu, so their difference is read the shorter way round it.
+void JC303::applySeqRewrites()
+{
+    if (_seqOffsetReset.load (std::memory_order_acquire) != 0)
+        return;
+
+    const int transpose = static_cast<int>(std::lround (seqTranspose->load()));
+    int applied = _appliedTranspose.load();
+    while (applied != transpose)
+    {
+        const int dir = transpose > applied ? 1 : -1;
+        if (! _sequencer.transposeNotes (dir)) break;
+        applied += dir;
+    }
+    _appliedTranspose.store (applied);
+
+    const int len = _sequencer.getTrackLength();
+
+    const int shift = static_cast<int>(std::lround (seqShift->load()));
+    if (const int turn = AcidSequencer303::shortestTurn (shift - _appliedShift.exchange (shift), len); turn != 0)
+        _sequencer.shiftSteps (turn);
+
+    const int rotate = static_cast<int>(std::lround (seqPitchRotate->load()));
+    if (const int turn = AcidSequencer303::shortestTurn (rotate - _appliedPitchRotate.exchange (rotate), len); turn != 0)
+        _sequencer.rotatePitches (turn);
+}
+
+// Audio thread: a new or cleared pattern starts its offsets at 0
+void JC303::resetSeqOffsets (int mask)
+{
+    _seqOffsetReset.fetch_or (mask, std::memory_order_acq_rel);
+    triggerAsyncUpdate();
+}
+
+void JC303::handleAsyncUpdate()
+{
+    const int mask = _seqOffsetReset.load (std::memory_order_acquire);
+    const std::pair<SeqOffset, const char*> offsets[] {
+        { OffsetTranspose, "seqTranspose" }, { OffsetShift, "seqShift" }, { OffsetPitchRotate, "seqPitchRotate" } };
+    for (const auto& [bit, id] : offsets)
+        if ((mask & bit) != 0)
+            if (auto* p = parameters.getParameter (id))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (p->convertTo0to1 (0.0f));
+                p->endChangeGesture();
+            }
+    if ((mask & OffsetTranspose) != 0)   _appliedTranspose.store (0);
+    if ((mask & OffsetShift) != 0)       _appliedShift.store (0);
+    if ((mask & OffsetPitchRotate) != 0) _appliedPitchRotate.store (0);
+    _seqOffsetReset.fetch_and (~mask, std::memory_order_acq_rel);
+}
+
 void JC303::applySeqCommands()
 {
     const int cmd = _seqCommand.exchange (static_cast<int>(SeqCommand::None),
@@ -698,28 +790,25 @@ void JC303::applySeqCommands()
     switch (static_cast<SeqCommand>(cmd))
     {
     case SeqCommand::Play:
-        _heldNote         = -1;
-        _lastStepHadSlide = false;
         _sequencer.start();
         break;
 
     case SeqCommand::Stop:
-        _heldNote         = -1;
-        _lastStepHadSlide = false;
         _sequencer.stop();
         break;
 
     case SeqCommand::Clear:
+        _sequencer.pushUndo();
         _sequencer.clearTrack();
+        resetSeqOffsets (OffsetTranspose | OffsetShift | OffsetPitchRotate);
         break;
 
     case SeqCommand::Generate:
+        _sequencer.pushUndo();
         _sequencerMuted.store (true, std::memory_order_release);
 
         for (int i = 0; i <= 127; i++)
             open303Core.noteOn (i, 0, 0);
-        _heldNote         = -1;
-        _lastStepHadSlide = false;
 
         _sequencer.acidRandomize(
             static_cast<uint8_t>(*seqGenerativeFill),
@@ -730,7 +819,43 @@ void JC303::applySeqCommands()
             static_cast<uint8_t>(*lowerNote),
             static_cast<uint8_t>(*rangeNote)
         );
+        resetSeqOffsets (OffsetTranspose | OffsetShift | OffsetPitchRotate);
 
+        _sequencerMuted.store (false, std::memory_order_release);
+        break;
+
+    case SeqCommand::GeneratePitches:
+        _sequencer.pushUndo();
+        _sequencerMuted.store (true, std::memory_order_release);
+        for (int i = 0; i <= 127; i++)
+            open303Core.noteOn (i, 0, 0);
+        _sequencer.randomizePitches (static_cast<uint8_t>(*numberOfTones),
+                                     static_cast<uint8_t>(*lowerNote),
+                                     static_cast<uint8_t>(*rangeNote));
+        resetSeqOffsets (OffsetTranspose | OffsetPitchRotate);
+        _sequencerMuted.store (false, std::memory_order_release);
+        break;
+
+    case SeqCommand::GenerateRhythm:
+        _sequencer.pushUndo();
+        _sequencerMuted.store (true, std::memory_order_release);
+        for (int i = 0; i <= 127; i++)
+            open303Core.noteOn (i, 0, 0);
+        _sequencer.randomizeRhythm (static_cast<uint8_t>(*seqGenerativeFill),
+                                    static_cast<uint8_t>(*seqGenerativeAccentProbability),
+                                    static_cast<uint8_t>(*seqGenerativeSlideProbability),
+                                    static_cast<uint8_t>(*seqGenerativeTieProbability));
+        resetSeqOffsets (OffsetShift | OffsetPitchRotate);
+        _sequencerMuted.store (false, std::memory_order_release);
+        break;
+
+    case SeqCommand::Undo:
+    case SeqCommand::Redo:
+        _sequencerMuted.store (true, std::memory_order_release);
+        for (int i = 0; i <= 127; i++)
+            open303Core.noteOn (i, 0, 0);
+        if (static_cast<SeqCommand>(cmd) == SeqCommand::Undo) _sequencer.undo();
+        else                                                  _sequencer.redo();
         _sequencerMuted.store (false, std::memory_order_release);
         break;
 
@@ -773,9 +898,7 @@ void JC303::setParameter (Open303Parameters index, float value)
         );
         break;
     case TUNING:
-        open303Core.setTuning(
-            linToLin(value, 0.0, 1.0,  400.0,    480.0)
-        );
+        open303Core.setTuning(440.0 * std::pow(2.0, tuningCents(value) / 1200.0));
         break;
     case CUTOFF:
         open303Core.setCutoff(
@@ -1087,8 +1210,6 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     _sequencer.prepare (sampleRate, 960.0);
     _pendingCount     = 0;
     _wasHostPlaying   = false;
-    _heldNote         = -1;
-    _lastStepHadSlide = false;
     _recHeldNote      = -1;
     _sustainArmed     = true;
     _recWasOn         = false;
@@ -1167,8 +1288,6 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         else if (! hostIsPlaying && _wasHostPlaying)
         {
             _sequencer.stop();
-            _heldNote         = -1;
-            _lastStepHadSlide = false;
         }
     }
     _wasHostPlaying = hostIsPlaying;
@@ -1183,12 +1302,22 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // thread and inside this buffer's event queue.
     applySeqCommands();
 
+    // 303 CPU interrupt timing is a mod: only active with the mod switch on
+    _sequencer.setCpuTiming (*switchModState > 0.5f && *seqCpuTiming > 0.5f);
+
+    applySeqRewrites();
+
+    const auto pitchLen  = static_cast<uint8_t>(std::lround (seqPitchLength->load()));
+    if (_sequencer.getPitchLength() != pitchLen)    _sequencer.setPitchLength (pitchLen);
+
+    // MPC-style swing: off-beat 16ths land at seqSwing % of the 8th-note pair
+    _sequencer.setSwingPercent (seqSwing->load());
+
     _sequencer.processBlock (midiMessages,
                              numSamples,
                              hostIsPlaying,
                              ppqAtStart,
-                             hostBpm,
-                             /*shufflePulses=*/ 0);
+                             hostBpm);
 
     // ── Sort pending sequencer events by sample position ──────────────────────
     // Typically 0–2 events per buffer; insertion sort is ideal here.
@@ -1208,28 +1337,12 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     //
     // Bridges sequencer note events to Open303.
     //
-    // TIE (rest+tie steps):
-    //   The sequencer never emits a NoteOn for a tied rest — it just extends
-    //   the gate countdown of the previous note.  Ties are fully transparent
-    //   here; no special handling is needed.
-    //
-    // SLIDE:
-    //   The slide flag lives on the step that *sends* the glide, not the one
-    //   that receives it.  We save it in _lastStepHadSlide after each NoteOn
-    //   so the next NoteOn can pass slide=1 to Open303, which performs the
-    //   portamento without retriggering the envelope.
-    //
-    // WRAP-AROUND TIE (same pitch re-firing at pattern boundary):
-    //   If the last step(s) of a pattern are rest+tie, the sequencer extends
-    //   the gate past the pattern end.  When step 0 then fires with the same
-    //   pitch still ringing, we skip the re-trigger so there is no click.
-    //   _lastStepHadSlide is preserved so the glide carry still works.
-    //
-    // NoteOff:
-    //   Always forwarded unconditionally.  This is the key fix — suppressing
-    //   NoteOffs to handle slide caused stuck notes because it prevented the
-    //   gate from closing.  Open303 handles note-stealing internally; we just
-    //   need to close every gate we opened.
+    // TIE / SLIDE:
+    //   The sequencer owns gate timing.  Ties extend a note's gate; a slide
+    //   overlaps the next note's gate, and Open303 glides (no retrigger)
+    //   whenever a NoteOn arrives while a note is still held.  A same-pitch
+    //   overlap is handed over inside the sequencer, so every NoteOn and
+    //   NoteOff is forwarded as is.
     //
     // MIDI output buffer — built up during rendering, replaces midiMessages
     // at the end so the DAW receives sample-accurate note events on the
@@ -1245,42 +1358,19 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             if (_sequencerMuted.load(std::memory_order_acquire))
                 return;
 
-            if (_heldNote >= 0 && ev.note == static_cast<uint8_t>(_heldNote))
-            {
-                // Wrap-around tie: same pitch already ringing from a gate
-                // extension across the pattern boundary — do not re-trigger.
-                // Keep _lastStepHadSlide as-is so slide carry is unaffected.
-            }
-            else
-            {
-                // Normal new note, or slide into a different pitch.
-                // _lastStepHadSlide was set by the previous NoteOn dispatch.
-                const int slide = _lastStepHadSlide ? 1 : 0;
-                open303Core.noteOn (ev.note, ev.velocity, slide);
-                _heldNote = static_cast<int>(ev.note);
+            open303Core.noteOn (ev.note, ev.velocity, 0);
 
-                // MIDI out: NoteOn
-                midiOut.addEvent (juce::MidiMessage::noteOn  (1, ev.note, static_cast<uint8_t>(ev.velocity)),
-                                  samplePos);
-            }
-
-            // Save the slide flag of the step we just played so the *next*
-            // NoteOn dispatch knows whether to use slide=1.
-            _lastStepHadSlide = _sequencer.slideOn (_sequencer.getCurrentStep());
+            // MIDI out: NoteOn
+            midiOut.addEvent (juce::MidiMessage::noteOn  (1, ev.note, static_cast<uint8_t>(ev.velocity)),
+                              samplePos);
         }
-        else // NoteOff — always forward, never drop
+        else // NoteOff
         {
             open303Core.noteOn (ev.note, 0, 0);
 
             // MIDI out: NoteOff
             midiOut.addEvent (juce::MidiMessage::noteOff (1, ev.note),
                               samplePos);
-
-            if (ev.note == static_cast<uint8_t>(_heldNote))
-            {
-                _heldNote         = -1;
-                _lastStepHadSlide = false;
-            }
         }
     };
 
@@ -1545,7 +1635,6 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
     _sequencer.copyTrackData (td);
 
     seqXml->setAttribute ("stepLength",  td.stepLength);
-    seqXml->setAttribute ("transpose",   td.transpose);
     //seqXml->setAttribute ("tune",        _sequencer.getTune());
     //seqXml->setAttribute ("temperament", _sequencer.getTemperamentId());
 
@@ -1601,8 +1690,6 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                 if (auto* lp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqLength")))
                     *lp = _sequencer.getTrackLength();
 
-                _sequencer.setTranspose (static_cast<int8_t>
-                                            (seqXml->getIntAttribute ("transpose", 0)));
                 //_sequencer.setTune      (static_cast<uint8_t>
                 //                            (seqXml->getIntAttribute ("tune",      0)));
                 //_sequencer.setTemperament (static_cast<uint8_t>
@@ -1622,6 +1709,11 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                     }
                 }
             }
+
+            // The restored pattern already carries its offsets
+            _appliedTranspose.store   (static_cast<int>(std::lround (seqTranspose->load())));
+            _appliedShift.store       (static_cast<int>(std::lround (seqShift->load())));
+            _appliedPitchRotate.store (static_cast<int>(std::lround (seqPitchRotate->load())));
         }
     }
 }
