@@ -22,8 +22,10 @@ namespace dfl
               phase in radians, so only its rising quarter is used, as a soft saw. Shape sweeps the
               ripple amount m1 from 0.8 (few, wide ripples) to 0.2 (many fine ripples).
 
-  Drift is the paper's LFO on m1 (Fig. 13), here also applied to aTM: a free-running 0.35 Hz sine
-  that keeps the timbre moving like a detuned oscillator bank.
+  Drift is the paper's LFO on m1 (Fig. 13), which stands in for the timbral motion of a detuned
+  oscillator bank. Like the beating of a real bank, it is irregular and scales with pitch: three
+  sines at incommensurate fractions of f0. It applies to SUPERSAW only; sweeping aTM would cross
+  the triangle modulation's fundamental null near aTM = 0.7, so the root would come and go.
 
   The wraps are value discontinuities locked to the phase, repaired with a 2-point polyBLEP. Slope
   kinks (the triangle corners, the ripple edges) are left to the surrounding oversampling, as in
@@ -45,7 +47,7 @@ namespace dfl
 
     static constexpr double SUPERSAW_A1 = 1.5;    // phase scaling a1 (Fig. 12)
     static constexpr double SUPERSAW_M2 = 0.88;   // second ripple modulus m2 (Fig. 12)
-    static constexpr double DRIFT_RATE  = 0.35;   // Hz
+    static constexpr int    NUM_DRIFTS  = 3;
 
     static double triModAmountForShape(double shape) { return 0.5 + 0.5 * clip01(shape); }
     static double rippleForShape(double shape)       { return 0.8 - 0.6 * clip01(shape); }
@@ -76,7 +78,7 @@ namespace dfl
     /** Timbre, 0..1: the triangle modulation amount or the supersaw ripple. */
     inline void setShape(double newShape) { shape = clip01(newShape); }
 
-    /** Depth of the slow LFO on the shape, 0..1. */
+    /** Depth of the ripple supersaw's shape drift, 0..1. */
     inline void setDrift(double newDrift) { drift = clip01(newDrift); }
 
     /** Bandlimiting on (default) or the trivial waveform (for tests). */
@@ -84,21 +86,28 @@ namespace dfl
 
     void resetPhase() { phase = 0.0; }
 
+    /** The current drift signal, -1..1 (0 while drift is off or in TRI_MOD). */
+    double getDriftValue() const { return driftValue; }
+
     //---------------------------------------------------------------------------------------------
     // audio processing:
 
     inline double getSample()
     {
-      double lfo = 0.0;
-      if( drift > 0.0 )
+      driftValue = 0.0;
+      if( mode == SUPERSAW && drift > 0.0 )
       {
-        lfo = std::sin(twoPi * driftPhase);
-        driftPhase += DRIFT_RATE * sampleRateRec;
-        if( driftPhase >= 1.0 )
-          driftPhase -= 1.0;
+        for( int i = 0; i < NUM_DRIFTS; i++ )
+        {
+          driftValue += std::sin(twoPi * driftPhase[i]);
+          driftPhase[i] += driftRatios[i] * increment;
+          if( driftPhase[i] >= 1.0 )
+            driftPhase[i] -= 1.0;
+        }
+        driftValue *= 1.0 / NUM_DRIFTS;
       }
 
-      const double out = (mode == TRI_MOD) ? triModSample(lfo) : supersawSample(lfo);
+      const double out = (mode == TRI_MOD) ? triModSample() : supersawSample(driftValue);
 
       phase += increment;
       if( phase >= 1.0 )
@@ -113,9 +122,12 @@ namespace dfl
     static constexpr double twoPi   = 6.28318530717958647692;
     static constexpr double edgeEps = 1.0e-9;   // one-sided limits at an edge
 
-    inline double triModSample(double lfo) const
+    // drift rates as fractions of f0: 0.44, 1.2 and 2.1 Hz at A2, in the range of a lightly detuned bank's beating
+    static constexpr double driftRatios[NUM_DRIFTS] = { 0.004, 0.011, 0.019 };
+
+    inline double triModSample() const
     {
-      const double a  = clip(triModAmountForShape(shape) + 0.12 * drift * lfo, 0.5, 1.0);
+      const double a  = triModAmountForShape(shape);
       const double dt = increment;
       double y = triMod(phase, a);
       if( ! antialias )
@@ -145,9 +157,9 @@ namespace dfl
       return 2.0 * (xT - std::ceil(xT - 0.5));
     }
 
-    inline double supersawSample(double lfo) const
+    inline double supersawSample(double driftSignal) const
     {
-      const double m1 = rippleForShape(shape) * (1.0 + 0.25 * drift * lfo);
+      const double m1 = rippleForShape(shape) * (1.0 + 0.3 * drift * driftSignal);
       const double a1 = SUPERSAW_A1;
       const double x  = a1 * phase;
       const double dt = increment;
@@ -220,7 +232,8 @@ namespace dfl
     double freq          = 440.0;
     double increment     = 0.0;
     double phase         = 0.0;
-    double driftPhase    = 0.0;
+    double driftPhase[NUM_DRIFTS] = { 0.0, 0.31, 0.67 };
+    double driftValue    = 0.0;
     double shape         = 0.5;
     double drift         = 0.0;
     int    mode          = TRI_MOD;

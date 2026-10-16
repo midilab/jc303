@@ -277,7 +277,7 @@ JC303::JC303()
                                                         "Shape Drift",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f),   // slow LFO on the phaseshaper shape
+                                                        0.0f),   // ripple saw shimmer, pitch-tracked like a detuned bank
             // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
                                                         "Square Model",

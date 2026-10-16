@@ -750,7 +750,12 @@ public:
         mod.items.add(Item { "superDetune", "Super Detune",     Type::value, {}, 0.0f, {}, "oscModel", -1, 1, true, 1 });
         mod.items.add(Item { "superMix",    "Super Mix",        Type::value, {}, 0.0f, {}, "oscModel", -1, 1, true, 1 });
         mod.items.add(Item { "shaperMode",  "Shaper Mode",      Type::value, {}, 1.0f, {}, "oscModel", -1, 2, true, 2 });   // Phaseshaper only
-        mod.items.add(Item { "shapeDrift",  "Shape Drift",      Type::value, {}, 0.0f, {}, "oscModel", -1, 2, true, 2 });
+        {
+            Item drift { "shapeDrift", "Shape Drift", Type::value, {}, 0.0f, {}, "oscModel", -1, 2, true, 2 };
+            drift.alsoHiddenWhenId = "shaperMode";   // Ripple Saw only
+            drift.alsoHiddenWhenIndex = 0;
+            mod.items.add(drift);
+        }
         mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f, {}, {}, -1, 0, true });
 
