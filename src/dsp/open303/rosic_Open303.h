@@ -8,12 +8,21 @@
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
 #include "dfl_DiodeLadderFilter.h"
+#include "dfl_MS20Filter.h"
+#include "dfl_RolandFilter.h"
+#include "dfl_WaspFilter.h"
+#include "dfl_SEMFilter.h"
+#include "dfl_ARP4075Filter.h"
+#include "dfl_FilterType.h"
+#include "dfl_ResonanceMap.h"
+#include "dfl_TB303OutputNetwork.h"
 #include "rosic_AnalogEnvelope.h"
 #include "rosic_DecayEnvelope.h"
 #include "rosic_LeakyIntegrator.h"
 #include "rosic_EllipticQuarterBandFilter.h"
 #include "rosic_AcidSequencer.h"
 #include "dfl_LFO.h"
+#include "dfl_DynamicSmoothingFilter.h"
 
 #include <list>
 
@@ -23,17 +32,6 @@ namespace rosic
 {
   // Import dfl classes
   using dfl::DiodeLadderFilter;
-
-  /** Filter types available for selection. */
-  enum FilterType
-  {
-    FILTER_TEEBEE = 0,      // Original TB-303 transistor ladder
-    FILTER_DIODE_OCTAVE,    // Diode ladder with 1st pole one octave above (~18dB/oct)
-    FILTER_DIODE,           // Diode ladder (4-pole, 24dB/oct)
-    FILTER_DIODE_BP,        // Diode ladder, bandpass response (12/12 dB/oct)
-    FILTER_DIODE_HP,        // Diode ladder, highpass response (24 dB/oct)
-    NUM_FILTER_TYPES
-  };
 
   enum SquareModel
   {
@@ -88,8 +86,9 @@ namespace rosic
     /** Sets the resonance amount for the filter. */
     void setResonance(double newResonance);
 
-    /** Sets the filter type. */
-    void setFilterType(FilterType newType);
+    /** Sets the filter type. While playing, the output fades out over a few ms, the filter chains reset and the new
+    model fades in, so the switch does not click. */
+    void setFilterType(dfl::FilterType newType);
 
     /** Sets the filter input drive in decibels. Pushes the signal into the
     diode ladder's saturating nonlinearity for overdrive character. The TeeBee
@@ -97,16 +96,53 @@ namespace rosic
     void setFilterDrive(double newDriveDb);
 
     /** Returns the current filter type. */
-    FilterType getFilterType() const { return currentFilterType; }
+    dfl::FilterType getFilterType() const { return pendingFilterType; }
 
-    /** Sets the diode filter's passband (bass) compensation, 0..1. Boosts the
-    low end to offset the thinning that the diode ladder exhibits at high
-    resonance. Only affects the diode filter models. */
+    /** Sets the diode filter's bass comp amount, 0..1. */
     void setPassbandCompensation(double newCompensation);
+
+    /** Sets the diode filter's response mode, 0..1: 0 = lowpass, 0.5 = bandpass, 1 = highpass. The LFO may modulate
+    it (destination 3), so the knob value is kept as the base. */
+    void setFilterMode(double newMode) { modeBase = newMode; }
 
     /** Sets the Filter FM depth (0-1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input to modulate filter cutoff frequency. */
-    void setFilterFmDepth(double depth) { diodeFilter.setFilterFmDepth(depth); }
+    void setFilterFmDepth(double depth)
+    {
+      diodeFilter.setFilterFmDepth(depth);
+      ms20Filter.setFilterFmDepth(depth);
+      junoFilter.setFilterFmDepth(depth);
+      waspFilter.setFilterFmDepth(depth);
+      semFilter.setFilterFmDepth(depth);
+      hornetFilter.setFilterFmDepth(depth);
+      arpFilter.setFilterFmDepth(depth);
+    }
+
+    /** Sets the diode models' unit trim (loop-gain scale, 1 = nominal unit). */
+    void setResonanceTrim(double trim) { diodeFilter.setLoopGainTrim(trim); }
+
+    /** Diode filter quality: Hi-Fi (the default) solves every diode pair's tanh per sample (DiodeLadderFilter::setHiFi). */
+    void setFilterHiFi(bool on) { diodeFilter.setHiFi(on); }
+
+    /** Diode ladder tension, -1..1 (Hi-Fi only; 0 = the circuit's diodes, DiodeLadderFilter::setTension). */
+    void setFilterTension(double t) { diodeFilter.setTension(t); }
+    void setFilterTensionEnvelope(bool on) { diodeFilter.setTensionEnvelope(on); }   // comparison switch (temporary)
+
+    // The character controls (DiodeLadderFilter::setBite / setClipThreshold / setSharpness / setWarmth) stay in the filter
+    // for the fidelity tools but are not exposed: Clip is Saturation in disguise (the model is homogeneous), Sharpness
+    // acts much like Res Trim, Warmth and Bite only once Saturation drives the pairs (Bite overlapping Saturation Bias).
+
+    /** Sets the diode filter's saturation asymmetry (0-1, default 0.5, ramps in with drive above 0 dB; its swell of the
+     *  loop gain is the driven filter's push, and near full resonance its crunch: the loop locks onto its own frequency
+     *  under the note, see DiodeLadderFilter SAT_BIAS_MAX). Higher = more swell and crunch. In Hi-Fi the range's top
+     *  half is rescaled to end at a cap that follows the tension (SAT_BIAS_CAP_*: past it the note chokes). The
+     *  plugin's Saturation Bias parameter. The MS-20 offsets its input stage, the Wasp OTA1's divider, the ARP 4075 its limiter pair; the IR3109 and SEM ignore it (see
+     *  updateCircuitCharacter). */
+    void setFilterBias(double bias) { diodeFilter.setSaturationBias(bias); circuitBias = bias; updateCircuitCharacter(); }
+
+    /** Sets the diode filter's rail, 0..1 (Hi-Fi; 1 = unlimited, the full crunch; lower = cleaner, see
+     *  DiodeLadderFilter::setRail). The MS-20 and IR3109 models take it as their Clip, the Wasp as its supply (see updateCircuitCharacter). */
+    void setFilterRail(double rail) { diodeFilter.setRail(rail); circuitRail = rail; updateCircuitCharacter(); }
 
     /** Returns the Filter FM depth. */
     double getFilterFmDepth() const { return diodeFilter.getFilterFmDepth(); }
@@ -164,11 +200,24 @@ namespace rosic
     void setTanhShaperOffset(double newOffset)
     { waveTable2.setTanhShaperOffsetFor303Square(newOffset); }
 
-    /** Sets the cutoff frequency for the highpass before the main filter. */
+    /** Sets the cutoff frequency for the highpass before the TeeBee filter (the diode models use the circuit's input coupling). */
     void setPreFilterHighpass(double newCutoff) { highpass1.setCutoff(newCutoff); }
 
     /** Sets the cutoff frequency for the highpass inside the feedback loop of the main filter. */
-    void setFeedbackHighpass(double newCutoff) { filter.setFeedbackHighpassCutoff(newCutoff); }
+    void setFeedbackHighpass(double newCutoff)
+    {
+      feedbackHighpass = newCutoff;
+      filter.setFeedbackHighpassCutoff(newCutoff);
+      // The knob is referenced to the TeeBee's 150 Hz default, where the diode sits at its default Q21 beta (300).
+      // From there the corner runs exponentially to DIODE_FEEDBACK_MAX at the knob's start (350 Hz) and to
+      // DIODE_FEEDBACK_MIN at its end (100 Hz).
+      const double def = DiodeLadderFilter::FEEDBACK_DEFAULT;
+      double diodeCutoff = newCutoff >= 150.0
+        ? def * pow(DIODE_FEEDBACK_MAX / def, log(newCutoff / 150.0) / log(350.0 / 150.0))
+        : def * pow(DIODE_FEEDBACK_MIN / def, log(150.0 / newCutoff) / log(150.0 / 100.0));
+      diodeFilter.setFeedbackHighpass(diodeCutoff);
+      outputNetwork.setCouplingPole(diodeFilter.getCouplingPoleHz());
+    }
 
     /** Sets the cutoff frequency for the highpass after the main filter. */
     void setPostFilterHighpass(double newCutoff) { highpass2.setCutoff(newCutoff); }
@@ -193,7 +242,9 @@ namespace rosic
     void setAccentAttack(double newAccentAttack)
     {
       accentAttack = newAccentAttack;
-      rc2.setTimeConstant(accentAttack);
+      // The resonance pot scales the accent capacitor's discharge lag (see
+      // setResonance): tau = accentAttack * (1 + 2*resonance), so 1x..3x.
+      rc2.setTimeConstant(accentAttack * (1.0 + resonanceSkewed * 2.0));
       updateAccentSweepGain();
     }
 
@@ -326,6 +377,23 @@ namespace rosic
     /** Calculates onse output sample at a time. */
     INLINE double getSample();
 
+    /** An effect inserted after the filter and output chain, before the VCA, so it sees a steady level
+    while the amp envelope shapes its output. It runs at the sample rate. */
+    class PreVcaInsert
+    {
+    public:
+      virtual ~PreVcaInsert() = default;
+      virtual void process(double* buffer, int numSamples) = 0;
+    };
+
+    /** Sets the pre-VCA insert; nullptr bypasses it. */
+    void setPreVcaInsert(PreVcaInsert* newInsert) { preVcaInsert = newInsert; }
+
+    /** Renders numSamples output samples through the pre-VCA insert, in chunks of maxBlockSize. */
+    void renderBlock(double* out, int numSamples);
+
+    static const int maxBlockSize = 64;
+
     //-----------------------------------------------------------------------------------------------
     // event handling:
 
@@ -346,13 +414,22 @@ namespace rosic
     dfl::DualSubOscillator    subOscillator;
     TeeBeeFilter              filter;
     DiodeLadderFilter         diodeFilter;
+    dfl::MS20Filter           ms20Filter;
+    dfl::RolandFilter         junoFilter;
+    dfl::WaspFilter           waspFilter { dfl::WaspFilter::Revision::EDP };
+    dfl::WaspFilter           hornetFilter { dfl::WaspFilter::Revision::A124 };
+    dfl::ARP4075Filter        arpFilter;
+    dfl::SEMFilter            semFilter;
+    dfl::TB303OutputNetwork   outputNetwork;   // the diode models' output path, instead of allpass / highpass2 / notch
     AnalogEnvelope            ampEnv;
     DecayEnvelope             mainEnv;
     LeakyIntegrator           pitchSlewLimiter;
+    DynamicSmoothingFilter    cutoffSmoother;   // anti-zipper smoothing of the cutoff parameter
     //LeakyIntegrator           ampDeClicker;
     BiquadFilter              ampDeClicker;
     LeakyIntegrator           rc1, rc2;
     OnePoleFilter             highpass1, highpass2, allpass;
+    OnePoleFilter             diodeInputCoupling;   // the diode models' VCF input coupling, instead of highpass1
     BiquadFilter              notch;
     EllipticQuarterBandFilter antiAliasFilter;
     AcidSequencer             sequencer;
@@ -363,6 +440,9 @@ namespace rosic
     /** Triggers a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
     void triggerNote(int noteNumber, bool hasAccent);
+
+    /** Clears the state of both filter models' chains (filter, input / output networks, anti-alias). */
+    void resetFilters();
 
     /** Slides to a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
@@ -389,7 +469,17 @@ namespace rosic
     main envelope generator. */
     void updateNormalizer2();
 
+    /** Renders one sample up to the VCA and returns the VCA gains to apply with applyVca. */
+    INLINE double renderPreVca(double& ampGain, double& volumeGain);
+
+    INLINE double applyVca(double in, double ampGain, double volumeGain) const;
+
     static const int oversampling = 4;
+
+    PreVcaInsert* preVcaInsert = nullptr;
+    double blockPreVca[maxBlockSize];
+    double blockAmp[maxBlockSize];
+    double blockVolume[maxBlockSize];
 
     double tuning;           // master tunung for A4 in Hz
     double ampScaler;        // final volume as raw factor
@@ -406,6 +496,7 @@ namespace rosic
     double envScaler;        // scale-factor for the normalized envelope (derived from envMod)
     double normalAttack;     // attack time for the filter envelope on non-accented notes
     double accentAttack;     // attack time for the filter envelope on accented notes
+    double resonanceSkewed;  // skewed resonance (0-1), scales the accent capacitor lag
     double normalDecay;      // decay time for the filter envelope on non-accented notes
     double accentDecay;      // decay time for the filter envelope on accented notes
     double normalAmpRelease; // amp-env release time for non-accented notes
@@ -421,13 +512,32 @@ namespace rosic
     int    noteOffCountDown; // a countdown variable till next note-off in sequencer mode
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
-    FilterType currentFilterType;  // currently selected filter type
+    dfl::FilterType currentFilterType;  // filter type currently rendered
+    dfl::FilterType pendingFilterType;  // selected filter type; currentFilterType follows after the switch fade-out
+    double switchGain = 1.0;            // filter switch fade, 0..1
+    double switchStep = 1.0;            // per-sample fade increment (5 ms)
+    double feedbackHighpass = 150.0;   // Filter Feedback knob in TeeBee Hz
+    // Level per filter model, after the filter chain, so the models sit at equal loudness at resonance 0 (saw, mean
+    // over C2 / C3 / C4 and cutoff 400 / 1000 / 2500 Hz, env mod 60; tools/diode-fidelity/model_level). Level matching
+    // between models lives here rather than in the filters, which stay at their own (circuit) level.
+    static constexpr double FILTER_LEVEL[dfl::NUM_FILTER_TYPES] = { 1.0, 2.401, 1.349, 1.274, 1.106, 1.259, 1.265, 1.288 };   // TeeBee, Spicy (+7.6 dB), MissBehave (+2.6 dB), JuneBug (+2.1 dB), Wasabi (+0.9 dB), Hornet (+2.0 dB), SemiSweet (+2.0 dB), Oddity (+2.2 dB)
+    // The diode models' corner at the knob's end: the coupling pole C27/C25 into Q21 at 46 Hz, Q21 beta about 500 (the
+    // 2SC1583's datasheet minimum). Higher betas make the network's ~7 Hz mode motorboat at high resonance (SPICE:
+    // beta 800 at full pot), so the knob stops here. The pole is 578.1 rad/s x corner / 115.
+    static constexpr double DIODE_FEEDBACK_MIN = 46.0 * 2.0 * 3.14159265358979 * 115.0 / 578.1;
+    // ... and at the knob's start: coupling pole 214 Hz (Q21 beta about 70).
+    static constexpr double DIODE_FEEDBACK_MAX = 350.0 * 115.0 / 150.0;
 
     // LFO modulation depth
     double lfoDepth;    // LFO depth (0.0 to 1.0)
     double lfoPhase = 0.0;      // LFO start phase for key-sync (0.0 to 1.0)
     bool lfoKeySync = false;    // reset LFO phase on note trigger
-    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width)
+    int lfoDestination;   // LFO destination (0=filter cutoff, 1=volume, 2=pitch, 3=pulse width, 4=filter mode)
+    // Saturation Bias / Rail / drive as last set, for the MS-20, IR3109 and Wasp models (updateCircuitCharacter)
+    double circuitBias = 0.5, circuitRail = 1.0, circuitDriveDb = 0.0;
+    void updateCircuitCharacter();
+
+    double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the LFO modulates it
     bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;
@@ -439,11 +549,20 @@ namespace rosic
 
   INLINE double Open303::getSample()
   {
-    //if( sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached() )
-    //  return 0.0;
+    // 'idle' short-circuits output before the first note is ever triggered (it starts true and is
+    // cleared on the first trigger). Note it is never set back to true afterwards, so this is only a
+    // pre-first-note guard; re-enabling end-of-note detection here to save CPU on silence is a
+    // possible future optimization but needs click-free retrigger testing.
     if( idle )
       return 0.0;
 
+    double ampGain, volumeGain;
+    double tmp = renderPreVca(ampGain, volumeGain);
+    return applyVca(tmp, ampGain, volumeGain);
+  }
+
+  INLINE double Open303::renderPreVca(double& ampGain, double& volumeGain)
+  {
     // check the sequencer if we have some note to trigger:
     if( sequencer.getSequencerMode() != AcidSequencer::OFF )
     {
@@ -484,6 +603,7 @@ namespace rosic
     double volumeModFactor = 1.0;
     double pitchModFactor = 1.0;
     double pwmDepth = 0.0, pwmLfo = 0.0;
+    double modeLfoAdd = 0.0;    // LFO contribution to the filter mode
 
     if (lfoEnabled && lfoDepth > 0.0)
     {
@@ -511,12 +631,27 @@ namespace rosic
             pwmDepth = lfoDepth;
             pwmLfo   = 0.5 * (lfoValue + 1.0);
             break;
+        case 4:
+            // Apply LFO to the diode filter mode: +/- 0.5 around the knob at depth 1 (LP -> BP or BP -> HP)
+            modeLfoAdd = 0.5 * lfoValue * lfoDepth;
+            break;
       }
     }
 
-    // calculate instantaneous oscillator frequency and set up the oscillator:
-    // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO
-    double instFreq = pitchSlewLimiter.getSample(oscFreq) * pitchModFactor;
+    diodeFilter.setMode(modeBase + modeLfoAdd);   // LFO-modulated when destination 3
+    ms20Filter.setMode(modeBase + modeLfoAdd);
+    junoFilter.setMode(modeBase + modeLfoAdd);
+    waspFilter.setMode(modeBase + modeLfoAdd);
+    semFilter.setMode(modeBase + modeLfoAdd);
+    hornetFilter.setMode(modeBase + modeLfoAdd);
+    arpFilter.setMode(modeBase + modeLfoAdd);
+
+    // calculate instantaneous oscillator frequency and set up the oscillator. The portamento slew
+    // runs in the log-frequency domain (glide log(freq), then exponentiate back to Hz) so the slide
+    // is an exponential in pitch/cents rather than in Hz - this matches how a real 303 slews its pitch CV
+    // (volts/octave) and keeps octave slides from lingering in the low end.
+    // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO.
+    double instFreq = exp( pitchSlewLimiter.getSample( log(oscFreq) ) ) * pitchModFactor;
     oscillator.setFrequency(instFreq*pitchWheelFactor);
     oscillator.calculateIncrement();
     subOscillator.setFrequency(instFreq*pitchWheelFactor);
@@ -548,11 +683,19 @@ namespace rosic
     if( accentGain > 0.0 )
       tmp2 = mainEnvOut;
     tmp2 = n2 * rc2.getSample(tmp2) * accentSweepGain;
-    tmp1 = envScaler * ( tmp1 - envOffset );  // seems not to work yet
+    tmp1 = envScaler * ( tmp1 - envOffset );  // main env-mod scaling (Schmidt's measured mapping)
     tmp2 = accentGain*tmp2;
-    double instCutoff = cutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);
+    // Anti-zipper: dynamically smooth the (block-rate) cutoff parameter before it drives the filter
+    double smoothedCutoff = cutoffSmoother.getSample(cutoff);
+    double instCutoff = smoothedCutoff * pow(2.0, tmp1+tmp2+lfoFilterMod);
     filter.setCutoff(instCutoff);
     diodeFilter.setCutoff(instCutoff);
+    ms20Filter.setCutoff(instCutoff);
+    junoFilter.setCutoff(instCutoff);
+    waspFilter.setCutoff(instCutoff);
+    semFilter.setCutoff(instCutoff);
+    hornetFilter.setCutoff(instCutoff);
+    arpFilter.setCutoff(instCutoff);
 
     double ampEnvOut = ampEnv.getSample();
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
@@ -567,31 +710,83 @@ namespace rosic
       tmp  = -oscillator.getSample();         // the raw oscillator signal
       if( subOscGain > 0.0 )
         tmp += subOscGain * (-subOscillator.getSample(subOscBlend));
-      tmp  = highpass1.getSample(tmp);        // pre-filter highpass
-      // Apply selected filter
-      if(currentFilterType == FILTER_TEEBEE)
+      if(currentFilterType == dfl::FILTER_TEEBEE)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
         tmp = filter.getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_MS20)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
+        tmp = ms20Filter.getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_JUNO106)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
+        tmp = junoFilter.getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_WASP || currentFilterType == dfl::FILTER_WASP_A124)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
+        tmp = (currentFilterType == dfl::FILTER_WASP ? waspFilter : hornetFilter).getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_SEM)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
+        tmp = semFilter.getSample(tmp);
+      }
+      else if(currentFilterType == dfl::FILTER_ARP4075)
+      {
+        tmp = highpass1.getSample(tmp);       // pre-filter highpass
+        tmp = arpFilter.getSample(tmp);
+      }
       else
+      {
+        tmp = diodeInputCoupling.getSample(tmp);
         tmp = diodeFilter.getSample(tmp);
+      }
       tmp  = antiAliasFilter.getSample(tmp);  // anti-aliasing filtered
 
     }
 
     // these filters may actually operate without oversampling (but only if we reset them in
     // triggerNote - avoid clicks)
-    tmp  = allpass.getSample(tmp);
-    tmp  = highpass2.getSample(tmp);
-    tmp = notch.getSample(tmp);
-    tmp *= ampEnvOut;                       // amplified
-    tmp *= ampScaler;
-    tmp *= volumeModFactor;                 // LFO volume modulation
-
-    // find out whether we may switch ourselves off for the next call:
-    idle = false;
-    //idle = (sequencer.getSequencerMode() == AcidSequencer::OFF && ampEnv.endIsReached()
-    //        && fabs(tmp) < 0.000001); // ampEnvOut < 0.000001;
+    if(currentFilterType == dfl::FILTER_DIODE)
+      tmp = outputNetwork.getSample(tmp);
+    else if(currentFilterType != dfl::FILTER_TEEBEE)
+      tmp = highpass2.getSample(tmp);         // MS-20 / IR3109 / Wasp / SEM / ARP: the post-filter highpass only (allpass / notch are the 303's)
+    else
+    {
+      tmp  = allpass.getSample(tmp);
+      tmp  = highpass2.getSample(tmp);
+      tmp = notch.getSample(tmp);
+    }
+    tmp *= FILTER_LEVEL[currentFilterType]; // level match between filter models
+    if(pendingFilterType != currentFilterType)
+    {
+      switchGain -= switchStep;
+      if(switchGain <= 0.0)
+      {
+        switchGain = 0.0;
+        currentFilterType = pendingFilterType;
+        resetFilters();
+      }
+    }
+    else if(switchGain < 1.0)
+      switchGain = fmin(switchGain + switchStep, 1.0);
+    tmp *= switchGain;                      // filter switch fade
+    ampGain    = ampEnvOut;
+    volumeGain = volumeModFactor;
 
     return tmp;
+  }
+
+  INLINE double Open303::applyVca(double in, double ampGain, double volumeGain) const
+  {
+    in *= ampGain;                          // amplified
+    in *= ampScaler;
+    in *= volumeGain;                       // LFO volume modulation
+    return in;
   }
 
 }

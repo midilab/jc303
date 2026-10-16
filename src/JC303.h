@@ -4,13 +4,111 @@
 
 // Open303
 #include "dsp/open303/rosic_Open303.h"
+#include "dsp/open303/dfl_DispersionFilter.h"
 using namespace rosic;
+using namespace dfl;
 
 // GuitarML BYOD implementation
 #include "dsp/guitarml-byod/processors/drive/GuitarMLAmp.h"
 
 // Aciduino Sequencer
 #include "sequencer/AcidSequencer303.h"
+
+// Allpass dispersion in front of the overdrive: it leaves the spectrum alone but smears the harmonics' phases,
+// reshaping the waveform's peaks, which changes how the distortion bites. Eight 2nd-order allpasses spread over
+// two octaves around the Disperse corner (150 Hz..3 kHz, where a 303 line's harmonics sit; 0 is bypass). Once the
+// harmonics are scrambled the Q matters little, so it is fixed at 1, which gave the peakiest waveform.
+class Disperser
+{
+public:
+    void prepare (double newSampleRate)
+    {
+        filter.setSampleRate (newSampleRate);
+        filter.setStages (dfl::DispersionFilter::MAX_STAGES);
+        filter.setSpread (2.0);
+        filter.setQ (1.0);
+        filter.reset();
+        active = false;
+    }
+
+    void setAmount (float newAmount) { amount = newAmount; }
+
+    static double cornerFor (float p) { return minCorner * std::pow (maxCorner / minCorner, (double) p); }
+
+    void process (float* x, int numSamples)
+    {
+        if (amount <= 0.0f)
+        {
+            active = false;
+            return;
+        }
+        const double target = std::log (cornerFor (amount));
+        if (! active)
+        {
+            // coming out of bypass: start clean instead of from stale stage state
+            active = true;
+            filter.reset();
+            logCorner = target;
+            filter.setCenterFreq (std::exp (logCorner));
+        }
+        // glide the corner in the log domain, updating the coefficients every few samples
+        for (int start = 0; start < numSamples; start += updateInterval)
+        {
+            if (std::abs (target - logCorner) > 1.0e-4)
+            {
+                logCorner += 0.1 * (target - logCorner);
+                filter.setCenterFreq (std::exp (logCorner));
+            }
+            const int end = juce::jmin (numSamples, start + updateInterval);
+            for (int n = start; n < end; ++n)
+                x[n] = filter.process (x[n]);
+        }
+    }
+
+private:
+    static constexpr double minCorner = 150.0, maxCorner = 3000.0;
+    static constexpr int updateInterval = 16;
+
+    dfl::DispersionFilter filter;
+    float amount = 0.0f;
+    double logCorner = 0.0;
+    bool active = false;
+};
+
+// The overdrive in pre-VCA mode: GuitarML after the filter, before the VCA (Open303's pre-VCA insert).
+class PreVcaOverdrive : public Open303::PreVcaInsert
+{
+public:
+    void prepare (double sampleRate)
+    {
+        amp.prepareProcessing (sampleRate, Open303::maxBlockSize);
+        mix.prepare ({ sampleRate, (uint32_t) Open303::maxBlockSize, 1 });
+        mix.setMixingRule (juce::dsp::DryWetMixingRule::sin3dB);
+        disperser.prepare (sampleRate);
+        buffer.setSize (1, Open303::maxBlockSize);
+    }
+
+    void process (double* x, int numSamples) override
+    {
+        buffer.setSize (1, numSamples, false, false, true);
+        auto* b = buffer.getWritePointer (0);
+        for (int i = 0; i < numSamples; ++i)
+            b[i] = (float) x[i];
+        disperser.process (b, numSamples);
+        mix.pushDrySamples (juce::dsp::AudioBlock<float> (buffer));
+        amp.processAudioBlock (buffer);
+        mix.mixWetSamples (juce::dsp::AudioBlock<float> (buffer));
+        for (int i = 0; i < numSamples; ++i)
+            x[i] = b[i];
+    }
+
+    GuitarMLAmp amp;
+    juce::dsp::DryWetMixer<float> mix;
+    Disperser disperser;
+
+private:
+    juce::AudioBuffer<float> buffer;
+};
 
 enum Open303Parameters
 {
@@ -32,8 +130,14 @@ enum Open303Parameters
   SLIDE_TIME,
   TANH_SHAPER_DRIVE,
   FILTER_DRIVE,
+  FILTER_MORPH,
   BASS_COMP,
   FILTER_FM,
+  RES_TRIM,
+  FILTER_QUALITY,
+  FILTER_TENSION,
+  FILTER_BIAS,
+  FILTER_RAIL,
   // LFO
   LFO_WAVEFORM,
   LFO_RATE,
@@ -46,6 +150,7 @@ enum Open303Parameters
   OVERDRIVE_LEVEL,
   OVERDRIVE_DRY_WET,
   OVERDRIVE_MODEL_INDEX,
+  OVERDRIVE_DISPERSE,
   // Sub oscillator
   SUB_OSC_GAIN,
   SUB_OSC_BLEND,
@@ -89,6 +194,12 @@ public:
     // TB-303 service notes: TUNING approx. +/-700 cents (perfect fifth)
     static constexpr float tuningRangeCents = 700.0f;
     static float tuningCents (float v) { return tuningRangeCents * bipolarDetent (v); }
+
+    static juce::String signedPercent (float v)
+    {
+        const int pct = juce::roundToInt (v * 100.0f);
+        return (pct > 0 ? "+" : "") + juce::String (pct) + "%";
+    }
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -144,6 +255,9 @@ private:
     void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
+    // Re-applies all cheap DSP parameters from the APVTS atomics on the audio thread. Called from
+    // processBlock when parametersNeedUpdate is set, so parameter writes never race getSample().
+    void updateOpen303Parameters();
 
     // Sequencer UI→audio command channel, consumed at the top of every audio
     // buffer so play/stop/generate/clear (and the accompanying Open303 note
@@ -162,6 +276,8 @@ private:
     // GuitarML - BYOD
     GuitarMLAmp guitarML;
     juce::dsp::DryWetMixer<float> overdriveMix;
+    Disperser overdriveDisperser;
+    PreVcaOverdrive preVcaOverdrive;
 
     // ── Acid Sequencer ────────────────────────────────────────────────────────
     AcidSequencer303 _sequencer;
@@ -241,11 +357,19 @@ private:
     std::atomic<float>* switchOverdriveState = nullptr;
     std::atomic<float>* overdriveLevel = nullptr;
     std::atomic<float>* overdriveDryWet = nullptr;
+    std::atomic<float>* overdriveDisperse = nullptr;
+    std::atomic<float>* overdrivePreVca = nullptr;
     std::atomic<float>* filterType = nullptr;
     std::atomic<float>* squareModel = nullptr;
     std::atomic<float>* filterDrive = nullptr;
+    std::atomic<float>* filterMorph = nullptr;
     std::atomic<float>* bassComp = nullptr;
     std::atomic<float>* filterFm = nullptr;
+    std::atomic<float>* resTrim = nullptr;
+    std::atomic<float>* filterQuality = nullptr;
+    std::atomic<float>* filterTension = nullptr;
+    std::atomic<float>* filterBias = nullptr;
+    std::atomic<float>* filterRail = nullptr;
     // generative sequencer
     std::atomic<float>* seqGenerativeFill = nullptr;
     std::atomic<float>* seqGenerativeAccentProbability = nullptr;
