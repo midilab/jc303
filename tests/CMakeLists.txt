@@ -78,3 +78,8 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     target_link_libraries(preset_test PRIVATE JC303)
     add_test(NAME preset_test COMMAND preset_test)
 endif()
+
+# AnaMark .tun parser (pure C++, no JUCE)
+add_executable(tuning_test tuning_test.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/dsp/tuning/TuningFileLoader.cpp)
+target_compile_features(tuning_test PRIVATE cxx_std_17)
+add_test(NAME tuning_test COMMAND tuning_test)

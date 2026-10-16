@@ -1,4 +1,5 @@
 #include "JC303.h"
+#include "dsp/tuning/TuningFileLoader.h"
 #include GUI_THEME_HEADER
 #include "Presets.h"
 
@@ -1798,18 +1799,40 @@ juce::AudioProcessorEditor* JC303::createEditor()
 }
 
 //==============================================================================
-// The pattern is serialised as its own XML child; keep it out of the APVTS tree
-// so replaceState/copyState round trips don't stack stale copies.
-static void stripSequencerState (juce::ValueTree& state)
+// The pattern and custom tuning are serialised as their own XML children; keep them
+// out of the APVTS tree so replaceState/copyState round trips don't stack stale copies.
+static void stripSerialisedChildren (juce::ValueTree& state)
 {
-    for (auto child = state.getChildWithName ("AcidSeq303"); child.isValid(); child = state.getChildWithName ("AcidSeq303"))
-        state.removeChild (child, nullptr);
+    for (auto name : { "AcidSeq303", "CustomTuning" })
+        for (auto child = state.getChildWithName (name); child.isValid(); child = state.getChildWithName (name))
+            state.removeChild (child, nullptr);
+}
+
+bool JC303::loadTuningFile (const juce::File& file, juce::String& errorMessage)
+{
+    auto result = TuningFileLoader::loadFromPath (file.getFullPathName().toStdString());
+    if (! result.ok)
+    {
+        errorMessage = juce::String (result.error);
+        return false;
+    }
+    tuningState = std::move (result.table);
+    open303Core.installPitchMap (tuningState.getFrequencies());
+    updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+    return true;
+}
+
+void JC303::resetTuning()
+{
+    tuningState.setEqualTemperament (440.0);
+    open303Core.installPitchMap (tuningState.getFrequencies());
+    updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
 }
 
 void JC303::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = parameters.copyState();
-    stripSequencerState (state);
+    stripSerialisedChildren (state);
     auto xml = state.createXml();
 
     // ── Persist sequencer state as a child element ────────────────────────────
@@ -1841,6 +1864,16 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
     }
 
     xml->addChildElement (seqXml.release());
+
+    // absolute frequencies, so projects reopen without the original .tun file
+    if (tuningState.isCustom())
+    {
+        auto* tuningXml = xml->createNewChildElement ("CustomTuning");
+        tuningXml->setAttribute ("name", juce::String (tuningState.getName()));
+        tuningXml->setAttribute ("path", juce::String (tuningState.getSourcePath()));
+        tuningXml->setAttribute ("freqs", juce::String (tuningState.frequenciesToString()));
+    }
+
     copyXmlToBinary (*xml, destData);
 }
 
@@ -1852,7 +1885,7 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
         if (xmlState->hasTagName (parameters.state.getType()))
         {
             auto newState = juce::ValueTree::fromXml (*xmlState);
-            stripSequencerState (newState);
+            stripSerialisedChildren (newState);
             parameters.replaceState (newState);
 
             // ── Restore sequencer sync state ──────────────────────────────────
@@ -1902,6 +1935,15 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                     }
                 }
             }
+
+            // a missing or malformed CustomTuning child falls back to 12-TET
+            auto* tuningXml = xmlState->getChildByName ("CustomTuning");
+            if (tuningXml == nullptr
+                || ! tuningState.loadFromCsv (tuningXml->getStringAttribute ("freqs").toStdString(),
+                                              tuningXml->getStringAttribute ("name", "Custom").toStdString(),
+                                              tuningXml->getStringAttribute ("path").toStdString()))
+                tuningState.setEqualTemperament (440.0);
+            open303Core.installPitchMap (tuningState.getFrequencies());
 
             // The restored pattern already carries its offsets
             _appliedTranspose.store   (static_cast<int>(std::lround (seqTranspose->load())));

@@ -174,6 +174,20 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuPage->onCreatePreset = [this] (const juce::String& name) { return processorRef.createNewPreset (name); };
     menuPage->onRenamePreset = [this] (const juce::String& name) { return processorRef.renameCurrentPreset (name); };
     menuPage->onDeletePreset = [this] { return processorRef.deleteCurrentPreset(); };
+    // Presets > Scale: + loads an AnaMark .tun file, - resets to 12-TET
+    menuPage->setAction("tuningFile", {
+        [this] (float direction)
+        {
+            if (direction < 0)
+                processorRef.resetTuning();
+            else
+                chooseTuningFile();
+        },
+        [this]
+        {
+            const auto name = processorRef.getTuningName();
+            return name.length() > 16 ? name.substring(0, 15) + "~" : name;
+        } });
 
     selectMenu(2);   // default menu page; after the callback is set so the knob syncs
 
@@ -474,6 +488,25 @@ void JC303Editor::paint (juce::Graphics& g)
     // transparent detail layer on top
     juce::Image overlay = ImageCache::getFromMemory (BinaryData::jc303gui_png, BinaryData::jc303gui_pngSize);
     g.drawImage (overlay, getLocalBounds().toFloat());
+}
+
+void JC303Editor::chooseTuningFile()
+{
+    tuningFileChooser = std::make_unique<juce::FileChooser>("Load AnaMark tuning", juce::File(), "*.tun");
+    const auto editorSaver = juce::Component::SafePointer<JC303Editor>(this);
+    tuningFileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [editorSaver] (const juce::FileChooser& chooser)
+        {
+            auto* editor = editorSaver.getComponent();
+            const auto file = chooser.getResult();
+            if (editor == nullptr || file == juce::File())
+                return;
+            juce::String error;
+            if (! editor->processorRef.loadTuningFile(file, error))
+                juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                                                       "Tuning load failed",
+                                                       file.getFileName() + "\n\n" + error);
+        });
 }
 
 void JC303Editor::resized()

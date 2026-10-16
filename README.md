@@ -137,7 +137,7 @@ picks the change up. The GUI theme is `midilabv2`.
 
 ### Presets page
 
-The Presets page in the LCD shows six rows:
+The Presets page in the LCD shows seven rows:
 
 | Row | Action |
 |--|--|
@@ -147,6 +147,7 @@ The Presets page in the LCD shows six rows:
 | `New` | Create a new preset from the current sound |
 | `Rename` | Rename the selected preset (keeps its sound) |
 | `Delete` | Delete the selected preset (asks for confirmation first) |
+| `Scale` | `+` loads an AnaMark `.tun` file, `-` resets to 12-TET (see Microtuning below) |
 
 New, Rename and Delete are confirmed on the keyboard:
 
@@ -248,6 +249,15 @@ the current bank's folder.
 - Filenames are safe slugs of the display name, lowercased: `"Dice Acid"` →
   `dice_acid.json`, `"My Cool Patch (1)"` → `my_cool_patch_1.json`.
 - Colliding names get OS-style suffixes: `"Name"`, `"Name (1)"`, `"Name (2)"`.
+
+## Microtuning
+
+JC303 loads AnaMark `.tun` (v2) scale files. In the LCD menu, open **PST** and select **Scale**: **+** opens a `.tun` file, **-** resets to 12-TET. The display shows the active scale name.
+
+- `[Exact Tuning]` takes precedence and needs `BaseFreq` plus all 128 notes. Without it, `[Functional Tuning]` needs `InitEqual`, and its `Note` lines apply in file order.
+- If a file is invalid, an error dialog shows the line and the cause, and the current scale stays loaded.
+- The **Tuning** knob transposes the loaded scale, the same way it transposes 12-TET.
+- The scale is saved with the project as absolute frequencies, so the `.tun` file is not needed to reopen it.
 
 ## Build
 

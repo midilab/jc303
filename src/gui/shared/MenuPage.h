@@ -1042,6 +1042,7 @@ public:
         pst.items.add(Item { "new", "New", Type::action, {}, 0.0f });
         pst.items.add(Item { "rename", "Rename", Type::action, {}, 0.0f });
         pst.items.add(Item { "delete", "Delete", Type::action, {}, 0.0f });
+        pst.items.add(Item { "tuningFile", "Scale", Type::action, {}, 0.0f });   // AnaMark .tun: + loads, - resets to 12-TET
         pages.add(pst);
 
         Page ovd; ovd.title = "Overdrive";
