@@ -191,6 +191,11 @@ public:
         const float a = std::abs (v);
         return a < bipolarDetentZone ? 0.0f : std::copysign ((a - bipolarDetentZone) / (1.0f - bipolarDetentZone), v);
     }
+
+    // TB-303 service notes: TUNING approx. +/-700 cents (perfect fifth)
+    static constexpr float tuningRangeCents = 700.0f;
+    static float tuningCents (float v) { return tuningRangeCents * bipolarDetent (v); }
+
     static juce::String signedPercent (float v)
     {
         const int pct = juce::roundToInt (v * 100.0f);
