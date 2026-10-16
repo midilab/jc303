@@ -471,7 +471,7 @@ void Open303::hammerToNote(int noteNumber, bool hasAccent)
   // Hammer is like slide but with instant pitch change (no portamento)
   // Set frequency AND immediately set slew limiter state to avoid any glide
   oscFreq = pitchToFreq(noteNumber, tuning);
-  pitchSlewLimiter.setState(oscFreq);  // Instant pitch change, no slew
+  pitchSlewLimiter.setState(log(oscFreq));  // Instant pitch change, no slew (the slew runs on log(freq))
 
   // Handle accent (same as slideToNote)
   if( hasAccent )
