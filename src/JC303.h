@@ -154,6 +154,10 @@ enum Open303Parameters
   // Sub oscillator
   SUB_OSC_GAIN,
   SUB_OSC_BLEND,
+  // Oscillator models
+  SUPER_DETUNE,
+  SUPER_MIX,
+  SHAPE_DRIFT,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -390,6 +394,13 @@ private:
     // Sub oscillator
     std::atomic<float>* subOscGain = nullptr;
     std::atomic<float>* subOscBlend = nullptr;
+    // Oscillator models
+    std::atomic<float>* oscModel = nullptr;
+    std::atomic<float>* junoWave = nullptr;
+    std::atomic<float>* superDetune = nullptr;
+    std::atomic<float>* superMix = nullptr;
+    std::atomic<float>* shaperMode = nullptr;
+    std::atomic<float>* shapeDrift = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;
