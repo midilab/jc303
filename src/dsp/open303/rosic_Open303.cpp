@@ -305,6 +305,30 @@ void Open303::setPitchBend(double newPitchBend)
 //------------------------------------------------------------------------------------------------------------
 // others:
 
+void Open303::renderBlock(double* out, int numSamples)
+{
+  while( numSamples > 0 )
+  {
+    const int n = numSamples < maxBlockSize ? numSamples : maxBlockSize;
+    if( idle )
+    {
+      for(int i=0; i<n; i++)
+        out[i] = 0.0;
+    }
+    else
+    {
+      for(int i=0; i<n; i++)
+        blockPreVca[i] = renderPreVca(blockAmp[i], blockVolume[i]);
+      if( preVcaInsert != nullptr )
+        preVcaInsert->process(blockPreVca, n);
+      for(int i=0; i<n; i++)
+        out[i] = applyVca(blockPreVca[i], blockAmp[i], blockVolume[i]);
+    }
+    out        += n;
+    numSamples -= n;
+  }
+}
+
 void Open303::noteOn(int noteNumber, int velocity, double detune)
 {
   if( sequencer.modeWasChanged() )

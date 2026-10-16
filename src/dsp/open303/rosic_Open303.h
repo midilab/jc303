@@ -377,6 +377,23 @@ namespace rosic
     /** Calculates onse output sample at a time. */
     INLINE double getSample();
 
+    /** An effect inserted after the filter and output chain, before the VCA, so it sees a steady level
+    while the amp envelope shapes its output. It runs at the sample rate. */
+    class PreVcaInsert
+    {
+    public:
+      virtual ~PreVcaInsert() = default;
+      virtual void process(double* buffer, int numSamples) = 0;
+    };
+
+    /** Sets the pre-VCA insert; nullptr bypasses it. */
+    void setPreVcaInsert(PreVcaInsert* newInsert) { preVcaInsert = newInsert; }
+
+    /** Renders numSamples output samples through the pre-VCA insert, in chunks of maxBlockSize. */
+    void renderBlock(double* out, int numSamples);
+
+    static const int maxBlockSize = 64;
+
     //-----------------------------------------------------------------------------------------------
     // event handling:
 
@@ -452,7 +469,17 @@ namespace rosic
     main envelope generator. */
     void updateNormalizer2();
 
+    /** Renders one sample up to the VCA and returns the VCA gains to apply with applyVca. */
+    INLINE double renderPreVca(double& ampGain, double& volumeGain);
+
+    INLINE double applyVca(double in, double ampGain, double volumeGain) const;
+
     static const int oversampling = 4;
+
+    PreVcaInsert* preVcaInsert = nullptr;
+    double blockPreVca[maxBlockSize];
+    double blockAmp[maxBlockSize];
+    double blockVolume[maxBlockSize];
 
     double tuning;           // master tunung for A4 in Hz
     double ampScaler;        // final volume as raw factor
@@ -529,6 +556,13 @@ namespace rosic
     if( idle )
       return 0.0;
 
+    double ampGain, volumeGain;
+    double tmp = renderPreVca(ampGain, volumeGain);
+    return applyVca(tmp, ampGain, volumeGain);
+  }
+
+  INLINE double Open303::renderPreVca(double& ampGain, double& volumeGain)
+  {
     // check the sequencer if we have some note to trigger:
     if( sequencer.getSequencerMode() != AcidSequencer::OFF )
     {
@@ -741,11 +775,18 @@ namespace rosic
     else if(switchGain < 1.0)
       switchGain = fmin(switchGain + switchStep, 1.0);
     tmp *= switchGain;                      // filter switch fade
-    tmp *= ampEnvOut;                       // amplified
-    tmp *= ampScaler;
-    tmp *= volumeModFactor;                 // LFO volume modulation
+    ampGain    = ampEnvOut;
+    volumeGain = volumeModFactor;
 
     return tmp;
+  }
+
+  INLINE double Open303::applyVca(double in, double ampGain, double volumeGain) const
+  {
+    in *= ampGain;                          // amplified
+    in *= ampScaler;
+    in *= volumeGain;                       // LFO volume modulation
+    return in;
   }
 
 }
