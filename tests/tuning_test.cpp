@@ -1,3 +1,4 @@
+// AnaMark .tun support by Andrej Schmitt (@Megagoth1702), from midilab/jc303#41.
 // Standalone smoke test for AnaMark .tun parsing + TuningTable (no JUCE).
 //
 // Built and run by ctest (see CMakeLists.txt).

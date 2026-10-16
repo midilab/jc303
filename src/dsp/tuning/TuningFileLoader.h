@@ -1,3 +1,4 @@
+// AnaMark .tun support by Andrej Schmitt (@Megagoth1702), from midilab/jc303#41.
 #pragma once
 
 #include "TuningTable.h"

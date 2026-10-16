@@ -116,6 +116,8 @@ JC303 loads AnaMark `.tun` (v2) scale files. Right-click the **Tuning** knob and
 - The **Tuning** knob transposes the loaded scale, the same way it transposes 12-TET.
 - The scale is saved with the project as absolute frequencies, so the `.tun` file is not needed to reopen it.
 
+AnaMark `.tun` support by Andrej Schmitt ([@Megagoth1702](https://github.com/Megagoth1702)).
+
 ## Build
 
 Generate the cmake project build files first for the OS of your choice.  
