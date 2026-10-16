@@ -114,7 +114,7 @@ JC303::JC303()
                                                         0.0f),
             std::make_unique<juce::AudioParameterChoice> ("lfoDestination",
                                                         "LFO Destination",
-                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width" },
+                                                        juce::StringArray{ "Cutoff", "Volume", "Pitch", "Pulse Width", "Filter Morph" },
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("lfoPhase",
                                                         "LFO Phase",
@@ -146,28 +146,58 @@ JC303::JC303()
             // filter model selection
             std::make_unique<juce::AudioParameterChoice> ("filterType",
                                                         "Filter Model",
-                                                        juce::StringArray{ "TeeBee", "Diode Octave", "Diode", "Diode BP", "Diode HP" },
+                                                        juce::StringArray{ "TeeBee", "Spicy", "MissBehave", "JuneBug", "Wasabi", "Hornet", "SemiSweet", "Oddity" },
                                                         FILTER_TEEBEE),
             // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
                                                         "Square Model",
                                                         juce::StringArray{ "Open303", "Circuit" },
-                                                        SQUARE_OPEN303),
+                                                        SQUARE_CIRCUIT),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
-                                                        "Filter Drive",
+                                                        "Filter Saturation",
                                                         0.0f,
                                                         1.0f,
-                                                        0.5f),   // ~4.5 dB into the diode saturator by default
+                                                        0.0f),   // 0 dB into the diode saturator: the real 303's level (6.5 Vpp saw, see docs/spicy-filter.md)
+            std::make_unique<juce::AudioParameterFloat> ("filterMorph",
+                                                        "Filter Morph",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // Diode: 0 = lowpass, 0.5 = bandpass, 1 = highpass
             std::make_unique<juce::AudioParameterFloat> ("bassComp",
                                                         "Bass Comp",
                                                         0.0f,
                                                         1.0f,
-                                                        0.1f),   // light passband/bass makeup by default
+                                                        0.0f),   // Diode: 0 = the real circuit's resonance bass loss
             std::make_unique<juce::AudioParameterFloat> ("filterFm",
                                                         "Filter FM",
                                                         0.0f,
                                                         1.0f,
                                                         0.0f),   // Devilfish audio-rate cutoff FM, off by default
+            std::make_unique<juce::AudioParameterFloat> ("resTrim",
+                                                        "Res Trim",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f),   // diode unit trim, 0.5 = nominal unit
+            std::make_unique<juce::AudioParameterChoice> ("filterQuality",
+                                                        "Filter Quality",
+                                                        juce::StringArray{ "Standard", "Hi-Fi" },
+                                                        0),      // Diode: Standard (default) only Q12 / Q21 tanh; Hi-Fi solves every diode pair's tanh
+            std::make_unique<juce::AudioParameterFloat> ("filterTension",
+                                                        "Filter Tension",
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,    // Hi-Fi diode rungs: 0 = the circuit, - floppy, + stiff
+                                                        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                            [] (float v, int) { return signedPercent (bipolarDetent (v)); })),
+            std::make_unique<juce::AudioParameterFloat> ("filterBias",
+                                                        "Saturation Bias",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f),   // Diode: Q12's asymmetry and driven swell; MS-20: its input stage; Wasp: OTA1's divider; ARP 4075: its limiter pair; not on JuneBug / SemiSweet; acts above 0 dB Saturation (0 = symmetric)
+            std::make_unique<juce::AudioParameterFloat> ("filterRail",
+                                                        "Saturation Rail",
+                                                        0.0f,
+                                                        1.0f,
+                                                        1.0f),   // Diode Hi-Fi: ceiling on the ladder's stage voltages; 1 = unlimited (the full crunch), lower = cleaner; MS-20 / IR3109: resonance limiter, Wasp / SEM: supply sag, 1 = the circuit
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -282,8 +312,14 @@ JC303::JC303()
     filterType = parameters.getRawParameterValue("filterType");
     squareModel = parameters.getRawParameterValue("squareModel");
     filterDrive = parameters.getRawParameterValue("filterDrive");
+    filterMorph = parameters.getRawParameterValue("filterMorph");
     bassComp = parameters.getRawParameterValue("bassComp");
     filterFm = parameters.getRawParameterValue("filterFm");
+    resTrim = parameters.getRawParameterValue("resTrim");
+    filterQuality = parameters.getRawParameterValue("filterQuality");
+    filterTension = parameters.getRawParameterValue("filterTension");
+    filterBias = parameters.getRawParameterValue("filterBias");
+    filterRail = parameters.getRawParameterValue("filterRail");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -358,8 +394,14 @@ JC303::JC303()
     parameters.addParameterListener("filterType", this);
     parameters.addParameterListener("squareModel", this);
     parameters.addParameterListener("filterDrive", this);
+    parameters.addParameterListener("filterMorph", this);
     parameters.addParameterListener("bassComp", this);
     parameters.addParameterListener("filterFm", this);
+    parameters.addParameterListener("resTrim", this);
+    parameters.addParameterListener("filterQuality", this);
+    parameters.addParameterListener("filterTension", this);
+    parameters.addParameterListener("filterBias", this);
+    parameters.addParameterListener("filterRail", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -428,8 +470,14 @@ JC303::~JC303()
     parameters.removeParameterListener("filterType", this);
     parameters.removeParameterListener("squareModel", this);
     parameters.removeParameterListener("filterDrive", this);
+    parameters.removeParameterListener("filterMorph", this);
     parameters.removeParameterListener("bassComp", this);
     parameters.removeParameterListener("filterFm", this);
+    parameters.removeParameterListener("resTrim", this);
+    parameters.removeParameterListener("filterQuality", this);
+    parameters.removeParameterListener("filterTension", this);
+    parameters.removeParameterListener("filterBias", this);
+    parameters.removeParameterListener("filterRail", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -697,20 +745,48 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setPulseSag(rosic::Open303::sagForSquareDrive(value));
         break;
     case FILTER_DRIVE:
-        // 0..1 -> 0..9 dB into the diode ladder's saturating input stage
-        // (matches the DB303 plugin's tuned range; the unity-makeup shaper
-        // here has no headroom scaling, so it already runs hot per-dB)
+        // 0..1 -> 0..+16 dB into the diode ladder's saturating input stage. 0 dB (the default)
+        // is the real 303's level; above it is grit. Level is compensated across the range (see setInputDrive), so the knob is
+        // not a volume control. The ladder is stability-tested up to +16 dB.
         open303Core.setFilterDrive(
-            linToLin(value, 0.0, 1.0,   0.0,     9.0)
+            linToLin(value, 0.0, 1.0,   0.0,     16.0)
         );
         break;
+    case FILTER_MORPH:
+        // 0..1 diode response mode: 0 = lowpass, 0.5 = bandpass, 1 = highpass
+        open303Core.setFilterMode(value);
+        break;
     case BASS_COMP:
-        // 0..1 diode-ladder passband (bass) compensation, applied directly
+        // 0..1 diode bass comp
         open303Core.setPassbandCompensation(value);
         break;
     case FILTER_FM:
         // 0..1 Devilfish-style audio-rate cutoff FM depth, applied directly
         open303Core.setFilterFmDepth(value);
+        break;
+    case RES_TRIM:
+        // 0..1 -> x0.85..x1.15 loop gain for the diode models (component-tolerance spread; above x1 it may self-oscillate)
+        open303Core.setResonanceTrim(linToLin(value, 0.0, 1.0, 0.85, 1.15));
+        break;
+    case FILTER_QUALITY:
+        // 0 = Standard (Q12 and Q21 tanh only), 1 = Hi-Fi (every diode pair's tanh, solved per sample)
+        open303Core.setFilterHiFi(value > 0.5f);
+        break;
+    case FILTER_TENSION:
+        // -1..1 with a centre detent: how the Hi-Fi ladder's resonance moves with level (0 = the circuit's diodes)
+        open303Core.setFilterTension(bipolarDetent(value));
+        break;
+    case FILTER_BIAS:
+        // 0..1: Q12's asymmetry and driven swell, ramping in above 0 dB Saturation (DiodeLadderFilter::setSaturationBias;
+        // the DT level tables are fitted at the default 0.5; higher = more swell and crunch near full resonance). MS-20:
+        // the same offset on its input stage, ramping in the same way (Open303::updateCircuitCharacter)
+        open303Core.setFilterBias(value);
+        break;
+    case FILTER_RAIL:
+        // 0..1: a ceiling on the Hi-Fi ladder's stage voltages (DiodeLadderFilter::setRail); 1 = unlimited, the crunch
+        // at high Saturation and Bias in full; lower = cleaner, toward what a real ladder can swing. MS-20 / IR3109: the
+        // resonance limiter's threshold (their Clip), 1 = the circuit, lower = earlier. Wasp: its supply, sagging
+        open303Core.setFilterRail(value);
         break;
 
     // LFO parameters
@@ -763,8 +839,14 @@ void JC303::setDevilMod(bool mode)
         open303Core.setFilterType(static_cast<FilterType>((int) *filterType));
         open303Core.setSquareModel(static_cast<SquareModel>((int) *squareModel));
         setParameter(FILTER_DRIVE, *filterDrive);
+        setParameter(FILTER_MORPH, *filterMorph);
         setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
+        setParameter(RES_TRIM, *resTrim);
+        setParameter(FILTER_QUALITY, *filterQuality);
+        setParameter(FILTER_TENSION, *filterTension);
+        setParameter(FILTER_BIAS, *filterBias);
+        setParameter(FILTER_RAIL, *filterRail);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
         setParameter(LFO_WAVEFORM, *lfoWaveform);

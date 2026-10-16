@@ -32,7 +32,8 @@ Open303::Open303()
   noteOffCountDown =     0;
   slideToNextNote  = false;
   idle             = true;
-  currentFilterType = FILTER_TEEBEE;
+  currentFilterType = dfl::FILTER_TEEBEE;
+  pendingFilterType = dfl::FILTER_TEEBEE;
 
   // LFO defaults
   lfoDepth         =    0.0;
@@ -69,6 +70,7 @@ Open303::Open303()
   rc2.setTimeConstant(15.0);
 
   highpass1.setMode(OnePoleFilter::HIGHPASS);
+  diodeInputCoupling.setMode(OnePoleFilter::HIGHPASS);
   highpass2.setMode(OnePoleFilter::HIGHPASS);
   allpass.setMode(OnePoleFilter::ALLPASS);
   notch.setMode(BiquadFilter::BANDREJECT);
@@ -79,12 +81,13 @@ Open303::Open303()
   oscillator.setPulseWidth(50.0);
   oscillator.setCircuitPulseShape(false);   // flat-topped square unless switched on (JC303: the Mods switch)
   highpass1.setCutoff(44.486);
+  diodeInputCoupling.setCutoff(1.0 / (2.0 * PI * 1e-6 * 222.2e3));   // C17 1u into R62 220k + R70 2.2k: 0.72 Hz
   highpass2.setCutoff(24.167);
   allpass.setCutoff(14.008);
   notch.setFrequency(7.5164);
   notch.setBandwidth(4.7);
 
-  filter.setFeedbackHighpassCutoff(150.0);
+  setFeedbackHighpass(feedbackHighpass);   // also sets the diode corner and the output network's coupling pole
 }
 
 Open303::~Open303()
@@ -111,13 +114,23 @@ void Open303::setSampleRate(double newSampleRate)
   highpass2.setSampleRate     (         newSampleRate);
   allpass.setSampleRate       (         newSampleRate);
   notch.setSampleRate         (         newSampleRate);
+  outputNetwork.setSampleRate (         newSampleRate);
+  outputNetwork.setCouplingInFilter(true);   // the diode filter applies C27 / C25 and Q21 at the oversampled rate
 
   highpass1.setSampleRate     (  oversampling*newSampleRate);
+  diodeInputCoupling.setSampleRate(oversampling*newSampleRate);
 
   oscillator.setSampleRate    (  oversampling*newSampleRate);
   subOscillator.setSampleRate (  oversampling*newSampleRate);
   filter.setSampleRate        (  oversampling*newSampleRate);
   diodeFilter.setSampleRate   (  oversampling*newSampleRate);
+  switchStep = 1.0 / (0.005 * newSampleRate);
+  ms20Filter.setSampleRate    (  oversampling*newSampleRate);
+  junoFilter.setSampleRate    (  oversampling*newSampleRate);
+  waspFilter.setSampleRate    (  oversampling*newSampleRate);
+  semFilter.setSampleRate     (  oversampling*newSampleRate);
+  hornetFilter.setSampleRate  (  oversampling*newSampleRate);
+  arpFilter.setSampleRate     (  oversampling*newSampleRate);
   sampleRate = newSampleRate;
   updateAccentSweepGain();
 }
@@ -131,18 +144,10 @@ void Open303::setCutoff(double newCutoff)
 void Open303::setResonance(double newResonance)
 {
   // newResonance is a percentage (0..100). The TeeBee filter takes percent
-  // directly and skews/normalizes it internally; the diode filter expects a
-  // normalized, pre-skewed 0..1 value (K = 17*resonance, self-oscillation ~17).
+  // directly and skews/normalizes it internally; the diode filter takes the same
+  // saturating-exponential skew (see TeeBeeFilter::setResonance) as a 0..1 value
+  // and undoes it to recover the resonance pot's rotation.
   double normalizedResonance = 0.01 * newResonance;               // 0..100 -> 0..1
-
-  // Match the TeeBee's resonance skew so the knob tracks the same curve on both
-  // models: use the TeeBee's saturating-exponential map (see
-  // TeeBeeFilter::setResonance) instead of a cubic, so the resonance comes up on
-  // the same curve rather than staying flat then spiking. At knob = 100 this
-  // reaches 1.0, driving the diode's K to its self-oscillation point (17).
-  // The Diode Octave model is pulled back below self-oscillation to match the
-  // TeeBee - that ceiling lives in DiodeLadderFilter (octave-mode only), so
-  // plain Diode still self-oscillates at full knob.
   double skewedResonance = (1.0 - exp(-3.0*normalizedResonance)) / (1.0 - exp(-3.0));
 
   filter.setResonance(newResonance);
@@ -153,22 +158,45 @@ void Open303::setResonance(double newResonance)
   // sweeps up more smoothly and stacks higher on rapid successive accents.
   resonanceSkewed = skewedResonance;
   setAccentAttack(accentAttack);
+  // the MS-20, IR3109 and Wasp models undo the skew (their pots are linear); the knob reaches their pots through a per-model
+  // map, so they resonate alike (dfl_ResonanceMap.h)
+  auto skewedPot = [normalizedResonance](dfl::FilterType type)
+  {
+    return (1.0 - exp(-3.0*dfl::resonancePot(type, normalizedResonance))) / (1.0 - exp(-3.0));
+  };
+  ms20Filter.setResonance(skewedPot(dfl::FILTER_MS20));
+  junoFilter.setResonance(skewedPot(dfl::FILTER_JUNO106));
+  waspFilter.setResonance(skewedPot(dfl::FILTER_WASP));   // the Wasp's RES pot is linear too
+  semFilter.setResonance(skewedPot(dfl::FILTER_SEM));   // the SEM's too
+  hornetFilter.setResonance(skewedPot(dfl::FILTER_WASP_A124));
+  arpFilter.setResonance(skewedPot(dfl::FILTER_ARP4075));        // the Odyssey's R144 is linear
+  outputNetwork.setPot(diodeFilter.getResonancePot());
 }
 
-void Open303::setFilterType(FilterType newType)
+void Open303::setFilterType(dfl::FilterType newType)
 {
-  currentFilterType = newType;
+  pendingFilterType = newType;
+  if( idle )
+    currentFilterType = newType;   // nothing is sounding yet: switch right away
+}
 
-  // Octave mode (steeper 1st pole) applies only to the plain-LP Diode Octave
-  // model. The BP/HP response modes are plain-diode only.
-  diodeFilter.setOctaveMode(newType == FILTER_DIODE_OCTAVE);
-
-  int response = DiodeLadderFilter::RESPONSE_LP;
-  if(newType == FILTER_DIODE_BP)
-    response = DiodeLadderFilter::RESPONSE_BP;
-  else if(newType == FILTER_DIODE_HP)
-    response = DiodeLadderFilter::RESPONSE_HP;
-  diodeFilter.setResponseMode(response);
+void Open303::resetFilters()
+{
+  filter.reset();
+  diodeFilter.reset();
+  ms20Filter.reset();
+  junoFilter.reset();
+  waspFilter.reset();
+  semFilter.reset();
+  hornetFilter.reset();
+  arpFilter.reset();
+  highpass1.reset();
+  diodeInputCoupling.reset();
+  highpass2.reset();
+  allpass.reset();
+  notch.reset();
+  outputNetwork.reset();
+  antiAliasFilter.reset();
 }
 
 void Open303::setFilterDrive(double newDriveDb)
@@ -178,11 +206,56 @@ void Open303::setFilterDrive(double newDriveDb)
   // is harmless there but has no audible effect.
   filter.setDrive(newDriveDb);
   diodeFilter.setInputDrive(newDriveDb);
+  ms20Filter.setInputDrive(newDriveDb);
+  junoFilter.setInputDrive(newDriveDb);
+  waspFilter.setInputDrive(newDriveDb);
+  semFilter.setInputDrive(newDriveDb);
+  hornetFilter.setInputDrive(newDriveDb);
+  arpFilter.setInputDrive(newDriveDb);
+  circuitDriveDb = newDriveDb;
+  updateCircuitCharacter();
+}
+
+void Open303::updateCircuitCharacter()
+{
+  // Saturation Bias and Rail on the MS-20 and IR3109 models, each on its own circuit (the diode filter has its own):
+  // - Bias offsets the element the input drives (IR3109 stage 1: the input pair, its resting current trimmed out, the
+  //   diode ladder's bias shape; Korg35: one forward limiter diode), see setSaturationBias. It ramps in with
+  //   Saturation as the diode's does, from none at 0 dB to the knob's value at +16 dB, so the clean filter stays the
+  //   circuit. The IR3109 and SEM keep Bias at 0: even at +16 dB it changed them by under -14 dB.
+  // - MS-20: Rail = Clip, the limiter diodes' threshold: 1 = the circuit, lower = the limiter bends earlier. That is a
+  //   softer limiter, not a harder one: the earlier diodes already conduct at rest, so the x58 stage's gain falls and
+  //   its curve rounds off (at 0 dB a full-scale sine's THD falls from ~4 % to ~3 %, at +16 dB from ~28 % to ~16 %).
+  //   The circuit has real rails, so there is no runaway for a ceiling to tame.
+  // - Juno: Rail sags the IR3109's +-15 V supplies (the stage OTAs' compliance and the followers' ceiling), see
+  //   RolandFilter::setRail.
+  // - Wasp: Bias offsets OTA1's input divider (IC1 then sits off its switching point), ramping in the same way; Rail is
+  //   its supply, 1 = the circuit, lower = sagging (less headroom and inverter gain), see WaspFilter::setRail.
+  // - SEM: Rail sags its +-15 V supplies, see SEMFilter::setRail. (SEMFilter::setSaturationBias would turn OTA1's offset
+  //   trim T9 off null; it is held nulled.)
+  // - ARP 4075: Bias offsets the limiter pair, ramping in the same way; Rail sags its +15 / -14 V supplies, the
+  //   limiter's tail with the +15 V: a quieter, less resonant filter rather than an earlier limit (its threshold is
+  //   the pair's 2 VT), see ARP4075Filter::setRail.
+  const double bias = circuitBias * std::clamp(circuitDriveDb / 16.0, 0.0, 1.0);
+  const double clip = 0.5 * circuitRail;
+  ms20Filter.setSaturationBias(bias);
+  ms20Filter.setClipThreshold(clip);
+  junoFilter.setSaturationBias(0.0);   // Bias held at 0 (trimmed out): too faint on the IR3109 to be worth a knob
+  junoFilter.setRail(circuitRail);     // the IR3109's +-15 V supplies
+  for (auto* f : { &waspFilter, &hornetFilter })
+  {
+    f->setSaturationBias(bias);
+    f->setRail(circuitRail);
+  }
+  arpFilter.setSaturationBias(bias);   // the limiter pair's offset
+  arpFilter.setRail(circuitRail);      // its +15 / -14 V supplies: quieter and less resonant, see ARP4075Filter::setRail
+  semFilter.setSaturationBias(0.0);    // Bias held at 0 (T9 nulled): too faint on the SEM to be worth a knob
+  semFilter.setRail(circuitRail);
 }
 
 void Open303::setPassbandCompensation(double newCompensation)
 {
-  // Diode-ladder-only: TeeBee has no passband compensation.
+  // Diode bass comp (the TeeBee has none)
   diodeFilter.setPassbandCompensation(newCompensation);
 }
 
@@ -308,13 +381,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   {
     oscillator.resetPhase();
     subOscillator.resetPhase();
-    filter.reset();
-    diodeFilter.reset();
-    highpass1.reset();
-    highpass2.reset();
-    allpass.reset();
-    notch.reset();
-    antiAliasFilter.reset();
+    resetFilters();
     ampDeClicker.reset();
   }
 

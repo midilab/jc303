@@ -34,8 +34,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         label->setInterceptsMouseClicks(false, false);
         addAndMakeVisible(label);
     }
-    filterDriveLabel.setText("DRIVE", juce::dontSendNotification);
-    bassCompLabel.setText("BASS", juce::dontSendNotification);
+    filterDriveLabel.setText("SATURATION", juce::dontSendNotification);
+    bassCompLabel.setText("HP/BP MORPH", juce::dontSendNotification);
     // on/off mod switch
     addAndMakeVisible(*(switchModButton = createSwitch()));
     addAndMakeVisible(*(ledModButton = createLed("switchModState")));
@@ -80,11 +80,48 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     switchOverdriveButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchOverdriveState", *switchOverdriveButton));
     
+    // show the HP/BP morph knob only for the Diode BP (3) and Diode HP (4) filter models
+    if (auto* filterTypeParam = valueTreeState.getParameter("filterType"))
+    {
+        filterTypeAttachment = std::make_unique<juce::ParameterAttachment>(
+            *filterTypeParam, [this](float value) { updateMorphVisibility((int) std::lround(value)); });
+        filterTypeAttachment->sendInitialUpdate();
+    }
+
+    if (auto* modStateParam = valueTreeState.getParameter("switchModState"))
+    {
+        modStateAttachment = std::make_unique<juce::ParameterAttachment>(
+            *modStateParam, [this](float value) { updateModEnabled(value > 0.5f); });
+        modStateAttachment->sendInitialUpdate();
+    }
+
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
     setSize (930, 363);
+}
+
+void JC303Editor::updateMorphVisibility(int filterTypeIndex)
+{
+    // the same parameter is the HP/BP morph for Diode BP / HP and the bass comp for Diode; the MS-20 and IR3109
+    // models have no bass comp (a Sallen-Key passband does not fall with resonance; the IR3109 compensates itself)
+    const bool show = filterTypeIndex == FILTER_DIODE;
+    bassCompSlider->setVisible(show);
+    bassCompLabel.setVisible(show);
+    bassCompLabel.setText(show ? "BASS COMP" : "HP/BP MORPH", juce::dontSendNotification);
+}
+
+void JC303Editor::updateModEnabled(bool modsOn)
+{
+    for (auto* knob : { normalDecaySlider, accentDecaySlider, feedbackFilterSlider, softAttackSlider,
+                        slideTimeSlider, sqrDriverSlider, filterDriveSlider, bassCompSlider })
+    {
+        knob->setEnabled(modsOn);
+        knob->setAlpha(modsOn ? 1.0f : 0.4f);
+    }
+    filterDriveLabel.setAlpha(modsOn ? 1.0f : 0.4f);
+    bassCompLabel.setAlpha(modsOn ? 1.0f : 0.4f);
 }
 
 JC303Editor::~JC303Editor()
@@ -240,8 +277,9 @@ void JC303Editor::setControlsLayout()
     filterDriveSlider->setBounds(filterDriveLocation.first, filterDriveLocation.second, sliderSmallSize, sliderSmallSize);
     bassCompSlider->setBounds(bassCompLocation.first, bassCompLocation.second, sliderSmallSize, sliderSmallSize);
     const int filterDriveCentreX = filterDriveLocation.first + sliderSmallSize / 2;
-    filterDriveLabel.setBounds(filterDriveCentreX - filterModLabelWidth / 2, filterDriveLocation.second - filterModLabelHeight - 1, filterModLabelWidth, filterModLabelHeight);
-    bassCompLabel.setBounds(filterDriveCentreX - filterModLabelWidth / 2, bassCompLocation.second - filterModLabelHeight - 1, filterModLabelWidth, filterModLabelHeight);
+    const int morphLabelWidth = 64;   // "HP/BP MORPH" and "SATURATION" are wider than the other mod labels
+    filterDriveLabel.setBounds(filterDriveCentreX - morphLabelWidth / 2, filterDriveLocation.second - filterModLabelHeight - 1, morphLabelWidth, filterModLabelHeight);
+    bassCompLabel.setBounds(filterDriveCentreX - morphLabelWidth / 2, bassCompLocation.second - filterModLabelHeight - 1, morphLabelWidth, filterModLabelHeight);
     switchModButton->setBounds(switchLocation.first, switchLocation.second, switchWidth, switchHeight);
     ledModButton->setBounds(modLedLocation.first, modLedLocation.second, ledWidth, ledHeight);
     // overdrive
