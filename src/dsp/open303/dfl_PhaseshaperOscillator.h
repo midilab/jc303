@@ -92,7 +92,7 @@ namespace dfl
       double lfo = 0.0;
       if( drift > 0.0 )
       {
-        lfo = std::sin(2.0 * PI * driftPhase);
+        lfo = std::sin(twoPi * driftPhase);
         driftPhase += DRIFT_RATE * sampleRateRec;
         if( driftPhase >= 1.0 )
           driftPhase -= 1.0;
@@ -110,8 +110,8 @@ namespace dfl
 
   protected:
 
-    static constexpr double PI  = 3.14159265358979323846;
-    static constexpr double EPS = 1.0e-9;
+    static constexpr double twoPi   = 6.28318530717958647692;
+    static constexpr double edgeEps = 1.0e-9;   // one-sided limits at an edge
 
     inline double triModSample(double lfo) const
     {
@@ -122,7 +122,7 @@ namespace dfl
         return y;
 
       // folds where xT crosses +-0.5: |2p - 1| = (1 +- 0.5/a) / 2, each on both slopes
-      if( a > 0.5 + EPS )
+      if( a > 0.5 + edgeEps )
       {
         for( double level : { 0.5 / a, -0.5 / a } )
         {
@@ -131,7 +131,7 @@ namespace dfl
           {
             const double td = wrap(phase - edge);
             if( td < dt || td > 1.0 - dt )
-              y += 0.5 * (triMod(edge + EPS, a) - triMod(edge - EPS, a)) * polyBlep(td, dt);
+              y += 0.5 * (triMod(edge + edgeEps, a) - triMod(edge - edgeEps, a)) * polyBlep(td, dt);
           }
         }
       }
@@ -185,7 +185,7 @@ namespace dfl
     // ripple phase u just before x
     static inline double rippleLeft(double x, double m1)
     {
-      return modm(x - EPS, m1) + modm(x - EPS, SUPERSAW_M2);
+      return modm(x - edgeEps, m1) + modm(x - edgeEps, SUPERSAW_M2);
     }
 
     // jump in y when the modulus-m term wraps at x

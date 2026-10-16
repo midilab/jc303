@@ -49,6 +49,8 @@ Open303::Open303()
   oscillator.setWaveTable2(&waveTable2);
   setSquareModel(SQUARE_OPEN303);
 
+  junoOscillator.setWaveform(dfl::AlphaJunoOscillator::SAW01);
+
   waveTable3.setWaveform(MipMappedWaveTable::SAW303);
   subOscillator.setWaveTable(&waveTable3);
 
@@ -122,6 +124,8 @@ void Open303::setSampleRate(double newSampleRate)
   diodeInputCoupling.setSampleRate(oversampling*newSampleRate);
 
   oscillator.setSampleRate    (  oversampling*newSampleRate);
+  junoOscillator.setSampleRate(  oversampling*newSampleRate);
+  phaseshaper.setSampleRate   (  oversampling*newSampleRate);
   subOscillator.setSampleRate (  oversampling*newSampleRate);
   filter.setSampleRate        (  oversampling*newSampleRate);
   diodeFilter.setSampleRate   (  oversampling*newSampleRate);
@@ -413,6 +417,8 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
   if( idle )
   {
     oscillator.resetPhase();
+    junoOscillator.reset();       // center voice at phase 0 with the sub-oscillator, side voices randomized
+    phaseshaper.resetPhase();
     subOscillator.resetPhase();
     resetFilters();
     ampDeClicker.reset();
