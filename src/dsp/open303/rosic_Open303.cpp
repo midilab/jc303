@@ -55,6 +55,8 @@ Open303::Open303()
   currentFilterType = dfl::FILTER_TEEBEE;
   pendingFilterType = dfl::FILTER_TEEBEE;
   currentNoteMuted = false;
+  currentNoteReverse = false;
+  reverseNoteMorph = 0.0;
   muteMorph        =   0.0;   // start unmuted
   muteMorphCoeff   =   0.0;   // will be set in setSampleRate
 
@@ -374,7 +376,7 @@ void Open303::renderBlock(double* out, int numSamples)
   }
 }
 
-void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bool hammer)
+void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bool hammer, bool reversed)
 {
   if( sequencer.modeWasChanged() )
     allNotesOff();
@@ -423,7 +425,10 @@ void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bo
     // (a hammer snaps to the new pitch instead of gliding; a muted note is never accented)
     const bool hasAccent = velocity >= 100 && !muted;
     if( noteList.empty() )
+    {
       triggerNote(noteNumber, hasAccent);
+      currentNoteReverse = reversed;   // a legato group keeps its first note's flag
+    }
     else if( hammer )
       hammerToNote(noteNumber, hasAccent);
     else
@@ -632,7 +637,7 @@ void Open303::hammerToNote(int noteNumber, bool hasAccent)
   slideToNote(noteNumber, hasAccent);
   pitchSlewLimiter.setState(log(oscFreq));  // the slew runs on log(freq)
 
-  // reverse mode: snap the inverse portamento to the new pitch too
+  // reverse mode: no inverse portamento either - the pitch is already at the target
   reverseFreqFrom = oscFreq;
   reverseLogRatio = 0.0;
 }

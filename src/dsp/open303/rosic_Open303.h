@@ -504,8 +504,10 @@ namespace rosic
 
     /** Accepts note-on events (note offs are also handled here as note ons with velocity zero).
     A muted note is choked (darker, quieter, never accented); a hammer onto a held note snaps to
-    the new pitch instead of sliding. */
-    void noteOn(int noteNumber, int velocity, double detune, bool muted = false, bool hammer = false);
+    the new pitch instead of sliding; a reversed note (or the legato group it starts) plays
+    time-reversed. */
+    void noteOn(int noteNumber, int velocity, double detune, bool muted = false, bool hammer = false,
+                bool reversed = false);
 
     /** Turns all possibly running notes off. */
     void allNotesOff();
@@ -741,6 +743,8 @@ namespace rosic
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   hammerToNextNote; // indicate that we need to hammer (legato w/ instant pitch) to the next note
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
+    bool   currentNoteReverse; // reversed flag of the note (or legato group) currently sounding
+    double reverseNoteMorph; // smoothed 0..1 per-note reverse amount (click-free switching)
     bool   currentNoteMuted; // flag indicating the current note is muted (shorter gate, darker, quieter)
 
     // TT-303 mute parameters
@@ -906,6 +910,11 @@ namespace rosic
     // back-loaded the curve is; reverseDen == e^reverseShape - 1 normalizes it to 0..1.
     // Computed first because in reverse mode the swell drives the filter envelope and the pitch glide.
     double mainEnvFwd = mainEnv.getSample();  // forward main envelope: decays 1 -> 0
+    // effective reverse depth: the global toggle, or a note flagged reversed in the sequencer
+    // (smoothed so the contour crossfade doesn't click); identical to reverseGate when no step is flagged
+    const double reverseNoteTarget = currentNoteReverse ? 1.0 : 0.0;
+    reverseNoteMorph = reverseNoteTarget + muteMorphCoeff * (reverseNoteMorph - reverseNoteTarget);
+    const double revDepth = reverseGate > reverseNoteMorph ? reverseGate : reverseNoteMorph;
     double rPos  = reversePhase / reverseLength;                  // 0..1 over the note, then clamped
     if( rPos > 1.0 ) rPos = 1.0;
     // The swell completes slightly early (at reverseHoldAt of the predicted length) and then HOLDS
@@ -941,7 +950,7 @@ namespace rosic
     // filter envelope, shared by the cutoff path and the modulation matrix. In reverse mode the
     // driver crossfades forward (1->0) to the reversed main-env swell (e^-Km -> 1), so the cutoff
     // opens on the mirrored curve of the forward Decay sweep and the accent lands on the peak.
-    double mainEnvOut = mainEnvFwd + reverseGate * (swellMain - mainEnvFwd);
+    double mainEnvOut = mainEnvFwd + revDepth * (swellMain - mainEnvFwd);
     double rc1Out     = n1 * rc1.getSample(mainEnvOut);
     double rc2Out     = n2 * rc2.getSample(accentGain > 0.0 || accentModActive ? mainEnvOut : 0.0) * accentSweepGain;
     double envSource  = rc1Out + accentGain * rc2Out;
@@ -952,7 +961,7 @@ namespace rosic
     // so the slide is an exponential in pitch/cents rather than in Hz - this matches how a real 303 slews
     // its pitch CV (volts/octave) and keeps octave slides from lingering in the low end.
     double slewedFreq = exp( pitchSlewLimiter.getSample( log(oscFreq) ) );
-    if( reverseGate > 0.0 )
+    if( revDepth > 0.0 )
     {
       // inverse portamento: the forward slew glides old->new at the note's silent head, so in reverse
       // mode it is inaudible. Instead glide from the current pitch to the target along the remaining
@@ -963,7 +972,7 @@ namespace rosic
       if( gp < 0.0 ) gp = 0.0;
       if( gp > 1.0 ) gp = 1.0;
       double glideFreq = reverseFreqFrom * exp(gp * reverseLogRatio);
-      slewedFreq = slewedFreq + reverseGate * (glideFreq - slewedFreq);
+      slewedFreq = slewedFreq + revDepth * (glideFreq - slewedFreq);
     }
     reverseInstFreq = slewedFreq;   // remember current pitch so a following slide can glide from here
 
@@ -1137,7 +1146,7 @@ namespace rosic
 
     // amplitude contour: crossfade the forward amp envelope with the reversed swell.
     double ampFwd    = ampEnv.getSample();
-    double ampEnvOut = ampFwd + reverseGate * (revAmp - ampFwd);
+    double ampEnvOut = ampFwd + revDepth * (revAmp - ampFwd);
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
     if( ampEnv.isNoteOn() )
       ampEnvOut += 0.45*mainEnvOut + instAccentGain*4.0*mainEnvOut;

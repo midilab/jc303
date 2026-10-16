@@ -318,8 +318,9 @@ private:
         uint8_t          note;
         uint8_t          velocity;
         int              sampleOffset;
-        bool             mute   { false };
-        bool             hammer { false };
+        bool             mute    { false };
+        bool             hammer  { false };
+        bool             reverse { false };
     };
     static constexpr int kPendingMax = 64;
     PendingNote  _pendingNotes[kPendingMax];
