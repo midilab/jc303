@@ -25,3 +25,9 @@ target_link_libraries(sequencer_test PRIVATE
     juce::juce_core juce::juce_audio_basics
     juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 add_test(NAME sequencer_test COMMAND sequencer_test)
+
+# Oscillator models: header-only DSP, no JUCE.
+add_executable(oscillator_test oscillator_test.cpp)
+target_compile_features(oscillator_test PRIVATE cxx_std_17)
+target_include_directories(oscillator_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/dsp/open303)
+add_test(NAME oscillator_test COMMAND oscillator_test)
