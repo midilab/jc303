@@ -242,6 +242,16 @@ JC303::JC303()
                                                     1.0f,
                                                     12.0f,
                                                     4.0f),
+            std::make_unique<juce::AudioParameterInt> ("seqScale",
+                                                    "Seq Scale",
+                                                    0,
+                                                    scalemask::kNumScaleChoices - 1,
+                                                    0),
+            std::make_unique<juce::AudioParameterInt> ("seqRoot",
+                                                    "Seq Root",
+                                                    0,
+                                                    scalemask::kNumRoots - 1,
+                                                    0),
             std::make_unique<juce::AudioParameterFloat> ("lowerNote",
                                                     "Lower Note",
                                                     static_cast<float> (SEQ303_NOTE_MIN),
@@ -377,6 +387,8 @@ JC303::JC303()
     seqGenerativeSlideProbability = parameters.getRawParameterValue("seqGenerativeSlideProbability");
     seqGenerativeTieProbability = parameters.getRawParameterValue("seqGenerativeTieProbability");
     numberOfTones = parameters.getRawParameterValue("numberOfTones");
+    seqScale = parameters.getRawParameterValue("seqScale");
+    seqRoot = parameters.getRawParameterValue("seqRoot");
     lowerNote = parameters.getRawParameterValue("lowerNote");
     rangeNote = parameters.getRawParameterValue("rangeNote");
     //seqHarmonizer = parameters.getRawParameterValue("seqHarmonizer");
@@ -705,6 +717,8 @@ void JC303::applySeqCommands()
             static_cast<uint8_t>(*seqGenerativeSlideProbability),
             static_cast<uint8_t>(*seqGenerativeTieProbability),
             static_cast<uint8_t>(*numberOfTones),
+            static_cast<uint8_t>(*seqScale),
+            static_cast<uint8_t>(*seqRoot),
             static_cast<uint8_t>(*lowerNote),
             static_cast<uint8_t>(*rangeNote)
         );
@@ -719,6 +733,8 @@ void JC303::applySeqCommands()
         for (int i = 0; i <= 127; i++)
             open303Core.noteOn (i, 0, 0);
         _sequencer.randomizePitches (static_cast<uint8_t>(*numberOfTones),
+                                     static_cast<uint8_t>(*seqScale),
+                                     static_cast<uint8_t>(*seqRoot),
                                      static_cast<uint8_t>(*lowerNote),
                                      static_cast<uint8_t>(*rangeNote));
         resetSeqOffsets (OffsetTranspose | OffsetPitchRotate);
