@@ -22,7 +22,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
         { "Init", {} },
 
         // Alpha Juno "What The" / Mentasm: the PWM'd chopped saw (SAW03), thickened by the supersaw stack in place
-        // of the Juno's chorus, a -1 octave sub, an open Juno filter, long decays and long slides for the swoops.
+        // of the Juno's chorus, a -1 octave sub, an open MS-20 filter, long decays and long slides for the swoops.
         { "Hoover", {
             { "switchModState",  1.0f },
             { "oscModel",        1.0f },    // Alpha Juno
@@ -35,7 +35,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "lfoDepth",        0.7f },
             { "subOscGain",      0.35f },
             { "subOscBlend",     1.0f },    // -1 octave
-            { "filterType",      3.0f },    // JuneBug
+            { "filterType",      2.0f },    // MissBehave
             { "cutoff",          0.85f },
             { "resonance",       0.15f },
             { "envmod",          0.15f },
