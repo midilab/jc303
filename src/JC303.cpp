@@ -1,5 +1,6 @@
 #include "JC303.h"
 #include GUI_THEME_HEADER
+#include "dfl_FactoryPresets.h"
 
 //==============================================================================
 JC303::JC303()
@@ -1124,23 +1125,28 @@ double JC303::getTailLengthSeconds() const
 
 int JC303::getNumPrograms()
 {
-    return 1;
+    return (int) dfl::factoryPresets().size();
 }
 
 int JC303::getCurrentProgram()
 {
-    return 0;
+    return currentProgram;
 }
 
+// Factory presets set the sound parameters; the sequencer, volume and tuning are left alone.
 void JC303::setCurrentProgram (int index)
 {
-    juce::ignoreUnused (index);
+    if (index < 0 || index >= getNumPrograms())
+        return;
+    currentProgram = index;
+    dfl::applyFactoryPreset (getParameters(), dfl::factoryPresets()[(size_t) index]);
 }
 
 const juce::String JC303::getProgramName (int index)
 {
-    juce::ignoreUnused (index);
-    return {};
+    if (index < 0 || index >= getNumPrograms())
+        return {};
+    return dfl::factoryPresets()[(size_t) index].name;
 }
 
 void JC303::changeProgramName (int index, const juce::String& newName)
