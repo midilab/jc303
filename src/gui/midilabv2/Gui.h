@@ -124,6 +124,9 @@ private:
     juce::TooltipWindow tooltipWindow { this, 700 };
 
     // declare the attchaments
+    std::unique_ptr<juce::FileChooser> tuningFileChooser;
+    void chooseTuningFile();
+
     std::unique_ptr<SliderAttachment> waveformAttachment;
     std::unique_ptr<SliderAttachment> tuningAttachment;
     std::unique_ptr<SliderAttachment> cutoffFreqAttachment;

@@ -25,3 +25,8 @@ target_link_libraries(sequencer_test PRIVATE
     juce::juce_core juce::juce_audio_basics
     juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 add_test(NAME sequencer_test COMMAND sequencer_test)
+
+# AnaMark .tun parser (pure C++, no JUCE)
+add_executable(tuning_test tuning_test.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/dsp/tuning/TuningFileLoader.cpp)
+target_compile_features(tuning_test PRIVATE cxx_std_17)
+add_test(NAME tuning_test COMMAND tuning_test)

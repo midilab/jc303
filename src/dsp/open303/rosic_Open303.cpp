@@ -7,6 +7,8 @@ using namespace rosic;
 Open303::Open303()
 {
   tuning           =   440.0;
+  TuningTable::fillEqualTemperament(pitchBanks[0], 440.0);
+  pitchBanks[1] = pitchBanks[0];
   ampScaler        =     1.0;
   oscFreq          =   440.0;
   sampleRate       = 44100.0;
@@ -422,7 +424,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
     ampEnv.setRelease(normalAmpRelease);
   }
 
-  oscFreq = pitchToFreq(noteNumber, tuning);
+  oscFreq = noteToHz(noteNumber);
   // Seed the slew limiter in the log-frequency domain (it glides log(freq), see getSample), so a
   // freshly triggered note starts exactly on pitch with no glide.
   pitchSlewLimiter.setState(log(oscFreq));
@@ -435,7 +437,7 @@ void Open303::triggerNote(int noteNumber, bool hasAccent)
 
 void Open303::slideToNote(int noteNumber, bool hasAccent)
 {
-  oscFreq = pitchToFreq(noteNumber, tuning);
+  oscFreq = noteToHz(noteNumber);
 
   if( hasAccent )
   {
@@ -465,8 +467,24 @@ void Open303::releaseNote(int noteNumber)
   else
   {
     // initiate slide back:
-    oscFreq     = pitchToFreq(currentNote);
+    oscFreq     = noteToHz(currentNote);
   }
+}
+
+bool Open303::installPitchMap(const std::array<double, TuningTable::kNumNotes>& frequencies)
+{
+  if( !TuningTable::validateFrequencies(frequencies) )
+    return false;
+  const int write = 1 - pitchBank.load(std::memory_order_relaxed);
+  pitchBanks[write] = frequencies;
+  pitchBank.store(write, std::memory_order_release);
+  return true;
+}
+
+double Open303::noteToHz(int noteNumber) const
+{
+  noteNumber = clip(noteNumber, 0, TuningTable::kNumNotes - 1);
+  return pitchBanks[pitchBank.load(std::memory_order_acquire)][(size_t) noteNumber] * tuning / 440.0;
 }
 
 void Open303::setMainEnvDecay(double newDecay)
