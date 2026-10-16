@@ -190,25 +190,50 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         const int step = i;
         seqStepButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setRest(step, !seqStepButtons[step]->getToggleState());
+            auto& seq = processorRef.getSequencer();
+            const bool on = seqStepButtons[step]->getToggleState();
+            seq.setRest(step, !on);
+            if (! on)
+                seq.setReverse(step, false);   // a rest has no reverse state
+        };
+        // shift-click toggles the step's reverse flag (turning the note on if it was a rest)
+        seqStepButtons[i]->onShiftClick = [this, step]
+        {
+            auto& seq = processorRef.getSequencer();
+            if (seq.stepOn(step))
+            {
+                seq.setReverse(step, ! seq.reverseOn(step));
+            }
+            else
+            {
+                seq.setRest(step, false);
+                seq.setReverse(step, true);
+            }
         };
         // micro toggles write their flag directly (button ON == feature active)
         seqAccentButtons[i]->setClickTogglesState(true);
         seqSlideButtons[i]->setClickTogglesState(true);
+        seqAccentButtons[i]->setSecondaryEnabled(true);
+        seqSlideButtons[i]->setSecondaryEnabled(true);
         seqAccentButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
+            const int state = seqAccentButtons[step]->getState();
+            processorRef.getSequencer().setAccent(step, state == 1);
+            processorRef.getSequencer().setMute(step, state == SequencerStepSelector::kSecondary);
         };
         // shared slide/tie toggle, as in aciduino: slide on a note, tie on a rest
         // (labelled "slide": on the TB-303 both are the same hold-into-next-step flag)
         seqSlideButtons[i]->onClick = [this, step]
         {
             auto& seq = processorRef.getSequencer();
-            const bool on = seqSlideButtons[step]->getState() != 0;
+            const int state = seqSlideButtons[step]->getState();
             if (seq.stepOn(step))
-                seq.setSlide(step, on);
+            {
+                seq.setSlide(step, state == 1);
+                seq.setHammer(step, state == SequencerStepSelector::kSecondary);
+            }
             else
-                seq.setTie(step, on);
+                seq.setTie(step, state != 0);
         };
         // clicking an LED selects the step to edit
         stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
@@ -249,9 +274,25 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // seq.isRunning(), so every click here always emits a fresh command.
     seqPlayButton->onClick = [this]
     {
+        if (seqPlayButton->getToggleState())
+            processorRef.getSequencer().setReversePlayback(false);
         processorRef.seqCommand(seqPlayButton->getToggleState()
                                     ? JC303::SeqCommand::Play
                                     : JC303::SeqCommand::Stop);
+    };
+    // shift-click: start playing in reverse, or flip the direction while running
+    seqPlayButton->onShiftClick = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        if (seq.isRunning())
+        {
+            seq.setReversePlayback(! seq.getReversePlayback());
+        }
+        else
+        {
+            seq.setReversePlayback(true);
+            processorRef.seqCommand(JC303::SeqCommand::Play);
+        }
     };
     seqRestButton->onPress = [this]
     {
@@ -414,6 +455,7 @@ void JC303Editor::timerCallback()
     const bool playing = seq.isRunning();
     if (seqPlayButton->getToggleState() != playing)
         seqPlayButton->setToggleState(playing, juce::dontSendNotification);
+    seqPlayButton->setSecondary(playing && seq.getReversePlayback());
     const int currentStep = static_cast<int>(seq.getCurrentStep());
 
     // keep the selected step inside the active pattern length
@@ -446,6 +488,7 @@ void JC303Editor::timerCallback()
         const bool noteOn = (i < length) && seq.stepOn(i);
         if (seqStepButtons[i]->getToggleState() != noteOn)
             seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
+        seqStepButtons[i]->setSecondary(noteOn && seq.reverseOn(i));
 
         // stored pitch name: black on a lit note step, dim on a rest (what it plays if switched on);
         // DAW octave numbering (middle C = C3), matching the keyboard; steps start at C0
@@ -456,15 +499,18 @@ void JC303Editor::timerCallback()
         if (seqStepNoteLabels[i]->findColour(juce::Label::textColourId) != noteColour)
             seqStepNoteLabels[i]->setColour(juce::Label::textColourId, noteColour);
 
-        // per-step accent and slide/tie toggles: ON == flag active (steps beyond the
-        // active pattern length show OFF, but stay editable). The shared toggle shows
-        // slide on a note step and tie on a rest.
-        const bool accentOn = (i < length) && seq.accentOn(i);
-        const bool slideOn  = (i < length) && (seq.stepOn(i) ? seq.slideOn(i) : seq.tieOn(i));
-        if (seqAccentButtons[i]->getState() != accentOn)
-            seqAccentButtons[i]->setState(accentOn ? 1 : 0);
-        if (seqSlideButtons[i]->getState() != slideOn)
-            seqSlideButtons[i]->setState(slideOn ? 1 : 0);
+        // per-step accent/mute and slide/hammer/tie toggles: ON == flag active, kSecondary
+        // == mute/hammer (steps beyond the active pattern length show OFF, but stay
+        // editable). The shared toggle shows slide/hammer on a note step and tie on a rest.
+        constexpr int kSecondary = SequencerStepSelector::kSecondary;
+        const int accentState = (i >= length) ? 0 : seq.accentOn(i) ? 1 : seq.muteOn(i) ? kSecondary : 0;
+        const int slideState  = (i >= length)  ? 0
+                              : ! seq.stepOn(i) ? (seq.tieOn(i) ? 1 : 0)
+                              : seq.slideOn(i)  ? 1 : seq.hammerOn(i) ? kSecondary : 0;
+        if (seqAccentButtons[i]->getState() != accentState)
+            seqAccentButtons[i]->setState(accentState);
+        if (seqSlideButtons[i]->getState() != slideState)
+            seqSlideButtons[i]->setState(slideState);
     }
 
     updateKeyboardForSelectedStep();
