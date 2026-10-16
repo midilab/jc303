@@ -1,9 +1,10 @@
 // Full-synth stress test: every diode filter type x drive x cutoff x env-mod x Devilfish FM,
 // at maximum resonance with accent 100, full bass comp, LP / BP / HP and in-between modes, and the Res Trim extremes. Fails on any non-finite sample,
-// on a sustained tail after gate-off (> -100 dB), or an absurd peak (> 26). Hi-Fi runs at tension -1, 0 and 1.
+// on a sustained tail after gate-off (> -100 dB), or an absurd peak (> 28). Hi-Fi runs at tension -1, 0 and 1.
 // (The loudest case without tension is HP at Res Trim 1.15, a self-oscillating unit, at +16 dB: about 21.6, as the drive
 // level tables restore BP / HP's mean level at resonance 100. Stiff tension there, at -3 dB drive where the drive makeup is
-// highest, reaches about 24.9: the tension envelope's sensitivity, DiodeLadderFilter::tensionSens.)
+// highest, reaches about 26.6 with FM at cutoff 314: the tension envelope's sensitivity, DiodeLadderFilter::tensionSens,
+// plus the resonance-scaled accent capacitor, which stacks the accent higher at resonance 100.)
 #include "rosic_Open303.h"
 #include <cstdio>
 #include <cstdlib>
@@ -42,7 +43,7 @@ int main()
               peak = fmax(peak, fabs(y)); if (i > N - 4410) tail = fmax(tail, fabs(y));
             }
             n++; double t = 20 * log10(tail + 1e-300);
-            if (!finite || t > -100 || peak > 26) { bad++; printf("  FAIL %s tension %g %s drive %.1f cutoff %.0f env %.0f fm %.0f: finite=%d tail %.0f dB peak %.2f\n", q ? "Hi-Fi" : "Standard", tension, c.name, drive, cut, env, fm, (int)finite, t, peak); }
+            if (!finite || t > -100 || peak > 28) { bad++; printf("  FAIL %s tension %g %s drive %.1f cutoff %.0f env %.0f fm %.0f: finite=%d tail %.0f dB peak %.2f\n", q ? "Hi-Fi" : "Standard", tension, c.name, drive, cut, env, fm, (int)finite, t, peak); }
             worstTail = fmax(worstTail, t); worstPeak = fmax(worstPeak, peak);
           }
   printf("stress test: %d runs, %d failures; worst tail %.0f dB, worst peak %.2f\n", n, bad, worstTail, worstPeak);

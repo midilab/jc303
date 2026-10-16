@@ -23,7 +23,8 @@ static const double MAX_RISE_DB[2][3] = { { 3.5, 6.0, 5.5 }, { 5.5, 6.0, 5.5 } }
 static bool hiFi = true;
 static double rmsDb(double mode, double cutoff, double res, double env, double drive)
 {
-  rosic::Open303 s; s.setSampleRate(SR); s.setFilterType(dfl::FILTER_DIODE); s.setFilterMode(mode); s.setCutoff(cutoff);
+  // cutoff before the sample rate: setSampleRate seeds the anti-zipper cutoff smoother, which would otherwise glide in from the default
+  rosic::Open303 s; s.setCutoff(cutoff); s.setSampleRate(SR); s.setFilterType(dfl::FILTER_DIODE); s.setFilterMode(mode);
   s.setResonance(res); s.setEnvMod(env); s.setDecay(400.0); s.setAccent(80.0); s.setVolume(-12.0);
   s.setFilterDrive(drive); s.setPassbandCompensation(0.0); s.setWaveform(0.0); s.setFilterHiFi(hiFi);
   s.noteOn(45, 64, 0.0);
