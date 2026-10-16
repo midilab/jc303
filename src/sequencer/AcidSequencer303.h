@@ -33,6 +33,7 @@
  */
 
 #include <JuceHeader.h>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <cmath>
@@ -48,7 +49,12 @@ static constexpr int      SEQ303_STEP_MAX         = 16;   // STEP_MAX_SIZE_303
 static constexpr int      SEQ303_NOTE_STACK_SIZE   = 3;    // NOTE_STACK_SIZE_303
 static constexpr uint8_t  SEQ303_NOTE_VELOCITY     = 70;   // NOTE_VELOCITY_303
 static constexpr uint8_t  SEQ303_ACCENT_VELOCITY   = 127;  // ACCENT_VELOCITY_303
-static constexpr uint8_t  SEQ303_DEFAULT_NOTE      = 36;   // C2
+static constexpr uint8_t  SEQ303_DEFAULT_NOTE      = 36;   // C1 (DAW numbering)
+
+// Lowest note the sequencer GUI enters: TB-303 owner's manual p.88, TRANSPOSE
+// DOWN starts at 1V = 32.7 Hz (MIDI 24, C0 in DAW numbering). The engine itself
+// accepts any MIDI note.
+static constexpr uint8_t  SEQ303_NOTE_MIN          = 24;
 
 // MIDI velocity at/above which a recorded step is marked accented — matches
 // Open303::noteOn() (`velocity >= 100` triggers accent on the synth side).
@@ -77,16 +83,16 @@ struct NoteStackEntry303
 {
     uint8_t  note   { 0  };
     int32_t  length { -1 };   // -1 = free slot; positive = pulse countdown
+    double   offFrac { 0.0 }; // release lands this fraction of a tick after the countdown ends
 };
 
 /** Full pattern data for one track (serialisable, UI-readable). */
 struct TrackData303
 {
     StepData303 step[SEQ303_STEP_MAX];
-    int8_t      shift      { 0 };
     uint8_t     stepLength { SEQ303_STEP_MAX };
-    int8_t      transpose  { 0 };
     uint8_t     tune       { 0 };  // 0=off; 1+N = harmonize + N semitone offset
+    uint8_t     pitchLength { 0 }; // 0 = off; N = loop the first N pitches across bars
 };
 
 // =============================================================================
@@ -117,8 +123,7 @@ public:
     std::function<void(const Acid303Event&)> onNoteEvent;
 
     /** Called whenever the sequencer clears its note stack (stop, mute, clearTrack,
-     *  acidRandomize).  JC303 uses this to reset _heldNote / _lastStepHadSlide so
-     *  Open303 receives a clean all-notes-off and no hung notes are left behind. */
+     *  acidRandomize), after the NoteOffs for held notes have been emitted. */
     std::function<void()> onAllNotesOff;
 
     // ── Constructor ──────────────────────────────────────────────────────────
@@ -138,10 +143,9 @@ public:
     {
         {
             juce::SpinLock::ScopedLockType lk (_dataLock);
-            _data.shift      = 0;
             _data.stepLength = SEQ303_STEP_MAX;
-            _data.transpose  = 0;
             _data.tune       = 0;
+            _data.pitchLength = 0;
             clearStepDataInternal (/*fillWithRests=*/false);
         }
         _stepLocation = 0;
@@ -180,6 +184,10 @@ public:
         _tickCounter     = 0;
         _lastHostTick    = -1;
         _lastMode        = _syncMode.load (std::memory_order_relaxed);
+        _blockStart      = 0;
+        _queueCount      = 0;
+        _lastMidiClock   = -1;
+        _tickSamples     = _samplesPerTick;
     }
 
     // =========================================================================
@@ -205,6 +213,25 @@ public:
     float getTempo() const { return _internalBpm.load (std::memory_order_relaxed); }
 
     // =========================================================================
+    // CPU timing (TB-303 uPD650C-133 interrupt latency)
+    // =========================================================================
+    /** When on, every gate edge lands on a free-running 1.8 ms interrupt grid
+     *  that is not synced to the tempo, NoteOn ~1.0 ms and NoteOff ~2.35 ms
+     *  after the interrupt (J. Schmidt, "Analysis of the uPD650C-133 CPU
+     *  timing").  Gates run slightly long and beat against the tempo. */
+    void setCpuTiming (bool on) { _cpuTiming.store (on, std::memory_order_relaxed); }
+    bool getCpuTiming() const   { return _cpuTiming.load (std::memory_order_relaxed); }
+
+    // =========================================================================
+    // Swing (MPC style)
+    // =========================================================================
+    /** Off-beat 16ths land at `percent` of the 8th-note pair: 50 % is straight,
+     *  75 % is 12 ticks late.  Continuous; the fraction of a tick is applied as
+     *  a sample offset. */
+    void  setSwingPercent (float percent) { _swingPercent.store (juce::jlimit (50.f, 75.f, percent), std::memory_order_relaxed); }
+    float getSwingPercent() const         { return _swingPercent.load (std::memory_order_relaxed); }
+
+    // =========================================================================
     // Transport control
     // =========================================================================
 
@@ -215,6 +242,9 @@ public:
         _tickCounter  = 0;
         _sampleAccum  = 0.0;
         _lastHostTick = -1;
+        _lastMidiClock = -1;
+        _swingRelatch = true;
+        _pitchPlayhead = -1;
         _running      = true;
     }
 
@@ -222,6 +252,7 @@ public:
     {
         if (! _running) return;
         _running = false;
+        _pitchPlayhead = -1;
         clearStackInternal (true);
     }
 
@@ -236,15 +267,15 @@ public:
      * @param hostIsPlaying     AudioPlayHead::isPlaying.
      * @param ppqAtBufferStart  ppqPosition at sample 0 (Host sync).
      * @param bpm               Current host BPM (Host sync; ignored in Internal).
-     * @param shufflePulses     Signed pulse offset applied to gate length.
      */
     void processBlock (const juce::MidiBuffer& midiIn,
                        int    numSamples,
                        bool   hostIsPlaying,
                        double ppqAtBufferStart,
-                       double bpm,
-                       int    shufflePulses = 0)
+                       double bpm)
     {
+        _blockLength = numSamples;
+
         // Apply any tempo queued from the UI thread before clocking.
         // _samplesPerTick is only ever written on the audio thread from here.
         updateSamplesPerTick();
@@ -285,9 +316,11 @@ public:
             {
                 if (msg.isMidiStart())
                 {
-                    _tickCounter  = 0;
-                    _sampleAccum  = 0.0;
-                    _lastHostTick = -1;
+                    _tickCounter   = 0;
+                    _sampleAccum   = 0.0;
+                    _lastHostTick  = -1;
+                    _lastMidiClock = -1;
+                    _swingRelatch  = true;
                     if (_startMode == StartMode::TransportStart)
                         start();
                 }
@@ -297,7 +330,7 @@ public:
                 }
                 else if (msg.isMidiClock() && _running)
                 {
-                    tickMidiClock (samplePos, shufflePulses);
+                    tickMidiClock (samplePos);
                 }
             }
 
@@ -309,24 +342,34 @@ public:
         switch (mode)
         {
             case SyncMode::Internal:
-                processInternalClock (numSamples, shufflePulses);
+                processInternalClock (numSamples);
                 break;
 
             case SyncMode::Host:
-                processHostClock (numSamples, hostIsPlaying, ppqAtBufferStart, bpm, shufflePulses);
+                processHostClock (numSamples, hostIsPlaying, ppqAtBufferStart, bpm);
                 break;
 
             case SyncMode::MidiClock:
                 break; // handled above per-message
         }
+
+        flushQueue (numSamples);
+        _blockStart += numSamples;
     }
 
     // =========================================================================
     // ── Per-step setters / getters — UI-thread-safe ───────────────────────────
     // =========================================================================
 
-    /** rest(step, state) — mirrors Engine303::rest() */
-    void setRest   (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].rest   = v; }
+    /** rest(step, state) — mirrors Engine303::rest().  A played step drops its
+     *  tie, as in the aciduino step editor. */
+    void setRest (int step, bool v)
+    {
+        juce::SpinLock::ScopedLockType lk(_dataLock);
+        _data.step[step].rest = v;
+        if (! v)
+            _data.step[step].tie = false;
+    }
     /** setAccent(step, state) */
     void setAccent (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].accent = v; }
     /** setSlide(step, state) */
@@ -370,13 +413,60 @@ public:
     // ── Track-level getters / setters — mirrors engine_303 API ───────────────
     // =========================================================================
 
-    /** setShiftPos / getShiftPos */
-    void   setShiftPos (int8_t shift)
+    /** `delta` taken the shorter way round a cycle of `len` values, in
+     *  (-len/2, len/2]: a menu value wrapping at len reads as one step. */
+    static int shortestTurn (int delta, int len)
+    {
+        int d = ((delta % len) + len) % len;
+        if (d > len / 2) d -= len;
+        return d;
+    }
+
+    /** Rotate the steps in the active length `n` places earlier: step n
+     *  becomes step 0.  Steps past the length are untouched. */
+    void shiftSteps (int n)
     {
         juce::SpinLock::ScopedLockType lk (_dataLock);
-        _data.shift = shift;
+        const int len = _data.stepLength;
+        StepData303 old[SEQ303_STEP_MAX];
+        std::copy (_data.step, _data.step + len, old);
+        for (int i = 0; i < len; ++i)
+            _data.step[i] = old[((i + n) % len + len) % len];
     }
-    int8_t getShiftPos() const { return _data.shift; }
+
+    /** Rotate the pitches through the note steps in the active length: each
+     *  note step takes the pitch `n` note steps later.  Rests, ties, accents
+     *  and slides stay on their steps. */
+    void rotatePitches (int n)
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        int     noteSteps[SEQ303_STEP_MAX];
+        uint8_t pitches[SEQ303_STEP_MAX];
+        int count = 0;
+        for (int i = 0; i < _data.stepLength; ++i)
+            if (! _data.step[i].rest)
+            {
+                noteSteps[count] = i;
+                pitches[count++] = _data.step[i].note;
+            }
+        for (int k = 0; k < count; ++k)
+            _data.step[noteSteps[k]].note = pitches[((k + n) % count + count) % count];
+    }
+
+    /** setPitchLength / getPitchLength — 0 = off; N = the note steps cycle
+     *  through the first N pitches, carried across bars (polymeter).  The
+     *  pitch is derived from the play position, so host seeks stay in phase. */
+    void    setPitchLength (uint8_t length)
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        _data.pitchLength = static_cast<uint8_t>(juce::jmin<int> (length, SEQ303_STEP_MAX));
+    }
+    uint8_t getPitchLength() const { return _data.pitchLength; }
+
+    /** Pitch playhead: the step whose stored pitch the last started note
+     *  used (differs from the step position with Pitch Rotate / Pitch
+     *  Length).  Holds through ties and rests; -1 while stopped. */
+    int getPitchPlayhead() const { return _pitchPlayhead.load (std::memory_order_relaxed); }
 
     /** setTune / getTune
      *  0   = harmonizer off (raw MIDI note)
@@ -388,13 +478,26 @@ public:
     }
     uint8_t getTune() const { return _data.tune; }
 
-    /** setTranspose / getTranspose — global semitone offset applied at note-on */
-    void   setTranspose (int8_t t)
+    /** True if every stored step note (rests included) stays in 0..127
+     *  after shifting by `semitones`. */
+    bool canTransposeNotes (int semitones) const
+    {
+        for (const auto& s : _data.step)
+            if (s.note + semitones < 0 || s.note + semitones > 127)
+                return false;
+        return true;
+    }
+
+    /** Shift every stored step note by `semitones`; refused, leaving the pattern
+     *  untouched, unless canTransposeNotes(). */
+    bool transposeNotes (int semitones)
     {
         juce::SpinLock::ScopedLockType lk (_dataLock);
-        _data.transpose = t;
+        if (! canTransposeNotes (semitones)) return false;
+        for (auto& s : _data.step)
+            s.note = static_cast<uint8_t>(s.note + semitones);
+        return true;
     }
-    int8_t getTranspose() const { return _data.transpose; }
 
     /** getCurrentStep — last-played step index.
      *  Written on the audio thread; UI reads are an acceptable approximation. */
@@ -557,79 +660,87 @@ public:
                         uint8_t lowerNote,
                         uint8_t rangeNote)
     {
-        // Build the chromatic-quantisation correction table (mirrors fix_tones[])
-        int8_t fixTones[12] = {};
-        if (numberOfTones > 0)
-        {
-            const int8_t fixMod = static_cast<int8_t>(12 / numberOfTones);
-            int8_t fixCounter   = 0;
-            for (uint8_t i = 0; i < 12; ++i)
-            {
-                if ((i % fixMod) == 0 || i == 0)
-                {
-                    fixTones[i] = 0;
-                    fixCounter  = 0;
-                }
-                else
-                {
-                    --fixCounter;
-                    fixTones[i] = fixCounter;
-                }
-            }
-        }
+        int8_t fixTones[12];
+        makeFixTones (numberOfTones, fixTones);
 
         // Clear the track: mutes, sends NoteOff for any held note (fires
-        // onAllNotesOff so JC303 resets _heldNote), clears all steps, then unmutes.
+        // onAllNotesOff), clears all steps, then unmutes.
         clearTrack();
 
         {
             juce::SpinLock::ScopedLockType lk (_dataLock);
-
             for (int i = 0; i < SEQ303_STEP_MAX; ++i)
-            {
-                const bool isOn = (randPercent() < fill);
-                _data.step[i].rest = ! isOn;
-
-                if (! isOn)
-                {
-                    // REST step
-                    _data.step[i].accent = false;
-                    _data.step[i].slide  = false;
-                    _data.step[i].tie    = false;
-
-                    // Tie: only probable when previous step had a note or a tie
-                    const int lastIdx = (i == 0) ? SEQ303_STEP_MAX - 1 : i - 1;
-                    if (! _data.step[lastIdx].rest || _data.step[lastIdx].tie)
-                        _data.step[i].tie = (randPercent() < tieProbability);
-
-                    continue;
-                }
-
-                // ON step — pick a note
-                const uint8_t highNote = static_cast<uint8_t>(
-                    juce::jlimit (0, 127, static_cast<int>(lowerNote) + rangeNote));
-
-                const uint8_t noteRange = (highNote > lowerNote)
-                                            ? static_cast<uint8_t>(highNote - lowerNote)
-                                            : 1;
-
-                uint8_t note = static_cast<uint8_t>(
-                    lowerNote + (randPercent() % noteRange));
-
-                if (numberOfTones > 0)
-                {
-                    const int fixed = static_cast<int>(note) + fixTones[note % 12];
-                    note = static_cast<uint8_t>(juce::jlimit (0, 127, fixed));
-                }
-
-                _data.step[i].note   = note;
-                _data.step[i].accent = (randPercent() < accentProbability);
-                _data.step[i].slide  = (randPercent() < slideProbability);
-                _data.step[i].tie    = false;
-            }
+                if (rollRhythmStep (i, fill, accentProbability, slideProbability, tieProbability))
+                    _data.step[i].note = randomNote (fixTones, numberOfTones, lowerNote, rangeNote);
         }
 
         // clearTrack() already called setMute(false) — no need to unmute again.
+    }
+
+    // =========================================================================
+    // ── Pattern undo / redo (step data only; settings live in their params) ──
+    // =========================================================================
+
+    static constexpr int kUndoDepth = 16;
+
+    /** Snapshot the steps before a destructive edit; clears the redo history. */
+    void pushUndo()
+    {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
+        pushSnapshot (_undo, _undoCount);
+        _redoCount = 0;
+    }
+
+    bool undo() { return swapHistory (_undo, _undoCount, _redo, _redoCount); }
+    bool redo() { return swapHistory (_redo, _redoCount, _undo, _undoCount); }
+
+    int  undoCount() const { return _undoCount.load (std::memory_order_relaxed); }
+    int  redoCount() const { return _redoCount.load (std::memory_order_relaxed); }
+    bool canUndo()   const { return undoCount() > 0; }
+    bool canRedo()   const { return redoCount() > 0; }
+
+    /** New random pitches on the note steps; rests, ties, accents and slides stay. */
+    void randomizePitches (uint8_t numberOfTones, uint8_t lowerNote, uint8_t rangeNote)
+    {
+        int8_t fixTones[12];
+        makeFixTones (numberOfTones, fixTones);
+
+        setMute (true);
+        clearStackInternal (true);
+        {
+            juce::SpinLock::ScopedLockType lk (_dataLock);
+            for (auto& st : _data.step)
+                if (! st.rest)
+                    st.note = randomNote (fixTones, numberOfTones, lowerNote, rangeNote);
+        }
+        setMute (false);
+    }
+
+    /** New random rests, ties, accents and slides; the pattern's pitches are
+     *  kept in order and laid onto the new note steps (wrapping), like
+     *  editing the time list on a TB-303. */
+    void randomizeRhythm (uint8_t fill,
+                          uint8_t accentProbability,
+                          uint8_t slideProbability,
+                          uint8_t tieProbability)
+    {
+        setMute (true);
+        clearStackInternal (true);
+        {
+            juce::SpinLock::ScopedLockType lk (_dataLock);
+
+            uint8_t pitches[SEQ303_STEP_MAX];
+            int n = 0;
+            for (int i = 0; i < _data.stepLength; ++i)
+                if (! _data.step[i].rest)
+                    pitches[n++] = _data.step[i].note;
+
+            int k = 0;
+            for (int i = 0; i < SEQ303_STEP_MAX; ++i)
+                if (rollRhythmStep (i, fill, accentProbability, slideProbability, tieProbability) && n > 0)
+                    _data.step[i].note = pitches[k++ % n];
+        }
+        setMute (false);
     }
 
     // =========================================================================
@@ -689,9 +800,11 @@ private:
     // Event-driven: skip directly to the next tick boundary instead of
     // iterating every sample.  The inner body runs once per 96-PPQN tick
     // (~1920 times/sec at 120 BPM) rather than once per sample (~44100/sec).
-    void processInternalClock (int numSamples, int shufflePulses)
+    void processInternalClock (int numSamples)
     {
         if (! _running) return;
+
+        _tickSamples = _samplesPerTick;
 
         int sampleCursor = 0;
 
@@ -712,7 +825,7 @@ private:
             sampleCursor  += samplesUntilTickI;
             _sampleAccum   = _sampleAccum + samplesUntilTickI - _samplesPerTick;
 
-            fireTick (_tickCounter, sampleCursor, shufflePulses);
+            fireTick (_tickCounter, sampleCursor);
             ++_tickCounter;
         }
     }
@@ -724,8 +837,7 @@ private:
     void processHostClock (int    numSamples,
                            bool   hostIsPlaying,
                            double ppqStart,
-                           double bpm,
-                           int    shufflePulses)
+                           double bpm)
     {
         if (! hostIsPlaying)
         {
@@ -749,14 +861,17 @@ private:
         }
 
         // Convert buffer start position to 96-PPQN ticks
-        // tick = ppq * 96  (96 ticks per quarter note)
-        const int64_t tickAtStart = static_cast<int64_t>(ppqStart * 96.0);
+        // tick = ppq * 96  (96 ticks per quarter note).  Tick boundaries are
+        // placed from the exact position, not the floored tick, so gate edges
+        // don't jitter with where the buffer starts inside a tick.
+        const double  tickPosAtStart = ppqStart * 96.0;
 
         // Samples per quarter note at current BPM
         const double samplesPerQuarter = (_sampleRate * 60.0) / bpm;
         // Samples per 96-PPQN tick (floored at 1.0 so a degenerate host tempo can
         // never yield sampPerTick = NaN/inf/0 and wedge the loop below)
         const double sampPerTick = std::max (1.0, samplesPerQuarter / 96.0);
+        _tickSamples = sampPerTick;
 
         int sampleCursor = 0;
 
@@ -764,8 +879,8 @@ private:
         {
             // Which tick does sampleCursor land on?
             const double  offsetInBuffer = static_cast<double>(sampleCursor);
-            const int64_t tickNow = tickAtStart
-                                    + static_cast<int64_t>(offsetInBuffer / sampPerTick);
+            const int64_t tickNow = static_cast<int64_t>(
+                std::floor (tickPosAtStart + offsetInBuffer / sampPerTick));
 
             if (tickNow <= _lastHostTick)
             {
@@ -779,12 +894,13 @@ private:
                 {
                     _lastHostTick = tickNow - 1;
                     _tickCounter  = static_cast<uint32_t>(tickNow);
+                    _swingRelatch = true;
                     continue; // re-evaluate the same sampleCursor against the new anchor
                 }
 
                 // Still inside the same tick — jump to where the next one starts
-                const double sampUntilNext = sampPerTick
-                    - (offsetInBuffer - static_cast<double>(tickNow - tickAtStart) * sampPerTick);
+                const double sampUntilNext = (static_cast<double>(tickNow + 1) - tickPosAtStart) * sampPerTick
+                                             - offsetInBuffer;
                 const int jump = std::max (1, static_cast<int>(sampUntilNext));
 
                 if (sampleCursor + jump >= numSamples)
@@ -808,24 +924,24 @@ private:
             {
                 _lastHostTick = tickNow - 1;
                 _tickCounter  = static_cast<uint32_t>(tickNow);
+                _swingRelatch = true;
                 firstNew      = tickNow;
             }
 
             for (int64_t t = firstNew; t <= tickNow; ++t)
             {
                 // Sample offset of tick t within this buffer
-                const double tickSampleF = static_cast<double>(t - tickAtStart) * sampPerTick;
-                const int    tickSample  = juce::jlimit (0, numSamples - 1,
-                                               static_cast<int>(tickSampleF));
-                fireTick (static_cast<uint32_t>(t), tickSample, shufflePulses);
+                const double tickSampleF = (static_cast<double>(t) - tickPosAtStart) * sampPerTick;
+                fireTick (static_cast<uint32_t>(t),
+                          juce::jlimit (0.0, static_cast<double>(numSamples - 1), tickSampleF));
             }
 
             _lastHostTick  = tickNow;
             _tickCounter   = static_cast<uint32_t>(tickNow);
 
             // Advance to where the next tick begins
-            const double nextTickSampleF = static_cast<double>(tickNow + 1 - tickAtStart) * sampPerTick;
-            const int    nextTickSample  = static_cast<int>(nextTickSampleF);
+            const double nextTickSampleF = (static_cast<double>(tickNow + 1) - tickPosAtStart) * sampPerTick;
+            const int    nextTickSample  = static_cast<int>(std::ceil (nextTickSampleF));
             if (nextTickSample >= numSamples) break;
             sampleCursor = nextTickSample;
         }
@@ -833,15 +949,22 @@ private:
 
     // ── MIDI clock ────────────────────────────────────────────────────────────
     // MIDI clock = 24 PPQN.  Our internal resolution is 96 PPQN ticks, so
-    // each incoming MIDI clock message = 4 ticks.  Integer math, no fractions.
-    void tickMidiClock (int samplePos, int shufflePulses)
+    // each incoming MIDI clock message = 4 ticks, spread over the measured
+    // clock period so gates and swing keep 96-PPQN resolution.  The first
+    // clock after a start has no period yet and fires its 4 ticks at once.
+    void tickMidiClock (int samplePos)
     {
-        // 96 / 24 = 4 ticks per MIDI clock message — always exact integer
         static constexpr int kTicksPerMidiClock = 4;
+
+        const int64_t now      = _blockStart + samplePos;
+        const int64_t interval = now - _lastMidiClock;
+        _tickSamples   = (_lastMidiClock >= 0 && interval > 0 && static_cast<double>(interval) < _sampleRate)
+                             ? static_cast<double>(interval) / kTicksPerMidiClock : 0.0;
+        _lastMidiClock = now;
 
         for (int i = 0; i < kTicksPerMidiClock; ++i)
         {
-            fireTick (_tickCounter, samplePos, shufflePulses);
+            fireTick (_tickCounter, samplePos + i * _tickSamples);
             ++_tickCounter;
         }
     }
@@ -858,27 +981,36 @@ private:
     // At 120 BPM / 44100 Hz that is ~1920 calls/sec instead of 44100/sec.
     // =========================================================================
 
-    inline void fireTick (uint32_t tick, int sampleOffset, int shufflePulses)
+    inline void fireTick (uint32_t tick, double sampleOffset)
     {
-        // Step boundary: every _ticksPerStep (= 24) ticks
-        if ((tick % static_cast<uint32_t>(_ticksPerStep)) == 0)
-            onStep (tick / static_cast<uint32_t>(_ticksPerStep), sampleOffset, shufflePulses);
-
-        // Note-off stack: check every tick (1-pulse resolution, same as original)
+        // Note-off stack: check every tick (1-pulse resolution, same as original).
+        // Count down before the step fires, so a note started on this tick
+        // keeps its full length (12 ticks = 50%) and a release on this tick
+        // is sent before the new NoteOn.
         onTick (sampleOffset);
+
+        // Step boundary: every _ticksPerStep (= 24) ticks; swung steps fire late,
+        // the whole ticks on the clock and the fraction as a sample offset.
+        // Swing is latched per pair of 16ths so a change can't skip or repeat a
+        // step, and on (re)start so a start mid-pair uses the current value.
+        const uint32_t step = tick / static_cast<uint32_t>(_ticksPerStep);
+        if (_swingRelatch || tick % (2u * static_cast<uint32_t>(_ticksPerStep)) == 0)
+        {
+            _swingLatched = (_swingPercent.load (std::memory_order_relaxed) - 50.0) / 100.0
+                            * 2.0 * _ticksPerStep;
+            _swingRelatch = false;
+        }
+        const double delay = swingDelay (step);
+        if (static_cast<int>(tick % static_cast<uint32_t>(_ticksPerStep)) == static_cast<int>(std::floor (delay)))
+            onStep (step, sampleOffset, delay - std::floor (delay));
     }
 
     // ── onStep — fires once per 16th-note step (every 24 ticks) ──────────────
-    void onStep (uint32_t stepTick, int sampleOffset, int shufflePulses)
+    void onStep (uint32_t stepTick, double sampleOffset, double onsetFrac)
     {
         const uint8_t stepLen = _data.stepLength;
 
-        // Circular step position with shift
-        const uint8_t stepPos = static_cast<uint8_t>(
-            (stepTick
-             + static_cast<uint32_t>(static_cast<int32_t>(_data.shift)
-                                     + static_cast<int32_t>(stepLen) * 1024))
-            % stepLen);
+        const uint8_t stepPos = static_cast<uint8_t>(stepTick % stepLen);
 
         _stepLocation.store (stepPos, std::memory_order_relaxed);
 
@@ -887,61 +1019,70 @@ private:
         const StepData303& cur = _data.step[stepPos];
         if (cur.rest) return;
 
-        // ── Gate length in 96-PPQN ticks: slide / tie lookahead ──────────────
-        // Identical to the original engine_303 logic.
-        // _noteLengthTicks = 12 (50% of 24 ticks), _slideExtraTicks = 20.
-        int32_t       gateLength     = _noteLengthTicks;
+        // ── Gate end in 96-PPQN ticks: slide / tie lookahead ─────────────────
+        // A gate ends _noteLengthTicks (12 = 50%) after the onset of the step
+        // it ends in; each tied rest moves that step on by one.  A slide
+        // belongs to the note, as on the TB-303, so it carries across tied
+        // rests and ends a fixed overhang (8 ticks) after the next played
+        // note's onset.  Measured from real (swung) onsets, so a swung gate
+        // never overruns the next note or a slide target.
         const uint8_t lookaheadBound = static_cast<uint8_t>(stepLen);
         uint8_t       nextStep       = stepPos;
+        uint32_t      endStep        = stepTick;   // clock step the gate ends in
+        int32_t       tail           = _noteLengthTicks;
 
         for (uint8_t i = 1; i <= lookaheadBound; ++i)
         {
             nextStep = static_cast<uint8_t>((nextStep + 1) % lookaheadBound);
+            const StepData303& next = _data.step[nextStep];
 
-            // Slide overhang only applies to the immediate next step.  Once a
-            // tied rest has been consumed the accumulated tie gate owns the
-            // length; re-applying the slide overhang there truncates the note.
-            if (cur.slide && i == 1 && ! _data.step[nextStep].rest)
+            if (next.rest && next.tie)
             {
-                gateLength = _noteLengthTicks + _slideExtraTicks;
-                break;
+                endStep = stepTick + i;
+                continue;
             }
-            else if (_data.step[nextStep].tie && _data.step[nextStep].rest)
+
+            if (cur.slide && ! next.rest)
             {
-                // Each tied rest adds one full step (24 ticks)
-                gateLength = _noteLengthTicks
-                             + static_cast<int32_t>(i) * static_cast<int32_t>(_ticksPerStep);
+                endStep = stepTick + i;
+                tail    = _slideExtraTicks - (_ticksPerStep - _noteLengthTicks);
             }
-            else if (! _data.step[nextStep].rest || ! _data.step[nextStep].tie)
-            {
-                break;
-            }
+            break;
         }
 
-        if (shufflePulses != 0)
-            gateLength = std::max (1, gateLength + shufflePulses);
+        // Ticks from the tick this step fires on (whole part of its swing) to the release
+        const double gateTicks = static_cast<double>(endStep - stepTick) * _ticksPerStep
+                                 + swingDelay (endStep) - std::floor (swingDelay (stepTick)) + tail;
+        const int32_t gateLength = std::max (1, static_cast<int32_t>(std::floor (gateTicks)));
+        const double  offFrac    = std::max (0.0, gateTicks - gateLength);
 
         // ── Note resolution ───────────────────────────────────────────────────
-        uint8_t note = cur.note;
+        const int pitchStep = _data.pitchLength != 0 ? resolvePitchStep (stepTick, stepLen) : stepPos;
+        _pitchPlayhead.store (pitchStep, std::memory_order_relaxed);
+        uint8_t note = _data.step[pitchStep].note;
         if (_data.tune > 0)
             note = _harmonizer.harmonize (note) + static_cast<uint8_t>(_data.tune - 1);
 
-        const int finalNote = static_cast<int>(note) + static_cast<int>(_data.transpose);
-        if (finalNote < 0 || finalNote > 127) return;
-
-        note = static_cast<uint8_t>(finalNote);
+        // ── Same-pitch handover ──────────────────────────────────────────────
+        // A slide or wrap-around overlap into the same pitch is one gate, as on
+        // the TB-303.  Drop the earlier entry without a NoteOff; otherwise its
+        // release would land after this NoteOn and end the new note early.
+        for (int i = 0; i < SEQ303_NOTE_STACK_SIZE; ++i)
+            if (_stack[i].length > 0 && _stack[i].note == note)
+                _stack[i].length = -1;
 
         // ── Place in note stack (gate length in 96-PPQN ticks) ───────────────
         for (int i = 0; i < SEQ303_NOTE_STACK_SIZE; ++i)
         {
             if (_stack[i].length == -1)
             {
-                _stack[i].note   = note;
-                _stack[i].length = gateLength;
-                emit ({ Acid303EventType::NoteOn,
-                        note,
-                        cur.accent ? SEQ303_ACCENT_VELOCITY : SEQ303_NOTE_VELOCITY,
-                        sampleOffset });
+                _stack[i].note    = note;
+                _stack[i].length  = gateLength;
+                _stack[i].offFrac = offFrac;
+                send (Acid303EventType::NoteOn,
+                      note,
+                      cur.accent ? SEQ303_ACCENT_VELOCITY : SEQ303_NOTE_VELOCITY,
+                      sampleOffset + onsetFrac * _tickSamples);
                 break;
             }
         }
@@ -950,7 +1091,7 @@ private:
     // ── onTick — fires every 96-PPQN tick; decrements note stack ─────────────
     // Replaces onPulse(). The countdown unit is now ticks (= pulses at 96 PPQN)
     // so all NOTE_LENGTH values remain identical to the original engine.
-    void onTick (int sampleOffset)
+    void onTick (double sampleOffset)
     {
         for (int i = 0; i < SEQ303_NOTE_STACK_SIZE; ++i)
         {
@@ -959,10 +1100,10 @@ private:
                 --_stack[i].length;
                 if (_stack[i].length == 0)
                 {
-                    emit ({ Acid303EventType::NoteOff,
-                            _stack[i].note,
-                            0,
-                            sampleOffset });
+                    send (Acid303EventType::NoteOff,
+                          _stack[i].note,
+                          0,
+                          sampleOffset + _stack[i].offFrac * _tickSamples);
                     _stack[i].length = -1;
                 }
             }
@@ -973,9 +1114,106 @@ private:
     // ── Utility ──────────────────────────────────────────────────────────────
     // =========================================================================
 
+    /** Step whose pitch the note step at clock step `stepTick` plays with
+     *  Pitch Length on.  The pitch list is the note steps in the active
+     *  length, in order; the note steps cycle through its first N entries,
+     *  counted from the play position across loops. */
+    int resolvePitchStep (uint32_t stepTick, uint8_t stepLen) const
+    {
+        const uint8_t stepPos = static_cast<uint8_t>(stepTick % stepLen);
+
+        uint8_t noteSteps[SEQ303_STEP_MAX];
+        int n = 0, k = 0;
+        for (uint8_t i = 0; i < stepLen; ++i)
+        {
+            if (_data.step[i].rest) continue;
+            if (i == stepPos) k = n;
+            noteSteps[n++] = i;
+        }
+
+        const int     len   = juce::jmin<int> (_data.pitchLength, n);
+        const int64_t index = static_cast<int64_t>(stepTick / stepLen) * n + k;
+        return noteSteps[index % len];
+    }
+
     inline void emit (const Acid303Event& ev) const
     {
         if (onNoteEvent) onNoteEvent (ev);
+    }
+
+    /** Delay of a clock step in ticks: off-beat 16ths are swung. */
+    double swingDelay (uint32_t step) const
+    {
+        return (step & 1u) ? _swingLatched : 0.0;
+    }
+
+    /** Queue an event at `sampleOffset` (may fall past this block), or on the
+     *  CPU-timing interrupt grid. */
+    void send (Acid303EventType type, uint8_t note, uint8_t velocity, double sampleOffset)
+    {
+        const double t = static_cast<double>(_blockStart) + sampleOffset;
+        int64_t      at;
+        if (_cpuTiming.load (std::memory_order_relaxed))
+        {
+            const double msToSamples = _sampleRate / 1000.0;
+            const double period      = kIrqPeriodMs * msToSamples;
+            const double latency     = (type == Acid303EventType::NoteOn ? kGateOnLatencyMs
+                                                                        : kGateOffLatencyMs) * msToSamples;
+            at = static_cast<int64_t>(std::llround (std::ceil (t / period) * period + latency));
+        }
+        else
+        {
+            at = static_cast<int64_t>(std::llround (t));
+        }
+
+        // A release sent before this NoteOn never lands after it: the longer
+        // NoteOff latency would otherwise turn the next note into a slide.
+        if (type == Acid303EventType::NoteOn)
+            for (int i = 0; i < _queueCount; ++i)
+                if (_queue[i].ev.type == Acid303EventType::NoteOff && _queue[i].at > at)
+                    _queue[i].at = at;
+
+        const Acid303Event ev { type, note, velocity, 0 };
+        if (_queueCount == kQueueSize)
+        {
+            emit ({ type, note, velocity,
+                    static_cast<int>(juce::jlimit<int64_t> (0, std::max (0, _blockLength - 1), at - _blockStart)) });
+            return;
+        }
+        _queue[_queueCount++] = { ev, at };
+    }
+
+    /** Emit queued events that fall inside the current block, in time order
+     *  (send order for events at the same sample). */
+    void flushQueue (int numSamples)
+    {
+        const int64_t blockEnd = _blockStart + numSamples;
+        QueuedEvent   due[kQueueSize];
+        int           numDue = 0;
+        int           kept   = 0;
+        for (int i = 0; i < _queueCount; ++i)
+        {
+            const auto q = _queue[i];
+            if (q.at < blockEnd)
+            {
+                int j = numDue++;
+                for (; j > 0 && due[j - 1].at > q.at; --j)
+                    due[j] = due[j - 1];
+                due[j] = q;
+            }
+            else
+            {
+                _queue[kept++] = q;
+            }
+        }
+        _queueCount = kept;
+
+        for (int i = 0; i < numDue; ++i)
+        {
+            auto ev = due[i].ev;
+            ev.sampleOffset = static_cast<int>(std::max<int64_t> (0, due[i].at - _blockStart));
+            emit (ev);
+        }
     }
 
     /** Must be called with _dataLock already held. */
@@ -996,6 +1234,15 @@ private:
     void clearStackInternal (bool sendNoteOffs)
     {
         bool sentAny = false;
+        for (int i = 0; i < _queueCount; ++i)
+        {
+            if (sendNoteOffs && _queue[i].ev.type == Acid303EventType::NoteOff)
+            {
+                emit ({ Acid303EventType::NoteOff, _queue[i].ev.note, 0, 0 });
+                sentAny = true;
+            }
+        }
+        _queueCount = 0;
         for (int i = 0; i < SEQ303_NOTE_STACK_SIZE; ++i)
         {
             if (_stack[i].length != -1)
@@ -1011,6 +1258,113 @@ private:
         // Notify JC303 to reset its held-note tracking whenever we silence the stack
         if (sendNoteOffs && sentAny && onAllNotesOff)
             onAllNotesOff();
+    }
+
+    using Steps = std::array<StepData303, SEQ303_STEP_MAX>;
+
+    /** Push the current steps onto `stack`, dropping the oldest when full.
+     *  Must be called with _dataLock held. */
+    void pushSnapshot (std::array<Steps, kUndoDepth>& stack, std::atomic<int>& count)
+    {
+        int n = count.load (std::memory_order_relaxed);
+        if (n == kUndoDepth)
+        {
+            std::move (stack.begin() + 1, stack.end(), stack.begin());
+            --n;
+        }
+        std::copy (std::begin (_data.step), std::end (_data.step), stack[n].begin());
+        count.store (n + 1, std::memory_order_relaxed);
+    }
+
+    /** Pop `from`, saving the current steps onto `to`; silences held notes. */
+    bool swapHistory (std::array<Steps, kUndoDepth>& from, std::atomic<int>& fromCount,
+                      std::array<Steps, kUndoDepth>& to,   std::atomic<int>& toCount)
+    {
+        if (fromCount.load (std::memory_order_relaxed) == 0)
+            return false;
+
+        setMute (true);
+        clearStackInternal (true);
+        {
+            juce::SpinLock::ScopedLockType lk (_dataLock);
+            pushSnapshot (to, toCount);
+            const int n = fromCount.load (std::memory_order_relaxed) - 1;
+            std::copy (from[n].begin(), from[n].end(), std::begin (_data.step));
+            fromCount.store (n, std::memory_order_relaxed);
+        }
+        setMute (false);
+        return true;
+    }
+
+    /** Chromatic-quantisation correction table (mirrors fix_tones[]). */
+    static void makeFixTones (uint8_t numberOfTones, int8_t (&fixTones)[12])
+    {
+        std::fill (std::begin (fixTones), std::end (fixTones), int8_t { 0 });
+        if (numberOfTones == 0)
+            return;
+
+        const int8_t fixMod = static_cast<int8_t>(12 / numberOfTones);
+        int8_t fixCounter   = 0;
+        for (uint8_t i = 0; i < 12; ++i)
+        {
+            if ((i % fixMod) == 0 || i == 0)
+            {
+                fixTones[i] = 0;
+                fixCounter  = 0;
+            }
+            else
+            {
+                --fixCounter;
+                fixTones[i] = fixCounter;
+            }
+        }
+    }
+
+    /** Random note in [lowerNote, lowerNote + rangeNote), snapped to the tone grid. */
+    uint8_t randomNote (const int8_t (&fixTones)[12], uint8_t numberOfTones,
+                        uint8_t lowerNote, uint8_t rangeNote)
+    {
+        const uint8_t highNote = static_cast<uint8_t>(
+            juce::jlimit (0, 127, static_cast<int>(lowerNote) + rangeNote));
+
+        const uint8_t noteRange = (highNote > lowerNote)
+                                    ? static_cast<uint8_t>(highNote - lowerNote)
+                                    : 1;
+
+        uint8_t note = static_cast<uint8_t>(lowerNote + (randPercent() % noteRange));
+
+        if (numberOfTones > 0)
+        {
+            const int fixed = static_cast<int>(note) + fixTones[note % 12];
+            note = static_cast<uint8_t>(juce::jlimit (0, 127, fixed));
+        }
+        return note;
+    }
+
+    /** Roll one step's rest / tie / accent / slide.  Returns true for a note
+     *  step.  A tie is only possible on a rest after a note or a tie.
+     *  Must be called with _dataLock held. */
+    bool rollRhythmStep (int i, uint8_t fill, uint8_t accentProbability,
+                         uint8_t slideProbability, uint8_t tieProbability)
+    {
+        auto& st = _data.step[i];
+        const bool isOn = (randPercent() < fill);
+        st.rest = ! isOn;
+        st.tie  = false;
+
+        if (! isOn)
+        {
+            st.accent = false;
+            st.slide  = false;
+            const auto& last = _data.step[(i == 0) ? SEQ303_STEP_MAX - 1 : i - 1];
+            if (! last.rest || last.tie)
+                st.tie = (randPercent() < tieProbability);
+            return false;
+        }
+
+        st.accent = (randPercent() < accentProbability);
+        st.slide  = (randPercent() < slideProbability);
+        return true;
     }
 
     /** Returns a pseudo-random integer 0–99 inclusive. */
@@ -1076,6 +1430,33 @@ private:
     int32_t                _slideExtraTicks { 0 };   // = 20 ticks
 
     std::atomic<float>     _internalBpm { 120.f };
+
+    // Absolute sample clock and events waiting for their sample (swing
+    // fraction, spread MIDI clock ticks) or CPU-timing interrupt
+    static constexpr double kIrqPeriodMs      = 1.8;
+    static constexpr double kGateOnLatencyMs  = 1.0;
+    static constexpr double kGateOffLatencyMs = 2.35;
+    static constexpr int    kQueueSize        = 32;
+    struct QueuedEvent { Acid303Event ev; int64_t at; };
+
+    // Pattern undo / redo history (audio thread writes, UI reads the counts)
+    std::array<Steps, kUndoDepth> _undo {};
+    std::array<Steps, kUndoDepth> _redo {};
+    std::atomic<int>       _undoCount { 0 };
+    std::atomic<int>       _redoCount { 0 };
+
+    std::atomic<int>       _pitchPlayhead { -1 }; // step whose pitch the last note used (display)
+
+    std::atomic<bool>      _cpuTiming  { false };
+    std::atomic<float>     _swingPercent { 50.f };
+    double                 _swingLatched { 0.0 };   // audio thread: off-beat delay in ticks for the current pair of 16ths
+    bool                   _swingRelatch { true };  // audio thread: latch swing on the next tick
+    double                 _tickSamples { 0.0 };    // audio thread: samples per tick of the active clock
+    int64_t                _lastMidiClock { -1 };   // absolute sample of the last MIDI clock
+    int64_t                _blockStart { 0 };
+    int                    _blockLength { 0 };
+    QueuedEvent            _queue[kQueueSize] {};
+    int                    _queueCount { 0 };
 
     // RNG (portable std::mt19937 replaces Arduino random())
     std::mt19937           _rng;
