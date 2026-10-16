@@ -5,24 +5,24 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     : AudioProcessorEditor (&p), processorRef (p), valueTreeState (vts)
 {
     // Create and configure rotary sliders for each parameter
-    addAndMakeVisible(waveformSlider = createKnob("large"));
-    addAndMakeVisible(volumeSlider = createKnob("large"));
-    addAndMakeVisible(tuningSlider = createKnob("medium"));
-    addAndMakeVisible(cutoffFreqSlider = createKnob("medium"));
-    addAndMakeVisible(resonanceSlider = createKnob("medium"));
-    addAndMakeVisible(envelopModSlider = createKnob("medium"));
-    addAndMakeVisible(decaySlider = createKnob("medium"));
-    addAndMakeVisible(accentSlider = createKnob("medium"));
+    addAndMakeVisible(*(waveformSlider = createKnob("large")));
+    addAndMakeVisible(*(volumeSlider = createKnob("large")));
+    addAndMakeVisible(*(tuningSlider = createKnob("medium")));
+    addAndMakeVisible(*(cutoffFreqSlider = createKnob("medium")));
+    addAndMakeVisible(*(resonanceSlider = createKnob("medium")));
+    addAndMakeVisible(*(envelopModSlider = createKnob("medium")));
+    addAndMakeVisible(*(decaySlider = createKnob("medium")));
+    addAndMakeVisible(*(accentSlider = createKnob("medium")));
     // MODs row
-    addAndMakeVisible(normalDecaySlider = createKnob("small"));
-    addAndMakeVisible(accentDecaySlider = createKnob("small"));
-    addAndMakeVisible(feedbackFilterSlider = createKnob("small"));
-    addAndMakeVisible(softAttackSlider = createKnob("small"));
-    addAndMakeVisible(slideTimeSlider = createKnob("small"));
-    addAndMakeVisible(sqrDriverSlider = createKnob("small"));
+    addAndMakeVisible(*(normalDecaySlider = createKnob("small")));
+    addAndMakeVisible(*(accentDecaySlider = createKnob("small")));
+    addAndMakeVisible(*(feedbackFilterSlider = createKnob("small")));
+    addAndMakeVisible(*(softAttackSlider = createKnob("small")));
+    addAndMakeVisible(*(slideTimeSlider = createKnob("small")));
+    addAndMakeVisible(*(sqrDriverSlider = createKnob("small")));
     // diode filter mods
-    addAndMakeVisible(filterDriveSlider = createKnob("small"));
-    addAndMakeVisible(bassCompSlider = createKnob("small"));
+    addAndMakeVisible(*(filterDriveSlider = createKnob("small")));
+    addAndMakeVisible(*(bassCompSlider = createKnob("small")));
     // labels for the diode filter mod knobs (panel has no printed labels here)
     juce::Font panelFont(juce::Typeface::createSystemTypefaceFor(BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttf, BinaryData::ErbosDraco1StOpenNbpRegularl5wX_ttfSize));
     panelFont.setHeight(9.0f);
@@ -37,18 +37,20 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     filterDriveLabel.setText("SATURATION", juce::dontSendNotification);
     bassCompLabel.setText("HP/BP MORPH", juce::dontSendNotification);
     // on/off mod switch
-    addAndMakeVisible(switchModButton = createSwitch());
-    addAndMakeVisible(ledModButton = createLed("switchModState"));
+    addAndMakeVisible(*(switchModButton = createSwitch()));
+    addAndMakeVisible(*(ledModButton = createLed("switchModState")));
     // overdrive
-    addAndMakeVisible(overdriveLevelSlider = createKnob("small"));
-    addAndMakeVisible(overdriveDryWetSlider = createKnob("small"));
+    addAndMakeVisible(*(overdriveLevelSlider = createKnob("small")));
+    addAndMakeVisible(*(overdriveDryWetSlider = createKnob("small")));
     // on/off overdrive switch
-    addAndMakeVisible(switchOverdriveButton = createSwitch());
-    addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
+    addAndMakeVisible(*(switchOverdriveButton = createSwitch()));
+    addAndMakeVisible(*(ledOverdriveButton = createLed("switchOverdriveState")));
     // overdrive model select component
-    addAndMakeVisible(overdriveModelSelect = new OverdriveModelSelect(valueTreeState, processorRef.getModelListNames()));
+    overdriveModelSelect = std::make_unique<OverdriveModelSelect>(valueTreeState, processorRef.getModelListNames());
+    addAndMakeVisible(*overdriveModelSelect);
     // filter model selector (MODIFICATIONS section)
-    addAndMakeVisible(filterModelSelect = new FilterModelSelect(valueTreeState));
+    filterModelSelect = std::make_unique<FilterModelSelect>(valueTreeState);
+    addAndMakeVisible(*filterModelSelect);
 
     // Easter egg mr. smile
     addAndMakeVisible(acidSmile);
@@ -102,11 +104,12 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
 void JC303Editor::updateMorphVisibility(int filterTypeIndex)
 {
-    // the same parameter is the HP/BP morph for Diode BP / HP and the bass comp for Diode
-    const bool show = filterTypeIndex >= FILTER_DIODE;
+    // the same parameter is the HP/BP morph for Diode BP / HP and the bass comp for Diode; the MS-20 and IR3109
+    // models have no bass comp (a Sallen-Key passband does not fall with resonance; the IR3109 compensates itself)
+    const bool show = filterTypeIndex == FILTER_DIODE;
     bassCompSlider->setVisible(show);
     bassCompLabel.setVisible(show);
-    bassCompLabel.setText(filterTypeIndex == FILTER_DIODE ? "BASS COMP" : "HP/BP MORPH", juce::dontSendNotification);
+    bassCompLabel.setText(show ? "BASS COMP" : "HP/BP MORPH", juce::dontSendNotification);
 }
 
 void JC303Editor::updateModEnabled(bool modsOn)
@@ -123,6 +126,19 @@ void JC303Editor::updateModEnabled(bool modsOn)
 
 JC303Editor::~JC303Editor()
 {
+    // Detach each knob from its KnobLookAndFeel before the look-and-feel members are destroyed, so no
+    // slider is left holding a dangling look-and-feel pointer during teardown.
+    for (juce::Slider* s : { waveformSlider.get(), tuningSlider.get(), cutoffFreqSlider.get(),
+                             resonanceSlider.get(), envelopModSlider.get(), decaySlider.get(),
+                             accentSlider.get(), volumeSlider.get(), normalDecaySlider.get(),
+                             accentDecaySlider.get(), feedbackFilterSlider.get(), softAttackSlider.get(),
+                             filterDriveSlider.get(), bassCompSlider.get(),
+                             slideTimeSlider.get(), sqrDriverSlider.get(), overdriveLevelSlider.get(),
+                             overdriveDryWetSlider.get() })
+    {
+        if (s != nullptr)
+            s->setLookAndFeel(nullptr);
+    }
 }
 
 //==============================================================================
@@ -147,9 +163,9 @@ void JC303Editor::resized()
     setControlsLayout();
 }
 
-juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
+std::unique_ptr<juce::Slider> JC303Editor::createKnob(const juce::String& knobType)
 {
-    auto* slider = new juce::Slider();
+    auto slider = std::make_unique<juce::Slider>();
     slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     if (knobType == "small")
     {
@@ -171,18 +187,17 @@ juce::Slider* JC303Editor::createKnob(const juce::String& knobType)
     return slider;
 }
 
-SwitchButton* JC303Editor::createSwitch()
+std::unique_ptr<SwitchButton> JC303Editor::createSwitch()
 {
-    auto* button = new SwitchButton();
+    auto button = std::make_unique<SwitchButton>();
     button->setClickingTogglesState(false);
 
     return button;
 }
 
-SwitchLed* JC303Editor::createLed(const juce::String& paramID)
+std::unique_ptr<SwitchLed> JC303Editor::createLed(const juce::String& paramID)
 {
-    auto* led = new SwitchLed(valueTreeState, paramID);
-    return led;
+    return std::make_unique<SwitchLed>(valueTreeState, paramID);
 }
 
 void JC303Editor::setControlsLayout()

@@ -227,21 +227,34 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterBool> ("switchOverdriveState",
                                                         "Switch Overdrive Mod",
                                                         false),
+            std::make_unique<juce::AudioParameterFloat> ("overdriveDisperse",
+                                                        "Overdrive Disperse",
+                                                        juce::NormalisableRange<float> (0.0f, 1.0f),
+                                                        0.0f,   // allpass before the overdrive: 0 = off
+                                                        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                            [] (float v, int) -> juce::String
+                                                            {
+                                                                return v <= 0.0f ? juce::String ("Off")
+                                                                                 : juce::String (juce::roundToInt (Disperser::cornerFor (v))) + " Hz";
+                                                            })),
+            std::make_unique<juce::AudioParameterBool> ("overdrivePreVca",
+                                                        "Overdrive Pre-VCA",
+                                                        false),
             // filter model selection
             std::make_unique<juce::AudioParameterChoice> ("filterType",
                                                         "Filter Model",
-                                                        juce::StringArray{ "TeeBee", "Spicy" },
+                                                        juce::StringArray{ "TeeBee", "Spicy", "MissBehave", "JuneBug", "Wasabi", "Hornet", "SemiSweet", "Oddity" },
                                                         FILTER_TEEBEE),
             // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
                                                         "Square Model",
                                                         juce::StringArray{ "Open303", "Circuit" },
-                                                        SQUARE_OPEN303),
+                                                        SQUARE_CIRCUIT),
             std::make_unique<juce::AudioParameterFloat> ("filterDrive",
                                                         "Filter Saturation",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f),   // -3 dB into the diode saturator by default (parity with TeeBee and the real circuit)
+                                                        0.0f),   // 0 dB into the diode saturator: the real 303's level (6.5 Vpp saw, see docs/spicy-filter.md)
             std::make_unique<juce::AudioParameterFloat> ("filterMorph",
                                                         "Filter Morph",
                                                         0.0f,
@@ -262,6 +275,26 @@ JC303::JC303()
                                                         0.0f,
                                                         1.0f,
                                                         0.5f),   // diode unit trim, 0.5 = nominal unit
+            std::make_unique<juce::AudioParameterChoice> ("filterQuality",
+                                                        "Filter Quality",
+                                                        juce::StringArray{ "Standard", "Hi-Fi" },
+                                                        0),      // Diode: Standard (default) only Q12 / Q21 tanh; Hi-Fi solves every diode pair's tanh
+            std::make_unique<juce::AudioParameterFloat> ("filterTension",
+                                                        "Filter Tension",
+                                                        juce::NormalisableRange<float> (-1.0f, 1.0f),
+                                                        0.0f,    // Hi-Fi diode rungs: 0 = the circuit, - floppy, + stiff
+                                                        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                            [] (float v, int) { return signedPercent (bipolarDetent (v)); })),
+            std::make_unique<juce::AudioParameterFloat> ("filterBias",
+                                                        "Saturation Bias",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.5f),   // Diode: Q12's asymmetry and driven swell; MS-20: its input stage; Wasp: OTA1's divider; ARP 4075: its limiter pair; not on JuneBug / SemiSweet; acts above 0 dB Saturation (0 = symmetric)
+            std::make_unique<juce::AudioParameterFloat> ("filterRail",
+                                                        "Saturation Rail",
+                                                        0.0f,
+                                                        1.0f,
+                                                        1.0f),   // Diode Hi-Fi: ceiling on the ladder's stage voltages; 1 = unlimited (the full crunch), lower = cleaner; MS-20 / IR3109: resonance limiter, Wasp / SEM: supply sag, 1 = the circuit
             // generative sequencer parameters
             std::make_unique<juce::AudioParameterFloat> ("seqGenerativeFill",
                                                     "Seq Generative Fill",
@@ -381,6 +414,8 @@ JC303::JC303()
     switchOverdriveState = parameters.getRawParameterValue("switchOverdriveState");
     overdriveLevel = parameters.getRawParameterValue("overdriveLevel");
     overdriveDryWet = parameters.getRawParameterValue("overdriveDryWet");
+    overdriveDisperse = parameters.getRawParameterValue("overdriveDisperse");
+    overdrivePreVca = parameters.getRawParameterValue("overdrivePreVca");
     // filter model
     filterType = parameters.getRawParameterValue("filterType");
     squareModel = parameters.getRawParameterValue("squareModel");
@@ -389,6 +424,10 @@ JC303::JC303()
     bassComp = parameters.getRawParameterValue("bassComp");
     filterFm = parameters.getRawParameterValue("filterFm");
     resTrim = parameters.getRawParameterValue("resTrim");
+    filterQuality = parameters.getRawParameterValue("filterQuality");
+    filterTension = parameters.getRawParameterValue("filterTension");
+    filterBias = parameters.getRawParameterValue("filterBias");
+    filterRail = parameters.getRawParameterValue("filterRail");
     // generative sequencer parameters
     seqGenerativeFill = parameters.getRawParameterValue("seqGenerativeFill");
     seqGenerativeAccentProbability = parameters.getRawParameterValue("seqGenerativeAccentProbability");
@@ -425,6 +464,7 @@ JC303::JC303()
     setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
     setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
     setParameter(OVERDRIVE_MODEL_INDEX, *overdriveModelIndex);
+    setParameter(OVERDRIVE_DISPERSE, *overdriveDisperse);
 
     // presets and overdrive models
     setupDataDirectories();
@@ -468,6 +508,7 @@ JC303::JC303()
     parameters.addParameterListener("overdriveLevel", this);
     parameters.addParameterListener("overdriveDryWet", this);
     parameters.addParameterListener("overdriveModelIndex", this);
+    parameters.addParameterListener("overdriveDisperse", this);
     parameters.addParameterListener("switchOverdriveState", this);
     parameters.addParameterListener("filterType", this);
     parameters.addParameterListener("squareModel", this);
@@ -476,6 +517,10 @@ JC303::JC303()
     parameters.addParameterListener("bassComp", this);
     parameters.addParameterListener("filterFm", this);
     parameters.addParameterListener("resTrim", this);
+    parameters.addParameterListener("filterQuality", this);
+    parameters.addParameterListener("filterTension", this);
+    parameters.addParameterListener("filterBias", this);
+    parameters.addParameterListener("filterRail", this);
     // generative sequencer parameter listener
     parameters.addParameterListener("seqPlayState", this);
     parameters.addParameterListener("seqGenerate", this);
@@ -549,6 +594,7 @@ JC303::~JC303()
     parameters.removeParameterListener("overdriveLevel", this);
     parameters.removeParameterListener("overdriveDryWet", this);
     parameters.removeParameterListener("overdriveModelIndex", this);
+    parameters.removeParameterListener("overdriveDisperse", this);
     parameters.removeParameterListener("switchOverdriveState", this);
     parameters.removeParameterListener("filterType", this);
     parameters.removeParameterListener("squareModel", this);
@@ -557,6 +603,10 @@ JC303::~JC303()
     parameters.removeParameterListener("bassComp", this);
     parameters.removeParameterListener("filterFm", this);
     parameters.removeParameterListener("resTrim", this);
+    parameters.removeParameterListener("filterQuality", this);
+    parameters.removeParameterListener("filterTension", this);
+    parameters.removeParameterListener("filterBias", this);
+    parameters.removeParameterListener("filterRail", this);
     // generative sequencer
     parameters.removeParameterListener("seqPlayState", this);
     parameters.removeParameterListener("seqGenerate", this);
@@ -570,125 +620,34 @@ JC303::~JC303()
     parameters.removeParameterListener("subOscBlend", this);
 }
 
-// Parameter change callback
+// Parameter change callback. Runs on the message/automation thread, NOT the audio thread, so it may
+// only touch cheap flags here - the actual open303 setters (which rewrite filter/envelope
+// coefficients the audio thread reads inside getSample) are deferred to updateOpen303Parameters(),
+// applied at the top of processBlock. This closes the torn-read race Fable flagged.
 void JC303::parameterChanged(const juce::String& parameterID, float newValue)
 {
-    // Map parameter ID to enum and update immediately or set flag
-    if (parameterID == "waveform") {
-        setParameter(WAVEFORM, newValue);
-    }
-    else if (parameterID == "tuning") {
-        setParameter(TUNING, newValue);
-    }
-    else if (parameterID == "cutoff") {
-        setParameter(CUTOFF, newValue);
-    }
-    else if (parameterID == "resonance") {
-        setParameter(RESONANCE, newValue);
-    }
-    else if (parameterID == "envmod") {
-        setParameter(ENVMOD, newValue);
-    }
-    else if (parameterID == "decay") {
-        setParameter(DECAY, newValue);
-    }
-    else if (parameterID == "accent") {
-        setParameter(ACCENT, newValue);
-    }
-    else if (parameterID == "volume") {
-        setParameter(VOLUME, newValue);
-    }
-    else if (parameterID == "switchModState") {
-        setDevilMod(newValue > 0.5f);
-    }
-    else if (parameterID == "normalDecay" && *switchModState) {
-        setParameter(NORMAL_DECAY, newValue);
-    }
-    else if (parameterID == "accentDecay" && *switchModState) {
-        setParameter(ACCENT_DECAY, newValue);
-    }
-    else if (parameterID == "accentSweep" && *switchModState) {
-        setParameter(ACCENT_SWEEP, newValue);
-    }
-    else if (parameterID == "feedbackFilter" && *switchModState) {
-        setParameter(FEEDBACK_HPF, newValue);
-    }
-    else if (parameterID == "softAttack" && *switchModState) {
-        setParameter(SOFT_ATTACK, newValue);
-    }
-    else if (parameterID == "slideTime" && *switchModState) {
-        setParameter(SLIDE_TIME, newValue);
-    }
-    else if (parameterID == "sqrDriver" && *switchModState) {
-        setParameter(TANH_SHAPER_DRIVE, newValue);
-    }
-    // LFO parameters (MOD-menu values: only apply while mod is active)
-    else if (parameterID == "lfoWaveform" && *switchModState) {
-        setParameter(LFO_WAVEFORM, newValue);
-    }
-    else if (parameterID == "lfoRate" && *switchModState) {
-        setParameter(LFO_RATE, newValue);
-    }
-    else if (parameterID == "lfoDepth" && *switchModState) {
-        setParameter(LFO_DEPTH, newValue);
-    }
-    else if (parameterID == "lfoDestination" && *switchModState) {
-        setParameter(LFO_DESTINATION, newValue);
-    }
-    else if (parameterID == "lfoPhase" && *switchModState) {
-        setParameter(LFO_PHASE, newValue);
-    }
-    else if (parameterID == "lfoSync" && *switchModState) {
-        setParameter(LFO_SYNC, newValue);
-    }
-    else if (parameterID.startsWith("modSlot") && *switchModState) {
-        // "modSlotN..." with N = 2..4 -> matrix slot N-2 of the three free slots
-        updateModSlot(parameterID.substring(7, 8).getIntValue() - 2);
-    }
-    else if (parameterID == "lfoContour" && *switchModState) {
-        setParameter(LFO_CONTOUR, newValue);
-    }
-    // overdrive parameter
-    else if (parameterID == "overdriveLevel") {
-        setParameter(OVERDRIVE_LEVEL, newValue);
-    }
-    else if (parameterID == "overdriveDryWet") {
-        setParameter(OVERDRIVE_DRY_WET, newValue);
-    }
-    else if (parameterID == "overdriveModelIndex") {
+    // Exception: loading an overdrive model allocates and touches the filesystem, which must happen
+    // off the audio thread. Keep it here on the message thread rather than deferring it.
+    if (parameterID == "overdriveModelIndex") {
         setParameter(OVERDRIVE_MODEL_INDEX, newValue);
+        return;
     }
-    else if (parameterID == "filterType" && *switchModState) {
-        open303Core.setFilterType(static_cast<FilterType>((int) newValue));
-    }
-    else if (parameterID == "squareModel" && *switchModState) {
-        open303Core.setSquareModel(static_cast<SquareModel>((int) newValue));
-    }
-    else if (parameterID == "filterDrive" && *switchModState) {
-        setParameter(FILTER_DRIVE, newValue);
-    }
-    else if (parameterID == "filterMorph" && *switchModState) {
-        setParameter(FILTER_MORPH, newValue);
-    }
-    else if (parameterID == "bassComp" && *switchModState) {
-        setParameter(BASS_COMP, newValue);
-    }
-    else if (parameterID == "filterFm" && *switchModState) {
-        setParameter(FILTER_FM, newValue);
-    }
-    else if (parameterID == "resTrim" && *switchModState) {
-        setParameter(RES_TRIM, newValue);
-    }
-    else if (parameterID == "seqPlayState") {
+
+    // Sequencer transport/edit commands bypass the deferred DSP path: play/stop/generate/clear are
+    // queued through _seqCommand and consumed on the audio thread by applySeqCommands().
+    if (parameterID == "seqPlayState") {
         _seqCommand.store (newValue > 0.5f ? static_cast<int>(SeqCommand::Play)
                                            : static_cast<int>(SeqCommand::Stop),
                            std::memory_order_release);
+        return;
     }
     else if (parameterID == "seqGenerate") {
         _seqCommand.store (static_cast<int>(SeqCommand::Generate), std::memory_order_release);
+        return;
     }
     else if (parameterID == "seqClear") {
         _seqCommand.store (static_cast<int>(SeqCommand::Clear), std::memory_order_release);
+        return;
     }
     //else if (parameterID == "seqHarmonizer") {
     //    uint8_t seqHarmony = static_cast<uint8_t>(*seqHarmonizer);
@@ -702,25 +661,28 @@ void JC303::parameterChanged(const juce::String& parameterID, float newValue)
     else if (parameterID == "seqLength") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqLength")))
             _sequencer.setTrackLength(static_cast<uint8_t>(p->get()));
+        return;
     }
     else if (parameterID == "seqSyncMode") {
         if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqSyncMode")))
             _sequencer.setSyncMode((AcidSequencer303::SyncMode) p->getIndex());
+        return;
     }
     else if (parameterID == "seqStartMode") {
         if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqStartMode")))
             _sequencer.setStartMode((AcidSequencer303::StartMode) p->getIndex());
+        return;
     }
     else if (parameterID == "seqTempo") {
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
             _sequencer.setTempo((float) p->get());
+        return;
     }
-    else if (parameterID == "subOscGain" && *switchModState) {
-        setParameter(SUB_OSC_GAIN, newValue);
-    }
-    else if (parameterID == "subOscBlend" && *switchModState) {
-        setParameter(SUB_OSC_BLEND, newValue);
-    }
+
+    // Everything else (the main knobs, the devil mod toggle + its pots, filter/square model, LFO,
+    // sub-osc, and overdrive level/mix) maps to cheap DSP setters. Flag them so the
+    // audio thread re-applies the current APVTS values in updateOpen303Parameters().
+    parametersNeedUpdate.store(true);
 }
 
 // Consumes a sequencer command queued by the UI thread.  Must run on the audio
@@ -778,6 +740,26 @@ void JC303::applySeqCommands()
     }
 }
 
+// Applies every cheap DSP parameter from the current APVTS atomic values. Audio-thread only.
+void JC303::updateOpen303Parameters()
+{
+    setParameter(WAVEFORM, *waveForm);
+    setParameter(TUNING, *tuning);
+    setParameter(CUTOFF, *cutoffFreq);
+    setParameter(RESONANCE, *resonance);
+    setParameter(ENVMOD, *envelopMod);
+    setParameter(ACCENT, *accent);
+    setParameter(VOLUME, *volume);
+    // setDevilMod adjusts decayMin/decayMax and (re)applies the mod pots (or restores fixed 303
+    // values), so it must run before DECAY, which reads that range.
+    setDevilMod(*switchModState > 0.5f);
+    setParameter(DECAY, *decay);
+    // Overdrive gain/mix/disperse are cheap; the model index is loaded on the message thread (see above).
+    setParameter(OVERDRIVE_LEVEL, *overdriveLevel);
+    setParameter(OVERDRIVE_DRY_WET, *overdriveDryWet);
+    setParameter(OVERDRIVE_DISPERSE, *overdriveDisperse);
+}
+
 void JC303::setParameter (Open303Parameters index, float value)
 {
   if( index < 0 || index >= OPEN303_NUM_PARAMETERS )
@@ -830,14 +812,21 @@ void JC303::setParameter (Open303Parameters index, float value)
     case OVERDRIVE_LEVEL:
         // conditioned param or gain if model is not conditioned
         guitarML.setDriver(value);
+        preVcaOverdrive.amp.setDriver(value);
         break;
     case OVERDRIVE_DRY_WET:
         overdriveMix.setWetMixProportion(value);
+        preVcaOverdrive.mix.setWetMixProportion(value);
         break;
     case OVERDRIVE_MODEL_INDEX:
         // load new model
         //guitarML.loadModel(value);
         guitarML.loadUserModel(value);
+        preVcaOverdrive.amp.loadUserModel(value);
+        break;
+    case OVERDRIVE_DISPERSE:
+        overdriveDisperser.setAmount(value);
+        preVcaOverdrive.disperser.setAmount(value);
         break;
 
     //
@@ -846,6 +835,16 @@ void JC303::setParameter (Open303Parameters index, float value)
     // https://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
     //
     case NORMAL_DECAY:
+        /*
+        Background (Devil Fish): on non-accented notes the TB-303's Main Envelope Generator (MEG) had
+        a decay time between 200 ms and 2 s (the Decay pot); on accented notes it was fixed to 200 ms.
+        The Devil Fish adds Normal Decay and Accent Decay pots, each 30 ms - 3 s.
+
+        NOTE: unlike the Devil Fish "Normal Decay" (which retimes the MEG / filter envelope), this
+        control drives the *amplitude* envelope decay via setAmpDecay(). The MEG decay is still set by
+        the main DECAY parameter. Kept as-is to preserve the current voicing; treat the name as
+        "normal (amp) decay" rather than a literal Devil Fish MEG-decay clone.
+        */
         open303Core.setAmpDecay(decayMs(value));
         break;
     case ACCENT_DECAY:
@@ -873,12 +872,11 @@ void JC303::setParameter (Open303Parameters index, float value)
         open303Core.setPulseSag(rosic::Open303::sagForSquareDrive(value));
         break;
     case FILTER_DRIVE:
-        // 0..1 -> -3..+16 dB into the diode ladder's saturating input stage. The bottom of the
-        // range (-3 dB) is the TeeBee-parity / circuit-like setting (little saturation); turn
-        // up for grit. Level is compensated across the range (see setInputDrive), so the knob is
+        // 0..1 -> 0..+16 dB into the diode ladder's saturating input stage. 0 dB (the default)
+        // is the real 303's level; above it is grit. Level is compensated across the range (see setInputDrive), so the knob is
         // not a volume control. The ladder is stability-tested up to +16 dB.
         open303Core.setFilterDrive(
-            linToLin(value, 0.0, 1.0,  -3.0,     16.0)
+            linToLin(value, 0.0, 1.0,   0.0,     16.0)
         );
         break;
     case FILTER_MORPH:
@@ -897,6 +895,26 @@ void JC303::setParameter (Open303Parameters index, float value)
         // 0..1 -> x0.85..x1.15 loop gain for the diode models (component-tolerance spread; above x1 it may self-oscillate)
         open303Core.setResonanceTrim(linToLin(value, 0.0, 1.0, 0.85, 1.15));
         break;
+    case FILTER_QUALITY:
+        // 0 = Standard (Q12 and Q21 tanh only), 1 = Hi-Fi (every diode pair's tanh, solved per sample)
+        open303Core.setFilterHiFi(value > 0.5f);
+        break;
+    case FILTER_TENSION:
+        // -1..1 with a centre detent: how the Hi-Fi ladder's resonance moves with level (0 = the circuit's diodes)
+        open303Core.setFilterTension(bipolarDetent(value));
+        break;
+    case FILTER_BIAS:
+        // 0..1: Q12's asymmetry and driven swell, ramping in above 0 dB Saturation (DiodeLadderFilter::setSaturationBias;
+        // the DT level tables are fitted at the default 0.5; higher = more swell and crunch near full resonance). MS-20:
+        // the same offset on its input stage, ramping in the same way (Open303::updateCircuitCharacter)
+        open303Core.setFilterBias(value);
+        break;
+    case FILTER_RAIL:
+        // 0..1: a ceiling on the Hi-Fi ladder's stage voltages (DiodeLadderFilter::setRail); 1 = unlimited, the crunch
+        // at high Saturation and Bias in full; lower = cleaner, toward what a real ladder can swing. MS-20 / IR3109: the
+        // resonance limiter's threshold (their Clip), 1 = the circuit, lower = earlier. Wasp: its supply, sagging
+        open303Core.setFilterRail(value);
+        break;
 
     // LFO parameters
     case LFO_WAVEFORM:
@@ -911,6 +929,14 @@ void JC303::setParameter (Open303Parameters index, float value)
     case LFO_DESTINATION:
         open303Core.setLfoDestination((int) value);
         break;
+    // sub oscillator
+    case SUB_OSC_GAIN:
+        open303Core.setSubOscGain(value);
+        break;
+    case SUB_OSC_BLEND:
+        // 0 = -2 octaves (25% pulse), 1 = -1 octave (square)
+        open303Core.setSubOscBlend(value);
+        break;
     case LFO_PHASE:
         open303Core.setLfoPhase(value);
         break;
@@ -919,15 +945,6 @@ void JC303::setParameter (Open303Parameters index, float value)
         break;
     case LFO_CONTOUR:
         open303Core.setLfoContour(value);
-        break;
-
-    // sub oscillator
-    case SUB_OSC_GAIN:
-        open303Core.setSubOscGain(value);
-        break;
-    case SUB_OSC_BLEND:
-        // 0 = -2 octaves (25% pulse), 1 = -1 octave (square)
-        open303Core.setSubOscBlend(value);
         break;
 	}
 }
@@ -954,6 +971,10 @@ void JC303::setDevilMod(bool mode)
         setParameter(BASS_COMP, *bassComp);
         setParameter(FILTER_FM, *filterFm);
         setParameter(RES_TRIM, *resTrim);
+        setParameter(FILTER_QUALITY, *filterQuality);
+        setParameter(FILTER_TENSION, *filterTension);
+        setParameter(FILTER_BIAS, *filterBias);
+        setParameter(FILTER_RAIL, *filterRail);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
         setParameter(LFO_WAVEFORM, *lfoWaveform);
@@ -1057,6 +1078,8 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     // init overdrive dry/wet processor
     overdriveMix.prepare ({ sampleRate, (uint32_t) samplesPerBlock, 2 });
     overdriveMix.setMixingRule (juce::dsp::DryWetMixingRule::sin3dB);
+    preVcaOverdrive.prepare (sampleRate);
+    overdriveDisperser.prepare (sampleRate);
 
     // ── Sequencer ─────────────────────────────────────────────────────────────
     // 960 PPQN is the JUCE default and is compatible with all major DAWs.
@@ -1099,8 +1122,17 @@ bool JC303::isBusesLayoutSupported (const BusesLayout& layouts) const
 void JC303::render303(juce::AudioBuffer<float>& buffer, int beginSample, int endSample)
 {
     auto* monoChannel = buffer.getWritePointer(0);
-    for (auto sample = beginSample; sample < endSample; ++sample)
-        monoChannel[sample] = (float) open303Core.getSample();
+    const bool preVca = *switchOverdriveState && *overdrivePreVca;
+    open303Core.setPreVcaInsert(preVca ? &preVcaOverdrive : nullptr);
+
+    double block[Open303::maxBlockSize];
+    for (auto sample = beginSample; sample < endSample; sample += Open303::maxBlockSize)
+    {
+        const int n = juce::jmin(Open303::maxBlockSize, endSample - sample);
+        open303Core.renderBlock(block, n);
+        for (int i = 0; i < n; ++i)
+            monoChannel[sample + i] = (float) block[i];
+    }
 }
 
 void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -1396,6 +1428,18 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     const auto numSamples = buffer.getNumSamples();
 
+    // Apply any pending parameter changes here on the audio thread, before rendering, so open303's
+    // coefficients are never rewritten concurrently with getSample() reading them.
+    if (parametersNeedUpdate.exchange(false))
+        updateOpen303Parameters();
+
+    // the LFO moves the overdrive dry/wet mix (both insert points) once per block
+    if (*switchOverdriveState) {
+        const float wet = juce::jlimit(0.0f, 1.0f, *overdriveDryWet + (float) open303Core.getLfoOverdriveMod());
+        overdriveMix.setWetMixProportion(wet);
+        preVcaOverdrive.mix.setWetMixProportion(wet);
+    }
+
     // clear buffer
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -1405,10 +1449,9 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
     // sequencer tick + MIDI handling + sample-accurate audio render
     renderMidi (buffer, midiMessages);
 
-    // GuitarML overdrive; the LFO moves the dry/wet mix once per block
-    if (*switchOverdriveState) {
-        overdriveMix.setWetMixProportion(juce::jlimit(0.0f, 1.0f,
-            *overdriveDryWet + (float) open303Core.getLfoOverdriveMod()));
+    // GuitarML overdrive (pre-VCA mode runs inside render303)
+    if (*switchOverdriveState && ! *overdrivePreVca) {
+        overdriveDisperser.process(buffer.getWritePointer(0), numSamples);
         overdriveMix.pushDrySamples(buffer);
         guitarML.processAudioBlock(buffer);
         overdriveMix.mixWetSamples(buffer);
@@ -1435,6 +1478,7 @@ int JC303::loadOverdriveTones()
             modelListNames.add(fileName);
         }
         guitarML.setModelList(modelFileList, modelListNames);
+        preVcaOverdrive.amp.setModelList(modelFileList, modelListNames);
         return guitarML.getModelListSize();
     }
     return 1; // to avoid -1 at overdrive indexes startup

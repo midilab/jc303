@@ -25,8 +25,9 @@ namespace dfl
    * 4-pole diode ladder filter based on Will Pirkle's analysis.
    * http://www.willpirkle.com/Downloads/AN-6DiodeLadderFilter.pdf
    *
-   * The 1st pole sits one octave above (TB-303 style ~18 dB/oct), with the real circuit's feedback
-   * coupling network and resonance-pot law, calibrated to a SPICE model of the TB-303 VCF (see calculateCoefficients).
+   * Four equal stage poles: the TB-303's half-value bottom cap (C18) sees only one diode pair, so its pole matches the
+   * others, and the stages' coupling spreads the poles (about 18 dB/oct from 2 to 4 x cutoff). With the real circuit's
+   * feedback coupling network and resonance-pot law, calibrated to a SPICE model of the TB-303 VCF (see calculateCoefficients).
    * The mode morph (LP -> BP -> HP) mixes the ladder's stage taps (see getSample).
    */
 
@@ -63,6 +64,15 @@ namespace dfl
         the drive (none at or below 0 dB), so the clean region is unaffected. */
     void setSaturationBias(double newBias);
 
+    /** Sets the ladder's rail, 0..1 (Hi-Fi): a soft ceiling on the stage voltages. 1 = unlimited (the model as it was);
+        lower values limit how far a stage can be driven past what its rungs carry (see RAIL_MIN). */
+    void setRail(double knob)
+    {
+      railKnob  = std::clamp(knob, 0.0, 1.0);
+      railLimit = (railKnob >= 1.0) ? 0.0 : RAIL_MIN * std::pow(2.0, RAIL_OCTAVES * railKnob);
+      if (hiFi && satBiasKnob > SAT_BIAS_DEFAULT) { updateSatBias(); calculateCoefficients(); }   // the bias cap follows
+    }
+
     /** Sets the bass comp amount (0..1): restores part of the passband loss that resonance causes (see getSample). */
     void setPassbandCompensation(double newCompensation) { passbandCompensation = newCompensation; }
 
@@ -71,9 +81,13 @@ namespace dfl
     void setMode(double newMode) { mode = std::clamp(newMode, 0.0, 1.0); }
 
     /** Sets the Filter Feedback corner (Hz): the real circuit's coupling network fits a one-pole highpass of
-        ~115 Hz, and the knob scales the network's dominant pole by newCutoff / 115 (see NET_POLE). Bleeds
-        resonance off as the cutoff falls into the bass. */
+        ~115 Hz at Stinchcombe's Q21 beta (about 200), and the knob scales the network's dominant pole by
+        newCutoff / 115 (see NET_POLE). Bleeds resonance off as the cutoff falls into the bass. */
     void setFeedbackHighpass(double newCutoff) { feedbackHpFreq = newCutoff; calculateCoefficients(); }
+
+    /** The default Filter Feedback corner: Q21 beta 300, as in the SPICE netlist the feedback law is fitted to
+        (tools/diode-fidelity/spice/tb303_vcf.py), whose C27/C25 coupling corner is 63.2 Hz (92.0 Hz at beta 200). */
+    static constexpr double FEEDBACK_DEFAULT = 79.0;
 
     /** Sets the unit trim: a loop-gain scale, TRIM_MIN..TRIM_MAX (1 = the nominal unit).
         Component tolerances make real units differ mostly by such a scale (spice/mc_native.py). Above 1 the
@@ -83,6 +97,61 @@ namespace dfl
       loopGainTrim = std::clamp(newTrim, TRIM_MIN, TRIM_MAX);
       calculateCoefficients();
     }
+
+    /** Hi-Fi (the default): every diode pair passes its tanh (If tanh(dv / 2Vt)), solved per sample (stepHiFi).
+        Off: only Q12 and Q21 saturate, around the linear ladder's zero-delay solve. Hi-Fi matches SPICE's large-signal
+        response far more closely for about 6 % more CPU per voice; the small-signal response is the same. */
+    void setHiFi(bool on) { hiFi = on; updateSatBias(); calculateCoefficients(); }   // (the bias cap is Hi-Fi's)
+    bool getHiFi() const { return hiFi; }
+
+    /** Sets the ladder's tension, -1..1 (Hi-Fi only): how the rungs' conductance, and so each stage's pole, moves with
+        the signal across them (a Duffing-like spring: the resonance's pitch follows its level). 0 = the circuit's diodes
+        (tanh: a loud signal slows a stage, the pitch falls, about 75 cents in self-oscillation). Below 0 the rungs
+        saturate earlier (floppy: -1 falls about 6 semitones); above 0 the softening fades out (linear at
+        1 / (1 + TENSION_STIFF_MAX)) and then reverses, the conductance rising with level (stiff: +1 rises about
+        4 semitones). Both ends also narrow the rungs' voltage scale, so the effect starts at lower levels.
+        Measured by tools/diode-fidelity/backbone. */
+    void setTension(double newTension)
+    {
+      tension = std::clamp(newTension, -1.0, 1.0);
+      const double t = tensionEnvelope ? 0.0 : tension;   // the envelope mode leaves the diodes as they are
+      rungScale = headroomBias * std::pow(TENSION_SCALE_MAX, 0.5 * std::abs(t));
+      rungMix   = t > 0.0 ? 1.0 - (1.0 + TENSION_STIFF_MAX) * t : 1.0;
+      if (hiFi && satBiasKnob > SAT_BIAS_DEFAULT) { updateSatBias(); calculateCoefficients(); }   // the knob's top half follows
+    }
+    double getTension() const { return tension; }
+    /** Comparison switch (temporary): true = the tension scales each stage's rate by exp(tension TENSION_ENV_GAIN e),
+        e a smoothed (TENSION_ENV_MS) square of its rungs' current re their limit, the diodes untouched; false = the
+        tension reshapes the rungs' I-V curve. */
+    void setTensionEnvelope(bool on) { tensionEnvelope = on; setTension(tension); }
+
+    // Character controls (0 / 0.5 / 0.5 / 0 = the circuit; from DB303). Rung and Q22 mismatches self-centre at DC (every
+    // rung carries the same current), so the ladder's asymmetry comes from Q12, whose offset pushes a DC current through
+    // every rung, and from Q21, whose input is AC-coupled. Checked against the netlist with the same changes
+    // (tools/diode-fidelity/spice/character.py; tb303_vcf.py's bite / sharp / warm).
+
+    /** Bite, 0..1: Q12's and Q21's saturation-current mismatch, up to BITE_Q12 / BITE_Q21 (ln of the IS ratio): the
+        Q12 offset's DC current runs through every rung (a lopsided ladder and resonance); Q21's is mostly cancelled by
+        its base currents through R113 / R114 (Q21_SELF_CENTRE). */
+    void setBite(double amount) { bite_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); calculateCoefficients(); }
+    double getBite() const { return bite_; }
+
+    /** Clip, 0..1 (0 = early, 0.5 = the circuit, 1 = late): every junction's Vt scaled by 2^(2 clip - 1), the currents
+        scaled to hold the cutoff and gains. The model is homogeneous, so this moves the whole ladder's saturation
+        (input and resonance) against the clean passband: y(x; clip) = s y(x / s; circuit), Tension included. */
+    void setClipThreshold(double amount) { clip_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); calculateCoefficients(); }
+    double getClipThreshold() const { return clip_; }
+
+    /** Sharpness, 0..1: Q12's knee. Above 0.5 its emitters are degenerated (RE If / 2 Vt up to SHARP_RHO_MAX, the gain
+        renormalised: linear, then a hard knee); 0.5 and below = the circuit (a bipolar pair cannot get softer: raising
+        its Vt and renormalising at its dividers cancels). */
+    void setSharpness(double amount) { sharp_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); calculateCoefficients(); }
+    double getSharpness() const { return sharp_; }
+
+    /** Warmth, 0..1: Q21 (the output / feedback pair) driven WARM_MAX^warmth harder, its output scaled back: grit in the
+        resonance loop and the output. 0 = the circuit. */
+    void setWarmth(double amount) { warmth_ = std::clamp(amount, 0.0, 1.0); updateCharacter(); calculateCoefficients(); }
+    double getWarmth() const { return warmth_; }
 
     /** Sets the Filter FM depth (0 to 1). Devilfish-style audio-rate cutoff modulation.
      *  Uses AC-coupled input signal to modulate filter cutoff frequency. */
@@ -143,7 +212,7 @@ namespace dfl
 
     // Coefficients for the diode ladder topology
     double alpha;           // g / (1 + g) - the one-pole alpha
-    double alpha2;          // one octave above, for 1st stage
+    double alpha4;          // stage 4's alpha, raised by the Q21 load (see LOAD_KAPPA)
     double G1, G2, G3, G4;  // "Big G" coefficients
     double beta1, beta2, beta3, beta4;   // feedback beta coefficients
     double delta1, delta2, delta3;       // delta coefficients
@@ -164,20 +233,31 @@ namespace dfl
     // the signal is actually driven. 0.5 = 6 dB headroom (matches DB303).
     static constexpr double headroomBias = 0.5;
 
-    // Asymmetric shaper bias: the shaper is shape(a + b) - shape(b), scaled so its small-signal slope
-    // stays 1 (loop gain, resonance and stability are unchanged). b = bias knob (0..1) * SAT_BIAS_MAX,
-    // ramping from 0 at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean region is untouched.
-    // Large-signal level and resonance depend on b; the level is part of the drive level tables DT below
-    // (fitted at SAT_BIAS_DEFAULT).
+    // Asymmetric shaper bias: the shaper is shape(a + b) - shape(b), scaled to slope 1 at rest (satBiasNorm). As a loud
+    // signal walks the pair back to its centre its slope rises to cosh^2 b: driven hard, the loop gain swells with the
+    // level. Near full resonance that swell carries the loop past its threshold and it locks onto its own frequency under
+    // the note: inharmonic, FM-like crunch, the driven filter's character (by ear; a loud-kick sweep reads it as a
+    // "latch", see docs/diode-fidelity.md; the VCA closes between notes, so it is never a stuck tone). Deliberately not
+    // capped. b = bias knob (0..1) * SAT_BIAS_MAX, ramping from 0 at 0 dB drive to full at SAT_BIAS_TOP_DB, so the clean
+    // region is untouched. Large-signal level and resonance depend on b; the drive level tables DT below are fitted at
+    // SAT_BIAS_DEFAULT.
     static constexpr double SAT_BIAS_MAX     = 1.0;
     static constexpr double SAT_BIAS_TOP_DB  = 16.0;
     static constexpr double SAT_BIAS_DEFAULT = 0.5;
+    // Hi-Fi caps the bias by tension (linear between the three): above the cap, driven hard, the rectified DC passes what
+    // stage 1's rung can carry and the note chokes (docs/diode-fidelity.md, "Choke at high bias"). Set by ear at full
+    // Saturation: floppy holds to 0.74, the circuit to 0.71, stiff to 0.85. A finite rail lifts the cap (RAIL_FREE_BIAS).
+    // The knob's top half (0.5..1) is rescaled to 0.5..cap, so the whole knob is usable and the default and below are
+    // unchanged. Standard (linear rungs) never chokes.
+    static constexpr double SAT_BIAS_CAP_FLOPPY  = 0.74;
+    static constexpr double SAT_BIAS_CAP_CIRCUIT = 0.71;
+    static constexpr double SAT_BIAS_CAP_STIFF   = 0.85;
 
     // Drive level compensation (dB): output gain as a function of drive and resonance so the drive knob is not
     // a volume control. Full-synth renders (default bias, mean over cutoff / env mod) of the level relative to the
     // -3 dB default; the correction is target - measured, with the target rising 1 dB from 0 to +16 dB drive.
-    // Tables per response [LP, BP / HP]; rows: resonance knob 0/30/70/100 %, columns: drive nodes.
-    // Fitted by tools/diode-fidelity/fit_drive_trim.py (see docs/diode-octave-fidelity.md).
+    // Tables per quality [Standard, Hi-Fi] and response [LP, BP / HP]; rows: resonance knob 0/30/70/100 %, columns: drive nodes.
+    // Fitted by tools/diode-fidelity/fit_drive_trim.py (see docs/diode-fidelity.md).
     static constexpr int    DT_DRIVE_N = 6;
     static constexpr int    DT_RES_N   = 4;
 
@@ -197,24 +277,22 @@ namespace dfl
     // RES_SKEW_NORM = 1 - exp(-3) is the normaliser of Open303's resonance skew.
     static constexpr double RES_SKEW_NORM = 0.950213;
 
-    // Tap mixes with a pure p^k numerator, p = s / wc (see getSample). With unit stages the ladder's taps from its
-    // input un are N_k(p) / D0(p): lp4 -> 1, lp3 -> 2 + 2p, lp2 -> 3 + 8p + 4p^2, lp1 -> 4 + 20p + 24p^2 + 8p^3,
-    // un -> D0 = 1 + 14p + 30p^2 + 20p^3 + 4p^4 (stage k > 1 takes 0.5 (y[k-1] + y[k+1]), stage 1 takes un + y2 with its
-    // pole an octave up). The basis is triangular, so these weights (on un, lp1..lp4) give p^0..p^4 exactly; the
-    // global feedback and the coupling network only change the shared denominator.
-    static constexpr double TAP_MIX[5][5] = {
-      { 0.0,   0.0,    0.0,    0.0,  1.0   },   // 1      lowpass
-      { 0.0,   0.0,    0.0,    0.5, -1.0   },   // p
-      { 0.0,   0.0,    0.25,  -1.0,  1.25  },   // p^2    bandpass
-      { 0.0,   0.125, -0.75,   1.75, -1.75 },   // p^3
-      { 0.25, -0.625,  1.875, -3.0,  2.625 } }; // p^4    highpass
+    // Tap mixes giving p^k times the lowpass, p = s / wg (see getSample, updateTapMix). Without the Q21 load the
+    // ladder's taps relative to lp4 are lp3 -> 2 + 2p, lp2 -> 3 + 8p + 4p^2, lp1 -> 4 + 20p + 24p^2 + 8p^3,
+    // un -> 1 + 16p + 40p^2 + 32p^3 + 8p^4 (stage k > 1 takes 0.5 (y[k-1] + y[k+1]), stage 1 takes un + y2); the load
+    // changes the top stage, so each tap is P(p) lp4 + c w (w = load lowpass, p w = rho (lp4 - w)). The basis is
+    // triangular, so weights on un, lp1..lp4 give p^0..p^4 exactly, less tapW * w; the global feedback and the coupling
+    // network only change the shared denominator.
+    double tapMix[5][5] = {};
+    double tapW[5] = {};
+    void updateTapMix(double rho);
 
-    // Static BP / HP output gains (on top of OUTPUT_GAIN) so the pure modes sit near LP loudness on a saw at a typical
+    // Static BP / HP output gains (relative to LP) so the pure modes sit near LP loudness on a saw at a typical
     // resonant 303 setting (resonance 50..70, cutoff 800..1500 Hz, see mode_level). No correction by cutoff: the
     // BP/HP-vs-LP gap at low resonance and high cutoff is the filter's character (a saw has most of its energy at the
     // low harmonics that BP/HP remove).
-    static constexpr double BP_GAIN = 5.636;   // +15.0 dB
-    static constexpr double HP_GAIN = 4.009;   // +12.1 dB (the p^4 mix has passband 1/4)
+    static constexpr double BP_GAIN = 8.283;   // +18.4 dB
+    static constexpr double HP_GAIN = 8.262;   // +18.3 dB (the p^4 mix has passband 1/8)
 
     // Filter parameters
     double cutoff;
@@ -227,7 +305,6 @@ namespace dfl
     void updateSatBias();
     double satBiasShape;          // shape(satBias)
     double satBiasNorm;           // 1 / slope of the shaper at satBias
-    double driveLoopGain;         // driveFactor * driveMakeup: small-signal gain of the drive stage inside the loop
     double passbandCompensation;  // bass comp amount, 0..1
     double resonance;             // resonance parameter (0-1, pre-skewed by Open303)
     double sampleRate;
@@ -235,6 +312,53 @@ namespace dfl
 
     // Filter FM (Devilfish mod) - audio-rate cutoff modulation from input
     double filterFmDepth;                          // User parameter: 0 (off) to 1 (full)
+
+    // Character controls (see setBite etc.)
+    static constexpr double BITE_Q12 = 0.4, BITE_Q21 = 0.5;    // ln(IS ratio) at Bite 1 (~10 / 13 mV); signs as the netlist's Q12a / Q21a
+    static constexpr double SHARP_RHO_MAX = 4.0;               // Q12 degeneration RE If / (2 Vt) at Sharpness 1
+    static constexpr double WARM_MAX = 4.0;
+    // Q21's DC self-centring: an offset unbalances its base currents (Ic / beta), whose drop across R113 / R114
+    // (100k) pushes back: X0 + K21 tanh(X0) = offset (tanh-argument units), K21 = Itail R113 / (beta 2 Vt), Q20's
+    // ~0.9 mA tail and beta 300 (independent of Clip's Vt and Warmth's drive, as the netlist realises them)
+    static constexpr double Q21_SELF_CENTRE = 0.9e-3 * 100e3 / (300.0 * 2.0 * 0.025865);
+    double bite_ = 0.0, clip_ = 0.5, sharp_ = 0.5, warmth_ = 0.0;
+    double clipS = 1.0;                // Vt scale (Clip)
+    double o12 = 0.0, o21 = 0.0;       // Q12 / Q21 offsets (ln IS ratio)
+    double oq21 = 0.0;                 // Q21's operating offset after its self-centring (tanh-argument units)
+    double q12Rho = 0.0, q12C = 1.0, q12TB = 0.0, q12Nrm = 1.0;   // Q12 degeneration, renormalisation, rest point
+    bool q12Plain = true;              // Q12 as the circuit (the unchanged path)
+    double q21W = 1.0, q21T0 = 0.0;    // Q21 drive, tanh at rest (subtracted: its DC is blocked downstream)
+    void updateCharacter();
+
+    /** Degenerated pair: t solving atanh(t) + rho t = X (Newton); returns t, and dt / dX. */
+    static double degenT(double X, double rho, double& dt)
+    {
+      // start inside (-1, 1): tanh of a large X rounds to +-1, where atanh is infinite
+      double t = std::clamp(std::tanh(X / (1.0 + rho)), -1.0 + 1e-15, 1.0 - 1e-15);
+      for (int i = 0; i < 30; ++i)
+      {
+        const double g = std::atanh(t) + rho * t - X, d = 1.0 / (1.0 - t * t) + rho;
+        double tn = std::clamp(t - g / d, -1.0 + 1e-15, 1.0 - 1e-15);
+        if (std::fabs(tn - t) < 1e-15) { t = tn; break; }
+        t = tn;
+      }
+      dt = 1.0 / (1.0 / (1.0 - t * t) + rho);
+      return t;
+    }
+
+    /** Q12 in general (Clip's Vt, Bite's offset, Sharpness' degeneration, Saturation Bias): un for the base difference
+        arg, and dun / darg. The offset sits at the bases, outside the dividers that renormalise the degenerated gain;
+        normalised to slope 1 at rest without the offset, as the circuit path (see SAT_BIAS_MAX). */
+    double q12(double arg, double& dun, bool rational)
+    {
+      const double X = q12C * (headroomBias * arg / clipS + satBias) + headroomBias * o12;
+      double dt;
+      // undegenerated: the quality's own tanh (as the circuit path), so Clip's identity holds to rounding
+      const double t = (q12Rho > 0.0) ? degenT(X, q12Rho, dt) : (rational ? tanhRational(X) : shape(X));
+      if (q12Rho <= 0.0) dt = 1.0 - t * t;
+      dun = q12Nrm * q12C * dt;
+      return clipS * (t - q12TB) * q12Nrm / headroomBias;
+    }
     double acCouplingState;                        // One-pole HPF state for AC coupling
 
     // Filter Feedback corner (Hz), scales the coupling network's dominant pole (see NET_POLE)
@@ -247,30 +371,90 @@ namespace dfl
     static constexpr int    NET_N = 5;
     static constexpr double NET_POLE[NET_N] = { 578.1, 97.5, 20.0, 7.41, 38.5 };
     static constexpr double NET_SHELF_ZERO  = 46.5;   // zero of the last section
-    // Cutoff: the cutoff parameter is the circuit's ladder-core 180-degree frequency, 1.18921 x its
+    // Cutoff: the cutoff parameter is the circuit's ladder-core 180-degree frequency, 2^(1/4) x its
     // corner wc (Stinchcombe's core polynomial s^4 + 6.727 s^3 + 14.142 s^2 + 9.514 s + 1), the frequency the
-    // resonant peak approaches at high cutoff. The Pirkle ladder's corner is 0.7006 x its cutoff coefficient
-    // (fitted to the core polynomial, 0.4 dB / 3 degrees up to 8x cutoff), so tuning = 1 / (1.18921 * 0.7006).
-    static constexpr double CUTOFF_TUNING = 1.2003;
-    // Output gain: static, chosen so the resonance-0 level equals the TeeBee's above the bass. The output
-    // network (TB303OutputNetwork, in Open303) cuts more bass than Open303's chain, so low notes are quieter (C2 about
-    // -4 dB). Like the real circuit the ladder's passband drops as resonance rises; the network's wiper tap makes up
-    // about half of it.
-    static constexpr double OUTPUT_GAIN = 2.1056;
+    // resonant peak approaches at high cutoff. The equal-stage ladder's D0 (see TAP_MIX) is exactly that polynomial
+    // with the stage rate at 2^(3/4) wc, so tuning = 2^(3/4) / 2^(1/4).
+    static constexpr double CUTOFF_TUNING = 1.41421356237;
     // Oscillation cap, as a fraction of the interpolated threshold KNC. 0.98 rather than 0.99: between the
     // 1 and 2 kHz nodes at Filter Feedback 1.0 the threshold sags below the interpolation (K / threshold reached
     // 0.9956 at 0.99 on a dense 20 x 20 check); it binds only near that knob extreme.
     static constexpr double K_MARGIN = 0.98;
-    // Bass comp knob range (amount at knob 1.0). Full-synth level vs the TeeBee at resonance 60..100
-    // (mean of cutoff 400 / 1000 / 2500, env mod 60, C2), with the output network's resonance-pot wiper tap already
-    // making up about half the loss: amount 0 is 1.4-2.7 dB quieter, 0.1 (knob 0.5) matches within 1.1 dB, 0.2 is
-    // 1.7-3.6 dB louder.
-    static constexpr double BASS_COMP_MAX = 0.2;
+    // Bass comp knob range (amount at knob 1.0): the output gain (1 + K)^amount restores that fraction (in dB) of the
+    // ladder's resonance passband loss. 0 (the default) is the real circuit.
+    static constexpr double BASS_COMP_MAX = 0.12;
     // Unit trim range: about the 5th..95th percentile of the per-unit loop-gain scale in the component
     // tolerance Monte Carlo (x0.85..x1.16 at 500 Hz, x0.90..x1.12 above). At x1.15 a unit at full pot sits up to
     // 1.15 x the oscillation threshold and sustains a sine 5-11 dB below a resonance-0 saw.
     static constexpr double TRIM_MIN = 0.85;
     static constexpr double TRIM_MAX = 1.15;
+    // Q21 loading: C27 / C25 into Q21's bases is a series RC on the ladder top. In the stage equations it adds
+    // kappa p / (1 + p / rho) y4 to the top node (p = s / wg, rho = coupling pole / wg, kappa = C27 / (2 C26) with
+    // the top rung's diode resistance 1 / (wg C26)), i.e. an extra conductance kappa rho above the coupling pole that
+    // a one-pole lowpass of y4 at the pole cancels below it. SPICE: the loss is up to 1.9 dB at 300 Hz cutoff, and
+    // this matches it within 0.16 dB (20-640 Hz, 300 Hz-5 kHz cutoff) with no fitted parameter.
+    static constexpr double LOAD_KAPPA = 0.1e-6 / (2.0 * 33e-9);
+    double loadKR    = 0.0;   // kappa rho
+    double loadSGain = 0.0;   // the load lowpass state's share of S4 (stage 4 and the lowpass are solved together)
+    double loadA     = 0.0;   // load lowpass: TPT one-pole coefficient at the coupling pole
+    double loadState = 0.0;
+    double loadW     = 0.0;   // load lowpass output
+    // Q21 (the output pair) is an undegenerated differential pair at the same 2 Vt scale as Q12, after the C27 / C25
+    // coupling: a tanh on network section 0's output, in the feedback loop and in the output (see getSample).
+    double q21(double u)      { const double hs = headroomBias / clipS; return (shape(hs * q21W * u + oq21) - q21T0) / (hs * q21W); }
+    double q21Slope(double u) { const double t = shape(headroomBias / clipS * q21W * u + oq21); return 1.0 - t * t; }
+    double outCouplingState = 0.0;  // the output's own C27 / C25 coupling (the mode mix differs from the loop's lp4)
+    bool   hiFi = true;
+    // Tension (setTension): the rungs pass x + rungMix (tanh(rungScale x) / rungScale - x), with conductance
+    // 1 - rungMix tanh^2(rungScale x). rungMix 1 at rungScale = headroomBias is the diode; the cubic term (the Duffing
+    // coefficient) is -rungMix rungScale^2 / 3.
+    static constexpr double TENSION_SCALE_MAX = 8.0;   // rungScale^2 at tension +-1, re the diode
+    static constexpr double TENSION_STIFF_MAX = 3.0;   // tension 1: a rung's conductance rises to 1 + this when loud
+    double tension = 0.0, rungScale = headroomBias, rungMix = 1.0;
+    bool   tensionEnvelope = true;   // the envelope version is Tension (the rung I-V version stays behind the switch for now)
+    static constexpr double TENSION_ENV_GAIN = 2.8;   // log stage-rate change at full tension and a rung at its limit
+    static constexpr double TENSION_ENV_MS   = 2.0;   // envelope time constant
+    static constexpr double TENSION_G_MAX    = 1.9626105055051506;   // tan(0.35 pi): a stage's rate stays below 0.35 fs
+    // (0.45 fs left marginal rings at the top cutoffs, stiff and loud; 0.4 fs did too once the driven shaper's swell
+    // was back (SAT_BIAS_MAX), with Bite; 0.35 fs: none)
+    double envA = 0.0, envE[4] = {};
+    double tensionSens = 1.0;   // the envelope's gain: the full-Saturation drive over the current drive (setInputDrive),
+                                // so Tension is audible at any Saturation (it may lock into the crunch too). Below 0 dB it
+                                // stays at its 0 dB value (24 dB): hotter, stiff tension at Res Trim 1.15 in HP peaked at
+                                // 27 (-3 dB drive) to 73 (-12 dB) in the stress test; at 0 dB and above, 21.6 at most
+
+    // Rail. Driven hard with the bias, Q12 pushes more current into stage 1 than its rungs can pass, and the stage's
+    // voltage runs off (tens to hundreds of units) and recovers every cycle: the FM-like crunch. No circuit can do that
+    // (a 303's ladder nodes sit near 10 V on a 12 V supply; in SPICE an exact analog of the biased shaper stays clean),
+    // so the rail is a knob: each stage voltage passes unchanged up to half the rail and then bends smoothly (tanh)
+    // toward it. 8 units (about 21 V) is already clean, 16 starts the crunch, 64 and up is most of it, unlimited the
+    // full crunch (and, at the top of the bias, the choke). railLimit = 0: unlimited.
+    static constexpr double RAIL_MIN = 8.0, RAIL_OCTAVES = 5.0;
+    // ... and the rail lifts the bias cap (SAT_BIAS_CAP_*: the choke is the same runaway): none at or below
+    // RAIL_FREE_BIAS (on held notes at +16 dB, no choke up to bias 1 at any tension), blending back to the full cap at
+    // unlimited (between, a few held notes choked from bias 0.8)
+    static constexpr double RAIL_FREE_BIAS = 0.6;
+    double railKnob = 1.0, railLimit = 0.0;
+    double unMean = 0.0, unMeanA = 0.0;   // Q12's mean output (UN_MEAN_HZ): the rungs' DC, the tension envelope's rest
+    static constexpr double UN_MEAN_HZ = 3.0;
+    double restRung = 0.0;   // tanh of every rung at Bite's DC operating point (hs un_dc, see updateCharacter): unMean's start
+    double yPrev[4] = {}, yPrev2[4] = {};   // the last two ladder solutions (Hi-Fi's Newton predictor)
+
+    // tanh(x) as x P(x^2) / Q(x^2), max error 5.8e-8 on |x| <= 9 (clamped beyond): one division (Hi-Fi)
+    static double tanhRational(double x)
+    {
+      x = std::clamp(x, -9.0, 9.0);
+      const double u = x * x;
+      const double P = 1.0 + u * (0.13390869692152904 + u * (0.0035073068980147394 + u * (2.0803216419499262e-05 + u * 1.3626260335743109e-08)));
+      const double Q = 1.0 + u * (0.46724189029648822 + u * (0.025921489787934984 + u * (0.00033048538750465151 + u * 7.8871635569881668e-07)));
+      return x * P / Q;
+    }
+    INLINE void stepHiFi(double vIn, double fmMod, double& un, double* lp, double& q21Residual);
+    // Hi-Fi's mode morph: the p^k tap mixes need the linear ladder's relations, which the diodes break at high drive
+    // (node voltages swing far past the linear case). A linear ladder driven open-loop by the same Q12 current
+    // supplies the p^1..p^4 terms; the LP term stays the Hi-Fi ladder's own output.
+    double shadowZ[4] = {}, shadowLoadState = 0.0;
+    INLINE void stepShadow(double un, double fmMod, double* lp, double& w);
     double netA[NET_N] = {};      // feedback network: TPT one-pole coefficients g / (1 + g)
     double netState[NET_N] = {};
     double shelfRatio = 1.0;      // NET_SHELF_ZERO / shelf pole
@@ -311,16 +495,28 @@ namespace dfl
 
   INLINE void DiodeLadderFilter::calculateCoefficients()
   {
-    // Bilinear transform calculations (cutoff tuned to the circuit's ladder core, see CUTOFF_TUNING)
-    double tunedCutoff = cutoff * CUTOFF_TUNING;
-    double wd = 2.0 * PI * tunedCutoff;
-    double T = 1.0 / sampleRate;
-    double wa = (2.0 / T) * tan(wd * T / 2.0);
-    double gCoeff = wa * T / 2.0;
+    // Bilinear transform, prewarped at the cutoff (the resonant peak) rather than the stage rate, so the peak
+    // frequency does not depend on the sample rate (stage rate tuned to the circuit's ladder core, see CUTOFF_TUNING)
+    double gCoeff = CUTOFF_TUNING * tan(PI * cutoff / sampleRate);
+    envA = 1.0 - std::exp(-1000.0 / (TENSION_ENV_MS * sampleRate));
+    unMeanA = 1.0 - std::exp(-2.0 * M_PI * UN_MEAN_HZ / sampleRate);
     double gp1 = 1.0 + gCoeff;
 
+    // Q21 loading on stage 4 (see LOAD_KAPPA): rate g (1 + kappa rho), input (a4 lp3 + kappa rho w) / (1 + kappa rho),
+    // w = (gl lp4 + loadState) / (1 + gl) solved with it. rho = gl / g is the coupling pole over the stage rate in the
+    // discrete domain, so the tap relations (updateTapMix) hold exactly.
+    const double gl = std::tan(PI * std::min(getCouplingPoleHz(), 0.45 * sampleRate) / sampleRate);
+    const double rho = gl / gCoeff;
+    loadKR = LOAD_KAPPA * rho;
+    const double g4 = gCoeff * (1.0 + loadKR);
+    alpha4 = g4 / (1.0 + g4);
+    loadA = gl / (1.0 + gl);
+    const double den4 = 1.0 + g4 - gCoeff * loadKR * loadA;
+    loadSGain = gCoeff * loadKR / (1.0 + gl);
+    updateTapMix(rho);
+
     // Calculate "Big G" coefficients (feedback path gains)
-    G4 = 0.5 * gCoeff / gp1;
+    G4 = 0.5 * gCoeff / den4;
     G3 = 0.5 * gCoeff / (gp1 - 0.5 * gCoeff * G4);
     G2 = 0.5 * gCoeff / (gp1 - 0.5 * gCoeff * G3);
     G1 = gCoeff / (gp1 - gCoeff * G2);
@@ -337,23 +533,11 @@ namespace dfl
     // One-pole alpha coefficient
     alpha = gCoeff / gp1;
 
-    // Alpha for 1st stage (one octave above, like TB-303). The octave-up pole
-    // reaches Nyquist at half the cutoff the other poles do, so at very high
-    // cutoff (and low sample rates) its prewarp argument can exceed pi/2, where
-    // tan() goes negative and the stage becomes unstable. Clamp the argument to a
-    // safe fraction of Nyquist - only engages at extreme cutoff, no effect
-    // otherwise.
-    const double MAX_POLE_ARG = 1.4;   // < pi/2 (1.5708)
-    double octArg = std::clamp(2*wd * T / 2.0, 0.0, MAX_POLE_ARG);
-    double wa2 = (2.0 / T) * tan(octArg);
-    double g2 = wa2 * T / 2.0;
-    alpha2 = g2 / (1.0 + g2);
-
     // Beta coefficients
     beta1 = 1.0 / (gp1 - gCoeff * G2);
     beta2 = 1.0 / (gp1 - 0.5 * gCoeff * G3);
     beta3 = 1.0 / (gp1 - 0.5 * gCoeff * G4);
-    beta4 = 1.0 / gp1;
+    beta4 = 1.0 / den4;
 
     // Gamma coefficients (local feedback)
     gamma1 = 1.0 + G1 * G2;
@@ -370,13 +554,12 @@ namespace dfl
     epsilon2 = G3;
     epsilon3 = G4;
 
-    // Feedback factor. Drive is applied through driveLoopGain (drive-invariance: K is divided by the drive stage's
-    // small-signal gain, so the loop gain does not depend on drive).
+    // Feedback factor. Drive scales only the input into Q12 (a hotter VCO), so the loop gain does not depend on it.
     // The resonance knob is the real pot's rotation (linear 50k, loaded), so undo Open303's skew.
     // The loop gain K(pot, cutoff) is solved offline so the resonant boost equals the SPICE model of the real VCF
-    // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 0.8 dB rms over the curves);
+    // (tools/diode-fidelity/gen_native_tables.py: spice/native_targets.py + native_solver, 0.26 dB rms over the curves);
     // KNC is the measured self-oscillation threshold (growth test, native_solver) at the Filter Feedback nodes
-    // 57.5 / 115 / 268 Hz (knob 1.0 / default / 0; Open303 maps the knob). The knob stops at Q21 beta about 500:
+    // 57.5 / 79 / 268 Hz (knob 1.0 / default / 0; Open303 maps the knob). The knob stops at Q21 beta about 500:
     // beyond it the coupling network's ~7 Hz mode motorboats at high resonance (SPICE: beta 800 at full pot).
     for (int i = 0; i < NET_N; ++i)
     {
@@ -388,21 +571,21 @@ namespace dfl
     static const double CN[11] = { 300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000 };
     static const double AN[7]  = { 0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0 };
     static const double KNT[11][7] = {
-      { 0, 2.952, 6.701, 8.531, 11.899, 13.695, 15.977 },
-      { 0, 2.947, 6.254, 9.021, 12.297, 14.386, 16.718 },
-      { 0, 3.180, 6.236, 9.359, 12.750, 14.664, 17.123 },
-      { 0, 3.463, 6.484, 9.255, 12.806, 14.905, 17.307 },
-      { 0, 3.525, 6.412, 9.479, 12.993, 15.171, 17.646 },
-      { 0, 3.652, 6.333, 9.466, 13.112, 15.249, 17.778 },
-      { 0, 3.647, 6.360, 9.461, 13.196, 15.302, 17.871 },
-      { 0, 3.537, 6.332, 9.498, 13.121, 15.330, 17.855 },
-      { 0, 3.328, 6.321, 9.437, 13.103, 15.309, 17.900 },
-      { 0, 3.027, 6.266, 9.399, 13.085, 15.333, 17.987 },
-      { 0, 2.643, 6.208, 9.394, 13.113, 15.434, 18.060 } };
+      { 0, 3.438, 7.573, 8.984, 12.574, 14.438, 16.671 },
+      { 0, 3.198, 6.025, 8.883, 12.397, 14.466, 16.893 },
+      { 0, 3.169, 5.886, 9.122, 12.504, 14.543, 16.908 },
+      { 0, 3.344, 6.126, 9.005, 12.583, 14.583, 16.931 },
+      { 0, 3.145, 6.048, 9.074, 12.583, 14.614, 16.994 },
+      { 0, 3.185, 6.072, 9.054, 12.560, 14.597, 16.988 },
+      { 0, 3.091, 5.985, 9.040, 12.541, 14.600, 16.932 },
+      { 0, 3.021, 5.925, 9.017, 12.466, 14.527, 16.885 },
+      { 0, 2.909, 5.961, 8.955, 12.375, 14.419, 16.843 },
+      { 0, 2.762, 5.866, 8.855, 12.287, 14.358, 16.702 },
+      { 0, 2.588, 5.774, 8.761, 12.198, 14.250, 16.561 } };
     static const double KNC[3][11] = {
-      { 24.030, 21.548, 20.204, 19.763, 18.896, 18.612, 18.397, 18.305, 18.324, 18.449, 18.705 },
-      { 28.858, 24.252, 21.824, 21.041, 19.515, 19.023, 18.640, 18.455, 18.423, 18.524, 18.765 },
-      { 43.817, 32.250, 26.466, 24.656, 21.223, 20.136, 19.296, 18.859, 18.688, 18.719, 18.920 } };
+      { 27.171, 22.849, 20.567, 19.830, 18.391, 17.921, 17.549, 17.341, 17.225, 17.166, 17.130 },
+      { 30.769, 24.833, 21.745, 20.754, 18.835, 18.214, 17.722, 17.448, 17.295, 17.219, 17.172 },
+      { 59.998, 45.040, 33.247, 29.640, 22.947, 20.876, 19.280, 18.405, 17.922, 17.681, 17.535 } };
     const double pot = getResonancePot();
     double lc = std::log(std::clamp(cutoff, CN[0], CN[10]));
     int ci = 0; while (ci < 9 && std::log(CN[ci + 1]) < lc) ++ci;
@@ -411,29 +594,39 @@ namespace dfl
     const double af = std::clamp((pot - AN[ai]) / (AN[ai + 1] - AN[ai]), 0.0, 1.0);
     auto at = [&](int c) { return KNT[c][ai] + af * (KNT[c][ai + 1] - KNT[c][ai]); };
     double effK = loopGainTrim * (at(ci) + cf * (at(ci + 1) - at(ci)));
-    static const double FN[3] = { 57.5, 115.0, 268.0 };
+    static const double FN[3] = { 57.5, FEEDBACK_DEFAULT, 268.0 };
     const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[2]));
     const int fi = (lf < std::log(FN[1])) ? 0 : 1;
     const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
     auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
     // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
     effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
-    K = effK / driveLoopGain;
+    K = effK;
     logLoopGain = std::log1p(effK);
 
     // Drive level compensation (see DT_* above)
     {
       static const double DN[DT_DRIVE_N] = { -3.0, 0.0, 4.5, 9.0, 12.5, 16.0 };
       static const double RN[DT_RES_N]   = { 0.0, 0.6245, 0.9235, 1.0 };
-      static const double DT[2][DT_RES_N][DT_DRIVE_N] = {
-        { { 0.00, 0.23, -0.37, 0.16, 1.49, 3.57 },
-          { 0.00, 0.08, -1.54, -2.97, -4.00, -4.56 },
-          { 0.00, 0.12, -1.32, -2.72, -3.91, -5.08 },
-          { 0.00, 0.50, -0.04, -1.00, -2.13, -3.36 } },
-        { { 0.00, 0.44, 0.98, 2.91, 5.19, 7.81 },
-          { 0.00, 0.69, 2.49, 5.14, 6.58, 8.29 },
-          { 0.00, 0.80, 2.94, 6.17, 8.15, 9.59 },
-          { 0.00, 1.27, 4.03, 7.47, 8.61, 8.00 } } };
+      static const double DT[2][2][DT_RES_N][DT_DRIVE_N] = {
+        // Standard
+        { { { 0.00, 0.29, -0.25, 1.03, 3.22, 5.94 },
+            { 0.00, 0.05, -1.75, -3.38, -4.21, -3.55 },
+            { 0.00, 0.09, -1.52, -3.16, -4.47, -5.49 },
+            { 0.00, 0.45, -0.29, -1.52, -2.79, -4.03 } },
+          { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
+            { 0.00, 0.62, 2.03, 4.24, 5.81, 8.42 },
+            { 0.00, 0.77, 2.79, 5.82, 7.74, 9.58 },
+            { 0.00, 1.25, 3.97, 7.36, 8.72, 9.39 } } },
+        // Hi-Fi
+        { { { 0.00, 0.22, -0.67, 0.61, 3.65, 7.71 },
+            { 0.00, 0.05, -1.77, -3.44, -3.82, -0.22 },
+            { 0.00, 0.09, -1.53, -3.18, -4.34, -1.87 },
+            { 0.00, 0.44, -0.29, -1.52, -2.89, -2.37 } },
+          { { 0.00, 0.35, 0.23, 2.49, 5.24, 7.94 },
+            { 0.00, 0.61, 2.03, 4.30, 5.65, 8.18 },
+            { 0.00, 0.76, 2.74, 5.70, 7.19, 7.37 },
+            { 0.00, 1.23, 3.90, 7.06, 6.91, 9.43 } } } };
       int di = 0; while (di < DT_DRIVE_N - 2 && DN[di + 1] < drive) ++di;
       const double df = std::clamp((drive - DN[di]) / (DN[di + 1] - DN[di]), 0.0, 1.0);
       const double rr = std::min(std::max(resonance, 0.0), 1.0);
@@ -441,11 +634,195 @@ namespace dfl
       const double rf = (rr - RN[ri]) / (RN[ri + 1] - RN[ri]);
       for (int m = 0; m < 2; ++m)
       {
-        const double a = DT[m][ri][di]     + df * (DT[m][ri][di + 1]     - DT[m][ri][di]);
-        const double b = DT[m][ri + 1][di] + df * (DT[m][ri + 1][di + 1] - DT[m][ri + 1][di]);
+        const auto& T = DT[hiFi ? 1 : 0];
+        const double a = T[m][ri][di]     + df * (T[m][ri][di + 1]     - T[m][ri][di]);
+        const double b = T[m][ri + 1][di] + df * (T[m][ri + 1][di + 1] - T[m][ri + 1][di]);
         driveTrim[m] = pow(10.0, (a + rf * (b - a)) / 20.0);
       }
     }
+  }
+
+  INLINE void DiodeLadderFilter::updateTapMix(double rho)
+  {
+    // taps j = un, lp1, lp2, lp3, lp4 as P[j](p) lp4 + c[j] w; P[j][d] is the p^d coefficient, degree 4 - j
+    const double lam = loadKR;
+    double P[5][5] = {}, c[5] = {};
+    P[4][0] = 1.0;
+    P[3][0] = 2.0 + 2.0 * lam; P[3][1] = 2.0; c[3] = -2.0 * lam;   // lp3 = 2 (p + 1 + lam) lp4 - 2 lam w
+    // tap j = m (p + 1) tap(j + 1) - tap(j + 2), with (p + 1) w = rho lp4 + (1 - rho) w
+    auto next = [&](int j, double m)
+    {
+      for (int d = 4; d >= 0; --d)
+        P[j][d] = m * (P[j + 1][d] + (d > 0 ? P[j + 1][d - 1] : 0.0)) - P[j + 2][d];
+      P[j][0] += m * c[j + 1] * rho;
+      c[j] = m * c[j + 1] * (1.0 - rho) - c[j + 2];
+    };
+    next(2, 2.0);   // lp2 = 2 (p + 1) lp3 - lp4
+    next(1, 2.0);   // lp1 = 2 (p + 1) lp2 - lp3
+    next(0, 1.0);   // un  = (p + 1) lp1 - lp2
+    for (int k = 0; k < 5; ++k)
+    {
+      tapW[k] = 0.0;
+      for (int j = 0; j < 5; ++j)
+      {
+        const int d = 4 - j;
+        double acc = (d == k) ? 1.0 : 0.0;
+        for (int i = 0; i < j; ++i)
+          acc -= tapMix[k][i] * P[i][d];
+        tapMix[k][j] = acc / P[j][d];
+        tapW[k] += tapMix[k][j] * c[j];
+      }
+    }
+  }
+
+  INLINE void DiodeLadderFilter::stepHiFi(double vIn, double fmMod, double& un, double* lp, double& q21Residual)
+  {
+    // Every diode pair passes If tanh(dv / 2Vt): with T(x) = tanh(h x) / h (h = headroomBias, the 2 Vt scale of the
+    // input pair), the stages (TPT, y = z + g F) are
+    //   F1 = un - T(y1 - y2),  F2 = 0.5 (T(y1 - y2) - T(y2 - y3)),  F3 = 0.5 (T(y2 - y3) - T(y3 - y4)),
+    //   F4 = 0.5 (T(y3 - y4) - T(y4)) - kappa rho (y4 - w)          (Q22 above the top rung; the Q21 load, w implicit)
+    // with un = Q12(vIn - K (netG Q21(u0) + netS)), u0 = c0 (y4 - s0). Linearised it is the standard ladder exactly.
+    // Two Newton steps from a linear extrapolation of the last two solutions, the 4x4 Jacobian (tridiagonal plus the
+    // feedback corner) by Cramer's rule: within -90 dB of a converged solve on stress tests, SPICE large-signal
+    // response within 0.04 dB / 0.02 % THD rms at the 303's level.
+    const double h = headroomBias, hs = h / clipS, hq = hs * q21W, oq = oq21;   // Clip, Warmth, Bite
+    const double g = alpha / (1.0 - alpha) * fmMod;
+    const double aL = loadA, sw = loadState, lamA = loadKR * (1.0 - aL), lamW = lamA * sw;
+    const double c0 = 1.0 - netA[0], s0 = netState[0];
+    double netG = 1.0, netS = 0.0;
+    for (int i = 1; i < NET_N; ++i)
+    {
+      const double a = netA[i], c = 1.0 - a;
+      const double gx = (i < NET_N - 1) ? c : c + shelfRatio * a;
+      const double gs = (i < NET_N - 1) ? -c : (shelfRatio - 1.0) * c;
+      netG *= gx;
+      netS = gx * netS + gs * netState[i];
+    }
+    const double KG = K * netG, z[4] = { z1, z2, z3, z4 };
+    // a rung's current and slope (see setTension; the diode at tension 0)
+    const double rs = rungScale / clipS, rm = rungMix;   // Clip scales the rungs' Vt too
+    auto rung = [rs, rm](double x, double& slope)
+    {
+      const double t = tanhRational(rs * x);
+      slope = 1.0 - rm * t * t;
+      return x + rm * (t / rs - x);
+    };
+    double y[4];
+    for (int k = 0; k < 4; ++k) y[k] = 2.0 * yPrev[k] - yPrev2[k];
+    // per-stage rates (the envelope tension; 1 otherwise)
+    double gk[4] = { g, g, g, g };
+    if (tensionEnvelope && tension != 0.0)
+      for (int k = 0; k < 4; ++k)   // capped below Nyquist: stiff and loud near the top of the range ran away
+        gk[k] = std::min(g * std::exp(tension * TENSION_ENV_GAIN * envE[k]), std::max(g, TENSION_G_MAX));
+    for (int it = 0; it < 2; ++it)
+    {
+      const double u0 = c0 * (y[3] - s0);
+      const double tq = tanhRational(hq * u0 + oq), Qv = (tq - q21T0) / hq, Qd = 1.0 - tq * tq;
+      double dun;
+      if (q12Plain)
+      {
+        const double tv = tanhRational(h * (vIn - KG * Qv - K * netS) + satBias);
+        un = (tv - satBiasShape) * satBiasNorm / h;
+        dun = (1.0 - tv * tv) * satBiasNorm * (-KG * Qd * c0);
+      }
+      else
+      {
+        double dq;
+        un = q12(vIn - KG * Qv - K * netS, dq, true);
+        dun = dq * (-KG * Qd * c0);
+      }
+      double d12, d23, d34, d4;
+      const double T12 = rung(y[0] - y[1], d12), T23 = rung(y[1] - y[2], d23);
+      const double T34 = rung(y[2] - y[3], d34), T4 = rung(y[3], d4);
+      const double g0 = gk[0], g1 = gk[1], g2 = gk[2], g3 = gk[3];
+      const double b0 = -(y[0] - z[0] - g0 * (un - T12));
+      const double b1 = -(y[1] - z[1] - g1 * 0.5 * (T12 - T23));
+      const double b2 = -(y[2] - z[2] - g2 * 0.5 * (T23 - T34));
+      const double b3 = -(y[3] - z[3] - g3 * (0.5 * (T34 - T4) - lamA * y[3] + lamW));
+      // Jacobian I - g dF/dy
+      const double a00 = 1.0 + g0 * d12, a01 = -g0 * d12, a03 = -g0 * dun;
+      const double a10 = -0.5 * g1 * d12, a11 = 1.0 + 0.5 * g1 * (d12 + d23), a12 = -0.5 * g1 * d23;
+      const double a21 = -0.5 * g2 * d23, a22 = 1.0 + 0.5 * g2 * (d23 + d34), a23 = -0.5 * g2 * d34;
+      const double a32 = -0.5 * g3 * d34, a33 = 1.0 + 0.5 * g3 * (d34 + d4) + g3 * lamA;
+      // Cramer's rule on the sparse pattern
+      const double D2 = a00 * a11 - a01 * a10, P = a22 * a33 - a23 * a32;
+      const double det = D2 * P - a00 * a12 * a21 * a33 - a03 * a10 * a21 * a32;
+      const double E = D2 * b2 - a00 * a21 * b1 + a10 * a21 * b0;
+      const double M32 = D2 * a23 + a03 * a10 * a21, M33 = D2 * a22 - a00 * a12 * a21;
+      const double F1 = b1 * P - a12 * (a33 * b2 - a23 * b3);
+      const double N3 = b3 * M33 - a32 * E;
+      const double N2 = a33 * E - b3 * M32;
+      const double N1 = a00 * F1 - a10 * (b0 * P + a03 * (a32 * b2 - a22 * b3));
+      const double N0 = b0 * (a11 * P - a12 * a21 * a33) - a01 * F1
+                      - a03 * (a21 * a32 * b1 - a11 * (a32 * b2 - a22 * b3) - a12 * a21 * b3);
+      const double r = 1.0 / det;
+      y[0] += N0 * r; y[1] += N1 * r; y[2] += N2 * r; y[3] += N3 * r;
+    }
+    if (railLimit > 0.0)
+    {
+      const double a = 0.5 * railLimit, w = railLimit - a;
+      for (int k = 0; k < 4; ++k)
+      {
+        const double m = std::fabs(y[k]);
+        if (m > a) y[k] = std::copysign(a + w * std::tanh((m - a) / w), y[k]);
+      }
+    }
+    z1 = 2.0 * y[0] - z1; z2 = 2.0 * y[1] - z2; z3 = 2.0 * y[2] - z3; z4 = 2.0 * y[3] - z4;
+    for (int k = 0; k < 4; ++k) lp[k] = y[k];
+    if (tensionEnvelope)
+    {
+      // each stage's envelope: the mean square of its rungs' current re the limit (stage 1 has one rung), as if driven
+      // at full Saturation (tensionSens): the pitch follows the note's dynamics at any Saturation, not only when the
+      // rungs really approach their limit
+      const double hv = hs * tensionSens;
+      const double s12 = tanhRational(hv * (y[0] - y[1])), s23 = tanhRational(hv * (y[1] - y[2]));
+      const double s34 = tanhRational(hv * (y[2] - y[3])), s4 = tanhRational(hv * y[3]);
+      // relative to the rungs' rest current: Bite's offset runs a DC current through every rung, and so does the biased
+      // shaper's rectification when driven (at DC every rung carries Q12's mean output). Neither is level: read as level,
+      // floppy tension slowed the stages on it and choked the note (+16 dB, bias above about 0.5). Stiff tension keeps
+      // reading the rectified DC (its faster stages carry it: relative to it, bias 0.7 choked)
+      unMean += unMeanA * (un - unMean);
+      const double rest = (tension < 0.0) ? std::clamp(hs * unMean, -0.999, 0.999) : restRung;   // at most the limit
+      const double r0 = (rest != 0.0) ? std::tanh(tensionSens * std::atanh(rest)) : 0.0;
+      const double r12 = s12 - r0, r23 = s23 - r0, r34 = s34 - r0, r4 = s4 - r0;
+      const double e[4] = { r12 * r12, 0.5 * (r12 * r12 + r23 * r23), 0.5 * (r23 * r23 + r34 * r34), 0.5 * (r34 * r34 + r4 * r4) };
+      for (int k = 0; k < 4; ++k) envE[k] += envA * (e[k] - envE[k]);
+    }
+
+    // advance the coupling network (Q21 after section 0) and the load lowpass
+    double x = y[3];
+    for (int i = 0; i < NET_N; ++i)
+    {
+      const double v = (x - netState[i]) * netA[i];
+      const double lpn = v + netState[i];
+      netState[i] = lpn + v;
+      x = (i < NET_N - 1) ? x - lpn : x - lpn + shelfRatio * lpn;
+      if (i == 0) { const double q = (tanhRational(hq * x + oq) - q21T0) / hq; q21Residual = q - x; x = q; }
+    }
+    loadW = aL * y[3] + (1.0 - aL) * sw;
+    loadState = 2.0 * loadW - sw;
+  }
+
+  INLINE void DiodeLadderFilter::stepShadow(double un, double fmMod, double* y, double& w)
+  {
+    // the linear ladder (TPT, y = z + g F) for a known un: tridiagonal, Thomas algorithm
+    const double g = alpha / (1.0 - alpha) * fmMod, aL = loadA, lamA = loadKR * (1.0 - aL);
+    const double lo[4] = { 0.0, -0.5 * g, -0.5 * g, -0.5 * g };
+    const double di[4] = { 1.0 + g, 1.0 + g, 1.0 + g, 1.0 + g + g * lamA };
+    const double up[4] = { -g, -0.5 * g, -0.5 * g, 0.0 };
+    double rhs[4] = { shadowZ[0] + g * un, shadowZ[1], shadowZ[2], shadowZ[3] + g * lamA * shadowLoadState };
+    double c[4], d[4];
+    c[0] = up[0] / di[0]; d[0] = rhs[0] / di[0];
+    for (int k = 1; k < 4; ++k)
+    {
+      const double m = di[k] - lo[k] * c[k - 1];
+      c[k] = up[k] / m; d[k] = (rhs[k] - lo[k] * d[k - 1]) / m;
+    }
+    y[3] = d[3];
+    for (int k = 2; k >= 0; --k) y[k] = d[k] - c[k] * y[k + 1];
+    for (int k = 0; k < 4; ++k) shadowZ[k] = 2.0 * y[k] - shadowZ[k];
+    w = aL * y[3] + (1.0 - aL) * shadowLoadState;
+    shadowLoadState = 2.0 * w - shadowLoadState;
   }
 
   INLINE double DiodeLadderFilter::shape(double x)
@@ -459,8 +836,8 @@ namespace dfl
     // Safety: if the ladder state ever goes non-finite (extreme cutoff/feedback
     // modulation), reset it so the filter self-heals instead of latching to
     // permanent silence via propagating NaN/Inf.
-    if (!std::isfinite(z1 + z2 + z3 + z4))
-      z1 = z2 = z3 = z4 = 0.0;
+    if (!std::isfinite(z1 + z2 + z3 + z4 + loadState))
+      z1 = z2 = z3 = z4 = loadState = loadW = 0.0;
 
     // Input without compensation - compensation applied at output
     double input = in;
@@ -482,100 +859,149 @@ namespace dfl
       fmMod = std::max(0.5, std::min(1.5, 1.0 + filterFmDepth * filterFmScale * acCoupledInput));
     }
 
-    double alphaFM  = alpha  * fmMod;
-    double alpha2FM = alpha2 * fmMod;
-
-    // Calculate feedback signals (S4 -> S3 -> S2 -> S1)
-    double S4 = beta4 * z4;
-    double S3 = beta3 * (z3 + S4 * delta3);
-    double S2 = beta2 * (z2 + S3 * delta2);
-    double S1 = beta1 * (z1 + S2 * delta1);
-
-    // SIGMA - weighted sum of feedback signals
-    double SIGMA = SG1 * S1 + SG2 * S2 + SG3 * S3 + SG4 * S4;
-
-    // Form input to the ladder (with feedback). The coupling network is linear, so the cascade's instantaneous
-    // response is y = netG * x + netS, with x = SIGMA + GAMMA*g*un the ladder output estimate: solve for un exactly,
-    // then advance the cascade.
-    double netG = 1.0, netS = 0.0;
-    for (int i = 0; i < NET_N; ++i)
+    // FM scales the stage rate g (as Hi-Fi does), not alpha = g / (1 + g): alpha x fmMod exceeds 1 near Nyquist and the
+    // integrators run away (without FM the path is unchanged, bit for bit)
+    double alphaFM = alpha, alpha4FM = alpha4;
+    if (filterFmDepth > 0.0)
     {
-      const double a = netA[i], c = 1.0 - a;
-      const double gx = (i < NET_N - 1) ? c : c + shelfRatio * a;   // highpass, or (s+z)/(s+p) shelf
-      const double gs = (i < NET_N - 1) ? -c : (shelfRatio - 1.0) * c;
-      netG *= gx;
-      netS = gx * netS + gs * netState[i];
-    }
-    double un = (input - K * (netG * SIGMA + netS)) / (1.0 + K * netG * GAMMA * driveLoopGain);
-    double x = SIGMA + GAMMA * driveLoopGain * un;
-    for (int i = 0; i < NET_N; ++i)
-    {
-      const double v = (x - netState[i]) * netA[i];
-      const double lp = v + netState[i];
-      netState[i] = lp + v;
-      x = (i < NET_N - 1) ? x - lp : x - lp + shelfRatio * lp;
+      const double gF = alpha / (1.0 - alpha) * fmMod, g4F = alpha4 / (1.0 - alpha4) * fmMod;
+      alphaFM = gF / (1.0 + gF); alpha4FM = g4F / (1.0 + g4F);
     }
 
-    // Apply input nonlinearity with headroom scaling: scale down before the
-    // tanh and back up after, so 0 dB drive (driveFactor == 1) stays clean
-    // and turning up the drive pushes the signal into saturation. Matches the
-    // DB303 shaper so the 0..9 dB range feels the same.
-    // driveMakeup is the level compensation (see setInputDrive): without it the
-    // pre-tanh driveFactor gain doubles as a volume boost, so the drive knob
-    // acted as a loudness control. It keeps drive roughly level-neutral while the
-    // tanh still saturates peaks - so drive changes timbre/resonance-compression,
-    // not overall level.
-    un = (shape(driveFactor * un * headroomBias + satBias) - satBiasShape) * satBiasNorm * driveMakeup / headroomBias;
+    const double vIn = driveFactor * input;   // the drive is the VCO level into Q12; the feedback is not scaled
+    double un, lp1, lp2, lp3, lp4, q21Residual = 0.0;
+    if (hiFi)
+    {
+      double lp[4];
+      stepHiFi(vIn, fmMod, un, lp, q21Residual);
+      lp1 = lp[0]; lp2 = lp[1]; lp3 = lp[2]; lp4 = lp[3];
+    }
+    else
+    {
+      // Calculate feedback signals (S4 -> S3 -> S2 -> S1)
+      double S4 = beta4 * (z4 + loadSGain * loadState);
+      double S3 = beta3 * (z3 + S4 * delta3);
+      double S2 = beta2 * (z2 + S3 * delta2);
+      double S1 = beta1 * (z1 + S2 * delta1);
 
-    // 1st stage (one octave above, TB-303 style slope)
-    double xin = un * gamma1 + S2 + epsilon1 * S1;
-    double v = (a1 * xin - z1) * alpha2FM;
-    double lp1 = v + z1;
-    z1 = lp1 + v;
+      // SIGMA - weighted sum of feedback signals
+      double SIGMA = SG1 * S1 + SG2 * S2 + SG3 * S3 + SG4 * S4;
 
-    // 2nd stage
-    xin = lp1 * gamma2 + S3 + epsilon2 * S2;
-    v = (a2 * xin - z2) * alphaFM;
-    double lp2 = v + z2;
-    z2 = lp2 + v;
+      // Form input to the ladder (with feedback). The coupling network is linear apart from Q21, the tanh after its
+      // section 0 (u0, C27 / C25). With x = SIGMA + GAMMA un the ladder output estimate, a linear first pass gives u0;
+      // Q21 is linearised about it, so the solve for un stays exact for small signals, then the cascade advances.
+      const double c0 = 1.0 - netA[0];
+      double netG = 1.0, netS = 0.0;   // sections 1.. : y = netG * q + netS
+      for (int i = 1; i < NET_N; ++i)
+      {
+        const double a = netA[i], c = 1.0 - a;
+        const double gx = (i < NET_N - 1) ? c : c + shelfRatio * a;   // highpass, or (s+z)/(s+p) shelf
+        const double gs = (i < NET_N - 1) ? -c : (shelfRatio - 1.0) * c;
+        netG *= gx;
+        netS = gx * netS + gs * netState[i];
+      }
+      const double unLin = (vIn - K * (netG * c0 * (SIGMA - netState[0]) + netS)) / (1.0 + K * netG * c0 * GAMMA);
+      const double u0e = c0 * (SIGMA + GAMMA * unLin - netState[0]);
+      const double qd = q21Slope(u0e);
+      const double fbA = netG * (q21(u0e) + qd * (c0 * (SIGMA - netState[0]) - u0e)) + netS;
+      const double fbB = netG * qd * c0 * GAMMA;
+      un = (vIn - K * fbA) / (1.0 + K * fbB);
+      double x = SIGMA + GAMMA * un;
+      for (int i = 0; i < NET_N; ++i)
+      {
+        const double v = (x - netState[i]) * netA[i];
+        const double lp = v + netState[i];
+        netState[i] = lp + v;
+        x = (i < NET_N - 1) ? x - lp : x - lp + shelfRatio * lp;
+        if (i == 0) { const double q = q21(x); q21Residual = q - x; x = q; }
+      }
 
-    // 3rd stage
-    xin = lp2 * gamma3 + S4 + epsilon3 * S3;
-    v = (a3 * xin - z3) * alphaFM;
-    double lp3 = v + z3;
-    z3 = lp3 + v;
+      // Q12, the input pair: a tanh with headroom scaling (0 dB drive = the real 303's level, see setInputDrive) and
+      // the optional asymmetry (see SAT_BIAS_MAX). The level makeup is applied at the output.
+      if (q12Plain)
+        un = (shape(un * headroomBias + satBias) - satBiasShape) * satBiasNorm / headroomBias;
+      else
+      {
+        double dq;
+        un = q12(un, dq, false);
+      }
 
-    // 4th stage
-    v = (a4 * lp3 - z4) * alphaFM;
-    double lp4 = v + z4;
-    z4 = lp4 + v;
+      // 1st stage
+      double xin = un * gamma1 + S2 + epsilon1 * S1;
+      double v = (a1 * xin - z1) * alphaFM;
+      lp1 = v + z1;
+      z1 = lp1 + v;
+
+      // 2nd stage
+      xin = lp1 * gamma2 + S3 + epsilon2 * S2;
+      v = (a2 * xin - z2) * alphaFM;
+      lp2 = v + z2;
+      z2 = lp2 + v;
+
+      // 3rd stage
+      xin = lp2 * gamma3 + S4 + epsilon3 * S3;
+      v = (a3 * xin - z3) * alphaFM;
+      lp3 = v + z3;
+      z3 = lp3 + v;
+
+      // 4th stage
+      // (with the load lowpass at this sample's lp4; exact without Filter FM)
+      loadW = loadA * (G4 * lp3 + S4) + (1.0 - loadA) * loadState;
+      v = ((a4 * lp3 + loadKR * loadW) / (1.0 + loadKR) - z4) * alpha4FM;
+      lp4 = v + z4;
+      z4 = lp4 + v;
+
+      // Q21 load lowpass
+      loadW = loadA * lp4 + (1.0 - loadA) * loadState;
+      loadState = 2.0 * loadW - loadState;
+    }
+    for (int k = 0; k < 4; ++k) yPrev2[k] = yPrev[k];
+    yPrev[0] = lp1; yPrev[1] = lp2; yPrev[2] = lp3; yPrev[3] = lp4;
 
     // Multimode output: the mode morphs LP -> BP -> HP along numerators with only real zeros, so no notch appears
     // on the way (a linear crossfade of 1 and p^2 has zeros on the frequency axis). With t the position within a
     // half and c0, c1, c2 the square roots of the LP / BP / HP output gains:
     //   LP -> BP:  ((1 - t) c0 + t c1 p)^2     = (1-t)^2 c0^2 * 1   + 2 t (1-t) c0 c1 * p   + t^2 c1^2 * p^2
     //   BP -> HP:  p^2 ((1 - t) c1 + t c2 p)^2 = (1-t)^2 c1^2 * p^2 + 2 t (1-t) c1 c2 * p^3 + t^2 c2^2 * p^4
-    // Each p^k is a fixed tap mix (TAP_MIX). Bass comp: below cutoff the loop's passband gain is about 1 / (1 + K), so
+    // Each p^k is a tap mix (tapMix, tapW). Bass comp: below cutoff the loop's passband gain is about 1 / (1 + K), so
     // (1 + K)^amount restores that fraction (in dB) of the resonance bass loss in the LP term; 0 = the real circuit.
-    const double taps[5] = { un, lp1, lp2, lp3, lp4 };
-    auto pk = [&](int k) { const double* w = TAP_MIX[k]; return w[0] * taps[0] + w[1] * taps[1] + w[2] * taps[2] + w[3] * taps[3] + w[4] * taps[4]; };
+    double taps[5] = { un, lp1, lp2, lp3, lp4 }, tapLoadW = loadW;
+    if (hiFi)
+    {
+      double ys[4];
+      stepShadow(un, fmMod, ys, tapLoadW);
+      for (int k = 0; k < 4; ++k) taps[k + 1] = ys[k];
+    }
+    auto pk = [&](int k)
+    {
+      if (k == 0) return lp4;   // the LP term is the ladder's own output (Hi-Fi: the nonlinear one)
+      const double* w = tapMix[k];
+      return w[0] * taps[0] + w[1] * taps[1] + w[2] * taps[2] + w[3] * taps[3] + w[4] * taps[4] - tapW[k] * tapLoadW;
+    };
     const double bassComp = BASS_COMP_MAX * std::clamp(passbandCompensation, 0.0, 1.0);
-    const double gLP = OUTPUT_GAIN * driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0);
+    const double gLP = driveMakeup * driveTrim[0] * (bassComp > 0.0 ? std::exp(bassComp * logLoopGain) : 1.0);
+    double lpWeight = 1.0;   // the LP term's share of the mix (Q21's distortion follows it)
     double out;
     if (mode <= 0.0)
       out = gLP * lp4;
     else
     {
-      const double gBP = OUTPUT_GAIN * BP_GAIN * driveTrim[1];
+      const double gBP = driveMakeup * BP_GAIN * driveTrim[1];
       const double lo = mode < 0.5 ? std::sqrt(gLP) : std::sqrt(gBP);
-      const double hi = mode < 0.5 ? std::sqrt(gBP) : std::sqrt(OUTPUT_GAIN * HP_GAIN * driveTrim[1]);
+      const double hi = mode < 0.5 ? std::sqrt(gBP) : std::sqrt(driveMakeup * HP_GAIN * driveTrim[1]);
       const int k = mode < 0.5 ? 0 : 2;
       const double t = mode < 0.5 ? 2.0 * mode : 2.0 * mode - 1.0;
       const double a = (1.0 - t) * lo, b = t * hi;
       // the weights sum to (1-t)^2 + t^2 (0.5 at the midpoint); normalising keeps the in-between level up
-      out = (a * a * pk(k) + 2.0 * a * b * pk(k + 1) + b * b * pk(k + 2)) / ((1.0 - t) * (1.0 - t) + t * t);
+      const double norm = (1.0 - t) * (1.0 - t) + t * t;
+      out = (a * a * pk(k) + 2.0 * a * b * pk(k + 1) + b * b * pk(k + 2)) / norm;
+      lpWeight = mode < 0.5 ? (1.0 - t) * (1.0 - t) / norm : 0.0;
     }
-    return out;
+    // the C27 / C25 coupling into Q21, then Q21's distortion (exact for LP: the same node as the loop's)
+    const double vo = (out - outCouplingState) * netA[0];
+    const double hp = out - (vo + outCouplingState);
+    outCouplingState += 2.0 * vo;
+    return hp + gLP * lpWeight * q21Residual;
   }
 
 } // end namespace dfl

@@ -24,8 +24,8 @@ private:
 // Generic LCD-style menu page component, shared across GUI themes.
 // Pure view/controller: reads and writes parameters through the value tree state.
 // Item types:
-//   select      - prev/next changes the selection (triggers the param), inc/dec does nothing
-//   value       - prev/next moves the cursor between items, inc/dec edits the current item's param
+//   select      - prev/next moves the cursor between items, inc/dec and the knob change the selection
+//   value       - prev/next moves the cursor between items, inc/dec and the knob edit the current item's param
 //   placeholder - inert row ("Soon to be implemented")
 class MenuPage : public juce::Component,
                  public juce::AudioProcessorValueTreeState::Listener
@@ -48,6 +48,10 @@ public:
         int shownUntilIndex = 1 << 30; // item is skipped while hiddenWhenId's choice index is above this
         juce::String altLabel;         // shown instead of label while hiddenWhenId's choice index equals altLabelIndex
         int altLabelIndex = -1;
+        juce::String alsoHiddenWhenId;  // a second condition: also skipped while this choice param equals alsoHiddenWhenIndex
+        int alsoHiddenWhenIndex = -1;
+        int alsoHiddenOnlyAtIndex = -1;  // if >= 0, the second condition applies only while hiddenWhenId's index equals this
+        juce::Array<int> alsoHiddenAtIndices;  // also skipped while hiddenWhenId's choice index is one of these
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
     };
 
@@ -138,12 +142,6 @@ public:
         if (item.type == Type::placeholder)
             return;
 
-        if (item.type == Type::select)
-        {
-            changeSelection(delta);
-            return;
-        }
-
         const int next = nextVisibleIndex(cursor, delta < 0 ? -1 : 1);
         if (next == cursor)
             return;
@@ -153,10 +151,15 @@ public:
         notifyCurrentItemChanged();
     }
 
-    // Called by the theme's dec/inc buttons. No-op on select/placeholder pages.
+    // Called by the theme's dec/inc buttons. No-op on placeholder items.
     void valueStep(float direction)
     {
         auto& item = currentItem();
+        if (item.type == Type::select)
+        {
+            changeSelection(direction < 0.0f ? -1 : 1);
+            return;
+        }
         if (item.type != Type::value || ! isItemEnabled(item))
             return;
         changeValue(direction);
@@ -167,6 +170,17 @@ public:
     void setValue(float percentage)
     {
         auto& item = currentItem();
+        if (item.type == Type::select)
+        {
+            if (auto* p = intParam(item.id))
+            {
+                const int index = p->getRange().getStart()
+                                  + juce::roundToInt(percentage / 100.0f * (float) p->getRange().getLength());
+                if (index != p->get())
+                    changeSelection(index - p->get());
+            }
+            return;
+        }
         if (item.type != Type::value || ! isItemEnabled(item))
             return;
         auto* param = valueTreeState.getParameter(item.id);
@@ -179,7 +193,7 @@ public:
     }
 
     // Fired when the cursor/page changes. Carries the current item's value in the
-    // knob's 0..100 scale, or -1 when the knob has nothing to edit (select/placeholder).
+    // knob's 0..100 scale, or -1 when the knob has nothing to edit (placeholder).
     std::function<void(float)> onCurrentItemChanged;
 
     // ---- assignable macro knobs ----
@@ -284,15 +298,27 @@ private:
         return item.label;
     }
 
+    /** The choice / int parameter's current index, or -1 if there is no such parameter. */
+    int choiceIndex(const juce::String& id) const
+    {
+        if (auto* p = valueTreeState.getParameter(id))
+            return (int) std::lround(p->convertFrom0to1(p->getValue()));
+        return -1;
+    }
+
     bool isHidden(const Item& item) const
     {
+        if (item.alsoHiddenWhenId.isNotEmpty() && (item.alsoHiddenOnlyAtIndex < 0 || choiceIndex(item.hiddenWhenId) == item.alsoHiddenOnlyAtIndex))
+            if (choiceIndex(item.alsoHiddenWhenId) == item.alsoHiddenWhenIndex)
+                return true;
         if (item.hiddenWhenId.isEmpty())
             return false;
         auto* p = valueTreeState.getParameter(item.hiddenWhenId);
         if (p == nullptr)
             return false;
         const int index = (int) std::lround(p->convertFrom0to1(p->getValue()));
-        return index == item.hiddenWhenIndex || index < item.shownFromIndex || index > item.shownUntilIndex;
+        return index == item.hiddenWhenIndex || index < item.shownFromIndex || index > item.shownUntilIndex
+            || item.alsoHiddenAtIndices.contains(index);
     }
 
     bool modsOn() const
@@ -356,7 +382,7 @@ private:
         if (!onCurrentItemChanged)
             return;
         float v = -1.0f;
-        if (currentItem().type == Type::value)
+        if (currentItem().type != Type::placeholder)
             if (auto* param = valueTreeState.getParameter(currentItem().id))
                 v = param->getValue() * 100.0f;
         onCurrentItemChanged(v);
@@ -434,6 +460,8 @@ private:
 
     static juce::String valueString(juce::RangedAudioParameter* param)
     {
+        if (auto* p = dynamic_cast<juce::AudioParameterFloat*>(param); p != nullptr && p->range.start < 0.0f)
+            return p->getCurrentValueAsText();   // bipolar: the parameter's own signed text (e.g. "+24%")
         if (auto* p = dynamic_cast<juce::AudioParameterInt*>(param))
             return juce::String(p->get());
         if (auto* p = dynamic_cast<juce::AudioParameterBool*>(param))
@@ -610,6 +638,9 @@ public:
 
         Page ovd; ovd.title = "Overdrive";
         ovd.items.add(Item { "overdriveModelIndex", "Model", Type::select, overdriveModelNames, 0.0f });
+        Item disperse { "overdriveDisperse", "Disperse", Type::value, {}, 0.0f };   // allpass corner before the overdrive
+        disperse.showParamText = true;
+        ovd.items.add(disperse);
         pages.add(ovd);
 
         Page mod; mod.title = "Modifications";
@@ -637,9 +668,27 @@ public:
         // every Mods-page item is greyed out and inert while the Mods switch is off
         mod.items.add(Item { "filterType",  "Filter Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "filterMorph", "Filter Morph",     Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // LP / BP / HP; no effect on TeeBee
-        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        mod.items.add(Item { "resTrim",     "Res Trim",         Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
+        mod.items.add(Item { "filterQuality", "Filter Quality", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
+        {
+            Item tension { "filterTension", "Filter Tension", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 };   // Spicy only
+            tension.alsoHiddenWhenId = "filterQuality";   // Hi-Fi only: hidden in Standard
+            tension.alsoHiddenWhenIndex = 0;
+            mod.items.add(tension);
+        }
         mod.items.add(Item { "filterDrive", "Filter Saturation", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
+        {
+            Item bias { "filterBias", "Saturation Bias", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true };   // no effect on TeeBee
+            bias.alsoHiddenAtIndices = { 3, 6 };   // JuneBug, SemiSweet: too faint to hear, held at 0
+            mod.items.add(bias);
+        }
+        {
+            Item rail { "filterRail", "Saturation Rail", Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 };   // Spicy only
+            rail.alsoHiddenWhenId = "filterQuality";   // Hi-Fi only: hidden in Standard
+            rail.alsoHiddenWhenIndex = 0;
+            mod.items.add(rail);
+        }
+        mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
         mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, {}, -1, 0, true });
