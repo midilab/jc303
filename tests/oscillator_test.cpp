@@ -140,6 +140,47 @@ static void testDriftModulatesTheShape()
     CHECK (diff > 0.05, "drift had no audible effect (max diff %g)", diff);
 }
 
+static void testDriftLeavesTriModAlone()
+{
+    // sweeping aTM crosses the fundamental's null near 0.7, so drift is a ripple-saw effect only
+    auto still = makePhaseshaper (48000.0, 480.0, dfl::PhaseshaperOscillator::TRI_MOD, 0.4);
+    auto drifting = makePhaseshaper (48000.0, 480.0, dfl::PhaseshaperOscillator::TRI_MOD, 0.4);
+    drifting.setDrift (1.0);
+    double diff = 0.0;
+    for (int n = 0; n < 48000; ++n)
+        diff = std::max (diff, std::fabs (still.getSample() - drifting.getSample()));
+    CHECK (diff == 0.0, "drift changed the triangle modulation (max diff %g)", diff);
+}
+
+// rate of the drift's shape motion: zero crossings per second of the drift signal
+static double driftCrossingRate (double f)
+{
+    const double sr = 48000.0;
+    auto drifting = makePhaseshaper (sr, f, dfl::PhaseshaperOscillator::SUPERSAW, 0.5);
+    drifting.setDrift (1.0);
+    const int period = (int) std::lround (sr / f);
+    const int seconds = 8;
+    std::vector<double> dev;   // the drift signal, once per period
+    for (int n = 0, k = 0; n < seconds * (int) sr; ++n)
+    {
+        drifting.getSample();
+        if (++k == period) { dev.push_back (drifting.getDriftValue()); k = 0; }
+    }
+    int crossings = 0;
+    for (size_t i = 1; i < dev.size(); ++i)
+        if ((dev[i - 1] < 0.0) != (dev[i] < 0.0)) ++crossings;
+    return crossings / (double) seconds;
+}
+
+static void testDriftRateTracksPitch()
+{
+    // a detuned bank beats faster on higher notes
+    const double low = driftCrossingRate (110.0), high = driftCrossingRate (440.0);
+    std::printf ("drift motion: %.2f crossings/s at 110 Hz, %.2f at 440 Hz\n", low, high);
+    CHECK (low > 0.5, "drift at 110 Hz is too slow (%.2f crossings/s)", low);
+    CHECK (high > 2.5 * low, "drift rate does not track pitch (%.2f vs %.2f)", low, high);
+}
+
 static void testPhaseshaperAntialiasing()
 {
     const int N = 4096, P = 97;   // f0 = 1136.7 Hz at 48 kHz
@@ -179,6 +220,8 @@ int main()
     testSupersawMatchesEquation28();
     testSupersawIsPeriodicAndBounded();
     testDriftModulatesTheShape();
+    testDriftLeavesTriModAlone();
+    testDriftRateTracksPitch();
     testPhaseshaperAntialiasing();
     testJunoSawIsBandlimited();
 
