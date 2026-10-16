@@ -137,7 +137,7 @@ picks the change up. The GUI theme is `midilabv2`.
 
 ### Presets page
 
-The Presets page in the LCD shows seven rows:
+The Presets page in the LCD shows six rows:
 
 | Row | Action |
 |--|--|
@@ -147,7 +147,6 @@ The Presets page in the LCD shows seven rows:
 | `New` | Create a new preset from the current sound |
 | `Rename` | Rename the selected preset (keeps its sound) |
 | `Delete` | Delete the selected preset (asks for confirmation first) |
-| `Scale` | `+` loads an AnaMark `.tun` file, `-` resets to 12-TET (see Microtuning below) |
 
 New, Rename and Delete are confirmed on the keyboard:
 
@@ -252,7 +251,7 @@ the current bank's folder.
 
 ## Microtuning
 
-JC303 loads AnaMark `.tun` (v2) scale files. In the LCD menu, open **PST** and select **Scale**: **+** opens a `.tun` file, **-** resets to 12-TET. The display shows the active scale name.
+JC303 loads AnaMark `.tun` (v2) scale files. Right-click the **Tuning** knob and choose **Load .tun...** or **Reset to 12-TET**. The active scale name shows under the knob.
 
 - `[Exact Tuning]` takes precedence and needs `BaseFreq` plus all 128 notes. Without it, `[Functional Tuning]` needs `InitEqual`, and its `Note` lines apply in file order.
 - If a file is invalid, an error dialog shows the line and the cause, and the current scale stays loaded.
