@@ -8,6 +8,14 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(waveformSlider = createKnob("medium", false, "WAVEFORM"));
     addAndMakeVisible(volumeSlider = createKnob("medium", false, "VOLUME"));
     addAndMakeVisible(tuningSlider = createKnob("medium", false, "TUNING"));
+    tuningKnobMouse.onMenu = [this] { showTuningMenu(); };
+    tuningSlider->addMouseListener(&tuningKnobMouse, false);
+    addAndMakeVisible(tuningScaleLabel = new juce::Label());
+    tuningScaleLabel->setFont(juce::Font(11.0f));
+    tuningScaleLabel->setColour(juce::Label::textColourId, juce::Colour(28, 28, 28).withAlpha(0.75f));
+    tuningScaleLabel->setJustificationType(juce::Justification::centred);
+    tuningScaleLabel->setMinimumHorizontalScale(0.7f);
+    tuningScaleLabel->setInterceptsMouseClicks(false, false);
     addAndMakeVisible(cutoffFreqSlider = createKnob("medium", false, "CUTOFF FREQ"));
     addAndMakeVisible(resonanceSlider = createKnob("medium", false, "RESONANCE"));
     addAndMakeVisible(envelopModSlider = createKnob("medium", false, "ENVMOD"));
@@ -127,21 +135,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         {
             auto& seq = processorRef.getSequencer();
             return "-" + juce::String(seq.undoCount()) + " +" + juce::String(seq.redoCount());
-        } });
-
-    // Presets > Scale: + loads an AnaMark .tun file, - resets to 12-TET
-    menuPage->setAction("tuningFile", {
-        [this] (float direction)
-        {
-            if (direction < 0)
-                processorRef.resetTuning();
-            else
-                chooseTuningFile();
-        },
-        [this]
-        {
-            const auto name = processorRef.getTuningName();
-            return name.length() > 16 ? name.substring(0, 15) + "~" : name;
         } });
 
     selectMenu(2);   // default menu page; after the callback is set so the knob syncs
@@ -375,6 +368,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 JC303Editor::~JC303Editor()
 {
     stopTimer();
+    tuningSlider->removeMouseListener(&tuningKnobMouse);
 }
 
 bool JC303Editor::keyPressed (const juce::KeyPress& key)
@@ -413,6 +407,15 @@ void JC303Editor::paint (juce::Graphics& g)
     g.drawImage (overlay, getLocalBounds().toFloat());
 }
 
+void JC303Editor::showTuningMenu()
+{
+    juce::PopupMenu menu;
+    menu.addSectionHeader(processorRef.getTuningName());
+    menu.addItem("Load .tun...", [this] { chooseTuningFile(); });
+    menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [this] { processorRef.resetTuning(); });
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(tuningSlider));
+}
+
 void JC303Editor::chooseTuningFile()
 {
     tuningFileChooser = std::make_unique<juce::FileChooser>("Load AnaMark tuning", juce::File(), "*.tun");
@@ -443,6 +446,9 @@ void JC303Editor::timerCallback()
 
     auto& seq = processorRef.getSequencer();
     menuPage->refreshAction();
+    const auto scaleName = processorRef.isCustomTuningActive() ? processorRef.getTuningName() : juce::String();
+    if (tuningScaleLabel->getText() != scaleName)
+        tuningScaleLabel->setText(scaleName, juce::dontSendNotification);
 
     const int length = seq.getTrackLength();
     const bool playing = seq.isRunning();
@@ -776,6 +782,7 @@ void JC303Editor::setControlsLayout()
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderMediumSize, sliderMediumSize);
     // medium knobs
     tuningSlider->setBounds(tuningLocation.first, tuningLocation.second, sliderMediumSize, sliderMediumSize);
+    tuningScaleLabel->setBounds(tuningLocation.first - 30, tuningLocation.second + sliderMediumSize + 24, sliderMediumSize + 60, 14);   // below the TUNING label
     cutoffFreqSlider->setBounds(cutoffFreqLocation.first, cutoffFreqLocation.second, sliderMediumSize, sliderMediumSize);
     resonanceSlider->setBounds(resonanceLocation.first, resonanceLocation.second, sliderMediumSize, sliderMediumSize);
     envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderMediumSize, sliderMediumSize);
