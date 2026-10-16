@@ -686,7 +686,7 @@ public:
         juce::Array<Page> pages;
 
         Page pst; pst.title = "Presets";
-        pst.items.add(Item { {}, {}, Type::placeholder, {}, 0.0f });
+        pst.items.add(Item { "preset", "Preset", Type::action, {}, 0.0f });   // factory presets: dec/inc loads the previous/next
         pages.add(pst);
 
         Page ovd; ovd.title = "Overdrive";
@@ -743,8 +743,19 @@ public:
         }
         mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
-        mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "oscModel",    "Osc Model",        Type::value, {}, 1.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, "oscModel", -1, 0, true, 0 });   // TB-303 only
+        mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, "oscModel", -1, 0, true, 0 });   // TB-303 only
+        mod.items.add(Item { "junoWave",    "Juno Wave",        Type::value, {}, 1.0f, {}, "oscModel", -1, 1, true, 1 });   // Alpha Juno only
+        mod.items.add(Item { "superDetune", "Super Detune",     Type::value, {}, 0.0f, {}, "oscModel", -1, 1, true, 1 });
+        mod.items.add(Item { "superMix",    "Super Mix",        Type::value, {}, 0.0f, {}, "oscModel", -1, 1, true, 1 });
+        mod.items.add(Item { "shaperMode",  "Shaper Mode",      Type::value, {}, 1.0f, {}, "oscModel", -1, 2, true, 2 });   // Phaseshaper only
+        {
+            Item drift { "shapeDrift", "Shape Drift", Type::value, {}, 0.0f, {}, "oscModel", -1, 2, true, 2 };
+            drift.alsoHiddenWhenId = "shaperMode";   // Ripple Saw only
+            drift.alsoHiddenWhenIndex = 0;
+            mod.items.add(drift);
+        }
         mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f, {}, {}, -1, 0, true });
 

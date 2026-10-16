@@ -180,6 +180,24 @@ static void newDestinationsMoveTheSound()
   }
 }
 
+static void waveformAndPulseWidthReachEveryOscModel()
+{
+  // the Waveform destination is the Juno pulse morph and the phaseshaper shape; Pulse Width is the Juno chop
+  struct Case { rosic::OscModel model; int dest; };
+  for(Case c : { Case{ rosic::OSC_ALPHA_JUNO, rosic::MOD_DEST_WAVEFORM }, Case{ rosic::OSC_ALPHA_JUNO, rosic::MOD_DEST_PULSE_WIDTH },
+                 Case{ rosic::OSC_PHASESHAPER, rosic::MOD_DEST_WAVEFORM } })
+  {
+    Config osc = [c](rosic::Open303& s) {
+      s.setOscModel(c.model);
+      s.setJunoWaveform(2);   // SAW03: the chop follows the pulse width
+      s.setWaveform(0.3); };
+    std::vector<double> base = render(osc);
+    std::vector<double> mod = render([&](rosic::Open303& s) {
+      osc(s); s.setModSlot(1, rosic::MOD_SRC_ENV, c.dest, 0.8); });
+    CHECK(maxDiff(base, mod) > 1e-3);
+  }
+}
+
 static void lfoDepthDestinationCanOpenAClosedLfo()
 {
   // LFO depth knob at zero: the envelope fades the cutoff LFO in at the attack
@@ -352,6 +370,7 @@ int main()
   modsOffDisablesTheMatrix();
   slotZeroIsOwnedByLegacySetters();
   newDestinationsMoveTheSound();
+  waveformAndPulseWidthReachEveryOscModel();
   lfoDepthDestinationCanOpenAClosedLfo();
   knobValuesAreRestoredWhenModulationStops();
   accentDestinationLeavesUnaccentedNotesAlone();
