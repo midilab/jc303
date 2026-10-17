@@ -84,8 +84,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(modAssign2 = createAssignableSlider("LFO depth", modAssign2Label));
     menuPage->bindAssignableSlider(0, modAssign1, modAssign1Label);
     menuPage->bindAssignableSlider(1, modAssign2, modAssign2Label);
-    menuPage->setAssignableParam(0, "lfoRate");
-    menuPage->setAssignableParam(1, "lfoDepth");
+    menuPage->syncAssignablesFromState();   // saved with the state; presets assign them too
 
     menuPresetButton->onClick = [this] { selectMenu(0); };
     menuOverdriveButton->onClick = [this] { selectMenu(1); };
@@ -116,6 +115,15 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
                 editor->menuKnob->setValue(v, juce::dontSendNotification);
         };
     }
+
+    // Presets > Preset: - / + load the previous / next factory preset (wrapping)
+    menuPage->setAction("preset", {
+        [this] (float direction)
+        {
+            const int n = processorRef.getNumPrograms();
+            processorRef.setCurrentProgram((processorRef.getCurrentProgram() + (direction < 0 ? n - 1 : 1)) % n);
+        },
+        [this] { return processorRef.getProgramName(processorRef.getCurrentProgram()); } });
 
     // Sequencer > Undo: - undoes, + redoes the last gen / re-roll / clear
     menuPage->setAction("seqUndo", {
@@ -417,6 +425,7 @@ void JC303Editor::timerCallback()
 
     auto& seq = processorRef.getSequencer();
     menuPage->refreshAction();
+    menuPage->syncAssignablesFromState();
 
     const int length = seq.getTrackLength();
     const bool playing = seq.isRunning();

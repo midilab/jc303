@@ -14,8 +14,9 @@ namespace dfl
 
     TRI_MOD   Roland JP-8000 triangle modulation (Sec. 3.5, Eqs. 26a/b): a bipolar triangle
               xT = aTM * (2|2p - 1| - 1) folded back into [-1, 1] by y = 2(xT - ceil(xT - 0.5)).
-              Odd harmonics only, the 3rd dominant; aTM sweeps formant-like sync timbres.
-              Shape 0 -> aTM 0.5 (a plain triangle), shape 1 -> aTM 1 (the JP-8000 maximum).
+              Odd harmonics only. Up to aTM 1 (the JP-8000 maximum) the 3rd dominates while notches
+              sweep through the upper partials; past 1 the peak climbs near harmonic 4 * aTM, a sync
+              sweep. Shape 0 -> aTM 0.5 (a plain triangle), shape 1 -> aTM 6 (peak near h24).
 
     SUPERSAW  Ripple supersaw simulation (Sec. 3.6, Eq. 28): y = gb(sin(modm(x, m1) + modm(x, m2)))
               with x = a1 * p, a1 = 1.5 and m2 = 0.88 as in the paper. The sine acts on the ripple
@@ -48,8 +49,9 @@ namespace dfl
     static constexpr double SUPERSAW_A1 = 1.5;    // phase scaling a1 (Fig. 12)
     static constexpr double SUPERSAW_M2 = 0.88;   // second ripple modulus m2 (Fig. 12)
     static constexpr int    NUM_DRIFTS  = 3;
+    static constexpr double TRI_MOD_MAX_AMOUNT = 6.0;   // aTM at shape 1
 
-    static double triModAmountForShape(double shape) { return 0.5 + 0.5 * clip01(shape); }
+    static double triModAmountForShape(double shape) { return 0.5 + (TRI_MOD_MAX_AMOUNT - 0.5) * clip01(shape); }
     static double rippleForShape(double shape)       { return 0.8 - 0.6 * clip01(shape); }
 
     //---------------------------------------------------------------------------------------------
@@ -133,10 +135,10 @@ namespace dfl
       if( ! antialias )
         return y;
 
-      // folds where xT crosses +-0.5: |2p - 1| = (1 +- 0.5/a) / 2, each on both slopes
-      if( a > 0.5 + edgeEps )
+      // wraps where xT crosses a half-integer +-L: |2p - 1| = (1 +- L/a) / 2, each on both slopes
+      for( double L = 0.5; L < a - edgeEps; L += 1.0 )
       {
-        for( double level : { 0.5 / a, -0.5 / a } )
+        for( double level : { L / a, -L / a } )
         {
           const double c = 0.5 * (1.0 + level);
           for( double edge : { 0.5 * (1.0 - c), 0.5 * (1.0 + c) } )

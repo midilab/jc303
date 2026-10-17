@@ -1,5 +1,6 @@
 #include "JC303.h"
 #include GUI_THEME_HEADER
+#include "dfl_FactoryPresets.h"
 
 namespace
 {
@@ -23,7 +24,7 @@ namespace
     // order matches rosic::ModSource
     juce::StringArray modSourceNames()
     {
-        return { "Off", "LFO", "Env", "Accent", "Key", "Random", "Cutoff" };
+        return { "Off", "LFO", "Env", "Accent", "Key", "Random", "Cutoff", "Env+" };
     }
 
     // order matches rosic::ModDestination
@@ -824,6 +825,34 @@ void JC303::handleAsyncUpdate()
     if ((mask & OffsetShift) != 0)       _appliedShift.store (0);
     if ((mask & OffsetPitchRotate) != 0) _appliedPitchRotate.store (0);
     _seqOffsetReset.fetch_and (~mask, std::memory_order_acq_rel);
+    applyPendingControllers();
+}
+
+// The mod wheel sets performance knob 0's parameter directly, so the knob on screen follows it.
+void JC303::applyPendingControllers()
+{
+    const int wheel = _pendingModWheel.exchange (-1, std::memory_order_acq_rel);
+    if (wheel < 0)
+        return;
+    if (auto* p = parameters.getParameter (getPerformanceKnob (0)))
+    {
+        p->beginChangeGesture();
+        p->setValueNotifyingHost ((float) wheel / 127.0f);
+        p->endChangeGesture();
+    }
+}
+
+juce::String JC303::getPerformanceKnob (int knob) const
+{
+    if (knob < 0 || knob > 1)
+        return {};
+    return parameters.state.getProperty (dfl::performanceKnobIds[knob], dfl::defaultPerformanceKnobs[knob]).toString();
+}
+
+void JC303::setPerformanceKnob (int knob, const juce::String& paramID)
+{
+    if (knob >= 0 && knob <= 1)
+        parameters.state.setProperty (dfl::performanceKnobIds[knob], paramID, nullptr);
 }
 
 void JC303::applySeqCommands()
@@ -1229,23 +1258,31 @@ double JC303::getTailLengthSeconds() const
 
 int JC303::getNumPrograms()
 {
-    return 1;
+    return (int) dfl::factoryPresets().size();
 }
 
 int JC303::getCurrentProgram()
 {
-    return 0;
+    return currentProgram;
 }
 
+// Factory presets set the sound parameters; the sequencer, volume and tuning are left alone.
 void JC303::setCurrentProgram (int index)
 {
-    juce::ignoreUnused (index);
+    if (index < 0 || index >= getNumPrograms())
+        return;
+    currentProgram = index;
+    const auto& preset = dfl::factoryPresets()[(size_t) index];
+    dfl::applyFactoryPreset (getParameters(), preset);
+    setPerformanceKnob (0, preset.knob1);
+    setPerformanceKnob (1, preset.knob2);
 }
 
 const juce::String JC303::getProgramName (int index)
 {
-    juce::ignoreUnused (index);
-    return {};
+    if (index < 0 || index >= getNumPrograms())
+        return {};
+    return dfl::factoryPresets()[(size_t) index].name;
 }
 
 void JC303::changeProgramName (int index, const juce::String& newName)
@@ -1474,6 +1511,16 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         {
             render303 (buffer, currentSample, samplePosition);
             currentSample = samplePosition;
+        }
+
+        // Performance controls, whether or not the sequencer is playing: pitch bend spans an octave each way;
+        // the mod wheel is applied to performance knob 0 on the message thread (applyPendingControllers).
+        if (message.isPitchWheel())
+            open303Core.setPitchBend (12.0 * (message.getPitchWheelValue() - 8192) / 8192.0);
+        else if (message.isController() && message.getControllerNumber() == 1)
+        {
+            _pendingModWheel.store (message.getControllerValue(), std::memory_order_release);
+            triggerAsyncUpdate();
         }
 
         // ── Rec mode (works whether or not the sequencer is playing) ─────────
