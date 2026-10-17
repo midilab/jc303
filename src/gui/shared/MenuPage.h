@@ -700,16 +700,22 @@ public:
         static const juce::Identifier modItemIDs[] =
         {
             "normalDecay", "accentDecay", "accentSweep", "feedbackFilter",
-            "softAttack", "slideTime", "lfoRate", 
-            "lfoDepth", "lfoWaveform", "lfoDestination",
-            "lfoPhase", "lfoSync"
+            "softAttack", "slideTime",
+            "lfoRate", "lfoDepth", "lfoWaveform", "lfoDestination",
+            "lfoPhase", "lfoSync", "lfoContour",
+            "modSlot2Dest", "modSlot2Amount",
+            "modSlot3Source", "modSlot3Dest", "modSlot3Amount",
+            "modSlot4Source", "modSlot4Dest", "modSlot4Amount"
         };
         static const juce::String modItemLabels[] =
         {
             "Normal decay", "Accent decay", "Accent sweep", "Filter Feedback",
-            "Soft attack", "Slide time", "LFO rate", 
-            "LFO depth", "LFO wave", "LFO dest",
-            "LFO phase", "LFO key sync"
+            "Soft attack", "Slide time",
+            "LFO rate", "LFO depth", "LFO wave", "LFO dest",
+            "LFO phase", "LFO key sync", "LFO contour",
+            "Env dest", "Env amount",
+            "Mod 3 source", "Mod 3 dest", "Mod 3 amount",
+            "Mod 4 source", "Mod 4 dest", "Mod 4 amount"
         };
 
         // every Mods-page item is greyed out and inert while the Mods switch is off
@@ -748,10 +754,13 @@ public:
 
         for (auto& it : mod.items)
         {
-            if (it.id == "lfoWaveform" || it.id == "lfoDestination")
+            if (it.id == "normalDecay" || it.id == "accentDecay" || it.id == "accentSweep" || it.id == "softAttack"
+                || it.id == "slideTime" || it.id == "lfoRate" || it.id == "feedbackFilter"
+                || it.id == "lfoContour" || it.id.endsWith("Amount"))
+                it.showParamText = true;   // these params format themselves with their units
+            if (it.id == "lfoWaveform" || it.id == "lfoDestination"
+                || it.id.endsWith("Source") || it.id.endsWith("Dest"))
                 it.step = 1.0f;   // Choice params step one index at a time
-            if (it.id == "accentSweep")
-                it.showParamText = true;   // shows the time constant
         }
 
         pages.add(mod);

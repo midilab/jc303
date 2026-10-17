@@ -145,6 +145,7 @@ enum Open303Parameters
   LFO_DESTINATION,
   LFO_PHASE,
   LFO_SYNC,
+  LFO_CONTOUR,
   // Overdrive
   OVERDRIVE_SWITCH,
   OVERDRIVE_LEVEL,
@@ -256,6 +257,7 @@ private:
     void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
+    void updateModSlot (int index);   // pushes free matrix slot 0..2 (UI slots 2..4) to the core
     // Re-applies all cheap DSP parameters from the APVTS atomics on the audio thread. Called from
     // processBlock when parametersNeedUpdate is set, so parameter writes never race getSample().
     void updateOpen303Parameters();
@@ -347,6 +349,10 @@ private:
     std::atomic<float>* lfoDestination = nullptr;
     std::atomic<float>* lfoPhase = nullptr;
     std::atomic<float>* lfoSync = nullptr;
+    std::atomic<float>* lfoContour = nullptr;
+    std::atomic<float>* modSlotSource[3] = {};
+    std::atomic<float>* modSlotDest[3] = {};
+    std::atomic<float>* modSlotAmount[3] = {};
     // overdrive
     std::atomic<float>* overdriveModelIndex = nullptr;
     std::atomic<float>* switchOverdriveState = nullptr;
