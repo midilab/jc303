@@ -217,13 +217,13 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Amount",  0.5f },    // 50% keyboard tracking
         }, "superDetune", "superMix" },
 
-        // Vowel Sync: Tri Mod formant sweep on every note, from the JP-8000 shape back down to a rooted sync bite.
+        // Vowel Sync: Tri Mod sync sweep on every note, from a peak near h13 back down to a rooted triangle bite.
         // Env+ rests at 0, so the Waveform knob is the resting shape.
         { "Vowel Sync", {
             { "switchModState",  1.0f },
             { "oscModel",        2.0f },    // Phaseshaper
             { "shaperMode",      0.0f },    // Tri Mod
-            { "waveform",        0.2f },    // shape at rest: the root stays solid
+            { "waveform",        0.02f },   // aTM 0.6 at rest: the root stays solid
             { "filterType",      6.0f },    // SemiSweet
             { "filterMorph",     0.25f },   // LP leaning to BP: nasal
             { "cutoff",          0.7f },    // 1.3 kHz
@@ -239,7 +239,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Amount",  0.5f },
             { "modSlot4Source",  7.0f },    // Env+
             { "modSlot4Dest",    10.0f },   // Waveform (shape)
-            { "modSlot4Amount",  0.44f },   // 0.64 (JP-8000 default) at note-on, back to 0.2
+            { "modSlot4Amount",  0.53f },   // aTM ~3.5 (peak ~h13) at note-on, back to 0.6
         }, "waveform", "filterMorph" },
 
         // Ripple Lead: drifting Ripple Saw with the LFO sweeping the ripple, -2 oct sub, ARP 4075 filter.
