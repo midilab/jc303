@@ -3,6 +3,7 @@
 #include "JC303.h"
 #include "dfl_FactoryPresets.h"
 
+#include <algorithm>
 #include <cstdio>
 
 static int failures = 0;
@@ -109,6 +110,7 @@ static void testHoover (JC303& p)
     CHECK (valueOf (p, "superDetune") > 0.0f, "no supersaw detune");
     CHECK (valueOf (p, "lfoDestination") == 3.0f, "lfoDestination %g, want Pulse Width", valueOf (p, "lfoDestination"));
     CHECK (valueOf (p, "lfoDepth") > 0.0f, "no PWM depth");
+    CHECK (valueOf (p, "modSlot3Source") == 7.0f && valueOf (p, "modSlot3Dest") == 2.0f, "no Env+ -> Pitch dive");
     CHECK (valueOf (p, "lfoWaveform") == defaultOf (p, "lfoWaveform"), "lfoWaveform %g not reset", valueOf (p, "lfoWaveform"));
     CHECK (p.getCurrentProgram() == hoover, "current program %d", p.getCurrentProgram());
 }
@@ -161,7 +163,8 @@ static double rmsDb (const juce::AudioBuffer<float>& out, int from, int to)
     return 10.0 * std::log10 (sum / (to - from) + 1e-30);
 }
 
-// Hoover starts at about the stock 303 sound's level (Init) and, unlike it, holds that level
+// Hoover decays far less than the stock sound (Init) over a held note. The engine has no amp sustain, so with
+// the short main-envelope decay that times the pitch dive some decay remains.
 static void testHooverRenders (JC303& p, const char* wavPath)
 {
     const double sr = 44100.0;
@@ -177,16 +180,17 @@ static void testHooverRenders (JC303& p, const char* wavPath)
     for (int i = 0; i < out.getNumSamples(); ++i)
         finite = finite && std::isfinite (out.getSample (0, i));
     CHECK (finite, "hoover render has NaN/inf");
-    CHECK (std::abs (hooverDb - initDb) < 6.0, "Hoover attack %.1f dB vs Init %.1f dB", hooverDb, initDb);
-    CHECK (hooverLateDb > hooverDb - 9.0, "Hoover dies away while held (%.1f -> %.1f dB)", hooverDb, hooverLateDb);
+    CHECK (hooverDb - hooverLateDb < 0.6 * (initDb - initLateDb), "Hoover decays %.1f dB while held, Init %.1f dB",
+           hooverDb - hooverLateDb, initDb - initLateDb);
 
     if (wavPath != nullptr)
         writeWav (out, juce::File::getCurrentWorkingDirectory().getChildFile (wavPath));
 }
 
-// every preset makes clean sound: finite, audible, under full scale
+// every preset makes clean sound: finite, audible, under full scale, and level-matched to the bank
 static void testEveryPresetRenders (JC303& p, const char* wavDir)
 {
+    std::vector<std::pair<const char*, double>> attacks;
     for (auto& preset : dfl::factoryPresets())
     {
         const auto out = render (p, preset.name);
@@ -199,14 +203,23 @@ static void testEveryPresetRenders (JC303& p, const char* wavDir)
                 peak = std::max (peak, std::abs (out.getSample (c, i)));
             }
         const double attackDb = rmsDb (out, 0, (int) (0.15 * 44100.0));
-        std::printf ("  %-12s attack %6.1f dBFS, peak %6.1f dBFS\n", preset.name, attackDb, 20.0 * std::log10 (peak + 1e-30));
+        const double heldDb = rmsDb (out, (int) (1.75 * 44100.0), (int) (1.9 * 44100.0));
+        std::printf ("  %-12s attack %6.1f dBFS, held %6.1f dBFS, peak %6.1f dBFS\n", preset.name, attackDb, heldDb,
+                     20.0 * std::log10 (peak + 1e-30));
         CHECK (finite, "preset '%s' renders NaN/inf", preset.name);
         CHECK (attackDb > -60.0, "preset '%s' is silent (%.1f dBFS)", preset.name, attackDb);
         CHECK (peak < 1.0f, "preset '%s' clips (peak %.2f)", preset.name, peak);
+        attacks.push_back ({ preset.name, attackDb });
 
         if (wavDir != nullptr)
             writeWav (out, juce::File (wavDir).getChildFile (juce::String (preset.name).replace (" ", "_") + ".wav"));
     }
+
+    auto sorted = attacks;
+    std::sort (sorted.begin(), sorted.end(), [] (auto& a, auto& b) { return a.second < b.second; });
+    const double median = sorted[sorted.size() / 2].second;
+    for (auto& [name, db] : attacks)
+        CHECK (std::abs (db - median) < 15.0, "preset '%s' attack %.1f dB is far from the bank median %.1f dB", name, db, median);
 }
 
 int main (int argc, char** argv)
