@@ -150,15 +150,13 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Amount",  0.5f },    // 50% keyboard tracking
         }, "superDetune", "superMix" },
 
-        // Vowel Sync: Tri Mod formant sweep on every note, from full JP-8000 bite down to the default shape.
-        // The env slot is bipolar (rests at -1), so shape 0.82 - 0.18 settles at 0.64, clear of the 0.4 null.
+        // Vowel Sync: Tri Mod formant sweep on every note, from the JP-8000 shape back down to a rooted sync bite.
+        // Env+ rests at 0, so the Waveform knob is the resting shape.
         { "Vowel Sync", {
             { "switchModState",  1.0f },
             { "oscModel",        2.0f },    // Phaseshaper
             { "shaperMode",      0.0f },    // Tri Mod
-            { "waveform",        0.82f },   // shape
-            { "modSlot2Dest",    10.0f },   // Env -> Waveform (shape)
-            { "modSlot2Amount",  0.18f },   // 1.0 at note-on -> 0.64 at rest
+            { "waveform",        0.2f },    // shape at rest: the root stays solid
             { "filterType",      6.0f },    // SemiSweet
             { "filterMorph",     0.25f },   // LP leaning to BP: nasal
             { "cutoff",          0.7f },    // 1.3 kHz
@@ -172,6 +170,9 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  4.0f },    // Key
             { "modSlot3Dest",    0.0f },    // Cutoff
             { "modSlot3Amount",  0.5f },
+            { "modSlot4Source",  7.0f },    // Env+
+            { "modSlot4Dest",    10.0f },   // Waveform (shape)
+            { "modSlot4Amount",  0.44f },   // 0.64 (JP-8000 default) at note-on, back to 0.2
         }, "waveform", "filterMorph" },
 
         // Ripple Lead: drifting Ripple Saw with the LFO sweeping the ripple, -2 oct sub, ARP 4075 filter.
@@ -282,7 +283,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot4Amount",  0.5f },    // +/- 1 octave of decay time per note
         }, "modSlot3Amount", "modSlot4Amount" },
 
-        // Sub Tracker: heavy -2 oct sub under a square, filter fully keytracked, decay shortens up the keyboard.
+        // Sub Tracker: heavy -1 oct sub under a square, filter fully keytracked, decay shortens up the keyboard.
         { "Sub Tracker", {
             { "switchModState",  1.0f },
             { "oscModel",        0.0f },
@@ -294,7 +295,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "decay",           0.55f },   // 380 ms
             { "accent",          0.5f },
             { "subOscGain",      0.8f },
-            { "subOscBlend",     0.0f },    // -2 octaves
+            { "subOscBlend",     1.0f },    // -1 octave (square)
             { "normalDecay",     0.5f },
             { "accentDecay",     0.15f },
             { "softAttack",      0.3f },    // 5 ms
