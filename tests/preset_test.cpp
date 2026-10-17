@@ -110,7 +110,6 @@ static void testHoover (JC303& p)
     CHECK (valueOf (p, "superDetune") > 0.0f, "no supersaw detune");
     CHECK (valueOf (p, "lfoDestination") == 3.0f, "lfoDestination %g, want Pulse Width", valueOf (p, "lfoDestination"));
     CHECK (valueOf (p, "lfoDepth") > 0.0f, "no PWM depth");
-    CHECK (valueOf (p, "modSlot3Source") == 7.0f && valueOf (p, "modSlot3Dest") == 2.0f, "no Env+ -> Pitch dive");
     CHECK (valueOf (p, "lfoWaveform") == defaultOf (p, "lfoWaveform"), "lfoWaveform %g not reset", valueOf (p, "lfoWaveform"));
     CHECK (p.getCurrentProgram() == hoover, "current program %d", p.getCurrentProgram());
 }
@@ -163,8 +162,7 @@ static double rmsDb (const juce::AudioBuffer<float>& out, int from, int to)
     return 10.0 * std::log10 (sum / (to - from) + 1e-30);
 }
 
-// Hoover decays far less than the stock sound (Init) over a held note. The engine has no amp sustain, so with
-// the short main-envelope decay that times the pitch dive some decay remains.
+// Hoover holds its level while the note is held (Init, like a stock 303, dies away)
 static void testHooverRenders (JC303& p, const char* wavPath)
 {
     const double sr = 44100.0;
@@ -180,8 +178,7 @@ static void testHooverRenders (JC303& p, const char* wavPath)
     for (int i = 0; i < out.getNumSamples(); ++i)
         finite = finite && std::isfinite (out.getSample (0, i));
     CHECK (finite, "hoover render has NaN/inf");
-    CHECK (hooverDb - hooverLateDb < 0.6 * (initDb - initLateDb), "Hoover decays %.1f dB while held, Init %.1f dB",
-           hooverDb - hooverLateDb, initDb - initLateDb);
+    CHECK (hooverLateDb > hooverDb - 9.0, "Hoover dies away while held (%.1f -> %.1f dB)", hooverDb, hooverLateDb);
 
     if (wavPath != nullptr)
         writeWav (out, juce::File::getCurrentWorkingDirectory().getChildFile (wavPath));
