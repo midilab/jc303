@@ -51,7 +51,8 @@ namespace rosic
     MOD_SRC_ACCENT,       // accent gate, 0 or 1 (smoothed over ~1 ms)
     MOD_SRC_KEYTRACK,     // pitch around MIDI note 48, -1..+1 over +/-2 octaves, follows slides
     MOD_SRC_RANDOM,       // new bipolar value on every note (triggered or slid)
-    MOD_SRC_CUTOFF        // cutoff knob position, 0..1 over CUTOFF_KNOB_MIN..CUTOFF_KNOB_MAX
+    MOD_SRC_CUTOFF,       // cutoff knob position, 0..1 over CUTOFF_KNOB_MIN..CUTOFF_KNOB_MAX
+    MOD_SRC_ENV_PLUS      // filter envelope, unipolar: 0 at rest, so pitch and other offsets settle back
   };
 
   /** Modulation matrix destinations (also the values of the lfoDestination parameter). */
@@ -867,6 +868,8 @@ namespace rosic
           value = randomModValue;
         else if( source == MOD_SRC_CUTOFF )
           value = cutoffKnobModValue;
+        else if( source == MOD_SRC_ENV_PLUS )
+          value = envSource;
         else if( source == MOD_SRC_KEYTRACK )
         {
           if( !keySampled )
