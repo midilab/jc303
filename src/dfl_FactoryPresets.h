@@ -178,8 +178,8 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "filterTension",   0.0f },    // the circuit's rungs
             { "oscModel",        0.0f },
             { "waveform",        0.0f },    // saw
-            { "cutoff",          0.45f },   // 785 Hz
-            { "resonance",       0.7f },
+            { "cutoff",          0.2f },    // 470 Hz
+            { "resonance",       1.0f },
             { "envmod",          0.55f },
             { "decay",           0.5f },    // 300 ms
             { "accent",          0.8f },
