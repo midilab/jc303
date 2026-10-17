@@ -117,6 +117,15 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         };
     }
 
+    // Presets > Preset: - / + load the previous / next factory preset (wrapping)
+    menuPage->setAction("preset", {
+        [this] (float direction)
+        {
+            const int n = processorRef.getNumPrograms();
+            processorRef.setCurrentProgram((processorRef.getCurrentProgram() + (direction < 0 ? n - 1 : 1)) % n);
+        },
+        [this] { return processorRef.getProgramName(processorRef.getCurrentProgram()); } });
+
     // Sequencer > Undo: - undoes, + redoes the last gen / re-roll / clear
     menuPage->setAction("seqUndo", {
         [this] (float direction)

@@ -758,7 +758,6 @@ namespace rosic
       junoOscillator.setSquareBlend(w);
       phaseshaper.setShape(w);
     }
-
     bool lfoEnabled = false;  // master LFO processing switch
 
     list<MidiNoteEvent> noteList;

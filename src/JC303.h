@@ -325,6 +325,8 @@ private:
     bool _sustainArmed  { true  };
     bool _recWasOn      { false };
 
+    int currentProgram = 0;   // factory preset index (see dfl_FactoryPresets.h)
+
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
     File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";

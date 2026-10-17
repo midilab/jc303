@@ -686,7 +686,7 @@ public:
         juce::Array<Page> pages;
 
         Page pst; pst.title = "Presets";
-        pst.items.add(Item { {}, {}, Type::placeholder, {}, 0.0f });
+        pst.items.add(Item { "preset", "Preset", Type::action, {}, 0.0f });   // factory presets: dec/inc loads the previous/next
         pages.add(pst);
 
         Page ovd; ovd.title = "Overdrive";
