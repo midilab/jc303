@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "BlueGlow.h"
+#include "GlowFrame.h"
 
 // Small LED used to visualise the sequencer step state; clicking it selects the
 // step to edit. The image is a 3-frame vertical strip: OFF (top), ON (middle),
@@ -114,7 +114,7 @@ public:
             if (ledState == kPitchPlayhead)
             {
                 if (! imageAmber.isValid())
-                    imageAmber = makeBlueGlowFrame(imageLed, 3, 0, 1, juce::Colour::fromFloatRGBA(1.0f, 0.62f, 0.1f, 1.0f));
+                    imageAmber = makeGlowFrame(imageLed, 3, 0, 1, juce::Colour::fromFloatRGBA(1.0f, 0.62f, 0.1f, 1.0f));
                 g.drawImage(imageAmber, 0, 0, getWidth(), drawHeight,
                             0, 0, imageAmber.getWidth(), imageAmber.getHeight(), false);
                 return;
@@ -123,7 +123,7 @@ public:
             if (ledState == kSecondary)
             {
                 if (! imageBlue.isValid())
-                    imageBlue = makeBlueGlowFrame(imageLed, 3, 0, 1);
+                    imageBlue = makeGlowFrame(imageLed, 3, 0, 1);
                 g.drawImage(imageBlue, 0, 0, getWidth(), drawHeight,
                             0, 0, imageBlue.getWidth(), imageBlue.getHeight(), false);
                 return;

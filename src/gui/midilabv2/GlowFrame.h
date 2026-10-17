@@ -2,10 +2,10 @@
 
 #include <JuceHeader.h>
 
-// Builds a recoloured "secondary" frame (blue by default) of a button strip: the OFF frame plus only the
-// light the ON frame adds (the lit glow), recoloured, so the button body and
+// Builds a recoloured frame of a button strip (blue by default): the OFF frame plus only the
+// light the ON frame adds (the lit glow), tinted, so the button body and
 // edge stay untouched. frameCount frames are stacked vertically in the strip.
-inline juce::Image makeBlueGlowFrame(const juce::Image& strip, int frameCount, int offFrame, int onFrame,
+inline juce::Image makeGlowFrame(const juce::Image& strip, int frameCount, int offFrame, int onFrame,
                                      juce::Colour tint = juce::Colour::fromFloatRGBA(0.25f, 0.55f, 1.0f, 1.0f))
 {
     if (! strip.isValid())
