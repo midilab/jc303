@@ -21,7 +21,7 @@ static int failures = 0;
 static constexpr int kStep = 6000;
 static constexpr int kTick = 250;
 
-struct Ev { bool on; int note; int vel; long at; };
+struct Ev { bool on; int note; int vel; long at; bool mute = false; bool hammer = false; };
 
 // Runs a sequencer and records the note events it emits.
 struct Rig
@@ -34,7 +34,7 @@ struct Rig
     Rig()
     {
         seq.onNoteEvent = [this] (const Acid303Event& e)
-        { evs.push_back ({ e.type == Acid303EventType::NoteOn, e.note, e.velocity, pos + e.sampleOffset }); };
+        { evs.push_back ({ e.type == Acid303EventType::NoteOn, e.note, e.velocity, pos + e.sampleOffset, e.mute, e.hammer }); };
         seq.onAllNotesOff = [this] { ++allNotesOffCalls; };
         seq.prepare (48000.0, 960.0);
         seq.setTempo (120.0f);
@@ -118,6 +118,62 @@ static void testSlideOverlapsNextNote()
     const long off0 = r.offAfter (40, ons[0].at);
     CHECK (off0 > ons[1].at);                        // legato: still sounding when the next note starts
     CHECK (off0 < ons[1].at + kStep);                // but released within the next step
+}
+
+static void testMuteChokesGate()
+{
+    Rig r;
+    r.step (0, 40, /*accent=*/true); r.step (1, 43);
+    r.seq.setStepMute (0, true);
+    r.seq.setTrackLength (2);
+    r.seq.start();
+    r.run (2 * kStep);
+    const auto ons = r.ons();
+    CHECK (! r.seq.accentOn (0));                    // mute clears accent
+    CHECK (ons[0].mute && ! ons[1].mute);
+    CHECK (ons[0].vel == SEQ303_NOTE_VELOCITY);
+    CHECK (r.offAfter (40, ons[0].at) == ons[0].at + 6 * kTick);   // half the plain gate
+}
+
+static void testMuteKeepsSlideOverlap()
+{
+    Rig r;
+    r.step (0, 40, false, /*slide=*/true); r.step (1, 43);
+    r.seq.setStepMute (0, true);
+    r.seq.setTrackLength (2);
+    r.seq.start();
+    r.run (2 * kStep);
+    const auto ons = r.ons();
+    CHECK (r.offAfter (40, ons[0].at) > ons[1].at);  // the slide extension is not choked
+}
+
+static void testHammerOverlapsAndFlagsNextNote()
+{
+    Rig r;
+    r.step (0, 40, false, /*slide=*/true); r.step (1, 43); r.step (2, 45);
+    r.seq.setHammer (0, true);
+    r.seq.setTrackLength (3);
+    r.seq.start();
+    r.run (3 * kStep);
+    const auto ons = r.ons();
+    CHECK (! r.seq.slideOn (0));                     // hammer clears slide
+    CHECK (r.offAfter (40, ons[0].at) > ons[1].at);  // legato like a slide
+    CHECK (! ons[0].hammer && ons[1].hammer && ! ons[2].hammer);   // flag rides on the receiving note
+    CHECK (r.offAfter (43, ons[1].at) < ons[2].at);  // the receiving step's own gate is plain
+}
+
+static void testHammerCarriesAcrossTie()
+{
+    Rig r;
+    r.step (0, 40); r.step (2, 43);
+    r.seq.setHammer (0, true);
+    r.seq.setTie (1, true);
+    r.seq.setTrackLength (3);
+    r.seq.start();
+    r.run (3 * kStep);
+    const auto ons = r.ons();
+    CHECK (ons.size() >= 2 && ons[1].note == 43 && ons[1].hammer);
+    CHECK (r.offAfter (40, ons[0].at) > ons[1].at);
 }
 
 static void testRestIsSilent()
@@ -732,6 +788,10 @@ int main()
     testStepSpacingAndGate();
     testAccentVelocity();
     testSlideOverlapsNextNote();
+    testMuteChokesGate();
+    testMuteKeepsSlideOverlap();
+    testHammerOverlapsAndFlagsNextNote();
+    testHammerCarriesAcrossTie();
     testRestIsSilent();
     testTieHoldsAcrossRest();
     testSameNoteSlideIsOneGate();

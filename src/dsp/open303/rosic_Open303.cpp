@@ -32,9 +32,19 @@ Open303::Open303()
   currentVel       =     0;
   noteOffCountDown =     0;
   slideToNextNote  = false;
+  hammerToNextNote = false;
   idle             = true;
   currentFilterType = dfl::FILTER_TEEBEE;
   pendingFilterType = dfl::FILTER_TEEBEE;
+  currentNoteMuted = false;
+  muteMorph        =   0.0;   // start unmuted
+  muteMorphCoeff   =   0.0;   // will be set in setSampleRate
+
+  // TT-303 mute parameters (conservative defaults)
+  muteGateFactor   =     0.5;   // 50% gate length
+  muteLevelFactor  =     0.6;   // 60% volume
+  muteCutoffFactor =     0.7;   // 70% cutoff
+  muteEnvFactor    =     0.7;   // 70% envelope mod
 
   // LFO defaults
   lfoDepth         =    0.0;
@@ -113,6 +123,10 @@ void Open303::setSampleRate(double newSampleRate)
   rc2.setSampleRate(             (float)newSampleRate);
   sequencer.setSampleRate(              newSampleRate);
   lfo.setSampleRate(                    newSampleRate);
+
+  // Mute morph smoother: ~2ms one-pole so mute level/cutoff/env changes ramp
+  // instead of stepping (avoids clicks at legato hammer/slide boundaries)
+  muteMorphCoeff = exp(-1.0 / (0.002 * newSampleRate));
 
   highpass2.setSampleRate     (         newSampleRate);
   allpass.setSampleRate       (         newSampleRate);
@@ -342,7 +356,7 @@ void Open303::renderBlock(double* out, int numSamples)
   }
 }
 
-void Open303::noteOn(int noteNumber, int velocity, double detune)
+void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bool hammer)
 {
   if( sequencer.modeWasChanged() )
     allNotesOff();
@@ -388,10 +402,15 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
   {
     // check if the note-list is empty (indicating that currently no note is playing) - if so,
     // trigger a new note, otherwise, slide to the new note:
+    // (a hammer snaps to the new pitch instead of gliding; a muted note is never accented)
+    const bool hasAccent = velocity >= 100 && !muted;
     if( noteList.empty() )
-      triggerNote(noteNumber, velocity >= 100);
+      triggerNote(noteNumber, hasAccent);
+    else if( hammer )
+      hammerToNote(noteNumber, hasAccent);
     else
-      slideToNote(noteNumber, velocity >= 100);
+      slideToNote(noteNumber, hasAccent);
+    currentNoteMuted = muted;
 
     currentNote = noteNumber;
     currentVel  = 64;
@@ -407,6 +426,7 @@ void Open303::allNotesOff()
 {
   noteList.clear();
   ampEnv.noteOff();
+  currentNoteMuted = false;
   currentNote = -1;
   currentVel  = 0;
 }
@@ -471,6 +491,13 @@ void Open303::slideToNote(int noteNumber, bool hasAccent)
     ampEnv.setRelease(normalAmpRelease);
   }
   idle = false;
+}
+
+void Open303::hammerToNote(int noteNumber, bool hasAccent)
+{
+  // Hammer is a slide with an instant pitch change: snap the slew limiter to the new pitch
+  slideToNote(noteNumber, hasAccent);
+  pitchSlewLimiter.setState(log(oscFreq));  // the slew runs on log(freq)
 }
 
 void Open303::releaseNote(int noteNumber)

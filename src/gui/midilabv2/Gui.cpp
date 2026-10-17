@@ -195,20 +195,28 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         // micro toggles write their flag directly (button ON == feature active)
         seqAccentButtons[i]->setClickTogglesState(true);
         seqSlideButtons[i]->setClickTogglesState(true);
+        // shift-click sets the secondary state: mute on the accent toggle, hammer on the slide toggle
+        seqAccentButtons[i]->setSecondaryEnabled(true);
+        seqSlideButtons[i]->setSecondaryEnabled(true);
         seqAccentButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
+            const int state = seqAccentButtons[step]->getState();
+            processorRef.getSequencer().setAccent(step, state == 1);
+            processorRef.getSequencer().setStepMute(step, state == SequencerStepSelector::kSecondary);
         };
-        // shared slide/tie toggle, as in aciduino: slide on a note, tie on a rest
+        // shared slide/tie toggle, as in aciduino: slide (or hammer) on a note, tie on a rest
         // (labelled "slide": on the TB-303 both are the same hold-into-next-step flag)
         seqSlideButtons[i]->onClick = [this, step]
         {
             auto& seq = processorRef.getSequencer();
-            const bool on = seqSlideButtons[step]->getState() != 0;
+            const int state = seqSlideButtons[step]->getState();
             if (seq.stepOn(step))
-                seq.setSlide(step, on);
+            {
+                seq.setSlide(step, state == 1);
+                seq.setHammer(step, state == SequencerStepSelector::kSecondary);
+            }
             else
-                seq.setTie(step, on);
+                seq.setTie(step, state != 0);
         };
         // clicking an LED selects the step to edit
         stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
@@ -456,15 +464,17 @@ void JC303Editor::timerCallback()
         if (seqStepNoteLabels[i]->findColour(juce::Label::textColourId) != noteColour)
             seqStepNoteLabels[i]->setColour(juce::Label::textColourId, noteColour);
 
-        // per-step accent and slide/tie toggles: ON == flag active (steps beyond the
-        // active pattern length show OFF, but stay editable). The shared toggle shows
-        // slide on a note step and tie on a rest.
-        const bool accentOn = (i < length) && seq.accentOn(i);
-        const bool slideOn  = (i < length) && (seq.stepOn(i) ? seq.slideOn(i) : seq.tieOn(i));
-        if (seqAccentButtons[i]->getState() != accentOn)
-            seqAccentButtons[i]->setState(accentOn ? 1 : 0);
-        if (seqSlideButtons[i]->getState() != slideOn)
-            seqSlideButtons[i]->setState(slideOn ? 1 : 0);
+        // per-step accent and slide/tie toggles: ON == flag active, blue == mute / hammer
+        // (steps beyond the active pattern length show OFF, but stay editable). The shared
+        // toggle shows slide or hammer on a note step and tie on a rest.
+        constexpr int kBlue = SequencerStepSelector::kSecondary;
+        const bool noteStep  = seq.stepOn(i);
+        const int accentState = (i >= length) ? 0 : seq.accentOn(i) ? 1 : seq.stepMuteOn(i) ? kBlue : 0;
+        const int slideState  = (i >= length) ? 0
+                              : ! noteStep    ? (seq.tieOn(i) ? 1 : 0)
+                              : seq.slideOn(i) ? 1 : seq.hammerOn(i) ? kBlue : 0;
+        seqAccentButtons[i]->setState(accentState);
+        seqSlideButtons[i]->setState(slideState);
     }
 
     updateKeyboardForSelectedStep();

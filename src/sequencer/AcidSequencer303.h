@@ -67,6 +67,9 @@ static constexpr uint8_t  SEQ303_ACCENT_VELOCITY_THRESHOLD = 100;
 static constexpr double SEQ303_NOTE_LENGTH_RATIO = 12.0 / 24.0;  // 50% gate
 static constexpr double SEQ303_SLIDE_EXTRA_RATIO = 20.0 / 24.0;  // slide overhang
 
+// Muted (choked) note: gate length multiplier, matches Open303 muteGateFactor.
+static constexpr double SEQ303_MUTE_GATE_FACTOR  = 0.5;
+
 // =============================================================================
 // Data structures
 // =============================================================================
@@ -77,6 +80,8 @@ struct StepData303
     bool    accent { false };
     bool    slide  { false };
     bool    tie    { false };
+    bool    mute   { false };   // choked note; excludes accent
+    bool    hammer { false };   // legato with instant pitch change; excludes slide
 };
 
 struct NoteStackEntry303
@@ -106,6 +111,8 @@ struct Acid303Event
     uint8_t          note;
     uint8_t          velocity;
     int              sampleOffset;   // sample position within the current buffer
+    bool             mute   { false };   // choked note
+    bool             hammer { false };   // legato into this note snaps the pitch instead of gliding
 };
 
 // =============================================================================
@@ -245,6 +252,7 @@ public:
         _lastMidiClock = -1;
         _swingRelatch = true;
         _pitchPlayhead = -1;
+        _hammerIn     = false;
         _running      = true;
     }
 
@@ -371,11 +379,15 @@ public:
             _data.step[step].tie = false;
     }
     /** setAccent(step, state) */
-    void setAccent (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].accent = v; }
+    void setAccent (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].accent = v; if (v) _data.step[step].mute = false; }
     /** setSlide(step, state) */
-    void setSlide  (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].slide  = v; }
+    void setSlide  (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].slide  = v; if (v) _data.step[step].hammer = false; }
     /** setTie(step, state) */
     void setTie    (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].tie    = v; }
+    /** setStepMute(step, state) -- choked note; clears accent (setMute() silences the whole sequencer) */
+    void setStepMute (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].mute   = v; if (v) _data.step[step].accent = false; }
+    /** setHammer(step, state) -- instant-pitch legato; clears slide */
+    void setHammer (int step, bool v) { juce::SpinLock::ScopedLockType lk(_dataLock); _data.step[step].hammer = v; if (v) _data.step[step].slide  = false; }
 
     /** setStepData(step, note) — mirrors Engine303::setStepData() */
     void setStepData (int step, uint8_t note)
@@ -408,6 +420,10 @@ public:
     bool slideOn  (int step) const { return  _data.step[step].slide;  }
     /** tieOn(step) */
     bool tieOn    (int step) const { return  _data.step[step].tie;    }
+    /** stepMuteOn(step) */
+    bool stepMuteOn (int step) const { return  _data.step[step].mute;   }
+    /** hammerOn(step) */
+    bool hammerOn (int step) const { return  _data.step[step].hammer; }
 
     // =========================================================================
     // ── Track-level getters / setters — mirrors engine_303 API ───────────────
@@ -568,6 +584,8 @@ public:
         s.accent = accent;
         s.slide  = legato;
         s.tie    = false;
+        s.mute   = false;
+        s.hammer = false;
         _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
 
@@ -595,6 +613,8 @@ public:
         s.accent = false;
         s.slide  = false;
         s.tie    = false;
+        s.mute   = false;
+        s.hammer = false;
         _recStep.store ((st + 1) % _data.stepLength, std::memory_order_relaxed);
     }
 
@@ -632,6 +652,8 @@ public:
             _data.step[idx].rest   = true;
             _data.step[idx].tie    = true;
             _data.step[idx].slide  = false;
+            _data.step[idx].mute   = false;
+            _data.step[idx].hammer = false;
             _data.step[idx].note   = anchorNote;
         }
     }
@@ -1042,13 +1064,17 @@ private:
                 continue;
             }
 
-            if (cur.slide && ! next.rest)
+            if ((cur.slide || cur.hammer) && ! next.rest)
             {
                 endStep = stepTick + i;
                 tail    = _slideExtraTicks - (_ticksPerStep - _noteLengthTicks);
             }
             break;
         }
+
+        // A muted note is choked: shorten the plain gate (slide / tie extensions stay intact)
+        if (cur.mute && endStep == stepTick)
+            tail = std::max (1, static_cast<int32_t>(tail * SEQ303_MUTE_GATE_FACTOR));
 
         // Ticks from the tick this step fires on (whole part of its swing) to the release
         const double gateTicks = static_cast<double>(endStep - stepTick) * _ticksPerStep
@@ -1081,11 +1107,14 @@ private:
                 _stack[i].offFrac = offFrac;
                 send (Acid303EventType::NoteOn,
                       note,
-                      cur.accent ? SEQ303_ACCENT_VELOCITY : SEQ303_NOTE_VELOCITY,
-                      sampleOffset + onsetFrac * _tickSamples);
+                      (cur.accent && ! cur.mute) ? SEQ303_ACCENT_VELOCITY : SEQ303_NOTE_VELOCITY,
+                      sampleOffset + onsetFrac * _tickSamples,
+                      cur.mute,
+                      _hammerIn);
                 break;
             }
         }
+        _hammerIn = cur.hammer;
     }
 
     // ── onTick — fires every 96-PPQN tick; decrements note stack ─────────────
@@ -1149,7 +1178,8 @@ private:
 
     /** Queue an event at `sampleOffset` (may fall past this block), or on the
      *  CPU-timing interrupt grid. */
-    void send (Acid303EventType type, uint8_t note, uint8_t velocity, double sampleOffset)
+    void send (Acid303EventType type, uint8_t note, uint8_t velocity, double sampleOffset,
+               bool mute = false, bool hammer = false)
     {
         const double t = static_cast<double>(_blockStart) + sampleOffset;
         int64_t      at;
@@ -1173,11 +1203,11 @@ private:
                 if (_queue[i].ev.type == Acid303EventType::NoteOff && _queue[i].at > at)
                     _queue[i].at = at;
 
-        const Acid303Event ev { type, note, velocity, 0 };
+        Acid303Event ev { type, note, velocity, 0, mute, hammer };
         if (_queueCount == kQueueSize)
         {
-            emit ({ type, note, velocity,
-                    static_cast<int>(juce::jlimit<int64_t> (0, std::max (0, _blockLength - 1), at - _blockStart)) });
+            ev.sampleOffset = static_cast<int>(juce::jlimit<int64_t> (0, std::max (0, _blockLength - 1), at - _blockStart));
+            emit (ev);
             return;
         }
         _queue[_queueCount++] = { ev, at };
@@ -1226,6 +1256,8 @@ private:
             _data.step[i].accent = false;
             _data.step[i].slide  = false;
             _data.step[i].tie    = false;
+            _data.step[i].mute   = false;
+            _data.step[i].hammer = false;
         }
     }
 
@@ -1349,8 +1381,10 @@ private:
     {
         auto& st = _data.step[i];
         const bool isOn = (randPercent() < fill);
-        st.rest = ! isOn;
-        st.tie  = false;
+        st.rest   = ! isOn;
+        st.tie    = false;
+        st.mute   = false;
+        st.hammer = false;
 
         if (! isOn)
         {
@@ -1428,6 +1462,7 @@ private:
     // Note lengths in 96-PPQN ticks (identical numbers to original engine_303)
     int32_t                _noteLengthTicks { 0 };   // = 12 ticks = 50% gate
     int32_t                _slideExtraTicks { 0 };   // = 20 ticks
+    bool                   _hammerIn { false };      // the last played note hammers into the next one
 
     std::atomic<float>     _internalBpm { 120.f };
 
