@@ -22,7 +22,8 @@ inline const std::vector<FactoryPreset>& factoryPresets()
         { "Init", {} },
 
         // Alpha Juno "What The" / Mentasm: the PWM'd chopped saw (SAW03), thickened by the supersaw stack in place
-        // of the Juno's chorus, a -1 octave sub, an open MS-20 filter, long decays and long slides for the swoops.
+        // of the Juno's chorus, a -1 octave sub, an open MS-20 filter, a long amp decay, the Env+ pitch dive on
+        // every note and long slides for the swoops.
         { "Hoover", {
             { "switchModState",  1.0f },
             { "oscModel",        1.0f },    // Alpha Juno
@@ -39,17 +40,20 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "cutoff",          0.85f },
             { "resonance",       0.15f },
             { "envmod",          0.15f },
-            { "decay",           1.0f },
-            { "accent",          0.4f },
+            { "decay",           0.45f },   // 240 ms: the pitch dive (and filter env) time
+            { "accent",          0.15f },   // light: a strong accent transient would swamp the body
             { "normalDecay",     1.0f },    // 3 s
-            { "accentDecay",     1.0f },
+            { "accentDecay",     0.07f },   // 240 ms: accented notes dive at the same speed
             { "slideTime",       0.8f },    // 290 ms
+            { "modSlot3Source",  7.0f },    // Env+
+            { "modSlot3Dest",    2.0f },    // Pitch
+            { "modSlot3Amount",  0.25f },   // +3 semitones at note-on, diving onto the note; deeper on accents
         } },
 
-        // Squelch: stock-timed TeeBee saw acid; accents also push the resonance up.
+        // Squelch: stock-timed saw acid on the Spicy diode ladder; accents also push the resonance up.
         { "Squelch", {
             { "switchModState",  1.0f },
-            { "filterType",      0.0f },    // TeeBee
+            { "filterType",      1.0f },    // Spicy
             { "oscModel",        0.0f },    // TB-303
             { "waveform",        0.0f },    // saw
             { "cutoff",          0.3f },    // 575 Hz
@@ -60,9 +64,32 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "normalDecay",     0.4f },    // 1.2 s, the stock amp decay
             { "accentDecay",     0.06f },   // 210 ms, stock
             { "slideTime",       0.16f },   // 60 ms, stock
+            { "softAttack",      0.38f },   // 10 ms
             { "modSlot3Source",  3.0f },    // Accent
             { "modSlot3Dest",    4.0f },    // Resonance
             { "modSlot3Amount",  0.2f },    // +10 points on accented notes
+        } },
+
+        // Mind Bender (fringeshift): Spicy at the LP/BP blend, the Cutoff knob also morphing it from 0.1 to 0.3,
+        // so opening the filter slides it further into bandpass.
+        { "Mind Bender", {
+            { "switchModState",  1.0f },
+            { "filterType",      1.0f },    // Spicy
+            { "oscModel",        0.0f },
+            { "waveform",        0.0f },    // saw
+            { "filterMorph",     0.1f },
+            { "cutoff",          0.4f },
+            { "resonance",       0.75f },
+            { "envmod",          0.6f },
+            { "decay",           0.5f },    // 300 ms
+            { "accent",          0.8f },
+            { "normalDecay",     0.4f },    // 1.2 s
+            { "accentDecay",     0.06f },   // 210 ms
+            { "slideTime",       0.16f },   // 60 ms
+            { "softAttack",      0.38f },   // 10 ms
+            { "modSlot3Source",  6.0f },    // Cutoff (knob position 0..1)
+            { "modSlot3Dest",    13.0f },   // Filter Morph
+            { "modSlot3Amount",  0.4f },    // +0.2 morph at full cutoff: 0.1 -> 0.3
         } },
 
         // Spicy Devil: Devil Fish-style square on the diode ladder, filter FM, accent sweep that builds over
@@ -201,13 +228,13 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "filterType",      2.0f },    // MissBehave
             { "oscModel",        0.0f },
             { "waveform",        0.3f },    // mostly saw
-            { "cutoff",          0.4f },    // 710 Hz
-            { "resonance",       0.95f },
+            { "cutoff",          0.0f },    // 314 Hz: keytrack, random and the envelope open it
+            { "resonance",       1.0f },
             { "envmod",          0.5f },
             { "decay",           0.5f },
             { "accent",          0.9f },
-            { "filterDrive",     0.75f },   // +12 dB
-            { "filterBias",      0.7f },
+            { "filterDrive",     0.44f },   // +7 dB
+            { "filterBias",      0.1f },    // nearly symmetric
             { "filterRail",      1.0f },
             { "normalDecay",     0.5f },
             { "accentDecay",     0.1f },
