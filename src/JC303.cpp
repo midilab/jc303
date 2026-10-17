@@ -250,6 +250,34 @@ JC303::JC303()
                                                         "Filter Model",
                                                         juce::StringArray{ "TeeBee", "Spicy", "MissBehave", "JuneBug", "Wasabi", "Hornet", "SemiSweet", "Oddity" },
                                                         FILTER_TEEBEE),
+            // oscillator model; the Waveform knob is the saw/pulse morph (Juno) or the shape (Phaseshaper)
+            std::make_unique<juce::AudioParameterChoice> ("oscModel",
+                                                        "Osc Model",
+                                                        juce::StringArray{ "TB-303", "Alpha Juno", "Phaseshaper" },
+                                                        OSC_TB303),
+            std::make_unique<juce::AudioParameterChoice> ("junoWave",
+                                                        "Juno Wave",
+                                                        juce::StringArray{ "1 Saw", "2 Oct", "3 PW", "4 Hi Oct", "5 Dual" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("superDetune",
+                                                        "Super Detune",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // 0 = one voice, up = JP-8000 supersaw spread
+            std::make_unique<juce::AudioParameterFloat> ("superMix",
+                                                        "Super Mix",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.75f),  // center/side balance, Szabo's default
+            std::make_unique<juce::AudioParameterChoice> ("shaperMode",
+                                                        "Shaper Mode",
+                                                        juce::StringArray{ "Tri Mod", "Ripple Saw" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("shapeDrift",
+                                                        "Shape Drift",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // ripple saw shimmer, pitch-tracked like a detuned bank
             // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
                                                         "Square Model",
@@ -488,6 +516,12 @@ JC303::JC303()
     seqClear = parameters.getRawParameterValue("seqClear");
     subOscGain = parameters.getRawParameterValue("subOscGain");
     subOscBlend = parameters.getRawParameterValue("subOscBlend");
+    oscModel = parameters.getRawParameterValue("oscModel");
+    junoWave = parameters.getRawParameterValue("junoWave");
+    superDetune = parameters.getRawParameterValue("superDetune");
+    superMix = parameters.getRawParameterValue("superMix");
+    shaperMode = parameters.getRawParameterValue("shaperMode");
+    shapeDrift = parameters.getRawParameterValue("shapeDrift");
 
     // force initial user values(some hosts migth not do it using value tree state)
     setParameter(WAVEFORM, *waveForm);
@@ -574,6 +608,12 @@ JC303::JC303()
     parameters.addParameterListener("seqTempo", this);
     parameters.addParameterListener("subOscGain", this);
     parameters.addParameterListener("subOscBlend", this);
+    parameters.addParameterListener("oscModel", this);
+    parameters.addParameterListener("junoWave", this);
+    parameters.addParameterListener("superDetune", this);
+    parameters.addParameterListener("superMix", this);
+    parameters.addParameterListener("shaperMode", this);
+    parameters.addParameterListener("shapeDrift", this);
 
     // ── Sequencer callback ────────────────────────────────────────────────────
     // Runs on the audio thread. Stores each event into _pendingNotes[] so
@@ -653,6 +693,12 @@ JC303::~JC303()
     parameters.removeParameterListener("seqTempo", this);
     parameters.removeParameterListener("subOscGain", this);
     parameters.removeParameterListener("subOscBlend", this);
+    parameters.removeParameterListener("oscModel", this);
+    parameters.removeParameterListener("junoWave", this);
+    parameters.removeParameterListener("superDetune", this);
+    parameters.removeParameterListener("superMix", this);
+    parameters.removeParameterListener("shaperMode", this);
+    parameters.removeParameterListener("shapeDrift", this);
 }
 
 // Parameter change callback. Runs on the message/automation thread, NOT the audio thread, so it may
@@ -1060,6 +1106,15 @@ void JC303::setParameter (Open303Parameters index, float value)
         // 0 = -2 octaves (25% pulse), 1 = -1 octave (square)
         open303Core.setSubOscBlend(value);
         break;
+    case SUPER_DETUNE:
+        open303Core.setSuperDetune(value);
+        break;
+    case SUPER_MIX:
+        open303Core.setSuperMix(value);
+        break;
+    case SHAPE_DRIFT:
+        open303Core.setPhaseshaperDrift(value);
+        break;
     case LFO_PHASE:
         open303Core.setLfoPhase(value);
         break;
@@ -1100,6 +1155,12 @@ void JC303::setDevilMod(bool mode)
         setParameter(FILTER_RAIL, *filterRail);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
+        open303Core.setOscModel(static_cast<OscModel>((int) *oscModel));
+        open303Core.setJunoWaveform((int) *junoWave);
+        open303Core.setPhaseshaperMode((int) *shaperMode);
+        setParameter(SUPER_DETUNE, *superDetune);
+        setParameter(SUPER_MIX, *superMix);
+        setParameter(SHAPE_DRIFT, *shapeDrift);
         setParameter(LFO_WAVEFORM, *lfoWaveform);
         setParameter(LFO_RATE, *lfoRate);
         setParameter(LFO_DEPTH, *lfoDepth);
@@ -1114,6 +1175,7 @@ void JC303::setDevilMod(bool mode)
     } else if (mode == false) {
         open303Core.setFilterType(FILTER_TEEBEE);
         open303Core.setSquareModel(SQUARE_OPEN303);
+        open303Core.setOscModel(OSC_TB303);
         open303Core.setLfoOn(false);   // hard-gates LFO; its internal values are never read while off
         open303Core.setCircuitPulseShape(false);   // moot here: Mods off is the Open303 square
         decayMin = 200.0;

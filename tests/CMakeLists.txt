@@ -50,3 +50,9 @@ if(EXISTS "${MATH_APPROX_INCLUDE}/math_approx/math_approx.hpp")
         ${MATH_APPROX_INCLUDE})
     add_test(NAME open303_mod_test COMMAND open303_mod_test)
 endif()
+
+# Oscillator models: header-only DSP, no JUCE.
+add_executable(oscillator_test oscillator_test.cpp)
+target_compile_features(oscillator_test PRIVATE cxx_std_17)
+target_include_directories(oscillator_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/dsp/open303)
+add_test(NAME oscillator_test COMMAND oscillator_test)
