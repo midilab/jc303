@@ -11,6 +11,7 @@
 class SequencerStepSelector : public juce::Component
 {
 public:
+    static constexpr int kSecondary     = 3;   // accent/mute, slide/hammer: the ON frame's glow in blue
     static constexpr int kPitchPlayhead = 4;
 
     enum class Mode
@@ -57,6 +58,9 @@ public:
     // Toggle mode: clicking flips between state 0 (off) and 1 (on) before onClick.
     void setClickTogglesState(bool enabled) { clickToggles = enabled; }
 
+    // Click toggles off/on; shift-click toggles off/secondary (mute, hammer).
+    void setSecondaryEnabled(bool enabled) { hasSecondary = enabled; }
+
     // Clicking an LED selects the corresponding sequencer step (wired by the editor).
     std::function<void()> onClick;
 
@@ -84,7 +88,12 @@ public:
         }
 
         if (clickToggles)
-            setState(ledState == 0 ? 1 : 0);
+        {
+            if (hasSecondary && event.mods.isShiftDown())
+                setState(ledState == kSecondary ? 0 : kSecondary);
+            else
+                setState(ledState == 0 ? 1 : 0);
+        }
         if (onClick != nullptr)
             onClick();
     }
@@ -111,6 +120,15 @@ public:
                 return;
             }
 
+            if (ledState == kSecondary)
+            {
+                if (! imageBlue.isValid())
+                    imageBlue = makeBlueGlowFrame(imageLed, 3, 0, 1);
+                g.drawImage(imageBlue, 0, 0, getWidth(), drawHeight,
+                            0, 0, imageBlue.getWidth(), imageBlue.getHeight(), false);
+                return;
+            }
+
             g.drawImage(imageLed, 0,  0, getWidth(), drawHeight,
                         0, ledState * frameHeight, imageLed.getWidth(), frameHeight,
                         false);
@@ -120,9 +138,11 @@ public:
 private:
     juce::Image imageLed;
     juce::Image imageAmber;   // built on first use
+    juce::Image imageBlue;    // likewise
     std::unique_ptr<juce::Label> label;
     int ledState = 0;
     bool clickToggles = false;
+    bool hasSecondary = false;
     Mode buttonMode = Mode::Toggle;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SequencerStepSelector)

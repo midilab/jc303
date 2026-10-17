@@ -455,8 +455,10 @@ namespace rosic
     //-----------------------------------------------------------------------------------------------
     // event handling:
 
-    /** Accepts note-on events (note offs are also handled here as note ons with velocity zero). */
-    void noteOn(int noteNumber, int velocity, double detune);
+    /** Accepts note-on events (note offs are also handled here as note ons with velocity zero).
+    A muted note is choked (darker, quieter, never accented); a hammer onto a held note snaps to
+    the new pitch instead of sliding. */
+    void noteOn(int noteNumber, int velocity, double detune, bool muted = false, bool hammer = false);
 
     /** Turns all possibly running notes off. */
     void allNotesOff();

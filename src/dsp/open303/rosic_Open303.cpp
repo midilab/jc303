@@ -352,7 +352,7 @@ void Open303::renderBlock(double* out, int numSamples)
   }
 }
 
-void Open303::noteOn(int noteNumber, int velocity, double detune)
+void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bool hammer)
 {
   if( sequencer.modeWasChanged() )
     allNotesOff();
@@ -398,10 +398,15 @@ void Open303::noteOn(int noteNumber, int velocity, double detune)
   {
     // check if the note-list is empty (indicating that currently no note is playing) - if so,
     // trigger a new note, otherwise, slide to the new note:
+    // (a hammer snaps to the new pitch instead of gliding; a muted note is never accented)
+    const bool hasAccent = velocity >= 100 && !muted;
     if( noteList.empty() )
-      triggerNote(noteNumber, velocity >= 100);
+      triggerNote(noteNumber, hasAccent);
+    else if( hammer )
+      hammerToNote(noteNumber, hasAccent);
     else
-      slideToNote(noteNumber, velocity >= 100);
+      slideToNote(noteNumber, hasAccent);
+    currentNoteMuted = muted;
 
     currentNote = noteNumber;
     currentVel  = 64;
@@ -417,6 +422,7 @@ void Open303::allNotesOff()
 {
   noteList.clear();
   ampEnv.noteOff();
+  currentNoteMuted = false;
   currentNote = -1;
   currentVel  = 0;
 }
@@ -483,25 +489,9 @@ void Open303::slideToNote(int noteNumber, bool hasAccent)
 
 void Open303::hammerToNote(int noteNumber, bool hasAccent)
 {
-  // Hammer is like slide but with instant pitch change (no portamento)
-  // Set frequency AND immediately set slew limiter state to avoid any glide
-  oscFreq = pitchToFreq(noteNumber, tuning);
-  pitchSlewLimiter.setState(log(oscFreq));  // Instant pitch change, no slew (the slew runs on log(freq))
-
-  // Handle accent (same as slideToNote)
-  if( hasAccent )
-  {
-    accentGain = accent;
-    setMainEnvDecay(accentDecay);
-    ampEnv.setRelease(accentAmpRelease);
-  }
-  else
-  {
-    accentGain = 0.0;
-    setMainEnvDecay(normalDecay);
-    ampEnv.setRelease(normalAmpRelease);
-  }
-  idle = false;
+  // Hammer is a slide with an instant pitch change: snap the slew limiter to the new pitch
+  slideToNote(noteNumber, hasAccent);
+  pitchSlewLimiter.setState(log(oscFreq));  // the slew runs on log(freq)
 }
 
 void Open303::releaseNote(int noteNumber)
