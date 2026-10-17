@@ -4,6 +4,8 @@
 #include <climits>
 #include "rosic_MidiNoteEvent.h"
 #include "dfl_BlendOscillator.h"
+#include "dfl_AlphaJunoSuperOscillator.h"
+#include "dfl_PhaseshaperOscillator.h"
 #include "dfl_DualSubOscillator.h"
 #include "rosic_BiquadFilter.h"
 #include "rosic_TeeBeeFilter.h"
@@ -40,6 +42,14 @@ namespace rosic
     NUM_SQUARE_MODELS
   };
 
+  enum OscModel
+  {
+    OSC_TB303 = 0,          // Open303's saw/square blend
+    OSC_ALPHA_JUNO,         // Alpha Juno DCO saws SAW01-05, with the JP-8000 supersaw ensemble
+    OSC_PHASESHAPER,        // single-oscillator JP-8000 triangle modulation / ripple supersaw
+    NUM_OSC_MODELS
+  };
+
   /**
 
   This is a monophonic bass-synth that aims to emulate the sound of the famous Roland TB 303 and
@@ -68,8 +78,32 @@ namespace rosic
     void setSampleRate(double newSampleRate);
 
     /** Sets up the waveform continuously between saw and square - the input should be in the range
-    0...1 where 0 means pure saw and 1 means pure square. */
-    void setWaveform(double newWaveform) { oscillator.setBlendFactor(newWaveform); }
+    0...1 where 0 means pure saw and 1 means pure square. The Alpha Juno model morphs its saw towards a
+    pulse; the phaseshaper takes it as its shape. */
+    void setWaveform(double newWaveform)
+    {
+      oscillator.setBlendFactor(newWaveform);
+      junoOscillator.setSquareBlend(newWaveform);
+      phaseshaper.setShape(newWaveform);
+    }
+
+    /** Selects the oscillator model (see OscModel). */
+    void setOscModel(OscModel newModel) { if( newModel >= 0 && newModel < NUM_OSC_MODELS ) oscModel = newModel; }
+
+    /** Selects the Alpha Juno saw waveform, 0..4 = SAW01..SAW05. */
+    void setJunoWaveform(int newWaveform) { junoOscillator.setWaveform(newWaveform); }
+
+    /** Sets the Alpha Juno supersaw detune spread (0 = a single voice, 1 = maximum spread). */
+    void setSuperDetune(double newDetune) { junoOscillator.setDetune(newDetune); }
+
+    /** Sets the Alpha Juno supersaw center/side balance (0..1, higher = more side voices). */
+    void setSuperMix(double newMix) { junoOscillator.setMix(newMix); }
+
+    /** Selects the phaseshaper algorithm (see dfl::PhaseshaperOscillator::Mode). */
+    void setPhaseshaperMode(int newMode) { phaseshaper.setMode(newMode); }
+
+    /** Sets the depth of the phaseshaper's slow shape drift (0..1). */
+    void setPhaseshaperDrift(double newDrift) { phaseshaper.setDrift(newDrift); }
 
     /** Sets the sub oscillator gain (0.0 to 1.0). */
     void setSubOscGain(double newGain) { subOscGain = newGain; }
@@ -411,6 +445,8 @@ namespace rosic
 
     MipMappedWaveTable        waveTable1, waveTable2, waveTable3;
     dfl::BlendOscillator      oscillator;
+    dfl::AlphaJunoSuperOscillator junoOscillator;
+    dfl::PhaseshaperOscillator phaseshaper;
     dfl::DualSubOscillator    subOscillator;
     TeeBeeFilter              filter;
     DiodeLadderFilter         diodeFilter;
@@ -503,6 +539,7 @@ namespace rosic
     double accentAmpRelease; // amp-env release time for accented notes
     double accentGain;       // between 0.0...1.0 - to scale the 3rd amp-envelope on accents
     double accentSweepGain = 1.0; // rc2 peak makeup for the accent sweep, 1 at the stock 15 ms
+    OscModel oscModel = OSC_TB303;
     double subOscGain;       // sub oscillator gain (0.0 to 1.0)
     double subOscBlend;      // sub oscillator blend (0.0 = -2 octaves, 1.0 = -1 octave)
     double pitchWheelFactor; // scale factor for oscillator frequency from pitch-wheel
@@ -537,6 +574,9 @@ namespace rosic
     double circuitBias = 0.5, circuitRail = 1.0, circuitDriveDb = 0.0;
     void updateCircuitCharacter();
 
+    /** The raw sample of the selected oscillator model (oversampled rate). */
+    INLINE double getOscSample();
+
     double modeBase = 0.0;    // diode filter mode knob value (0 = LP, 0.5 = BP, 1 = HP); the LFO modulates it
     bool lfoEnabled = false;  // master LFO processing switch
 
@@ -546,6 +586,16 @@ namespace rosic
 
   //-------------------------------------------------------------------------------------------------
   // inlined functions:
+
+  INLINE double Open303::getOscSample()
+  {
+    switch( oscModel )
+    {
+    case OSC_ALPHA_JUNO:  return junoOscillator.getSample();
+    case OSC_PHASESHAPER: return phaseshaper.getSample();
+    default:              return oscillator.getSample();
+    }
+  }
 
   INLINE double Open303::getSample()
   {
@@ -652,8 +702,20 @@ namespace rosic
     // (volts/octave) and keeps octave slides from lingering in the low end.
     // Apply pitch modulation AFTER slew limiter to prevent smoothing of audio-rate LFO.
     double instFreq = exp( pitchSlewLimiter.getSample( log(oscFreq) ) ) * pitchModFactor;
-    oscillator.setFrequency(instFreq*pitchWheelFactor);
-    oscillator.calculateIncrement();
+    switch( oscModel )
+    {
+    case OSC_ALPHA_JUNO:
+      junoOscillator.setFrequency(instFreq*pitchWheelFactor);
+      junoOscillator.calculateIncrement();
+      break;
+    case OSC_PHASESHAPER:
+      phaseshaper.setFrequency(instFreq*pitchWheelFactor);
+      phaseshaper.calculateIncrement();
+      break;
+    default:
+      oscillator.setFrequency(instFreq*pitchWheelFactor);
+      oscillator.calculateIncrement();
+    }
     subOscillator.setFrequency(instFreq*pitchWheelFactor);
     subOscillator.calculateIncrement();
 
@@ -673,6 +735,7 @@ namespace rosic
         pw = clip(centre - pwmDepth*pwmLfo*(centre - 10.0), 10.0, 75.0);
       }
       oscillator.setPulseWidth(pw);
+      junoOscillator.setPulseWidth(pw);   // the +1-octave chop of SAW02/03/05 and the pulse morph
     }
 
     // calculate instantaneous cutoff frequency from the nominal cutoff and all its modifiers and
@@ -707,7 +770,7 @@ namespace rosic
     double tmp;
     for(int i=1; i<=oversampling; i++)
     {
-      tmp  = -oscillator.getSample();         // the raw oscillator signal
+      tmp  = -getOscSample();                 // the raw oscillator signal
       if( subOscGain > 0.0 )
         tmp += subOscGain * (-subOscillator.getSample(subOscBlend));
       if(currentFilterType == dfl::FILTER_TEEBEE)
