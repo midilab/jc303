@@ -155,6 +155,10 @@ enum Open303Parameters
   // Sub oscillator
   SUB_OSC_GAIN,
   SUB_OSC_BLEND,
+  // Oscillator models
+  SUPER_DETUNE,
+  SUPER_MIX,
+  SHAPE_DRIFT,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -217,6 +221,13 @@ public:
 
     //==============================================================================
     int getNumPrograms() override;
+
+    /** The parameter ID on performance knob 0 or 1 (saved with the state; the mod wheel drives knob 0). */
+    juce::String getPerformanceKnob (int knob) const;
+    void setPerformanceKnob (int knob, const juce::String& paramID);
+
+    /** Applies controller moves queued by the audio thread (the mod wheel); runs on the message thread. */
+    void applyPendingControllers();
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
@@ -319,6 +330,8 @@ private:
     bool _sustainArmed  { true  };
     bool _recWasOn      { false };
 
+    int currentProgram = 0;   // factory preset index (see dfl_FactoryPresets.h)
+
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
     File userAppDataDirectory_tones = userAppDataDirectory.getFullPathName() + "/overdrive_models";
@@ -396,6 +409,13 @@ private:
     // Sub oscillator
     std::atomic<float>* subOscGain = nullptr;
     std::atomic<float>* subOscBlend = nullptr;
+    // Oscillator models
+    std::atomic<float>* oscModel = nullptr;
+    std::atomic<float>* junoWave = nullptr;
+    std::atomic<float>* superDetune = nullptr;
+    std::atomic<float>* superMix = nullptr;
+    std::atomic<float>* shaperMode = nullptr;
+    std::atomic<float>* shapeDrift = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;
@@ -416,6 +436,7 @@ private:
     // params, and rewrites wait until it has
     enum SeqOffset : int { OffsetTranspose = 1, OffsetShift = 2, OffsetPitchRotate = 4 };
     std::atomic<int> _seqOffsetReset { 0 };
+    std::atomic<int> _pendingModWheel { -1 };   // CC 1 value awaiting the message thread, -1 = none
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

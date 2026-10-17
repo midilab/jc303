@@ -1,5 +1,6 @@
 #include "JC303.h"
 #include GUI_THEME_HEADER
+#include "dfl_FactoryPresets.h"
 
 namespace
 {
@@ -23,7 +24,7 @@ namespace
     // order matches rosic::ModSource
     juce::StringArray modSourceNames()
     {
-        return { "Off", "LFO", "Env", "Accent", "Key", "Random", "Cutoff" };
+        return { "Off", "LFO", "Env", "Accent", "Key", "Random", "Cutoff", "Env+" };
     }
 
     // order matches rosic::ModDestination
@@ -250,6 +251,34 @@ JC303::JC303()
                                                         "Filter Model",
                                                         juce::StringArray{ "TeeBee", "Spicy", "MissBehave", "JuneBug", "Wasabi", "Hornet", "SemiSweet", "Oddity" },
                                                         FILTER_TEEBEE),
+            // oscillator model; the Waveform knob is the saw/pulse morph (Juno) or the shape (Phaseshaper)
+            std::make_unique<juce::AudioParameterChoice> ("oscModel",
+                                                        "Osc Model",
+                                                        juce::StringArray{ "TB-303", "Alpha Juno", "Phaseshaper" },
+                                                        OSC_TB303),
+            std::make_unique<juce::AudioParameterChoice> ("junoWave",
+                                                        "Juno Wave",
+                                                        juce::StringArray{ "1 Saw", "2 Oct", "3 PW", "4 Hi Oct", "5 Dual" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("superDetune",
+                                                        "Super Detune",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // 0 = one voice, up = JP-8000 supersaw spread
+            std::make_unique<juce::AudioParameterFloat> ("superMix",
+                                                        "Super Mix",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.75f),  // center/side balance, Szabo's default
+            std::make_unique<juce::AudioParameterChoice> ("shaperMode",
+                                                        "Shaper Mode",
+                                                        juce::StringArray{ "Tri Mod", "Ripple Saw" },
+                                                        0),
+            std::make_unique<juce::AudioParameterFloat> ("shapeDrift",
+                                                        "Shape Drift",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // ripple saw shimmer, pitch-tracked like a detuned bank
             // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
                                                         "Square Model",
@@ -488,6 +517,12 @@ JC303::JC303()
     seqClear = parameters.getRawParameterValue("seqClear");
     subOscGain = parameters.getRawParameterValue("subOscGain");
     subOscBlend = parameters.getRawParameterValue("subOscBlend");
+    oscModel = parameters.getRawParameterValue("oscModel");
+    junoWave = parameters.getRawParameterValue("junoWave");
+    superDetune = parameters.getRawParameterValue("superDetune");
+    superMix = parameters.getRawParameterValue("superMix");
+    shaperMode = parameters.getRawParameterValue("shaperMode");
+    shapeDrift = parameters.getRawParameterValue("shapeDrift");
 
     // force initial user values(some hosts migth not do it using value tree state)
     setParameter(WAVEFORM, *waveForm);
@@ -574,6 +609,12 @@ JC303::JC303()
     parameters.addParameterListener("seqTempo", this);
     parameters.addParameterListener("subOscGain", this);
     parameters.addParameterListener("subOscBlend", this);
+    parameters.addParameterListener("oscModel", this);
+    parameters.addParameterListener("junoWave", this);
+    parameters.addParameterListener("superDetune", this);
+    parameters.addParameterListener("superMix", this);
+    parameters.addParameterListener("shaperMode", this);
+    parameters.addParameterListener("shapeDrift", this);
 
     // ── Sequencer callback ────────────────────────────────────────────────────
     // Runs on the audio thread. Stores each event into _pendingNotes[] so
@@ -653,6 +694,12 @@ JC303::~JC303()
     parameters.removeParameterListener("seqTempo", this);
     parameters.removeParameterListener("subOscGain", this);
     parameters.removeParameterListener("subOscBlend", this);
+    parameters.removeParameterListener("oscModel", this);
+    parameters.removeParameterListener("junoWave", this);
+    parameters.removeParameterListener("superDetune", this);
+    parameters.removeParameterListener("superMix", this);
+    parameters.removeParameterListener("shaperMode", this);
+    parameters.removeParameterListener("shapeDrift", this);
 }
 
 // Parameter change callback. Runs on the message/automation thread, NOT the audio thread, so it may
@@ -778,6 +825,34 @@ void JC303::handleAsyncUpdate()
     if ((mask & OffsetShift) != 0)       _appliedShift.store (0);
     if ((mask & OffsetPitchRotate) != 0) _appliedPitchRotate.store (0);
     _seqOffsetReset.fetch_and (~mask, std::memory_order_acq_rel);
+    applyPendingControllers();
+}
+
+// The mod wheel sets performance knob 0's parameter directly, so the knob on screen follows it.
+void JC303::applyPendingControllers()
+{
+    const int wheel = _pendingModWheel.exchange (-1, std::memory_order_acq_rel);
+    if (wheel < 0)
+        return;
+    if (auto* p = parameters.getParameter (getPerformanceKnob (0)))
+    {
+        p->beginChangeGesture();
+        p->setValueNotifyingHost ((float) wheel / 127.0f);
+        p->endChangeGesture();
+    }
+}
+
+juce::String JC303::getPerformanceKnob (int knob) const
+{
+    if (knob < 0 || knob > 1)
+        return {};
+    return parameters.state.getProperty (dfl::performanceKnobIds[knob], dfl::defaultPerformanceKnobs[knob]).toString();
+}
+
+void JC303::setPerformanceKnob (int knob, const juce::String& paramID)
+{
+    if (knob >= 0 && knob <= 1)
+        parameters.state.setProperty (dfl::performanceKnobIds[knob], paramID, nullptr);
 }
 
 void JC303::applySeqCommands()
@@ -1060,6 +1135,15 @@ void JC303::setParameter (Open303Parameters index, float value)
         // 0 = -2 octaves (25% pulse), 1 = -1 octave (square)
         open303Core.setSubOscBlend(value);
         break;
+    case SUPER_DETUNE:
+        open303Core.setSuperDetune(value);
+        break;
+    case SUPER_MIX:
+        open303Core.setSuperMix(value);
+        break;
+    case SHAPE_DRIFT:
+        open303Core.setPhaseshaperDrift(value);
+        break;
     case LFO_PHASE:
         open303Core.setLfoPhase(value);
         break;
@@ -1100,6 +1184,12 @@ void JC303::setDevilMod(bool mode)
         setParameter(FILTER_RAIL, *filterRail);
         setParameter(SUB_OSC_GAIN, *subOscGain);
         setParameter(SUB_OSC_BLEND, *subOscBlend);
+        open303Core.setOscModel(static_cast<OscModel>((int) *oscModel));
+        open303Core.setJunoWaveform((int) *junoWave);
+        open303Core.setPhaseshaperMode((int) *shaperMode);
+        setParameter(SUPER_DETUNE, *superDetune);
+        setParameter(SUPER_MIX, *superMix);
+        setParameter(SHAPE_DRIFT, *shapeDrift);
         setParameter(LFO_WAVEFORM, *lfoWaveform);
         setParameter(LFO_RATE, *lfoRate);
         setParameter(LFO_DEPTH, *lfoDepth);
@@ -1114,6 +1204,7 @@ void JC303::setDevilMod(bool mode)
     } else if (mode == false) {
         open303Core.setFilterType(FILTER_TEEBEE);
         open303Core.setSquareModel(SQUARE_OPEN303);
+        open303Core.setOscModel(OSC_TB303);
         open303Core.setLfoOn(false);   // hard-gates LFO; its internal values are never read while off
         open303Core.setCircuitPulseShape(false);   // moot here: Mods off is the Open303 square
         decayMin = 200.0;
@@ -1167,23 +1258,31 @@ double JC303::getTailLengthSeconds() const
 
 int JC303::getNumPrograms()
 {
-    return 1;
+    return (int) dfl::factoryPresets().size();
 }
 
 int JC303::getCurrentProgram()
 {
-    return 0;
+    return currentProgram;
 }
 
+// Factory presets set the sound parameters; the sequencer, volume and tuning are left alone.
 void JC303::setCurrentProgram (int index)
 {
-    juce::ignoreUnused (index);
+    if (index < 0 || index >= getNumPrograms())
+        return;
+    currentProgram = index;
+    const auto& preset = dfl::factoryPresets()[(size_t) index];
+    dfl::applyFactoryPreset (getParameters(), preset);
+    setPerformanceKnob (0, preset.knob1);
+    setPerformanceKnob (1, preset.knob2);
 }
 
 const juce::String JC303::getProgramName (int index)
 {
-    juce::ignoreUnused (index);
-    return {};
+    if (index < 0 || index >= getNumPrograms())
+        return {};
+    return dfl::factoryPresets()[(size_t) index].name;
 }
 
 void JC303::changeProgramName (int index, const juce::String& newName)
@@ -1412,6 +1511,16 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         {
             render303 (buffer, currentSample, samplePosition);
             currentSample = samplePosition;
+        }
+
+        // Performance controls, whether or not the sequencer is playing: pitch bend spans an octave each way;
+        // the mod wheel is applied to performance knob 0 on the message thread (applyPendingControllers).
+        if (message.isPitchWheel())
+            open303Core.setPitchBend (12.0 * (message.getPitchWheelValue() - 8192) / 8192.0);
+        else if (message.isController() && message.getControllerNumber() == 1)
+        {
+            _pendingModWheel.store (message.getControllerValue(), std::memory_order_release);
+            triggerAsyncUpdate();
         }
 
         // ── Rec mode (works whether or not the sequencer is playing) ─────────

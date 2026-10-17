@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "../../dfl_FactoryPresets.h"
 
 // Rotary slider that exposes its double-click to MenuPage so a theme knob can
 // be repurposed for "assign this knob to the current menu item". Overriding
@@ -248,14 +249,31 @@ public:
         rebindAssignable(slot);
     }
 
+    // The assignment is saved with the plugin state (presets set it too).
     void setAssignableParam(int slot, const juce::String& paramID)
     {
         if (slot < 0 || slot >= numAssignableSlots)
             return;
+        valueTreeState.state.setProperty(dfl::performanceKnobIds[slot], paramID, nullptr);
         if (assignableSlots[slot].id == paramID)
             return;
         assignableSlots[slot].id = paramID;
         rebindAssignable(slot);
+    }
+
+    // Picks up assignments changed outside the menu (a preset load, a restored session); polled by the theme.
+    void syncAssignablesFromState()
+    {
+        for (int i = 0; i < numAssignableSlots; ++i)
+        {
+            const juce::String id = valueTreeState.state.getProperty(dfl::performanceKnobIds[i],
+                                                                     dfl::defaultPerformanceKnobs[i]).toString();
+            if (assignableSlots[i].id != id)
+            {
+                assignableSlots[i].id = id;
+                rebindAssignable(i);
+            }
+        }
     }
 
     void assignCurrentItemToSlot(int slot)
@@ -296,6 +314,8 @@ public:
             for (auto& it : pg.items)
                 if (it.id == id)
                     return labelOf(it);
+        if (auto* p = valueTreeState.getParameter(id))   // a main-panel knob such as Cutoff
+            return p->getName(32);
         return {};
     }
 
@@ -686,7 +706,7 @@ public:
         juce::Array<Page> pages;
 
         Page pst; pst.title = "Presets";
-        pst.items.add(Item { {}, {}, Type::placeholder, {}, 0.0f });
+        pst.items.add(Item { "preset", "Preset", Type::action, {}, 0.0f });   // factory presets: dec/inc loads the previous/next
         pages.add(pst);
 
         Page ovd; ovd.title = "Overdrive";
@@ -743,8 +763,19 @@ public:
         }
         mod.items.add(Item { "bassComp",    "Bass Comp",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true, 1 });   // Spicy only
         mod.items.add(Item { "filterFm",    "Filter FM",        Type::value, {}, 0.0f, {}, "filterType", 0, 0, true });   // no effect on TeeBee
-        mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, {}, -1, 0, true });
-        mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "oscModel",    "Osc Model",        Type::value, {}, 1.0f, {}, {}, -1, 0, true });
+        mod.items.add(Item { "squareModel", "Square Model",     Type::value, {}, 1.0f, {}, "oscModel", -1, 0, true, 0 });   // TB-303 only
+        mod.items.add(Item { "sqrDriver",   "Square Drive",     Type::value, {}, 0.0f, {}, "oscModel", -1, 0, true, 0 });   // TB-303 only
+        mod.items.add(Item { "junoWave",    "Juno Wave",        Type::value, {}, 1.0f, {}, "oscModel", -1, 1, true, 1 });   // Alpha Juno only
+        mod.items.add(Item { "superDetune", "Super Detune",     Type::value, {}, 0.0f, {}, "oscModel", -1, 1, true, 1 });
+        mod.items.add(Item { "superMix",    "Super Mix",        Type::value, {}, 0.0f, {}, "oscModel", -1, 1, true, 1 });
+        mod.items.add(Item { "shaperMode",  "Shaper Mode",      Type::value, {}, 1.0f, {}, "oscModel", -1, 2, true, 2 });   // Phaseshaper only
+        {
+            Item drift { "shapeDrift", "Shape Drift", Type::value, {}, 0.0f, {}, "oscModel", -1, 2, true, 2 };
+            drift.alsoHiddenWhenId = "shaperMode";   // Ripple Saw only
+            drift.alsoHiddenWhenIndex = 0;
+            mod.items.add(drift);
+        }
         mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f, {}, {}, -1, 0, true });
 

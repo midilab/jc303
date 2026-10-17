@@ -180,6 +180,56 @@ static void newDestinationsMoveTheSound()
   }
 }
 
+static void waveformAndPulseWidthReachEveryOscModel()
+{
+  // the Waveform destination is the Juno pulse morph and the phaseshaper shape; Pulse Width is the Juno chop
+  struct Case { rosic::OscModel model; int dest; };
+  for(Case c : { Case{ rosic::OSC_ALPHA_JUNO, rosic::MOD_DEST_WAVEFORM }, Case{ rosic::OSC_ALPHA_JUNO, rosic::MOD_DEST_PULSE_WIDTH },
+                 Case{ rosic::OSC_PHASESHAPER, rosic::MOD_DEST_WAVEFORM } })
+  {
+    Config osc = [c](rosic::Open303& s) {
+      s.setOscModel(c.model);
+      s.setJunoWaveform(2);   // SAW03: the chop follows the pulse width
+      s.setWaveform(0.3); };
+    std::vector<double> base = render(osc);
+    std::vector<double> mod = render([&](rosic::Open303& s) {
+      osc(s); s.setModSlot(1, rosic::MOD_SRC_ENV, c.dest, 0.8); });
+    CHECK(maxDiff(base, mod) > 1e-3);
+  }
+}
+
+// period (samples) by autocorrelation over a window, searched between 1 and 1000 Hz at 44.1 kHz
+static double periodOf(const std::vector<double>& x, int from, int len)
+{
+  double best = -1e300; int bestLag = 0;
+  for(int lag = 44; lag < 1000; lag++)
+  {
+    double acc = 0.0;
+    for(int i = from; i < from + len; i++)
+      acc += x[i] * x[i + lag];
+    if( acc > best ) { best = acc; bestLag = lag; }
+  }
+  return bestLag;
+}
+
+static void envPlusIsUnipolarAndSettlesOnPitch()
+{
+  // a bright, short-decay note; the envelope's RC tail takes about 2 s to die out
+  Config bright = [](rosic::Open303& s) {
+    s.setCutoff(2000.0); s.setResonance(0.0); s.setEnvMod(0.0); s.setDecay(100.0); };
+  const int n = 3 * 44100;
+  std::vector<double> base = render(bright, n);
+  std::vector<double> plus = render([&](rosic::Open303& s) {
+    bright(s); s.setModSlot(2, rosic::MOD_SRC_ENV_PLUS, rosic::MOD_DEST_PITCH, 0.5); }, n);
+  std::vector<double> bipolar = render([&](rosic::Open303& s) {
+    bright(s); s.setModSlot(2, rosic::MOD_SRC_ENV, rosic::MOD_DEST_PITCH, 0.5); }, n);
+
+  const int late = n - 6000, early = 200;
+  CHECK(periodOf(plus, early, 2000) < periodOf(base, early, 2000) - 20.0);   // starts sharp
+  CHECK(std::fabs(periodOf(plus, late, 4000) - periodOf(base, late, 4000)) <= 1.0);   // lands on the note
+  CHECK(periodOf(bipolar, late, 4000) > periodOf(base, late, 4000) + 20.0);   // bipolar Env rests flat
+}
+
 static void lfoDepthDestinationCanOpenAClosedLfo()
 {
   // LFO depth knob at zero: the envelope fades the cutoff LFO in at the attack
@@ -352,6 +402,8 @@ int main()
   modsOffDisablesTheMatrix();
   slotZeroIsOwnedByLegacySetters();
   newDestinationsMoveTheSound();
+  waveformAndPulseWidthReachEveryOscModel();
+  envPlusIsUnipolarAndSettlesOnPitch();
   lfoDepthDestinationCanOpenAClosedLfo();
   knobValuesAreRestoredWhenModulationStops();
   accentDestinationLeavesUnaccentedNotesAlone();
