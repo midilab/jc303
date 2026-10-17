@@ -22,8 +22,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
         { "Init", {} },
 
         // Alpha Juno "What The" / Mentasm: the PWM'd chopped saw (SAW03), thickened by the supersaw stack in place
-        // of the Juno's chorus, a -1 octave sub, an open MS-20 filter, a long amp decay, the Env+ pitch dive on
-        // every note and long slides for the swoops.
+        // of the Juno's chorus, a -1 octave sub, an open MS-20 filter, long decays and long slides for the swoops.
         { "Hoover", {
             { "switchModState",  1.0f },
             { "oscModel",        1.0f },    // Alpha Juno
@@ -40,14 +39,11 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "cutoff",          0.85f },
             { "resonance",       0.15f },
             { "envmod",          0.15f },
-            { "decay",           0.45f },   // 240 ms: the pitch dive (and filter env) time
-            { "accent",          0.15f },   // light: a strong accent transient would swamp the body
+            { "decay",           1.0f },
+            { "accent",          0.4f },
             { "normalDecay",     1.0f },    // 3 s
-            { "accentDecay",     0.07f },   // 240 ms: accented notes dive at the same speed
+            { "accentDecay",     1.0f },
             { "slideTime",       0.8f },    // 290 ms
-            { "modSlot3Source",  7.0f },    // Env+
-            { "modSlot3Dest",    2.0f },    // Pitch
-            { "modSlot3Amount",  0.25f },   // +3 semitones at note-on, diving onto the note; deeper on accents
         } },
 
         // Squelch: stock-timed saw acid on the Spicy diode ladder; accents also push the resonance up.
