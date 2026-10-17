@@ -67,7 +67,8 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "normalDecay",     0.4f },    // 1.2 s, the stock amp decay
             { "accentDecay",     0.06f },   // 210 ms, stock
             { "slideTime",       0.16f },   // 60 ms, stock
-            { "softAttack",      0.38f },   // 10 ms
+            { "softAttack",      0.35f },   // 7.5 ms
+            { "resTrim",         0.98f },   // a hot unit: more loop gain
             { "modSlot3Source",  3.0f },    // Accent
             { "modSlot3Dest",    4.0f },    // Resonance
             { "modSlot3Amount",  0.2f },    // +10 points on accented notes
