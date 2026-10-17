@@ -65,6 +65,18 @@ static void testPresetIdsExist (JC303& p)
             CHECK (find (p, id) != nullptr, "preset '%s' sets unknown parameter '%s'", preset.name, id);
 }
 
+static void testPresetValuesInRange (JC303& p)
+{
+    // convertTo0to1 clamps silently, so an out-of-range value or choice index would load as something else
+    for (auto& preset : dfl::factoryPresets())
+        for (auto& [id, v] : preset.values)
+            if (auto* param = find (p, id))
+            {
+                const float loaded = param->convertFrom0to1 (param->convertTo0to1 (v));
+                CHECK (std::abs (loaded - v) < 1e-3f, "preset '%s': %s = %g loads as %g", preset.name, id, v, loaded);
+            }
+}
+
 static void testInitResetsSoundOnly (JC303& p)
 {
     setParam (p, "cutoff", 0.9f);
@@ -129,6 +141,18 @@ static juce::AudioBuffer<float> render (JC303& p, const juce::String& program)
     return out;
 }
 
+static void writeWav (const juce::AudioBuffer<float>& out, juce::File file)
+{
+    file.deleteFile();
+    juce::WavAudioFormat wav;
+    if (auto stream = file.createOutputStream())
+        if (auto writer = std::unique_ptr<juce::AudioFormatWriter> (wav.createWriterFor (stream.get(), 44100.0, 2, 24, {}, 0)))
+        {
+            stream.release();
+            writer->writeFromAudioSampleBuffer (out, 0, out.getNumSamples());
+        }
+}
+
 static double rmsDb (const juce::AudioBuffer<float>& out, int from, int to)
 {
     double sum = 0.0;
@@ -157,16 +181,31 @@ static void testHooverRenders (JC303& p, const char* wavPath)
     CHECK (hooverLateDb > hooverDb - 9.0, "Hoover dies away while held (%.1f -> %.1f dB)", hooverDb, hooverLateDb);
 
     if (wavPath != nullptr)
+        writeWav (out, juce::File::getCurrentWorkingDirectory().getChildFile (wavPath));
+}
+
+// every preset makes clean sound: finite, audible, under full scale
+static void testEveryPresetRenders (JC303& p, const char* wavDir)
+{
+    for (auto& preset : dfl::factoryPresets())
     {
-        juce::File file (juce::File::getCurrentWorkingDirectory().getChildFile (wavPath));
-        file.deleteFile();
-        juce::WavAudioFormat wav;
-        if (auto stream = file.createOutputStream())
-            if (auto writer = std::unique_ptr<juce::AudioFormatWriter> (wav.createWriterFor (stream.get(), sr, 2, 24, {}, 0)))
+        const auto out = render (p, preset.name);
+        bool finite = true;
+        float peak = 0.0f;
+        for (int c = 0; c < out.getNumChannels(); ++c)
+            for (int i = 0; i < out.getNumSamples(); ++i)
             {
-                stream.release();
-                writer->writeFromAudioSampleBuffer (out, 0, out.getNumSamples());
+                finite = finite && std::isfinite (out.getSample (c, i));
+                peak = std::max (peak, std::abs (out.getSample (c, i)));
             }
+        const double attackDb = rmsDb (out, 0, (int) (0.15 * 44100.0));
+        std::printf ("  %-12s attack %6.1f dBFS, peak %6.1f dBFS\n", preset.name, attackDb, 20.0 * std::log10 (peak + 1e-30));
+        CHECK (finite, "preset '%s' renders NaN/inf", preset.name);
+        CHECK (attackDb > -60.0, "preset '%s' is silent (%.1f dBFS)", preset.name, attackDb);
+        CHECK (peak < 1.0f, "preset '%s' clips (peak %.2f)", preset.name, peak);
+
+        if (wavDir != nullptr)
+            writeWav (out, juce::File (wavDir).getChildFile (juce::String (preset.name).replace (" ", "_") + ".wav"));
     }
 }
 
@@ -177,9 +216,11 @@ int main (int argc, char** argv)
         JC303 p;
         testProgramList (p);
         testPresetIdsExist (p);
+        testPresetValuesInRange (p);
         testInitResetsSoundOnly (p);
         testHoover (p);
         testHooverRenders (p, argc > 1 ? argv[1] : nullptr);
+        testEveryPresetRenders (p, argc > 2 ? argv[2] : nullptr);
     }
 
     if (failures == 0)
