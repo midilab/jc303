@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "../../dfl_FactoryPresets.h"
 
 // Rotary slider that exposes its double-click to MenuPage so a theme knob can
 // be repurposed for "assign this knob to the current menu item". Overriding
@@ -248,14 +249,31 @@ public:
         rebindAssignable(slot);
     }
 
+    // The assignment is saved with the plugin state (presets set it too).
     void setAssignableParam(int slot, const juce::String& paramID)
     {
         if (slot < 0 || slot >= numAssignableSlots)
             return;
+        valueTreeState.state.setProperty(dfl::performanceKnobIds[slot], paramID, nullptr);
         if (assignableSlots[slot].id == paramID)
             return;
         assignableSlots[slot].id = paramID;
         rebindAssignable(slot);
+    }
+
+    // Picks up assignments changed outside the menu (a preset load, a restored session); polled by the theme.
+    void syncAssignablesFromState()
+    {
+        for (int i = 0; i < numAssignableSlots; ++i)
+        {
+            const juce::String id = valueTreeState.state.getProperty(dfl::performanceKnobIds[i],
+                                                                     dfl::defaultPerformanceKnobs[i]).toString();
+            if (assignableSlots[i].id != id)
+            {
+                assignableSlots[i].id = id;
+                rebindAssignable(i);
+            }
+        }
     }
 
     void assignCurrentItemToSlot(int slot)
@@ -296,6 +314,8 @@ public:
             for (auto& it : pg.items)
                 if (it.id == id)
                     return labelOf(it);
+        if (auto* p = valueTreeState.getParameter(id))   // a main-panel knob such as Cutoff
+            return p->getName(32);
         return {};
     }
 
