@@ -23,10 +23,19 @@ namespace dfl
               phase in radians, so only its rising quarter is used, as a soft saw. Shape sweeps the
               ripple amount m1 from 0.8 (few, wide ripples) to 0.2 (many fine ripples).
 
+  FORMANT is Vector Phaseshaping from Kleimola, Lazzarini, Timoney and Valimaki, "Vector
+  Phaseshaping Synthesis" (DAFx-11): y = -cos(2 pi phi(p)), with phi bent at the point (d, v)
+  (Eq. 6). A centred bend with v > 1 puts a formant at (2v - 1) f0 (Eq. 8); between harmonics
+  two VPS signals a harmonic apart are crossfaded (Eqs. 9, 10), so 2v stays whole, the cosine's
+  slope is zero at the bend and the reset, and no BLEP is needed. Shape sweeps the formant from
+  harmonic 2 to 16 (v = 1 would add a DC step). Split moves d off centre, which divides the
+  formant into two peaks at v/d f0 and (v - 1)/(1 - d) f0.
+
   Drift is the paper's LFO on m1 (Fig. 13), which stands in for the timbral motion of a detuned
   oscillator bank. Like the beating of a real bank, it is irregular and scales with pitch: three
-  sines at incommensurate fractions of f0. It applies to SUPERSAW only; sweeping aTM would cross
-  the triangle modulation's fundamental null near aTM = 0.7, so the root would come and go.
+  sines at incommensurate fractions of f0. In FORMANT it moves the formant instead. It leaves
+  TRI_MOD alone; sweeping aTM would cross the triangle modulation's fundamental null near
+  aTM = 0.7, so the root would come and go.
 
   The wraps are value discontinuities locked to the phase, repaired with a 2-point polyBLEP. Slope
   kinks (the triangle corners, the ripple edges) are left to the surrounding oversampling, as in
@@ -43,6 +52,7 @@ namespace dfl
     {
       TRI_MOD = 0,
       SUPERSAW,
+      FORMANT,
       NUM_MODES
     };
 
@@ -50,9 +60,14 @@ namespace dfl
     static constexpr double SUPERSAW_M2 = 0.88;   // second ripple modulus m2 (Fig. 12)
     static constexpr int    NUM_DRIFTS  = 3;
     static constexpr double TRI_MOD_MAX_AMOUNT = 6.0;   // aTM at shape 1
+    static constexpr double FORMANT_MIN = 2.0;           // formant harmonic (2v - 1) at shape 0
+    static constexpr double FORMANT_MAX = 16.0;          // ... and at shape 1
 
     static double triModAmountForShape(double shape) { return 0.5 + (TRI_MOD_MAX_AMOUNT - 0.5) * clip01(shape); }
     static double rippleForShape(double shape)       { return 0.8 - 0.6 * clip01(shape); }
+    static double formantForShape(double shape)      { return FORMANT_MIN + (FORMANT_MAX - FORMANT_MIN) * clip01(shape); }
+    static double shapeForFormant(double h)          { return (h - FORMANT_MIN) / (FORMANT_MAX - FORMANT_MIN); }
+    static double bendForSplit(double split)         { return 0.5 - 0.4 * clip01(split); }   // d = 0.5 .. 0.1
 
     //---------------------------------------------------------------------------------------------
     // parameter settings:
@@ -77,11 +92,14 @@ namespace dfl
         mode = newMode;
     }
 
-    /** Timbre, 0..1: the triangle modulation amount or the supersaw ripple. */
+    /** Timbre, 0..1: the triangle modulation amount, the supersaw ripple or the formant. */
     inline void setShape(double newShape) { shape = clip01(newShape); }
 
-    /** Depth of the ripple supersaw's shape drift, 0..1. */
+    /** Depth of the shape drift (ripple supersaw and formant), 0..1. */
     inline void setDrift(double newDrift) { drift = clip01(newDrift); }
+
+    /** Splits the formant into two peaks, 0..1 (0 = one peak, centred bend). */
+    inline void setSplit(double newSplit) { bend = bendForSplit(newSplit); }
 
     /** Bandlimiting on (default) or the trivial waveform (for tests). */
     void setAntialias(bool on) { antialias = on; }
@@ -97,7 +115,7 @@ namespace dfl
     inline double getSample()
     {
       driftValue = 0.0;
-      if( mode == SUPERSAW && drift > 0.0 )
+      if( mode != TRI_MOD && drift > 0.0 )
       {
         for( int i = 0; i < NUM_DRIFTS; i++ )
         {
@@ -109,7 +127,13 @@ namespace dfl
         driftValue *= 1.0 / NUM_DRIFTS;
       }
 
-      const double out = (mode == TRI_MOD) ? triModSample() : supersawSample(driftValue);
+      double out;
+      switch( mode )
+      {
+      case TRI_MOD:  out = triModSample();                break;
+      case SUPERSAW: out = supersawSample(driftValue);    break;
+      default:       out = formantSample(driftValue);     break;
+      }
 
       phase += increment;
       if( phase >= 1.0 )
@@ -209,6 +233,22 @@ namespace dfl
       return 2.0 * (std::sin(u - m) - std::sin(u));
     }
 
+    inline double formantSample(double driftSignal) const
+    {
+      const double h  = clip(formantForShape(shape) * (1.0 + 0.15 * drift * driftSignal), FORMANT_MIN, FORMANT_MAX);
+      const double h1 = std::floor(h);
+      const double a  = h - h1;
+      const double v1 = 0.5 * (h1 + 1.0);
+      const double y1 = vps(phase, bend, v1);
+      return (a > 0.0) ? y1 + a * (vps(phase, bend, v1 + 0.5) - y1) : y1;
+    }
+
+    static inline double vps(double p, double d, double v)
+    {
+      const double phi = (p < d) ? v * p / d : (1.0 - v) * (p - d) / (1.0 - d) + v;
+      return -std::cos(twoPi * phi);
+    }
+
     // 2-point polyBLEP residual for a jump of 2 (same form as AlphaJunoOscillator), scaled by half
     // the jump and added to the trivial waveform. x is the distance to the edge in samples: in [0, 1)
     // just after it, in (-1, 0] just before.
@@ -238,6 +278,7 @@ namespace dfl
     double driftValue    = 0.0;
     double shape         = 0.5;
     double drift         = 0.0;
+    double bend          = 0.5;   // VPS bend point d
     int    mode          = TRI_MOD;
     bool   antialias     = true;
 

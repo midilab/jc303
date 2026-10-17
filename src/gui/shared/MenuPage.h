@@ -56,6 +56,7 @@ public:
         juce::String alsoHiddenWhenId;  // a second condition: also skipped while this choice param equals alsoHiddenWhenIndex
         int alsoHiddenWhenIndex = -1;
         int alsoHiddenOnlyAtIndex = -1;  // if >= 0, the second condition applies only while hiddenWhenId's index equals this
+        int alsoShownFromIndex = 0;     // also skipped while alsoHiddenWhenId's choice index is below this
         juce::Array<int> alsoHiddenAtIndices;  // also skipped while hiddenWhenId's choice index is one of these
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
         bool wrap = false;             // value type only: dec/inc wrap around the param range (int params)
@@ -644,8 +645,11 @@ private:
     bool isHidden(const Item& item) const
     {
         if (item.alsoHiddenWhenId.isNotEmpty() && (item.alsoHiddenOnlyAtIndex < 0 || choiceIndex(item.hiddenWhenId) == item.alsoHiddenOnlyAtIndex))
-            if (choiceIndex(item.alsoHiddenWhenId) == item.alsoHiddenWhenIndex)
+        {
+            const int alsoIndex = choiceIndex(item.alsoHiddenWhenId);
+            if (alsoIndex == item.alsoHiddenWhenIndex || alsoIndex < item.alsoShownFromIndex)
                 return true;
+        }
         if (item.hiddenWhenId.isEmpty())
             return false;
         auto* p = valueTreeState.getParameter(item.hiddenWhenId);
@@ -1108,9 +1112,15 @@ public:
         mod.items.add(Item { "shaperMode",  "Shaper Mode",      Type::value, {}, 1.0f, {}, "oscModel", -1, 2, true, 2 });   // Phaseshaper only
         {
             Item drift { "shapeDrift", "Shape Drift", Type::value, {}, 0.0f, {}, "oscModel", -1, 2, true, 2 };
-            drift.alsoHiddenWhenId = "shaperMode";   // Ripple Saw only
+            drift.alsoHiddenWhenId = "shaperMode";   // Ripple Saw and Formant
             drift.alsoHiddenWhenIndex = 0;
             mod.items.add(drift);
+        }
+        {
+            Item split { "shaperSplit", "Formant Split", Type::value, {}, 0.0f, {}, "oscModel", -1, 2, true, 2 };
+            split.alsoHiddenWhenId = "shaperMode";   // Formant only
+            split.alsoShownFromIndex = 2;
+            mod.items.add(split);
         }
         mod.items.add(Item { "subOscGain",  "Sub Osc",          Type::value, {}, 0.0f, {}, {}, -1, 0, true });
         mod.items.add(Item { "subOscBlend", "Sub Octave -2/-1", Type::value, {}, 0.0f, {}, {}, -1, 0, true });

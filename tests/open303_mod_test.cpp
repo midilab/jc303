@@ -198,6 +198,18 @@ static void waveformAndPulseWidthReachEveryOscModel()
   }
 }
 
+static void formantModeTakesWaveformAndSplit()
+{
+  Config formant = [](rosic::Open303& s) {
+    s.setOscModel(rosic::OSC_PHASESHAPER);
+    s.setPhaseshaperMode(dfl::PhaseshaperOscillator::FORMANT);
+    s.setWaveform(0.3); };
+  std::vector<double> base = render(formant);
+  CHECK(maxDiff(base, render([&](rosic::Open303& s) { formant(s); s.setPhaseshaperSplit(0.6); })) > 1e-3);
+  CHECK(maxDiff(base, render([&](rosic::Open303& s) {
+    formant(s); s.setModSlot(1, rosic::MOD_SRC_ENV, rosic::MOD_DEST_WAVEFORM, 0.8); })) > 1e-3);
+}
+
 // period (samples) by autocorrelation over a window, searched between 1 and 1000 Hz at 44.1 kHz
 static double periodOf(const std::vector<double>& x, int from, int len)
 {
@@ -403,6 +415,7 @@ int main()
   slotZeroIsOwnedByLegacySetters();
   newDestinationsMoveTheSound();
   waveformAndPulseWidthReachEveryOscModel();
+  formantModeTakesWaveformAndSplit();
   envPlusIsUnipolarAndSettlesOnPitch();
   lfoDepthDestinationCanOpenAClosedLfo();
   knobValuesAreRestoredWhenModulationStops();
