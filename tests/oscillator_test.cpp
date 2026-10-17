@@ -79,19 +79,46 @@ static void testTriModAtZeroShapeIsTriangle()
     CHECK (maxErr < 1e-9, "shape 0 should be a plain triangle, max error %g", maxErr);
 }
 
+static double shapeForTriModAmount (double a)
+{
+    return (a - 0.5) / (dfl::PhaseshaperOscillator::TRI_MOD_MAX_AMOUNT - 0.5);
+}
+
 static void testTriModOddHarmonicsWithDominantThird()
 {
-    // Kleimola et al. 2010, Sec. 3.5: odd harmonics only, the 3rd the most prominent for aTM in [0.7, 1]
-    // (aTM 0.7, 0.82, 0.95; at exactly 1 the 3rd and 5th tie)
-    for (double shape : { 0.4, 0.64, 0.9 })
+    // Kleimola et al. 2010, Sec. 3.5: odd harmonics only, the 3rd the most prominent for aTM in [0.7, 1)
+    // (at exactly 1 the 3rd and 5th tie)
+    for (double a : { 0.7, 0.82, 0.95 })
     {
+        const double shape = shapeForTriModAmount (a);
         auto osc = makePhaseshaper (96000.0, 100.0, dfl::PhaseshaperOscillator::TRI_MOD, shape);
         std::vector<double> x (9600);
         for (auto& s : x) s = osc.getSample();
         const double h1 = harmonic (x, 960.0, 1), h2 = harmonic (x, 960.0, 2), h3 = harmonic (x, 960.0, 3);
         const double h4 = harmonic (x, 960.0, 4), h5 = harmonic (x, 960.0, 5);
-        CHECK (h2 < 1e-3 * h3 && h4 < 1e-3 * h3, "shape %.2f: even harmonics h2=%g h4=%g h3=%g", shape, h2, h4, h3);
-        CHECK (h3 > h1 && h3 > h5, "shape %.2f: 3rd not dominant (h1=%g h3=%g h5=%g)", shape, h1, h3, h5);
+        CHECK (h2 < 1e-3 * h3 && h4 < 1e-3 * h3, "aTM %.2f: even harmonics h2=%g h4=%g h3=%g", a, h2, h4, h3);
+        CHECK (h3 > h1 && h3 > h5, "aTM %.2f: 3rd not dominant (h1=%g h3=%g h5=%g)", a, h1, h3, h5);
+    }
+}
+
+static void testTriModPeakSweepsLikeSync()
+{
+    // past aTM = 1 the strongest harmonic climbs with the amount, near 4 * aTM, as a sync sweep does
+    // (half-integer amounts: at whole ones harmonics 4a - 1 and 4a + 1 tie)
+    const int expected[] = { 9, 17, 21 };
+    int i = 0;
+    for (double a : { 2.5, 4.5, 5.5 })
+    {
+        const double shape = shapeForTriModAmount (a);
+        auto osc = makePhaseshaper (96000.0, 100.0, dfl::PhaseshaperOscillator::TRI_MOD, shape);
+        osc.setAntialias (false);
+        std::vector<double> x (960);
+        for (auto& s : x) s = osc.getSample();
+        int peak = 1;
+        for (int k = 2; k <= 60; ++k)
+            if (harmonic (x, 960.0, k) > harmonic (x, 960.0, peak)) peak = k;
+        CHECK (peak == expected[i], "shape %.3f: peak at h%d, expected h%d", shape, peak, expected[i]);
+        ++i;
     }
 }
 
@@ -187,14 +214,29 @@ static void testPhaseshaperAntialiasing()
     const double sr = 48000.0, f = sr * P / N;
     for (int mode : { (int) dfl::PhaseshaperOscillator::TRI_MOD, (int) dfl::PhaseshaperOscillator::SUPERSAW })
     {
-        auto naive = makePhaseshaper (sr, f, mode, 0.7);
+        const double shape = (mode == dfl::PhaseshaperOscillator::TRI_MOD) ? shapeForTriModAmount (0.85) : 0.7;
+        auto naive = makePhaseshaper (sr, f, mode, shape);
         naive.setAntialias (false);
-        auto blep = makePhaseshaper (sr, f, mode, 0.7);
+        auto blep = makePhaseshaper (sr, f, mode, shape);
         const double naiveDb = aliasRatioDb ([&] { return naive.getSample(); }, N, P);
         const double blepDb = aliasRatioDb ([&] { return blep.getSample(); }, N, P);
         std::printf ("phaseshaper mode %d alias: naive %.1f dB, polyBLEP %.1f dB\n", mode, naiveDb, blepDb);
         CHECK (blepDb < naiveDb - 10.0, "mode %d: polyBLEP only %.1f dB below naive", mode, naiveDb - blepDb);
     }
+}
+
+static void testTriModAntialiasingAtFullAmount()
+{
+    // aTM = 6 wraps at every half-integer level from 0.5 to 5.5, twelve per slope
+    const int N = 4096, P = 23;   // f0 = 269.5 Hz at 48 kHz
+    const double sr = 48000.0, f = sr * P / N;
+    auto naive = makePhaseshaper (sr, f, dfl::PhaseshaperOscillator::TRI_MOD, 1.0);
+    naive.setAntialias (false);
+    auto blep = makePhaseshaper (sr, f, dfl::PhaseshaperOscillator::TRI_MOD, 1.0);
+    const double naiveDb = aliasRatioDb ([&] { return naive.getSample(); }, N, P);
+    const double blepDb = aliasRatioDb ([&] { return blep.getSample(); }, N, P);
+    std::printf ("tri mod aTM 6 alias: naive %.1f dB, polyBLEP %.1f dB\n", naiveDb, blepDb);
+    CHECK (blepDb < naiveDb - 4.0, "aTM 6: polyBLEP only %.1f dB below naive", naiveDb - blepDb);
 }
 
 static void testJunoSawIsBandlimited()
@@ -217,12 +259,14 @@ int main()
 {
     testTriModAtZeroShapeIsTriangle();
     testTriModOddHarmonicsWithDominantThird();
+    testTriModPeakSweepsLikeSync();
     testSupersawMatchesEquation28();
     testSupersawIsPeriodicAndBounded();
     testDriftModulatesTheShape();
     testDriftLeavesTriModAlone();
     testDriftRateTracksPitch();
     testPhaseshaperAntialiasing();
+    testTriModAntialiasingAtFullAmount();
     testJunoSawIsBandlimited();
 
     if (failures == 0)
