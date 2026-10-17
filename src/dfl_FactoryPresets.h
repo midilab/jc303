@@ -123,6 +123,68 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Amount",  0.6f },    // +0.3 FM depth on accents
         }, "filterFm", "filterDrive" },
 
+        // Stiff Spring: Hi-Fi diode ladder with stiff rungs: the resonance's pitch rises with its level, so loud
+        // (accented) notes chirp upward. The mod wheel plays the tension.
+        { "Stiff Spring", {
+            { "switchModState",  1.0f },
+            { "filterType",      1.0f },    // Spicy
+            { "filterQuality",   1.0f },    // Hi-Fi
+            { "filterTension",   0.7f },    // stiff: up to ~3 semitones higher when loud
+            { "oscModel",        0.0f },
+            { "waveform",        0.0f },    // saw
+            { "cutoff",          0.35f },   // 640 Hz
+            { "resonance",       0.88f },   // just below self-oscillation
+            { "envmod",          0.65f },
+            { "decay",           0.45f },   // 240 ms
+            { "accent",          0.9f },
+            { "filterDrive",     0.3f },    // +5 dB: enough level to bend the rungs
+            { "normalDecay",     0.4f },    // 1.2 s
+            { "accentDecay",     0.08f },   // 270 ms
+            { "slideTime",       0.2f },    // 74 ms
+            { "softAttack",      0.35f },   // 7.5 ms
+        }, "filterTension", "resonance" },
+
+        // Floppy Drop: Hi-Fi diode ladder with floppy rungs: the louder the resonance rings, the further its pitch
+        // sags, a rubbery drop on every accent.
+        { "Floppy Drop", {
+            { "switchModState",  1.0f },
+            { "filterType",      1.0f },    // Spicy
+            { "filterQuality",   1.0f },    // Hi-Fi
+            { "filterTension",   -0.8f },   // floppy: up to ~5 semitones lower when loud
+            { "oscModel",        0.0f },
+            { "waveform",        1.0f },    // square
+            { "cutoff",          0.3f },    // 575 Hz
+            { "resonance",       0.85f },
+            { "envmod",          0.7f },
+            { "decay",           0.55f },   // 380 ms
+            { "accent",          1.0f },
+            { "filterDrive",     0.35f },   // +6 dB
+            { "normalDecay",     0.45f },   // 1.4 s
+            { "accentDecay",     0.12f },   // 390 ms
+            { "slideTime",       0.33f },   // 120 ms
+        }, "filterTension", "cutoff" },
+
+        // Rail Crush: Hi-Fi diode ladder at full saturation (+16 dB) under a lowered rail: the stage voltages are
+        // capped, so the drive turns into a dense, compressed crunch rather than runaway fizz.
+        { "Rail Crush", {
+            { "switchModState",  1.0f },
+            { "filterType",      1.0f },    // Spicy
+            { "filterQuality",   1.0f },    // Hi-Fi
+            { "filterDrive",     1.0f },    // +16 dB, full saturation
+            { "filterRail",      0.4f },    // a low ceiling on the stage voltages
+            { "oscModel",        0.0f },
+            { "waveform",        0.0f },    // saw
+            { "cutoff",          0.45f },   // 785 Hz
+            { "resonance",       0.7f },
+            { "envmod",          0.55f },
+            { "decay",           0.5f },    // 300 ms
+            { "accent",          0.8f },
+            { "normalDecay",     0.4f },    // 1.2 s
+            { "accentDecay",     0.08f },   // 270 ms
+            { "slideTime",       0.16f },   // 60 ms
+            { "softAttack",      0.35f },   // 7.5 ms
+        }, "filterRail", "filterDrive" },
+
         // Super JP: JP-8000 supersaw stack on the Juno-106 filter, half keytracked, slow cutoff breath.
         { "Super JP", {
             { "switchModState",  1.0f },
