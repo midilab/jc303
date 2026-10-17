@@ -24,7 +24,7 @@ namespace
     // order matches rosic::ModSource
     juce::StringArray modSourceNames()
     {
-        return { "Off", "LFO", "Env", "Accent", "Key", "Random", "Cutoff" };
+        return { "Off", "LFO", "Env", "Accent", "Key", "Random", "Cutoff", "Env+" };
     }
 
     // order matches rosic::ModDestination
