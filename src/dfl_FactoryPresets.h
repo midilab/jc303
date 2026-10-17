@@ -164,14 +164,18 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "slideTime",       0.33f },   // 120 ms
         }, "filterTension", "cutoff" },
 
-        // Rail Crush: Hi-Fi diode ladder at full saturation (+16 dB) under a lowered rail: the stage voltages are
+        // Rail Crusher: Hi-Fi diode ladder at full saturation (+16 dB) under a lowered rail: the stage voltages are
         // capped, so the drive turns into a dense, compressed crunch rather than runaway fizz.
-        { "Rail Crush", {
+        { "Rail Crusher", {
             { "switchModState",  1.0f },
             { "filterType",      1.0f },    // Spicy
             { "filterQuality",   1.0f },    // Hi-Fi
             { "filterDrive",     1.0f },    // +16 dB, full saturation
             { "filterRail",      0.4f },    // a low ceiling on the stage voltages
+            { "filterBias",      1.0f },    // full asymmetry and driven swell
+            { "filterTension",   0.0f },    // the circuit's rungs (knob 2 bends them)
+            { "filterBias",      1.0f },    // full asymmetry and driven swell
+            { "filterTension",   0.0f },    // the circuit's rungs
             { "oscModel",        0.0f },
             { "waveform",        0.0f },    // saw
             { "cutoff",          0.45f },   // 785 Hz
@@ -183,7 +187,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "accentDecay",     0.08f },   // 270 ms
             { "slideTime",       0.16f },   // 60 ms
             { "softAttack",      0.35f },   // 7.5 ms
-        }, "filterRail", "filterDrive" },
+        }, "filterRail", "filterTension" },
 
         // Super JP: JP-8000 supersaw stack on the Juno-106 filter, half keytracked, slow cutoff breath.
         { "Super JP", {
