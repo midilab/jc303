@@ -184,6 +184,118 @@ static void testHooverRenders (JC303& p, const char* wavPath)
         writeWav (out, juce::File::getCurrentWorkingDirectory().getChildFile (wavPath));
 }
 
+static void testPerformanceKnobs()
+{
+    {
+        JC303 p;
+        CHECK (p.getPerformanceKnob (0) == "cutoff" && p.getPerformanceKnob (1) == "lfoDepth",
+               "default knobs %s / %s", p.getPerformanceKnob (0).toRawUTF8(), p.getPerformanceKnob (1).toRawUTF8());
+
+        p.setCurrentProgram (programIndex (p, "Super JP"));
+        CHECK (p.getPerformanceKnob (0) == "superDetune" && p.getPerformanceKnob (1) == "superMix",
+               "Super JP knobs %s / %s", p.getPerformanceKnob (0).toRawUTF8(), p.getPerformanceKnob (1).toRawUTF8());
+        p.setCurrentProgram (0);
+        CHECK (p.getPerformanceKnob (0) == "cutoff", "Init knob 1 %s", p.getPerformanceKnob (0).toRawUTF8());
+
+        // an assignment made on the knobs is part of the saved state
+        p.setPerformanceKnob (0, "filterMorph");
+        juce::MemoryBlock state;
+        p.getStateInformation (state);
+        JC303 restored;
+        restored.setStateInformation (state.getData(), (int) state.getSize());
+        CHECK (restored.getPerformanceKnob (0) == "filterMorph", "restored knob 1 %s", restored.getPerformanceKnob (0).toRawUTF8());
+        CHECK (restored.getPerformanceKnob (1) == "lfoDepth", "restored knob 2 %s", restored.getPerformanceKnob (1).toRawUTF8());
+    }
+}
+
+static void testPresetKnobsExist (JC303& p)
+{
+    for (auto& preset : dfl::factoryPresets())
+        for (auto* id : { preset.knob1, preset.knob2 })
+            CHECK (find (p, id) != nullptr, "preset '%s' assigns unknown parameter '%s' to a knob", preset.name, id);
+}
+
+// fundamental by autocorrelation over 50..500 Hz
+static double fundamental (const juce::AudioBuffer<float>& x, int from, int len)
+{
+    double best = -1e300; int bestLag = 0;
+    for (int lag = 88; lag < 882; ++lag)
+    {
+        double acc = 0.0;
+        for (int i = from; i < from + len; ++i)
+            acc += x.getSample (0, i) * x.getSample (0, i + lag);
+        if (acc > best) { best = acc; bestLag = lag; }
+    }
+    return 44100.0 / bestLag;
+}
+
+// MIDI pitch bend spans an octave each way
+static void testPitchBend (JC303& p)
+{
+    auto play = [&] (int wheel)
+    {
+        p.setCurrentProgram (0);
+        setParam (p, "cutoff", 1.0f);
+        setParam (p, "tuning", 0.0f);
+        p.setPlayConfigDetails (0, 2, 44100.0, 512);
+        p.prepareToPlay (44100.0, 512);
+        juce::AudioBuffer<float> out (2, 512 * 40), buffer (2, 512);
+        for (int b = 0; b < 40; ++b)
+        {
+            juce::MidiBuffer midi;
+            if (b == 0)
+            {
+                midi.addEvent (juce::MidiMessage::pitchWheel (1, wheel), 0);
+                midi.addEvent (juce::MidiMessage::noteOn (1, 45, (juce::uint8) 64), 0);
+            }
+            buffer.clear();
+            p.processBlock (buffer, midi);
+            out.copyFrom (0, b * 512, buffer, 0, 0, 512);
+        }
+        juce::MidiBuffer reset;
+        reset.addEvent (juce::MidiMessage::pitchWheel (1, 8192), 0);
+        reset.addEvent (juce::MidiMessage::noteOff (1, 45), 0);
+        juce::AudioBuffer<float> scratch (2, 512);
+        p.processBlock (scratch, reset);
+        p.releaseResources();
+        return fundamental (out, 4096, 4096);
+    };
+    const double centre = play (8192), up = play (16383), down = play (0);
+    std::printf ("pitch bend: centre %.1f Hz, up %.1f Hz, down %.1f Hz\n", centre, up, down);
+    CHECK (std::abs (centre - 110.0) < 2.0, "centre %.1f Hz", centre);
+    CHECK (std::abs (up - 220.0) < 4.0, "full bend up %.1f Hz, want an octave up", up);
+    CHECK (std::abs (down - 55.0) < 1.5, "full bend down %.1f Hz, want an octave down", down);
+}
+
+// the mod wheel (CC 1) drives performance knob 1's parameter: Cutoff on Init, the preset's own knob otherwise
+static void testModWheelDrivesKnobOne (JC303& p)
+{
+    auto wheel = [&] (int value)
+    {
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::controllerEvent (1, 1, value), 0);
+        juce::AudioBuffer<float> buffer (2, 512);
+        p.setPlayConfigDetails (0, 2, 44100.0, 512);
+        p.prepareToPlay (44100.0, 512);
+        p.processBlock (buffer, midi);
+        p.releaseResources();
+        p.applyPendingControllers();   // the message thread's side
+    };
+    auto normalised = [&] (const char* id) { return find (p, id)->getValue(); };
+
+    p.setCurrentProgram (0);
+    CHECK (p.getPerformanceKnob (0) == "cutoff", "Init knob 1 is %s", p.getPerformanceKnob (0).toRawUTF8());
+    wheel (127);
+    CHECK (std::abs (normalised ("cutoff") - 1.0f) < 1e-4f, "wheel 127 left cutoff at %g", normalised ("cutoff"));
+    wheel (0);
+    CHECK (normalised ("cutoff") < 1e-4f, "wheel 0 left cutoff at %g", normalised ("cutoff"));
+
+    p.setCurrentProgram (programIndex (p, "Super JP"));
+    wheel (64);
+    CHECK (std::abs (normalised ("superDetune") - 64.0f / 127.0f) < 0.006f,   // the parameter snaps to 0.01 steps
+           "wheel 64 set superDetune %g", normalised ("superDetune"));
+}
+
 // every preset makes clean sound: finite, audible, under full scale, and level-matched to the bank
 static void testEveryPresetRenders (JC303& p, const char* wavDir)
 {
@@ -227,11 +339,15 @@ int main (int argc, char** argv)
         testProgramList (p);
         testPresetIdsExist (p);
         testPresetValuesInRange (p);
+        testPresetKnobsExist (p);
         testInitResetsSoundOnly (p);
         testHoover (p);
         testHooverRenders (p, argc > 1 ? argv[1] : nullptr);
         testEveryPresetRenders (p, argc > 2 ? argv[2] : nullptr);
+        testPitchBend (p);
+        testModWheelDrivesKnobOne (p);
     }
+    testPerformanceKnobs();
 
     if (failures == 0)
         std::printf ("preset_test: all passed\n");

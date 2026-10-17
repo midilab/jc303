@@ -221,6 +221,13 @@ public:
 
     //==============================================================================
     int getNumPrograms() override;
+
+    /** The parameter ID on performance knob 0 or 1 (saved with the state; the mod wheel drives knob 0). */
+    juce::String getPerformanceKnob (int knob) const;
+    void setPerformanceKnob (int knob, const juce::String& paramID);
+
+    /** Applies controller moves queued by the audio thread (the mod wheel); runs on the message thread. */
+    void applyPendingControllers();
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
@@ -429,6 +436,7 @@ private:
     // params, and rewrites wait until it has
     enum SeqOffset : int { OffsetTranspose = 1, OffsetShift = 2, OffsetPitchRotate = 4 };
     std::atomic<int> _seqOffsetReset { 0 };
+    std::atomic<int> _pendingModWheel { -1 };   // CC 1 value awaiting the message thread, -1 = none
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

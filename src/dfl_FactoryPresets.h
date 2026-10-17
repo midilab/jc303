@@ -10,11 +10,18 @@ namespace dfl
 
 // A factory sound: parameter ID -> value in the parameter's own units (choice index, 0/1 for bools,
 // the raw value for floats). Every sound parameter not listed goes back to its default, so Init is empty.
+// knob1 / knob2 are the parameters on the two performance knobs; the mod wheel drives knob1.
 struct FactoryPreset
 {
     const char* name;
     std::vector<std::pair<const char*, float>> values;
+    const char* knob1 = "cutoff";
+    const char* knob2 = "lfoDepth";
 };
+
+// the performance knob assignments, kept as properties of the plugin state
+inline const juce::Identifier performanceKnobIds[2] { "perfKnob1", "perfKnob2" };
+inline const char* const defaultPerformanceKnobs[2] { "cutoff", "lfoDepth" };
 
 inline const std::vector<FactoryPreset>& factoryPresets()
 {
@@ -44,7 +51,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "normalDecay",     1.0f },    // 3 s
             { "accentDecay",     1.0f },
             { "slideTime",       0.8f },    // 290 ms
-        } },
+        }, "superDetune", "lfoDepth" },
 
         // Squelch: stock-timed saw acid on the Spicy diode ladder; accents also push the resonance up.
         { "Squelch", {
@@ -64,7 +71,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  3.0f },    // Accent
             { "modSlot3Dest",    4.0f },    // Resonance
             { "modSlot3Amount",  0.2f },    // +10 points on accented notes
-        } },
+        }, "cutoff", "accentSweep" },
 
         // Mind Bender (fringeshift): Spicy at the LP/BP blend, the Cutoff knob also morphing it from 0.1 to 0.3,
         // so opening the filter slides it further into bandpass.
@@ -86,7 +93,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  6.0f },    // Cutoff (knob position 0..1)
             { "modSlot3Dest",    13.0f },   // Filter Morph
             { "modSlot3Amount",  0.4f },    // +0.2 morph at full cutoff: 0.1 -> 0.3
-        } },
+        }, "cutoff", "modSlot3Amount" },
 
         // Spicy Devil: Devil Fish-style square on the diode ladder, filter FM, accent sweep that builds over
         // consecutive accents, long accent decay.
@@ -113,7 +120,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  3.0f },    // Accent
             { "modSlot3Dest",    6.0f },    // Filter FM
             { "modSlot3Amount",  0.6f },    // +0.3 FM depth on accents
-        } },
+        }, "filterFm", "filterDrive" },
 
         // Super JP: JP-8000 supersaw stack on the Juno-106 filter, half keytracked, slow cutoff breath.
         { "Super JP", {
@@ -141,7 +148,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  4.0f },    // Key
             { "modSlot3Dest",    0.0f },    // Cutoff
             { "modSlot3Amount",  0.5f },    // 50% keyboard tracking
-        } },
+        }, "superDetune", "superMix" },
 
         // Vowel Sync: Tri Mod formant sweep on every note, from full JP-8000 bite down to the default shape.
         // The env slot is bipolar (rests at -1), so shape 0.82 - 0.18 settles at 0.64, clear of the 0.4 null.
@@ -165,7 +172,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  4.0f },    // Key
             { "modSlot3Dest",    0.0f },    // Cutoff
             { "modSlot3Amount",  0.5f },
-        } },
+        }, "waveform", "filterMorph" },
 
         // Ripple Lead: drifting Ripple Saw with the LFO sweeping the ripple, -2 oct sub, ARP 4075 filter.
         { "Ripple Lead", {
@@ -192,7 +199,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  4.0f },    // Key
             { "modSlot3Dest",    8.0f },    // Decay
             { "modSlot3Amount",  -0.4f },   // high notes decay faster
-        } },
+        }, "shapeDrift", "lfoDepth" },
 
         // Wasp Sting: EDP Wasp in bandpass on a PWM'd circuit square; accents drop back to lowpass.
         { "Wasp Sting", {
@@ -216,7 +223,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  3.0f },    // Accent
             { "modSlot3Dest",    13.0f },   // Filter Morph
             { "modSlot3Amount",  -0.5f },   // accents morph BP -> LP for weight
-        } },
+        }, "filterMorph", "lfoDepth" },
 
         // Miss Scream: MS-20 at full resonance driven hard, keytracked, per-note random cutoff, RAT before the VCA.
         { "Miss Scream", {
@@ -247,7 +254,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "overdriveDryWet", 0.5f },
             { "overdriveDisperse", 0.3f },
             { "overdrivePreVca", 1.0f },    // pre-VCA: the RAT post-VCA runs ~14 dB hotter than the bank
-        } },
+        }, "filterDrive", "filterBias" },
 
         // Dice Acid: every note rolls its own cutoff and decay; an S&H LFO flickers the saw/square blend.
         { "Dice Acid", {
@@ -273,7 +280,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot4Source",  5.0f },    // Random
             { "modSlot4Dest",    8.0f },    // Decay
             { "modSlot4Amount",  0.5f },    // +/- 1 octave of decay time per note
-        } },
+        }, "modSlot3Amount", "modSlot4Amount" },
 
         // Sub Tracker: heavy -2 oct sub under a square, filter fully keytracked, decay shortens up the keyboard.
         { "Sub Tracker", {
@@ -298,7 +305,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot4Source",  4.0f },    // Key
             { "modSlot4Dest",    8.0f },    // Decay
             { "modSlot4Amount",  -0.5f },   // an octave up halves the decay
-        } },
+        }, "subOscGain", "subOscBlend" },
 
         // Muff Stomp: Big Muff fuzz before the VCA so the envelope shapes the fuzz; accents push the wet mix.
         { "Muff Stomp", {
@@ -325,7 +332,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "modSlot3Source",  3.0f },    // Accent
             { "modSlot3Dest",    5.0f },    // Overdrive (dry/wet)
             { "modSlot3Amount",  0.8f },    // +0.4 wet on accents (clamped at 1.0)
-        } },
+        }, "cutoff", "modSlot3Amount" },
 
         // Hornet Morph: buzzy +3 oct chopped Juno saw, the Wasp A124 filter swept LP -> BP -> HP by the LFO.
         { "Hornet Morph", {
@@ -346,7 +353,7 @@ inline const std::vector<FactoryPreset>& factoryPresets()
             { "lfoDepth",        1.0f },    // full LP..HP sweep
             { "normalDecay",     0.5f },
             { "slideTime",       0.33f },
-        } },
+        }, "lfoRate", "filterMorph" },
     };
     return presets;
 }
