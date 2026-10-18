@@ -107,6 +107,117 @@ The sequencer is briefly muted while a pattern is generated so no stray notes pl
   - **Sync Mode** — `Internal` (free-running at Tempo), `Host` (follows the DAW transport position and tempo), or `Midi Clock` (follows external MIDI Start/Stop/Clock messages).
   - **Start Mode** — `Transport` (starts on host transport or MIDI Start) or `Note Trigger` (starts automatically on the first incoming note, even while stopped).
 
+## Presets
+
+JC303 ships with 17 factory presets. Each preset is its own `.json` file in the user's
+presets directory, so you can edit a sound in any text editor and the next bank load
+picks the change up. The GUI theme is `midilabv2`.
+
+### Presets page
+
+The Presets page in the LCD shows six rows:
+
+| Row | Action |
+|--|--|
+| `Preset` | Pick a preset with the knob or inc/dec (also opens a picker on click) |
+| `Bank` | Pick a preset bank |
+| `Save` | Save the current sound into the selected preset |
+| `New` | Create a new preset from the current sound |
+| `Rename` | Rename the selected preset (keeps its sound) |
+| `Delete` | Delete the selected preset (asks for confirmation first) |
+
+New, Rename and Delete are confirmed on the keyboard:
+
+- **New / Rename** — type the name (blinking block cursor over the last character),
+  `Enter` to confirm. `ESC` or moving the cursor cancels; a blank name is rejected.
+- **Delete** — the first `Enter` arms the delete ("Press Enter to confirm" blinks);
+  a second `Enter` actually deletes the file.
+- After each operation the result (`Saved` / `Created` / `Renamed` / `Deleted`)
+  blinks for three seconds, then the cursor returns to the `Preset` row with the
+  affected preset selected.
+
+### Preset files
+
+Presets live under `<Documents>/midilab/JC303/presets/` (your OS's Documents folder).
+On first run the `factory` bank is seeded from the copies embedded in the binary;
+afterwards every sound is loaded from disk.
+
+A preset file is plain JSON:
+
+```json
+{
+  "name": "Hoover",
+  "modKnob1": "superDetune",
+  "modKnob2": "lfoDepth",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "oscModel": 1.0,
+    "...": "..."
+  }
+}
+```
+
+- `name` — the display name on the Preset row.
+- `modKnob1` / `modKnob2` — the parameters on the two mod knobs (mod-wheel driven
+  knob 1). They must be Modifications-page parameters, not main-panel controls.
+- `values` — each sound parameter you want to set, in the parameter's own units.
+  Anything you leave out falls back to that parameter's default.
+
+#### Editing presets by hand
+
+To tweak a preset without touching the plugin, open its `.json` in any text editor,
+change the `values` entries, and save. The plugin reads presets from disk each time a
+bank loads, so switch the Bank back and forth (or restart the plugin) to pick up your
+edits. Keep the file valid JSON — a preset that fails to parse is skipped, and a bank
+with no loadable presets falls back to `Init`.
+
+For new sounds, it's easiest to dial the patch in the plugin and use **Save / New**
+(see the Presets page above) rather than writing `values` by hand — the plugin records
+exact parameter values for you.
+
+#### Volume level guidance for preset creators (-6 dB target)
+
+Every preset carries its own `volume`, so each sound recalls its own output level and
+no preset is louder or quieter than the last when you step through them. When creating
+a preset, aim for **-6 dB** for the final sound — **measured as the peak level of the
+patch in your DAW's meter (or the plugin host you're using), not a number on this
+plugin's knob**. The knob's scale is its own, so judge by what your DAW reads, not by
+a position on the dial.
+
+Why -6 dB:
+
+- **Consistent loudness when switching presets.** If one program sits near full scale
+  and the next at half that, stepping through them in a mix jumps audibly and risks a
+  sudden clipping spike. A shared target keeps changes musical instead of startling.
+- **Headroom sits at the mix bus, not inside the synth.** A preset peaking at full
+  scale leaves no room for several voices to sum, or for the track plus the rest of
+  the arrangement to add up before the master; -6 dB leaves a clear margin for that
+  summing and for a limiter or master chain later.
+- **Resonant and accent-heavy 303 patches get louder than they look.** Filter
+  resonance and accents push peaks up past a quiet hand-tuned patch; testing at the
+  loudest moment (hard accent, resonance up) and settling on a -6 dB peak keeps the
+  patch from suddenly overloading when that moment arrives.
+
+There's no "-6 dB" stored in the JSON — `volume` is the plugin's own scale. Create the
+sound, watch your DAW's meter, adjust the plugin's volume until the loudest notes peak
+around -6 dB, then Save.
+
+### Banks
+
+Any subdirectory you create in `presets/` full of `.json` files becomes a selectable
+Bank (listed alphabetically after `factory`). Use a separate folder per collection,
+set, or project. Switching banks swaps the presets in memory; the list always mirrors
+the current bank's folder.
+
+### Safe file handling
+
+- Every write is atomic: a `.json.tmp` is written first and moved over the target
+  only on success, so a crash can never leave a half-written preset.
+- Filenames are safe slugs of the display name, lowercased: `"Dice Acid"` →
+  `dice_acid.json`, `"My Cool Patch (1)"` → `my_cool_patch_1.json`.
+- Colliding names get OS-style suffixes: `"Name"`, `"Name (1)"`, `"Name (2)"`.
+
 ## Build
 
 Generate the cmake project build files first for the OS of your choice.  
@@ -208,4 +319,4 @@ No distribution of VST2 plugin binaries is allowed without a license, but if you
 4. ~~Overdrive~~
 5. ~~Step Sequencer~~
 6. Sequencer Patterns
-5. Preset Support
+5. ~~Preset Support~~
