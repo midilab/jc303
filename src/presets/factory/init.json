@@ -1,0 +1,8 @@
+{
+  "name": "Init",
+  "modKnob1": "lfoRate",
+  "modKnob2": "lfoDepth",
+  "values": {
+    "volume": 0.75
+  }
+}

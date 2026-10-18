@@ -1,0 +1,28 @@
+{
+  "name": "Hoover",
+  "modKnob1": "superDetune",
+  "modKnob2": "lfoDepth",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "oscModel": 1.0,
+    "junoWave": 2.0,
+    "superDetune": 0.35,
+    "waveform": 0.0,
+    "lfoDestination": 3.0,
+    "lfoWaveform": 0.0,
+    "lfoRate": 0.4,
+    "lfoDepth": 0.7,
+    "subOscGain": 0.35,
+    "subOscBlend": 1.0,
+    "filterType": 2.0,
+    "cutoff": 0.85,
+    "resonance": 0.15,
+    "envmod": 0.15,
+    "decay": 1.0,
+    "accent": 0.4,
+    "normalDecay": 1.0,
+    "accentDecay": 1.0,
+    "slideTime": 0.8
+  }
+}

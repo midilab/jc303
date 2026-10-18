@@ -1,24 +1,27 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../../dfl_FactoryPresets.h"
+#include "../../Presets.h"
 
-// Rotary slider that exposes its double-click to MenuPage so a theme knob can
-// be repurposed for "assign this knob to the current menu item". Overriding
-// mouseDoubleClick without calling the base also blocks the attachment's
-// reset-to-default behaviour.
+// Rotary slider that exposes its shift-click to MenuPage so a theme knob can
+// be repurposed for "assign this knob to the current menu item". The shift-click
+// is swallowed, so the knob value stays put while the assignment happens.
 class AssignableSlider : public juce::Slider
 {
 public:
     using juce::Slider::Slider;
 
-    std::function<void()> onDoubleClick;
+    std::function<void()> onAssign;
 
 private:
-    void mouseDoubleClick(const juce::MouseEvent&) override
+    void mouseDown(const juce::MouseEvent& e) override
     {
-        if (onDoubleClick)
-            onDoubleClick();
+        if (e.mods.isShiftDown() && onAssign)
+        {
+            onAssign();
+            return;
+        }
+        juce::Slider::mouseDown(e);
     }
 };
 
@@ -29,7 +32,8 @@ private:
 //   value       - prev/next moves the cursor between items, inc/dec and the knob edit the current item's param
 //   placeholder - inert row ("Soon to be implemented")
 class MenuPage : public juce::Component,
-                 public juce::AudioProcessorValueTreeState::Listener
+                 public juce::AudioProcessorValueTreeState::Listener,
+                 public juce::Timer
 {
 public:
     enum class Type { value, select, placeholder, action };
@@ -56,6 +60,7 @@ public:
         bool showParamText = false;    // value type only: show the parameter's own text (units) instead of 0..100
         bool wrap = false;             // value type only: dec/inc wrap around the param range (int params)
         juce::String wrapAtParam;      // with wrap: wrap at this int param's value (0..value-1) instead
+        bool labelAndValue = false;    // action list item: label on the left, the current pick on the right
     };
 
     struct Page
@@ -122,6 +127,7 @@ public:
 
     ~MenuPage() override
     {
+        stopTimer();
         for (auto& id : paramIDs)
             valueTreeState.removeParameterListener(id, this);
     }
@@ -131,6 +137,8 @@ public:
     {
         if (idx < 0 || idx >= pageList.size())
             return;
+        if (! isIdle())
+            cancelTransient();   // leaving the page abandons a text input or the delete guard
         pageCursor.getReference(currentPage) = cursor;
         currentPage = idx;
         cursor = pageCursor.getReference(idx);
@@ -141,6 +149,8 @@ public:
     // Called by the theme's prev/next buttons.
     void indexStep(int delta)
     {
+        if (! isIdle())
+            cancelTransient();   // moving the cursor abandons a text input or the delete guard
         auto& item = currentItem();
         if (item.type == Type::placeholder)
             return;
@@ -162,7 +172,11 @@ public:
         {
             auto it = actions.find(item.id);
             if (it != actions.end() && it->second.step)
+            {
                 it->second.step(direction);
+                updateDisplay();
+                notifyCurrentItemChanged();
+            }
             return;
         }
         if (item.type == Type::select)
@@ -184,6 +198,21 @@ public:
     void setValue(float percentage)
     {
         auto& item = currentItem();
+        if (item.type == Type::action && ! item.options.isEmpty())
+        {
+            auto it = actions.find(item.id);
+            if (it != actions.end() && it->second.jump)
+            {
+                const int target = juce::roundToInt(percentage / 100.0f * (float) (item.options.size() - 1));
+                if (target != actionIndex(item))
+                {
+                    it->second.jump(target);
+                    updateDisplay();
+                    notifyCurrentItemChanged();
+                }
+            }
+            return;
+        }
         if (item.type == Type::select)
         {
             if (auto* p = intParam(item.id))
@@ -211,6 +240,7 @@ public:
     {
         std::function<void(float)> step;
         std::function<juce::String()> text;
+        std::function<void(int)> jump;   // optional: pick an option by index (list actions, e.g. presets)
     };
 
     void setAction(const juce::String& id, Action action)
@@ -219,13 +249,126 @@ public:
         updateDisplay();
     }
 
-    bool currentItemIsAction() { return currentItem().type == Type::action; }
+    // Rebuilds the Preset row's options from the currently loaded bank (picked when the bank changes).
+    void refreshPresetOptions()
+    {
+        for (auto& pg : pageList)
+            for (auto& it : pg.items)
+                if (it.id == "preset")
+                {
+                    it.options.clear();
+                    for (auto& preset : factoryPresets())
+                        it.options.add(preset.name);
+                }
+        updateDisplay();
+    }
+
+    bool currentItemIsAction()
+    {
+        auto& item = currentItem();
+        return item.type == Type::action && actions.find(item.id) != actions.end();
+    }
 
     // Polled by the theme's timer: action values can change outside the menu.
     void refreshAction()
     {
-        if (currentItemIsAction() && valueLabel.getText() != actionText(currentItem()))
+        if (! currentItemIsAction())
+            return;
+        if (isSaveNewRow (currentItem()))
+            return;   // the Save/New/Rename/Delete rows are driven by our own Timer, not the poll
+        auto& item = currentItem();
+        const juce::String shown = (! item.options.isEmpty() && ! item.labelAndValue)
+                                       ? itemLabel.getText() : valueLabel.getText();
+        if (shown != actionText(item))
+        {
             updateDisplay();
+            notifyCurrentItemChanged();   // the value knob follows a list action (e.g. presets)
+        }
+    }
+
+    // --- Save / New / Rename / Delete preset rows -----------------------------------
+    // Enter on the row runs the operation; New and Rename turn the right column into a
+    // text input (blinking cursor), then the result ("Saved"/"Created"/"Renamed"/"Deleted")
+    // blinks for three seconds before the cursor returns to the Preset list row.
+    std::function<bool()> onSave;                 // wired by the theme's editor
+    std::function<int (const juce::String&)> onCreatePreset;   // returns the new preset's index, or -1
+    std::function<int (const juce::String&)> onRenamePreset;   // returns the renamed preset's index, or -1
+    std::function<int()> onDeletePreset;          // returns the preset to select next, or -1
+
+    // Keyboard input from the theme's editor. Returns true when the key was consumed.
+    bool handleKeyPress (const juce::KeyPress& key)
+    {
+        auto& item = currentItem();
+        const bool onPresetRow = item.id == "save" || item.id == "new" || item.id == "rename" || item.id == "delete";
+
+        if (key == juce::KeyPress::escapeKey && ! isIdle())
+        {
+            cancelTransient();
+            return true;
+        }
+
+        if (key == juce::KeyPress::returnKey)
+        {
+            if (state == State::naming)
+            {
+                commitNaming();
+                return true;
+            }
+            if (state == State::confirmDelete)
+            {
+                doDelete();
+                return true;
+            }
+            if (state == State::feedback)
+                return onPresetRow;   // swallow Enter while the result is blinking
+            if (! onPresetRow)
+                return false;
+
+            if (item.id == "save")
+            {
+                if (onSave && onSave())
+                    beginFeedback ("Saved");
+                return true;
+            }
+            if (item.id == "new")
+            {
+                beginNaming (juce::String());
+                updateDisplay();
+                return true;
+            }
+            if (item.id == "rename")
+            {
+                beginNaming (currentPresetName());
+                updateDisplay();
+                return true;
+            }
+            if (item.id == "delete")
+            {
+                beginConfirmDelete();
+                updateDisplay();
+                return true;
+            }
+        }
+
+        if (state == State::naming)
+        {
+            if (key == juce::KeyPress::backspaceKey || key == juce::KeyPress::deleteKey)
+            {
+                if (nameBuffer.length() > 0)
+                    nameBuffer = nameBuffer.dropLastCharacters (1);
+            }
+            else
+            {
+                const auto c = key.getTextCharacter();
+                if (c >= 32 && c < 127)
+                    nameBuffer += juce::String::charToString (c);
+                else
+                    return false;
+            }
+            updateDisplay();
+            return true;
+        }
+        return false;
     }
 
     // Fired when the cursor/page changes. Carries the current item's value in the
@@ -234,7 +377,7 @@ public:
 
     // ---- assignable macro knobs ----
     // A slot binds a theme-owned rotary slider to a value item (by param id), so
-    // themes can expose quick-access knobs for MOD parameters. Double-clicking the
+    // themes can expose quick-access knobs for MOD parameters. Shift-clicking the
     // slider assigns the currently selected menu item to it. Both directions of the
     // value stay in sync through a per-slot SliderAttachment.
     static constexpr int numAssignableSlots = 2;
@@ -245,7 +388,7 @@ public:
             return;
         assignableSlots[slot].slider = slider;
         assignableSlots[slot].label = label;
-        slider->onDoubleClick = [this, slot] { assignCurrentItemToSlot(slot); };
+        slider->onAssign = [this, slot] { assignCurrentItemToSlot(slot); };
         rebindAssignable(slot);
     }
 
@@ -254,7 +397,7 @@ public:
     {
         if (slot < 0 || slot >= numAssignableSlots)
             return;
-        valueTreeState.state.setProperty(dfl::performanceKnobIds[slot], paramID, nullptr);
+        valueTreeState.state.setProperty(modKnobIds[slot], paramID, nullptr);
         if (assignableSlots[slot].id == paramID)
             return;
         assignableSlots[slot].id = paramID;
@@ -266,8 +409,8 @@ public:
     {
         for (int i = 0; i < numAssignableSlots; ++i)
         {
-            const juce::String id = valueTreeState.state.getProperty(dfl::performanceKnobIds[i],
-                                                                     dfl::defaultPerformanceKnobs[i]).toString();
+            const juce::String id = valueTreeState.state.getProperty(modKnobIds[i],
+                                                                     defaultModKnobs[i]).toString();
             if (assignableSlots[i].id != id)
             {
                 assignableSlots[i].id = id;
@@ -313,9 +456,9 @@ public:
         for (auto& pg : pageList)
             for (auto& it : pg.items)
                 if (it.id == id)
-                    return labelOf(it);
+                    return labelOf(it).toUpperCase();
         if (auto* p = valueTreeState.getParameter(id))   // a main-panel knob such as Cutoff
-            return p->getName(32);
+            return p->getName(32).toUpperCase();
         return {};
     }
 
@@ -343,7 +486,144 @@ public:
             showItemMenu();
     }
 
+void timerCallback() override
+    {
+        blinkOn = ! blinkOn;
+        if (state == State::feedback
+            && juce::Time::getMillisecondCounter() - feedbackStartMs >= 3000u)
+            finishFeedback();
+        else
+            updateDisplay();
+    }
+
 private:
+    enum class State { idle, naming, confirmDelete, feedback };
+
+    bool isIdle() const { return state == State::idle; }
+
+    static bool isSaveNewRow (const Item& item)
+    {
+        return item.id == "save" || item.id == "new" || item.id == "rename" || item.id == "delete";
+    }
+
+    juce::String saveNewValueText() const
+    {
+        if (state == State::naming)
+        {
+            if (blinkOn)
+                return nameBuffer.isNotEmpty() ? nameBuffer.dropLastCharacters(1) + "_" : "_";   // cursor over the last char, alone when empty
+            return nameBuffer;
+        }
+        if (state == State::confirmDelete)
+            return blinkOn ? "Press Enter to confirm" : juce::String();
+        if (state == State::feedback)
+            return blinkOn ? feedbackText : juce::String();
+        return "(Press Enter)";
+    }
+
+    juce::String currentPresetName()
+    {
+        for (auto& pg : pageList)
+            for (auto& it : pg.items)
+                if (it.id == "preset")
+                    return actionText (it);
+        return {};
+    }
+
+    void beginNaming (const juce::String& prefill)
+    {
+        state = State::naming;
+        nameBuffer = prefill;
+        blinkOn = true;
+        startTimer (250);
+    }
+
+    void beginConfirmDelete()
+    {
+        state = State::confirmDelete;
+        blinkOn = true;
+        startTimer (250);
+    }
+
+    void beginFeedback (const juce::String& word)
+    {
+        state = State::feedback;
+        feedbackText = word;
+        blinkOn = true;
+        feedbackStartMs = juce::Time::getMillisecondCounter();
+        startTimer (125);
+    }
+
+    void commitNaming()
+    {
+        const juce::String name = nameBuffer.trim();
+        if (name.isEmpty())
+            return;   // stay in the text input, the name must not be blank
+
+        const bool isNew = currentItem().id == "new";
+        const int idx = isNew ? (onCreatePreset ? onCreatePreset (name) : -1)
+                              : (onRenamePreset ? onRenamePreset (name) : -1);
+        if (idx < 0)
+        {
+            cancelTransient();   // the operation failed: drop the input and show the hint again
+            return;
+        }
+        targetIndex = idx;
+        beginFeedback (isNew ? "Created" : "Renamed");
+    }
+
+    void doDelete()
+    {
+        const int idx = onDeletePreset ? onDeletePreset() : -1;
+        if (idx < 0)
+        {
+            cancelTransient();
+            return;
+        }
+        targetIndex = idx;
+        beginFeedback ("Deleted");
+    }
+
+    void cancelTransient()
+    {
+        stopTimer();
+        state = State::idle;
+        nameBuffer = juce::String();
+        updateDisplay();
+    }
+
+    // After the blink ends: refresh the preset list (create/rename/delete changed it),
+    // select the affected preset, and return the cursor to the Preset row.
+    void finishFeedback()
+    {
+        stopTimer();
+        state = State::idle;
+        nameBuffer = juce::String();
+
+        refreshPresetOptions();
+        auto& item = currentItem();
+        if (item.id != "preset" && targetIndex >= 0)
+            if (auto it = actions.find ("preset"); it != actions.end() && it->second.jump)
+                it->second.jump (targetIndex);
+
+        for (int i = 0; i < pageList.getReference (currentPage).items.size(); ++i)
+            if (pageList.getReference (currentPage).items.getReference (i).id == "preset")
+            {
+                cursor = i;
+                pageCursor.getReference (currentPage) = i;
+                break;
+            }
+        updateDisplay();
+        notifyCurrentItemChanged();
+    }
+
+    State state = State::idle;
+    juce::String nameBuffer;
+    juce::String feedbackText;
+    juce::uint32 feedbackStartMs = 0;
+    int targetIndex = -1;
+    bool blinkOn = false;
+
     juce::String labelOf(const Item& item) const
     {
         if (item.altLabel.isNotEmpty())
@@ -437,9 +717,19 @@ private:
         if (!onCurrentItemChanged)
             return;
         float v = -1.0f;
-        if (currentItem().type != Type::placeholder)
-            if (auto* param = valueTreeState.getParameter(currentItem().id))
+        auto& item = currentItem();
+        if (item.type != Type::placeholder)
+        {
+            if (auto* param = valueTreeState.getParameter(item.id))
                 v = param->getValue() * 100.0f;
+            else if (item.type == Type::action && ! item.options.isEmpty())
+            {
+                const int idx = actionIndex(item);
+                const int n = item.options.size();
+                if (idx >= 0 && n > 1)
+                    v = idx * 100.0f / (n - 1);
+            }
+        }
         onCurrentItemChanged(v);
     }
 
@@ -574,8 +864,24 @@ private:
         auto& item = currentItem();
         if (item.type == Type::action)
         {
-            itemLabel.setText(item.label, juce::dontSendNotification);
-            valueLabel.setText(actionText(item), juce::dontSendNotification);
+            if (! item.options.isEmpty())   // list action: label + current pick (labelAndValue) or the pick as the row
+            {
+                if (item.labelAndValue)
+                {
+                    itemLabel.setText(labelOf(item), juce::dontSendNotification);
+                    valueLabel.setText(actionText(item), juce::dontSendNotification);
+                }
+                else
+                {
+                    itemLabel.setText(actionText(item), juce::dontSendNotification);
+                    valueLabel.setText({}, juce::dontSendNotification);
+                }
+            }
+            else
+            {
+                itemLabel.setText(item.label, juce::dontSendNotification);
+                valueLabel.setText(isSaveNewRow (item) ? saveNewValueText() : actionText(item), juce::dontSendNotification);
+            }
         }
         else if (item.type == Type::value)
         {
@@ -623,15 +929,22 @@ private:
                 safeThis->handlePopupChoice(result - 1);
         };
 
-        if (item.type == Type::select)
+        if (item.type == Type::select || (item.type == Type::action && ! item.options.isEmpty()))
         {
-            auto* p = intParam(item.id);
-            if (p == nullptr)
-                return;
+            int cur = -1;
+            if (item.type == Type::select)
+            {
+                auto* p = intParam(item.id);
+                if (p == nullptr)
+                    return;
+                cur = p->get();
+            }
+            else
+                cur = actionIndex(item);
 
             juce::PopupMenu menu;
             for (int i = 0; i < item.options.size(); ++i)
-                menu.addItem(1 + i, item.options[i], true, i == p->get());
+                menu.addItem(1 + i, item.options[i], true, i == cur);
             menu.setLookAndFeel(&popupLookAndFeel);
             menu.showMenuAsync(juce::PopupMenu::Options()
                                    .withTargetComponent(this)
@@ -672,6 +985,15 @@ private:
             }
             return;
         }
+        if (item.type == Type::action && ! item.options.isEmpty())
+        {
+            auto it = actions.find(item.id);
+            if (it != actions.end() && it->second.jump && pick >= 0 && pick < item.options.size())
+                it->second.jump(pick);
+            updateDisplay();
+            notifyCurrentItemChanged();
+            return;
+        }
 
         cursor = juce::jlimit(0, pageList.getReference(currentPage).items.size() - 1, pick);
         pageCursor.getReference(currentPage) = cursor;
@@ -706,11 +1028,25 @@ public:
         juce::Array<Page> pages;
 
         Page pst; pst.title = "Presets";
-        pst.items.add(Item { "preset", "Preset", Type::action, {}, 0.0f });   // factory presets: dec/inc loads the previous/next
+        pst.items.add(Item { "preset", "Preset", Type::action, {}, 0.0f });   // factory presets: inc/dec, the knob and the list pick them
+        for (auto& preset : factoryPresets())
+            pst.items.getReference(0).options.add(preset.name);
+        Item bank { "bank", "Bank", Type::action, presetBanks(), 0.0f };   // the preset bank: factory plus any of the user's own preset folders
+        bank.labelAndValue = true;   // "Bank" on the left, the current folder on the right
+        pst.items.add (bank);
+        pst.items.add(Item { "save", "Save", Type::action, {}, 0.0f });
+        pst.items.add(Item { "new", "New", Type::action, {}, 0.0f });
+        pst.items.add(Item { "rename", "Rename", Type::action, {}, 0.0f });
+        pst.items.add(Item { "delete", "Delete", Type::action, {}, 0.0f });
         pages.add(pst);
 
         Page ovd; ovd.title = "Overdrive";
         ovd.items.add(Item { "overdriveModelIndex", "Model", Type::select, overdriveModelNames, 0.0f });
+        {
+            Item preVca { "overdrivePreVca", "Pre VCA", Type::value, {}, 0.0f };   // put the overdrive before the VCA so the amp envelope shapes the fuzz
+            preVca.showParamText = true;   // shows On / Off
+            ovd.items.add(preVca);
+        }
         Item disperse { "overdriveDisperse", "Disperse", Type::value, {}, 0.0f };   // allpass corner before the overdrive
         disperse.showParamText = true;
         ovd.items.add(disperse);
@@ -847,6 +1183,15 @@ private:
     {
         auto it = actions.find(item.id);
         return (it != actions.end() && it->second.text) ? it->second.text() : juce::String();
+    }
+
+    // The selected index of a list action (options from actionText), or -1 when none.
+    int actionIndex(const Item& item)
+    {
+        auto it = actions.find(item.id);
+        if (it == actions.end() || ! it->second.text)
+            return -1;
+        return item.options.indexOf(it->second.text());
     }
     juce::Array<int> pageCursor;
     int modPageIndex = -1;

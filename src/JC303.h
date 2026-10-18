@@ -222,9 +222,9 @@ public:
     //==============================================================================
     int getNumPrograms() override;
 
-    /** The parameter ID on performance knob 0 or 1 (saved with the state; the mod wheel drives knob 0). */
-    juce::String getPerformanceKnob (int knob) const;
-    void setPerformanceKnob (int knob, const juce::String& paramID);
+    /** The parameter ID on mod knob 0 or 1 (saved with the state; the mod wheel drives knob 0). */
+    juce::String getModKnob (int knob) const;
+    void setModKnob (int knob, const juce::String& paramID);
 
     /** Applies controller moves queued by the audio thread (the mod wheel); runs on the message thread. */
     void applyPendingControllers();
@@ -232,6 +232,13 @@ public:
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
+
+    /** Preset file operations from the Presets menu (Save / New / Rename / Delete): snapshot the
+        current sound, write it to the current bank's folder, and re-sync the bank in memory. */
+    bool saveCurrentPreset();            // overwrite the current preset's own .json; false on failure
+    int createNewPreset (const juce::String& name);      // -> new preset's index, or -1
+    int renameCurrentPreset (const juce::String& name);  // -> new index, or -1
+    int deleteCurrentPreset();           // -> the index to select next, or -1
 
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
@@ -332,7 +339,7 @@ private:
     bool _sustainArmed  { true  };
     bool _recWasOn      { false };
 
-    int currentProgram = 0;   // factory preset index (see dfl_FactoryPresets.h)
+    int currentProgram = 0;   // factory preset index (see Presets.h)
 
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);

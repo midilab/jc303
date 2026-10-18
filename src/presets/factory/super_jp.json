@@ -1,0 +1,32 @@
+{
+  "name": "Super JP",
+  "modKnob1": "superDetune",
+  "modKnob2": "superMix",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "oscModel": 1.0,
+    "junoWave": 0.0,
+    "superDetune": 0.55,
+    "superMix": 0.75,
+    "waveform": 0.0,
+    "filterType": 3.0,
+    "cutoff": 0.85,
+    "resonance": 0.1,
+    "envmod": 0.2,
+    "decay": 0.7,
+    "accent": 0.3,
+    "normalDecay": 1.0,
+    "softAttack": 0.55,
+    "slideTime": 0.3,
+    "subOscGain": 0.2,
+    "subOscBlend": 1.0,
+    "lfoDestination": 0.0,
+    "lfoWaveform": 0.0,
+    "lfoRate": 0.3,
+    "lfoDepth": 0.15,
+    "modSlot3Source": 4.0,
+    "modSlot3Dest": 0.0,
+    "modSlot3Amount": 0.5
+  }
+}

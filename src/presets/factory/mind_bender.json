@@ -1,0 +1,25 @@
+{
+  "name": "Mind Bender",
+  "modKnob1": "filterMorph",
+  "modKnob2": "modSlot3Amount",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "filterType": 1.0,
+    "oscModel": 0.0,
+    "waveform": 0.0,
+    "filterMorph": 0.1,
+    "cutoff": 0.4,
+    "resonance": 0.75,
+    "envmod": 0.6,
+    "decay": 0.5,
+    "accent": 0.8,
+    "normalDecay": 0.4,
+    "accentDecay": 0.06,
+    "slideTime": 0.16,
+    "softAttack": 0.38,
+    "modSlot3Source": 6.0,
+    "modSlot3Dest": 13.0,
+    "modSlot3Amount": 0.4
+  }
+}

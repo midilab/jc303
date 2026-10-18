@@ -1,0 +1,28 @@
+{
+  "name": "Vowel Sync",
+  "modKnob1": "modSlot4Amount",
+  "modKnob2": "filterMorph",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "oscModel": 2.0,
+    "shaperMode": 0.0,
+    "waveform": 0.02,
+    "filterType": 6.0,
+    "filterMorph": 0.25,
+    "cutoff": 0.7,
+    "resonance": 0.3,
+    "envmod": 0.3,
+    "decay": 0.6,
+    "accentDecay": 0.15,
+    "accent": 0.5,
+    "normalDecay": 0.5,
+    "slideTime": 0.4,
+    "modSlot3Source": 4.0,
+    "modSlot3Dest": 0.0,
+    "modSlot3Amount": 0.5,
+    "modSlot4Source": 7.0,
+    "modSlot4Dest": 10.0,
+    "modSlot4Amount": 0.53
+  }
+}

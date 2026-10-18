@@ -1,0 +1,31 @@
+{
+  "name": "Muff Stomp",
+  "modKnob1": "feedbackFilter",
+  "modKnob2": "modSlot3Amount",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "filterType": 1.0,
+    "oscModel": 0.0,
+    "waveform": 0.0,
+    "cutoff": 0.35,
+    "resonance": 0.7,
+    "envmod": 0.6,
+    "decay": 0.5,
+    "accent": 0.9,
+    "bassComp": 0.4,
+    "feedbackFilter": 0.8,
+    "normalDecay": 0.45,
+    "accentDecay": 0.08,
+    "slideTime": 0.33,
+    "switchOverdriveState": 1.0,
+    "overdriveModelIndex": 36.0,
+    "overdriveLevel": 0.7,
+    "overdriveDryWet": 0.6,
+    "overdriveDisperse": 0.5,
+    "overdrivePreVca": 1.0,
+    "modSlot3Source": 3.0,
+    "modSlot3Dest": 5.0,
+    "modSlot3Amount": 0.8
+  }
+}

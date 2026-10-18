@@ -35,4 +35,5 @@ target_sources("${PROJECT_NAME}"
         gui/${GUI_THEME}/Gui.cpp
 
         JC303.cpp
+        Presets.cpp
 )
