@@ -107,6 +107,28 @@ The sequencer is briefly muted while a pattern is generated so no stray notes pl
   - **Sync Mode** — `Internal` (free-running at Tempo), `Host` (follows the DAW transport position and tempo), or `Midi Clock` (follows external MIDI Start/Stop/Clock messages).
   - **Start Mode** — `Transport` (starts on host transport or MIDI Start) or `Note Trigger` (starts automatically on the first incoming note, even while stopped).
 
+## Mod knobs
+
+Beneath the panel sit two assignable rotary knobs that give you quick, always-in-reach
+control over any parameter from the Modifications (`MOD`) page — handy for the ones you
+tweak the most (filter type, decay, LFO rate, a mod amount, ...).
+
+How to assign:
+
+1. Switch the editor to the `MOD` menu page and select the item you want on the knob
+   (e.g. "Decay").
+2. **Shift-click** the knob (hold the Shift key and click it).
+3. The knob now controls that parameter; the item's label appears on the knob.
+
+Notes:
+
+- A knob can only grab a **Modifications-page** parameter, not a main-panel control.
+- The same parameter can't be on both knobs at once — assigning it to the second knob
+  is a no-op.
+- Normal clicks still turn the knob; **shift-click is the only quick-assign gesture**.
+- The assignment is saved with the plugin state, and presets can set `modKnob1` /
+  `modKnob2` for any sound (see Presets below).
+
 ## Presets
 
 JC303 ships with 17 factory presets. Each preset is its own `.json` file in the user's

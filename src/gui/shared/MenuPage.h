@@ -3,22 +3,25 @@
 #include <JuceHeader.h>
 #include "../../Presets.h"
 
-// Rotary slider that exposes its double-click to MenuPage so a theme knob can
-// be repurposed for "assign this knob to the current menu item". Overriding
-// mouseDoubleClick without calling the base also blocks the attachment's
-// reset-to-default behaviour.
+// Rotary slider that exposes its shift-click to MenuPage so a theme knob can
+// be repurposed for "assign this knob to the current menu item". The shift-click
+// is swallowed, so the knob value stays put while the assignment happens.
 class AssignableSlider : public juce::Slider
 {
 public:
     using juce::Slider::Slider;
 
-    std::function<void()> onDoubleClick;
+    std::function<void()> onAssign;
 
 private:
-    void mouseDoubleClick(const juce::MouseEvent&) override
+    void mouseDown(const juce::MouseEvent& e) override
     {
-        if (onDoubleClick)
-            onDoubleClick();
+        if (e.mods.isShiftDown() && onAssign)
+        {
+            onAssign();
+            return;
+        }
+        juce::Slider::mouseDown(e);
     }
 };
 
@@ -374,7 +377,7 @@ public:
 
     // ---- assignable macro knobs ----
     // A slot binds a theme-owned rotary slider to a value item (by param id), so
-    // themes can expose quick-access knobs for MOD parameters. Double-clicking the
+    // themes can expose quick-access knobs for MOD parameters. Shift-clicking the
     // slider assigns the currently selected menu item to it. Both directions of the
     // value stay in sync through a per-slot SliderAttachment.
     static constexpr int numAssignableSlots = 2;
@@ -385,7 +388,7 @@ public:
             return;
         assignableSlots[slot].slider = slider;
         assignableSlots[slot].label = label;
-        slider->onDoubleClick = [this, slot] { assignCurrentItemToSlot(slot); };
+        slider->onAssign = [this, slot] { assignCurrentItemToSlot(slot); };
         rebindAssignable(slot);
     }
 

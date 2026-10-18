@@ -79,7 +79,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(menuKnob = createKnob("medium"));
     menuKnob->setRange(0.0, 100.0);
 
-    // assignable macro knobs (double-click -> assign current MOD item)
+    // assignable macro knobs (shift-click -> assign current MOD item)
     addAndMakeVisible(modAssign1 = createAssignableSlider("LFO rate", modAssign1Label));
     addAndMakeVisible(modAssign2 = createAssignableSlider("LFO depth", modAssign2Label));
     menuPage->bindAssignableSlider(0, modAssign1, modAssign1Label);
