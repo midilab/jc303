@@ -1,0 +1,26 @@
+{
+  "name": "Rail Crusher",
+  "modKnob1": "filterRail",
+  "modKnob2": "filterTension",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "filterType": 1.0,
+    "filterQuality": 1.0,
+    "filterDrive": 1.0,
+    "filterRail": 0.4,
+    "filterBias": 1.0,
+    "filterTension": 0.0,
+    "oscModel": 0.0,
+    "waveform": 0.0,
+    "cutoff": 0.2,
+    "resonance": 1.0,
+    "envmod": 0.55,
+    "decay": 0.5,
+    "accent": 0.8,
+    "normalDecay": 0.4,
+    "accentDecay": 0.08,
+    "slideTime": 0.16,
+    "softAttack": 0.35
+  }
+}

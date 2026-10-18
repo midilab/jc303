@@ -1,0 +1,25 @@
+{
+  "name": "Squelch",
+  "modKnob1": "normalDecay",
+  "modKnob2": "accentSweep",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "filterType": 1.0,
+    "oscModel": 0.0,
+    "waveform": 0.0,
+    "cutoff": 0.3,
+    "resonance": 0.8,
+    "envmod": 0.75,
+    "decay": 0.5,
+    "accent": 0.9,
+    "normalDecay": 0.4,
+    "accentDecay": 0.06,
+    "slideTime": 0.16,
+    "softAttack": 0.35,
+    "resTrim": 0.98,
+    "modSlot3Source": 3.0,
+    "modSlot3Dest": 4.0,
+    "modSlot3Amount": 0.2
+  }
+}

@@ -116,14 +116,45 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         };
     }
 
-    // Presets > Preset: - / + load the previous / next factory preset (wrapping)
+    // Presets > Preset: - / + load the previous / next factory preset (wrapping), the list picks any
     menuPage->setAction("preset", {
         [this] (float direction)
         {
             const int n = processorRef.getNumPrograms();
+            if (n == 0)
+                return;   // the current bank has no presets yet
             processorRef.setCurrentProgram((processorRef.getCurrentProgram() + (direction < 0 ? n - 1 : 1)) % n);
         },
-        [this] { return processorRef.getProgramName(processorRef.getCurrentProgram()); } });
+        [this] { return processorRef.getProgramName(processorRef.getCurrentProgram()); },
+        [this] (int index)
+        {
+            if (index >= 0 && index < processorRef.getNumPrograms() && index != processorRef.getCurrentProgram())
+                processorRef.setCurrentProgram(index);
+        } });
+
+    // Presets > Bank: - / + switch the preset bank (factory, or any folder the user created in the presets
+    // folder), the list picks any. Switching clears the loaded presets and loads the new bank's first preset.
+    menuPage->setAction("bank", {
+        [this] (float direction)
+        {
+            const auto banks = presetBanks();
+            if (banks.size() < 2)
+                return;   // only the default factory bank exists
+            const int cur = juce::jmax(0, banks.indexOf(currentPresetBank()));
+            loadPresetBank(banks[(cur + (direction < 0 ? (int) banks.size() - 1 : 1)) % (int) banks.size()]);
+            processorRef.setCurrentProgram(0);   // the new bank's first preset becomes the default
+            menuPage->refreshPresetOptions();
+        },
+        [this] { return currentPresetBank(); },
+        [this] (int index)
+        {
+            const auto banks = presetBanks();
+            if (index < 0 || index >= banks.size())
+                return;
+            loadPresetBank(banks[(size_t) index]);
+            processorRef.setCurrentProgram(0);
+            menuPage->refreshPresetOptions();
+        } });
 
     // Sequencer > Undo: - undoes, + redoes the last gen / re-roll / clear
     menuPage->setAction("seqUndo", {
@@ -136,6 +167,13 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             auto& seq = processorRef.getSequencer();
             return "-" + juce::String(seq.undoCount()) + " +" + juce::String(seq.redoCount());
         } });
+
+    // Presets > Save / New / Rename / Delete: the MenuPage drives the interaction, these hooks do
+    // the file work so the memory always mirrors the bank's folder (each op reloads from disk).
+    menuPage->onSave = [this] { return processorRef.saveCurrentPreset(); };
+    menuPage->onCreatePreset = [this] (const juce::String& name) { return processorRef.createNewPreset (name); };
+    menuPage->onRenamePreset = [this] (const juce::String& name) { return processorRef.renameCurrentPreset (name); };
+    menuPage->onDeletePreset = [this] { return processorRef.deleteCurrentPreset(); };
 
     selectMenu(2);   // default menu page; after the callback is set so the knob syncs
 
@@ -334,21 +372,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     overdriveLevelAttachment.reset(new SliderAttachment(valueTreeState, "overdriveLevel", *overdriveLevelSlider));
     overdriveDryWetAttachment.reset(new SliderAttachment(valueTreeState, "overdriveDryWet", *overdriveDryWetSlider));
     switchOverdriveButtonAttachment.reset(new ButtonAttachment(valueTreeState, "switchOverdriveState", *switchOverdriveButton));
-    // shift-click: toggle the overdrive between post-VCA and pre-VCA (red), switching it on
-    switchOverdriveButton->onShiftClick = [this]
-    {
-        auto* preVca = valueTreeState.getParameter("overdrivePreVca");
-        const bool toPre = preVca->getValue() < 0.5f;
-        preVca->setValueNotifyingHost(toPre ? 1.0f : 0.0f);
-        if (toPre)
-            switchOverdriveButton->setToggleState(true, juce::sendNotification);
-    };
-    // switching the overdrive off leaves pre-VCA mode, so the next click turns it back on post-VCA
-    switchOverdriveButton->onClick = [this]
-    {
-        if (! switchOverdriveButton->getToggleState())
-            valueTreeState.getParameter("overdrivePreVca")->setValueNotifyingHost(0.0f);
-    };
 
     // generative sequencer attachments
     seqGenerativeFillAttachment.reset(new SliderAttachment(valueTreeState, "seqGenerativeFill", *seqGenerativeFillSlider));
@@ -380,6 +403,11 @@ JC303Editor::~JC303Editor()
 
 bool JC303Editor::keyPressed (const juce::KeyPress& key)
 {
+    // Preset row interactions (Save/New/Rename/Delete): Enter runs them, and while naming the
+    // keyboard types the preset name.
+    if (menuPage != nullptr && menuPage->handleKeyPress (key))
+        return true;
+
     // Cmd/Ctrl+Z: undo the last gen / re-roll / clear; with Shift: redo
     if (key.getModifiers().isCommandDown()
         && juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) key.getKeyCode()) == 'Z')
@@ -421,8 +449,6 @@ void JC303Editor::resized()
 
 void JC303Editor::timerCallback()
 {
-    switchOverdriveButton->setAltState(*valueTreeState.getRawParameterValue("overdrivePreVca") > 0.5f);
-
     auto& seq = processorRef.getSequencer();
     menuPage->refreshAction();
     menuPage->syncAssignablesFromState();

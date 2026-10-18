@@ -1,0 +1,23 @@
+{
+  "name": "Floppy Drop",
+  "modKnob1": "filterTension",
+  "modKnob2": "filterDrive",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "filterType": 1.0,
+    "filterQuality": 1.0,
+    "filterTension": -0.8,
+    "oscModel": 0.0,
+    "waveform": 1.0,
+    "cutoff": 0.3,
+    "resonance": 0.85,
+    "envmod": 0.7,
+    "decay": 0.55,
+    "accent": 1.0,
+    "filterDrive": 0.35,
+    "normalDecay": 0.45,
+    "accentDecay": 0.12,
+    "slideTime": 0.33
+  }
+}

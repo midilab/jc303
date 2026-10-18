@@ -1,0 +1,24 @@
+{
+  "name": "Stiff Spring",
+  "modKnob1": "filterTension",
+  "modKnob2": "filterDrive",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "filterType": 1.0,
+    "filterQuality": 1.0,
+    "filterTension": 0.7,
+    "oscModel": 0.0,
+    "waveform": 0.0,
+    "cutoff": 0.35,
+    "resonance": 0.88,
+    "envmod": 0.65,
+    "decay": 0.45,
+    "accent": 0.9,
+    "filterDrive": 0.3,
+    "normalDecay": 0.4,
+    "accentDecay": 0.08,
+    "slideTime": 0.2,
+    "softAttack": 0.35
+  }
+}

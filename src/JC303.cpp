@@ -1,6 +1,6 @@
 #include "JC303.h"
 #include GUI_THEME_HEADER
-#include "dfl_FactoryPresets.h"
+#include "Presets.h"
 
 namespace
 {
@@ -629,6 +629,9 @@ JC303::JC303()
     // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
     // and the AcidSeq303 child (stepLength) on state restore.
     _sequencer.setTrackLength (16);
+
+    // Seed the user's presets directory from the embedded copies on first run, then load the factory presets.
+    ensureFactoryPresets();
 }
 
 JC303::~JC303()
@@ -828,13 +831,13 @@ void JC303::handleAsyncUpdate()
     applyPendingControllers();
 }
 
-// The mod wheel sets performance knob 0's parameter directly, so the knob on screen follows it.
+// The mod wheel sets mod knob 0's parameter directly, so the knob on screen follows it.
 void JC303::applyPendingControllers()
 {
     const int wheel = _pendingModWheel.exchange (-1, std::memory_order_acq_rel);
     if (wheel < 0)
         return;
-    if (auto* p = parameters.getParameter (getPerformanceKnob (0)))
+    if (auto* p = parameters.getParameter (getModKnob (0)))
     {
         p->beginChangeGesture();
         p->setValueNotifyingHost ((float) wheel / 127.0f);
@@ -842,17 +845,17 @@ void JC303::applyPendingControllers()
     }
 }
 
-juce::String JC303::getPerformanceKnob (int knob) const
+juce::String JC303::getModKnob (int knob) const
 {
     if (knob < 0 || knob > 1)
         return {};
-    return parameters.state.getProperty (dfl::performanceKnobIds[knob], dfl::defaultPerformanceKnobs[knob]).toString();
+    return parameters.state.getProperty (modKnobIds[knob], defaultModKnobs[knob]).toString();
 }
 
-void JC303::setPerformanceKnob (int knob, const juce::String& paramID)
+void JC303::setModKnob (int knob, const juce::String& paramID)
 {
     if (knob >= 0 && knob <= 1)
-        parameters.state.setProperty (dfl::performanceKnobIds[knob], paramID, nullptr);
+        parameters.state.setProperty (modKnobIds[knob], paramID, nullptr);
 }
 
 void JC303::applySeqCommands()
@@ -1258,7 +1261,7 @@ double JC303::getTailLengthSeconds() const
 
 int JC303::getNumPrograms()
 {
-    return (int) dfl::factoryPresets().size();
+    return (int) factoryPresets().size();
 }
 
 int JC303::getCurrentProgram()
@@ -1266,28 +1269,70 @@ int JC303::getCurrentProgram()
     return currentProgram;
 }
 
-// Factory presets set the sound parameters; the sequencer, volume and tuning are left alone.
+// Factory presets set the sound parameters, volume included; the sequencer and tuning are left alone.
 void JC303::setCurrentProgram (int index)
 {
     if (index < 0 || index >= getNumPrograms())
         return;
     currentProgram = index;
-    const auto& preset = dfl::factoryPresets()[(size_t) index];
-    dfl::applyFactoryPreset (getParameters(), preset);
-    setPerformanceKnob (0, preset.knob1);
-    setPerformanceKnob (1, preset.knob2);
+    const auto& preset = factoryPresets()[(size_t) index];
+    applyFactoryPreset (getParameters(), preset);
+    setModKnob (0, preset.modKnob1);
+    setModKnob (1, preset.modKnob2);
 }
 
 const juce::String JC303::getProgramName (int index)
 {
     if (index < 0 || index >= getNumPrograms())
         return {};
-    return dfl::factoryPresets()[(size_t) index].name;
+    return factoryPresets()[(size_t) index].name;
 }
 
 void JC303::changeProgramName (int index, const juce::String& newName)
 {
     juce::ignoreUnused (index, newName);
+}
+
+bool JC303::saveCurrentPreset()
+{
+    if (currentProgram < 0 || currentProgram >= getNumPrograms())
+        return false;
+    const auto& current = factoryPresets()[(size_t) currentProgram];
+    FactoryPreset snapshot = captureFactoryPreset (getParameters());
+    snapshot.name = current.name;
+    snapshot.modKnob1 = getModKnob (0);
+    snapshot.modKnob2 = getModKnob (1);
+    return savePresetToFile (snapshot, current.file);
+}
+
+int JC303::createNewPreset (const juce::String& name)
+{
+    if (name.trim().isEmpty())
+        return -1;
+    FactoryPreset snapshot = captureFactoryPreset (getParameters());
+    snapshot.name = name.trim();
+    snapshot.modKnob1 = getModKnob (0);
+    snapshot.modKnob2 = getModKnob (1);
+    juce::String usedName;
+    return createNewPresetFile (snapshot, usedName);
+}
+
+int JC303::renameCurrentPreset (const juce::String& name)
+{
+    if (name.trim().isEmpty() || currentProgram < 0 || currentProgram >= getNumPrograms())
+        return -1;
+    const auto& current = factoryPresets()[(size_t) currentProgram];
+    if (name.trim() == current.name)
+        return currentProgram;   // the name is unchanged: nothing to do, stay selected
+    juce::String usedName;
+    return renamePresetFile (current, name.trim(), usedName);
+}
+
+int JC303::deleteCurrentPreset()
+{
+    if (currentProgram < 0 || currentProgram >= getNumPrograms())
+        return -1;
+    return deletePresetFile (factoryPresets()[(size_t) currentProgram]);
 }
 
 //==============================================================================
@@ -1513,8 +1558,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             currentSample = samplePosition;
         }
 
-        // Performance controls, whether or not the sequencer is playing: pitch bend spans an octave each way;
-        // the mod wheel is applied to performance knob 0 on the message thread (applyPendingControllers).
+        // The mod wheel and pitch bend apply whether or not the sequencer is playing: bend spans an octave each way;
+        // the mod wheel is applied to mod knob 0 on the message thread (applyPendingControllers).
         if (message.isPitchWheel())
             open303Core.setPitchBend (12.0 * (message.getPitchWheelValue() - 8192) / 8192.0);
         else if (message.isController() && message.getControllerNumber() == 1)

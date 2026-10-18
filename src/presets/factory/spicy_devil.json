@@ -1,0 +1,30 @@
+{
+  "name": "Spicy Devil",
+  "modKnob1": "filterFm",
+  "modKnob2": "filterDrive",
+  "values": {
+    "volume": 0.75,
+    "switchModState": 1.0,
+    "filterType": 1.0,
+    "oscModel": 0.0,
+    "waveform": 1.0,
+    "cutoff": 0.35,
+    "resonance": 0.9,
+    "envmod": 0.6,
+    "decay": 0.4,
+    "accent": 1.0,
+    "filterDrive": 0.5,
+    "filterBias": 0.65,
+    "filterFm": 0.4,
+    "bassComp": 0.3,
+    "resTrim": 0.6,
+    "feedbackFilter": 1.0,
+    "accentSweep": 0.6,
+    "accentDecay": 0.3,
+    "normalDecay": 0.6,
+    "slideTime": 0.5,
+    "modSlot3Source": 3.0,
+    "modSlot3Dest": 6.0,
+    "modSlot3Amount": 0.6
+  }
+}
