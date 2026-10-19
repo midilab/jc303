@@ -4,10 +4,10 @@
   "modKnob2": "subOscBlend",
   "values": {
     "volume": 0.75,
-    "switchModState": 1.0,
-    "oscModel": 0.0,
+    "switchModState": true,
+    "oscModel": "TB-303",
     "waveform": 1.0,
-    "filterType": 3.0,
+    "filterType": "JuneBug",
     "cutoff": 0.3,
     "resonance": 0.3,
     "envmod": 0.4,
@@ -19,11 +19,11 @@
     "accentDecay": 0.15,
     "softAttack": 0.3,
     "slideTime": 0.4,
-    "modSlot3Source": 4.0,
-    "modSlot3Dest": 0.0,
+    "modSlot3Source": "Key",
+    "modSlot3Dest": "Cutoff",
     "modSlot3Amount": 1.0,
-    "modSlot4Source": 4.0,
-    "modSlot4Dest": 8.0,
+    "modSlot4Source": "Key",
+    "modSlot4Dest": "Decay",
     "modSlot4Amount": -0.5
   }
 }

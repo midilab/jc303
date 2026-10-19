@@ -4,9 +4,9 @@
   "modKnob2": "filterDrive",
   "values": {
     "volume": 0.75,
-    "switchModState": 1.0,
-    "filterType": 1.0,
-    "oscModel": 0.0,
+    "switchModState": true,
+    "filterType": "Spicy",
+    "oscModel": "TB-303",
     "waveform": 1.0,
     "cutoff": 0.35,
     "resonance": 0.9,
@@ -23,8 +23,8 @@
     "accentDecay": 0.3,
     "normalDecay": 0.6,
     "slideTime": 0.5,
-    "modSlot3Source": 3.0,
-    "modSlot3Dest": 6.0,
+    "modSlot3Source": "Accent",
+    "modSlot3Dest": "Filter FM",
     "modSlot3Amount": 0.6
   }
 }

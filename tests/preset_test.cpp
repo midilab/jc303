@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <optional>
 
 static int failures = 0;
 
@@ -57,9 +58,24 @@ static bool hasParamValue (JC303& p, int index, const char* id, float want)
 {
     const auto& preset = factoryPresets()[(size_t) index];
     for (auto& [pid, v] : preset.values)
-        if (pid == id && std::abs (v - want) < 1e-3f)
-            return true;
+        if (pid == id)
+            if (const auto value = resolvePresetValue (*find (p, id), v); value && std::abs (*value - want) < 1e-3f)
+                return true;
     return false;
+}
+
+static void testPresetValueResolution (JC303& p)
+{
+    // choice params take their display names, switches take true / false, numbers stay in the parameter's units
+    auto resolve = [&] (const char* id, const juce::var& v) { return resolvePresetValue (*find (p, id), v); };
+    CHECK (resolve ("oscModel", "Phaseshaper") == std::optional<float> (2.0f), "oscModel 'Phaseshaper' did not resolve to 2");
+    CHECK (resolve ("modSlot3Source", "Env+") == std::optional<float> (7.0f), "modSlot3Source 'Env+' did not resolve to 7");
+    CHECK (resolve ("oscModel", 1) == std::optional<float> (1.0f), "numeric choice index");
+    CHECK (resolve ("switchModState", true) == std::optional<float> (1.0f), "switch true");
+    CHECK (resolve ("switchModState", false) == std::optional<float> (0.0f), "switch false");
+    CHECK (resolve ("cutoff", 0.25) == std::optional<float> (0.25f), "float value");
+    CHECK (! resolve ("oscModel", "No Such Model").has_value(), "unknown choice name resolved");
+    CHECK (! resolve ("cutoff", "high").has_value(), "a name on a float param resolved");
 }
 
 static void testProgramList (JC303& p)
@@ -83,8 +99,13 @@ static void testPresetValuesInRange (JC303& p)
         for (auto& [id, v] : preset.values)
             if (auto* param = find (p, id))
             {
-                const float loaded = param->convertFrom0to1 (param->convertTo0to1 (v));
-                CHECK (std::abs (loaded - v) < 1e-3f, "preset '%s': %s = %g loads as %g", preset.name.toRawUTF8(), id.toRawUTF8(), v, loaded);
+                const auto value = resolvePresetValue (*param, v);
+                CHECK (value.has_value(), "preset '%s': %s = '%s' is not a valid value", preset.name.toRawUTF8(), id.toRawUTF8(),
+                       v.toString().toRawUTF8());
+                if (! value)
+                    continue;
+                const float loaded = param->convertFrom0to1 (param->convertTo0to1 (*value));
+                CHECK (std::abs (loaded - *value) < 1e-3f, "preset '%s': %s = %g loads as %g", preset.name.toRawUTF8(), id.toRawUTF8(), *value, loaded);
             }
 }
 
@@ -94,7 +115,7 @@ static void testEveryPresetHasVolume (JC303& p)
     {
         bool hasVolume = false;
         for (auto& [id, v] : preset.values)
-            hasVolume = hasVolume || (id == "volume" && std::abs (v - 0.75f) < 1e-4f);
+            hasVolume = hasVolume || (id == "volume" && std::abs ((float) (double) v - 0.75f) < 1e-4f);
         CHECK (hasVolume, "preset '%s' does not recall volume 0.75", preset.name.toRawUTF8());
     }
 }
@@ -331,6 +352,62 @@ static void testBankSwitch()
     blank.deleteRecursively();
 }
 
+// A bank is ordered by file name (natural order), so renaming files reorders it; Init stays first.
+static void testBankOrderFollowsFileNames()
+{
+    const juce::String factoryBank = currentPresetBank();
+    const juce::File bank = factoryPresetsDirectory().getParentDirectory().getChildFile ("ordertest");
+    bank.deleteRecursively();
+    bank.createDirectory();
+    auto write = [&] (const char* file, const char* name)
+    {
+        bank.getChildFile (file).replaceWithText (juce::String ("{\"name\":\"") + name + "\",\"values\":{}}");
+    };
+    write ("10_alpha.json", "Alpha");
+    write ("2_zulu.json", "Zulu");
+    write ("b_mid.json", "AAA Mid");
+    write ("x_init.json", "Init");
+
+    loadPresetBank ("ordertest");
+    const juce::StringArray want { "Init", "Zulu", "Alpha", "AAA Mid" };
+    CHECK ((int) factoryPresets().size() == want.size(), "ordertest has %d presets", (int) factoryPresets().size());
+    for (int i = 0; i < juce::jmin (want.size(), (int) factoryPresets().size()); ++i)
+        CHECK (factoryPresets()[(size_t) i].name == want[i], "ordertest row %d is '%s', want '%s'", i,
+               factoryPresets()[(size_t) i].name.toRawUTF8(), want[i].toRawUTF8());
+
+    loadPresetBank (factoryBank);
+    bank.deleteRecursively();
+}
+
+// Save writes choices by name and switches as true / false, so saved files read like the factory ones.
+static void testSaveWritesChoiceNames (JC303& p)
+{
+    const juce::String factoryBank = currentPresetBank();
+    const juce::File bank = factoryPresetsDirectory().getParentDirectory().getChildFile ("namestest");
+    bank.deleteRecursively();
+    bank.createDirectory();
+    const juce::File file = bank.getChildFile ("named.json");
+    file.replaceWithText ("{\"name\":\"Named\",\"values\":{\"oscModel\":\"Phaseshaper\",\"switchModState\":true}}");
+
+    loadPresetBank ("namestest");
+    p.setCurrentProgram (0);
+    CHECK (valueOf (p, "oscModel") == 2.0f, "'Phaseshaper' loaded oscModel %g", valueOf (p, "oscModel"));
+    CHECK (valueOf (p, "switchModState") == 1.0f, "true loaded switchModState %g", valueOf (p, "switchModState"));
+
+    setParam (p, "modSlot3Source", 7.0f);
+    CHECK (p.saveCurrentPreset(), "save failed");
+    const auto values = juce::JSON::parse (file.loadFileAsString())["values"];
+    CHECK (values["oscModel"].toString() == "Phaseshaper", "saved oscModel '%s'", values["oscModel"].toString().toRawUTF8());
+    CHECK (values["modSlot3Source"].toString() == "Env+", "saved modSlot3Source '%s'", values["modSlot3Source"].toString().toRawUTF8());
+    CHECK (values["switchModState"].isBool() && (bool) values["switchModState"], "saved switchModState '%s'",
+           values["switchModState"].toString().toRawUTF8());
+    CHECK (values["cutoff"].isDouble(), "saved cutoff is not a number");
+
+    loadPresetBank (factoryBank);
+    p.setCurrentProgram (0);
+    bank.deleteRecursively();
+}
+
 // The Presets page file operations: Save overwrites, New/Rename disambiguate OS-style and always
 // resync the bank in memory from the folder's .json files, Delete removes the file and selects the
 // preset that moved into the freed slot.
@@ -342,7 +419,7 @@ static void testSaveRenameDelete (JC303& p)
     const juce::File bank = root.getChildFile ("srdtest");
     bank.deleteRecursively();
     bank.createDirectory();
-    bank.getChildFile ("one.json").replaceWithText (
+    bank.getChildFile ("alpha.json").replaceWithText (
         "{\"name\":\"Alpha\",\"modKnob1\":\"lfoRate\",\"modKnob2\":\"lfoDepth\",\"values\":{}}");
 
     loadPresetBank ("srdtest");
@@ -551,7 +628,10 @@ int main (int argc, char** argv)
         testPresetValuesInRange (p);
         testPresetKnobsExist (p);
         testPresetPage();
+        testPresetValueResolution (p);
         testBankSwitch();
+        testBankOrderFollowsFileNames();
+        testSaveWritesChoiceNames (p);
         testSaveRenameDelete (p);
         testEveryPresetHasVolume (p);
         testInitResetsSoundOnly (p);

@@ -4,9 +4,9 @@
   "modKnob2": "accentSweep",
   "values": {
     "volume": 0.75,
-    "switchModState": 1.0,
-    "filterType": 1.0,
-    "oscModel": 0.0,
+    "switchModState": true,
+    "filterType": "Spicy",
+    "oscModel": "TB-303",
     "waveform": 0.0,
     "cutoff": 0.3,
     "resonance": 0.8,
@@ -18,8 +18,8 @@
     "slideTime": 0.16,
     "softAttack": 0.35,
     "resTrim": 0.98,
-    "modSlot3Source": 3.0,
-    "modSlot3Dest": 4.0,
+    "modSlot3Source": "Accent",
+    "modSlot3Dest": "Resonance",
     "modSlot3Amount": 0.2
   }
 }

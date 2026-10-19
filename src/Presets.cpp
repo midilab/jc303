@@ -65,7 +65,7 @@ namespace
         preset.values.clear();
         if (const auto* values = obj->getProperty ("values").getDynamicObject())
             for (auto& [id, value] : values->getProperties())
-                preset.values.emplace_back (id.toString(), (float) (double) value);
+                preset.values.emplace_back (id.toString(), value);
 
         preset.file = file;
         return true;
@@ -81,14 +81,15 @@ namespace
                 presets.push_back (std::move (preset));
         }
 
-        // Init stays first (it is the default program); the rest alphabetical and stable.
+        // Init stays first (it is the default program); the rest in natural file-name order, so a bank
+        // is reordered by renaming its files ("2_zulu.json" before "10_alpha.json").
         std::stable_sort (presets.begin(), presets.end(), [] (const FactoryPreset& a, const FactoryPreset& b)
         {
             if (a.name == "Init")
                 return b.name != "Init";
             if (b.name == "Init")
                 return false;
-            return a.name < b.name;
+            return a.file.getFileNameWithoutExtension().compareNatural (b.file.getFileNameWithoutExtension()) < 0;
         });
     }
 
