@@ -1,6 +1,6 @@
 {
   "name": "Formant Talk",
-  "modKnob1": "waveform",
+  "modKnob1": "modSlot3Amount",
   "modKnob2": "shaperSplit",
   "values": {
     "volume": 0.75,
