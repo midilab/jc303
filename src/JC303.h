@@ -159,6 +159,7 @@ enum Open303Parameters
   SUPER_DETUNE,
   SUPER_MIX,
   SHAPE_DRIFT,
+  SHAPER_SPLIT,
 
   OPEN303_NUM_PARAMETERS
 };
@@ -425,6 +426,7 @@ private:
     std::atomic<float>* superMix = nullptr;
     std::atomic<float>* shaperMode = nullptr;
     std::atomic<float>* shapeDrift = nullptr;
+    std::atomic<float>* shaperSplit = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;

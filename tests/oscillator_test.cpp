@@ -239,6 +239,100 @@ static void testTriModAntialiasingAtFullAmount()
     CHECK (blepDb < naiveDb - 4.0, "aTM 6: polyBLEP only %.1f dB below naive", naiveDb - blepDb);
 }
 
+// Eq. 6 with Eq. 1: the VPS cosine for a single bend point p = (d, v)
+static double vps (double p, double d, double v)
+{
+    const double phi = (p < d) ? v * p / d : (1.0 - v) * (p - d) / (1.0 - d) + v;
+    return -std::cos (2.0 * kPi * phi);
+}
+
+static int strongestHarmonic (const std::vector<double>& x, double period, int maxK)
+{
+    int best = 1;
+    for (int k = 2; k <= maxK; ++k)
+        if (harmonic (x, period, k) > harmonic (x, period, best)) best = k;
+    return best;
+}
+
+static void testFormantPeaksAtHarmonic()
+{
+    // Eq. 8: centred bend, the formant sits at (2v - 1) f0
+    for (double h : { 2.0, 3.0, 5.0, 8.0, 16.0 })
+    {
+        auto osc = makePhaseshaper (96000.0, 100.0, dfl::PhaseshaperOscillator::FORMANT,
+                                    dfl::PhaseshaperOscillator::shapeForFormant (h));
+        std::vector<double> x (960);
+        for (auto& s : x) s = osc.getSample();
+        const int peak = strongestHarmonic (x, 960.0, 40);
+        CHECK (peak == (int) h, "formant %g peaks at harmonic %d", h, peak);
+    }
+}
+
+static void testFormantMatchesEquation10()
+{
+    // between harmonics the paper crossfades two VPS signals a harmonic apart (Eqs. 9, 10)
+    const double h = 4.3, split = 0.4;
+    auto osc = makePhaseshaper (48000.0, 480.0, dfl::PhaseshaperOscillator::FORMANT,
+                                dfl::PhaseshaperOscillator::shapeForFormant (h));
+    osc.setSplit (split);
+    const double d = dfl::PhaseshaperOscillator::bendForSplit (split);
+    const double v1 = 0.5 * (std::floor (h) + 1.0), a = h - std::floor (h);
+    double maxErr = 0.0;
+    for (int n = 0; n < 100; ++n)
+    {
+        const double p = n / 100.0;
+        const double expected = (1.0 - a) * vps (p, d, v1) + a * vps (p, d, v1 + 0.5);
+        maxErr = std::max (maxErr, std::fabs (osc.getSample() - expected));
+    }
+    CHECK (maxErr < 1e-9, "formant differs from Eq. 10, max error %g", maxErr);
+}
+
+static void testFormantSplitMakesTwoPeaks()
+{
+    // an off-centre bend splits the formant: v/d f0 on the short segment, (v - 1)/(1 - d) f0 on the long one
+    const double h = 8.0, split = 0.5;
+    auto osc = makePhaseshaper (96000.0, 100.0, dfl::PhaseshaperOscillator::FORMANT,
+                                dfl::PhaseshaperOscillator::shapeForFormant (h));
+    osc.setSplit (split);
+    std::vector<double> x (960);
+    for (auto& s : x) s = osc.getSample();
+    const double d = dfl::PhaseshaperOscillator::bendForSplit (split), v = 0.5 * (h + 1.0);
+    const int hiK = (int) std::lround (v / d), loK = (int) std::lround ((v - 1.0) / (1.0 - d));
+    const double centre = harmonic (x, 960.0, (int) h);
+    std::printf ("formant split %.1f: h%d %.3f, h%d %.3f, h%d %.3f\n", split,
+                 loK, harmonic (x, 960.0, loK), (int) h, centre, hiK, harmonic (x, 960.0, hiK));
+    CHECK (harmonic (x, 960.0, loK) > 2.0 * centre, "no lower formant at h%d", loK);
+    CHECK (harmonic (x, 960.0, hiK) > 2.0 * centre, "no upper formant at h%d", hiK);
+}
+
+static void testFormantIsSmoothAndBounded()
+{
+    // with 2v whole, the cosine's slope is zero at the bend and the reset: no BLEP needed
+    const int N = 4096, P = 97;
+    const double sr = 48000.0, f = sr * P / N;
+    auto osc = makePhaseshaper (sr, f, dfl::PhaseshaperOscillator::FORMANT,
+                                dfl::PhaseshaperOscillator::shapeForFormant (6.5));
+    const double db = aliasRatioDb ([&] { return osc.getSample(); }, N, P);
+    std::printf ("formant alias: %.1f dB\n", db);
+    CHECK (db < -50.0, "formant alias ratio %.1f dB", db);
+
+    double peak = 0.0, dc = 0.0;
+    for (int n = 0; n < N; ++n) { const double s = osc.getSample(); peak = std::max (peak, std::fabs (s)); dc += s; }
+    CHECK (peak <= 1.0 + 1e-9, "formant peak %g", peak);
+    CHECK (std::fabs (dc / N) < 1e-3, "formant DC %g", dc / N);
+}
+
+static void testDriftMovesTheFormant()
+{
+    auto still = makePhaseshaper (48000.0, 480.0, dfl::PhaseshaperOscillator::FORMANT, 0.5);
+    auto moving = makePhaseshaper (48000.0, 480.0, dfl::PhaseshaperOscillator::FORMANT, 0.5);
+    moving.setDrift (1.0);
+    double diff = 0.0;
+    for (int n = 0; n < 48000; ++n)
+        diff = std::max (diff, std::fabs (still.getSample() - moving.getSample()));
+    CHECK (diff > 0.05, "drift had no effect on the formant (max diff %g)", diff);
+}
+
 static void testJunoSawIsBandlimited()
 {
     const int N = 4096, P = 97;
@@ -267,6 +361,11 @@ int main()
     testDriftRateTracksPitch();
     testPhaseshaperAntialiasing();
     testTriModAntialiasingAtFullAmount();
+    testFormantPeaksAtHarmonic();
+    testFormantMatchesEquation10();
+    testFormantSplitMakesTwoPeaks();
+    testFormantIsSmoothAndBounded();
+    testDriftMovesTheFormant();
     testJunoSawIsBandlimited();
 
     if (failures == 0)

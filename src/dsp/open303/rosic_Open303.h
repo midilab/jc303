@@ -80,7 +80,7 @@ namespace rosic
   {
     OSC_TB303 = 0,          // Open303's saw/square blend
     OSC_ALPHA_JUNO,         // Alpha Juno DCO saws SAW01-05, with the JP-8000 supersaw ensemble
-    OSC_PHASESHAPER,        // single-oscillator JP-8000 triangle modulation / ripple supersaw
+    OSC_PHASESHAPER,        // single-oscillator JP-8000 triangle modulation / ripple supersaw / VPS formant
     NUM_OSC_MODELS
   };
 
@@ -141,6 +141,9 @@ namespace rosic
 
     /** Sets the depth of the phaseshaper's slow shape drift (0..1). */
     void setPhaseshaperDrift(double newDrift) { phaseshaper.setDrift(newDrift); }
+
+    /** Splits the phaseshaper's formant into two peaks (0..1). */
+    void setPhaseshaperSplit(double newSplit) { phaseshaper.setSplit(newSplit); }
 
     /** Sets the sub oscillator gain (0.0 to 1.0). */
     void setSubOscGain(double newGain) { subOscGain = newGain; }

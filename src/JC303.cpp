@@ -272,13 +272,18 @@ JC303::JC303()
                                                         0.75f),  // center/side balance, Szabo's default
             std::make_unique<juce::AudioParameterChoice> ("shaperMode",
                                                         "Shaper Mode",
-                                                        juce::StringArray{ "Tri Mod", "Ripple Saw" },
+                                                        juce::StringArray{ "Tri Mod", "Ripple Saw", "Formant" },
                                                         0),
             std::make_unique<juce::AudioParameterFloat> ("shapeDrift",
                                                         "Shape Drift",
                                                         0.0f,
                                                         1.0f,
-                                                        0.0f),   // ripple saw shimmer, pitch-tracked like a detuned bank
+                                                        0.0f),   // ripple saw shimmer / formant wobble, pitch-tracked like a detuned bank
+            std::make_unique<juce::AudioParameterFloat> ("shaperSplit",
+                                                        "Formant Split",
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f),   // 0 = one formant, up = two peaks moving apart
             // square wave model: Open303's wavetable or the TB-303 circuit model
             std::make_unique<juce::AudioParameterChoice> ("squareModel",
                                                         "Square Model",
@@ -523,6 +528,7 @@ JC303::JC303()
     superMix = parameters.getRawParameterValue("superMix");
     shaperMode = parameters.getRawParameterValue("shaperMode");
     shapeDrift = parameters.getRawParameterValue("shapeDrift");
+    shaperSplit = parameters.getRawParameterValue("shaperSplit");
 
     // force initial user values(some hosts migth not do it using value tree state)
     setParameter(WAVEFORM, *waveForm);
@@ -615,6 +621,7 @@ JC303::JC303()
     parameters.addParameterListener("superMix", this);
     parameters.addParameterListener("shaperMode", this);
     parameters.addParameterListener("shapeDrift", this);
+    parameters.addParameterListener("shaperSplit", this);
 
     // ── Sequencer callback ────────────────────────────────────────────────────
     // Runs on the audio thread. Stores each event into _pendingNotes[] so
@@ -703,6 +710,7 @@ JC303::~JC303()
     parameters.removeParameterListener("superMix", this);
     parameters.removeParameterListener("shaperMode", this);
     parameters.removeParameterListener("shapeDrift", this);
+    parameters.removeParameterListener("shaperSplit", this);
 }
 
 // Parameter change callback. Runs on the message/automation thread, NOT the audio thread, so it may
@@ -1147,6 +1155,9 @@ void JC303::setParameter (Open303Parameters index, float value)
     case SHAPE_DRIFT:
         open303Core.setPhaseshaperDrift(value);
         break;
+    case SHAPER_SPLIT:
+        open303Core.setPhaseshaperSplit(value);
+        break;
     case LFO_PHASE:
         open303Core.setLfoPhase(value);
         break;
@@ -1193,6 +1204,7 @@ void JC303::setDevilMod(bool mode)
         setParameter(SUPER_DETUNE, *superDetune);
         setParameter(SUPER_MIX, *superMix);
         setParameter(SHAPE_DRIFT, *shapeDrift);
+        setParameter(SHAPER_SPLIT, *shaperSplit);
         setParameter(LFO_WAVEFORM, *lfoWaveform);
         setParameter(LFO_RATE, *lfoRate);
         setParameter(LFO_DEPTH, *lfoDepth);

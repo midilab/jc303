@@ -73,7 +73,7 @@ static void testPresetIdsExist (JC303& p)
 {
     for (auto& preset : factoryPresets())
         for (auto& [id, v] : preset.values)
-            CHECK (find (p, id) != nullptr, "preset '%s' sets unknown parameter '%s'", preset.name.toRawUTF8(), id);
+            CHECK (find (p, id) != nullptr, "preset '%s' sets unknown parameter '%s'", preset.name.toRawUTF8(), id.toRawUTF8());
 }
 
 static void testPresetValuesInRange (JC303& p)
@@ -84,7 +84,7 @@ static void testPresetValuesInRange (JC303& p)
             if (auto* param = find (p, id))
             {
                 const float loaded = param->convertFrom0to1 (param->convertTo0to1 (v));
-                CHECK (std::abs (loaded - v) < 1e-3f, "preset '%s': %s = %g loads as %g", preset.name.toRawUTF8(), id, v, loaded);
+                CHECK (std::abs (loaded - v) < 1e-3f, "preset '%s': %s = %g loads as %g", preset.name.toRawUTF8(), id.toRawUTF8(), v, loaded);
             }
 }
 
