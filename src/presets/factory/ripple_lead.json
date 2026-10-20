@@ -4,12 +4,12 @@
   "modKnob2": "lfoDepth",
   "values": {
     "volume": 0.75,
-    "switchModState": 1.0,
-    "oscModel": 2.0,
-    "shaperMode": 1.0,
+    "switchModState": true,
+    "oscModel": "Phaseshaper",
+    "shaperMode": "Ripple Saw",
     "waveform": 0.5,
     "shapeDrift": 0.6,
-    "filterType": 7.0,
+    "filterType": "Oddity",
     "cutoff": 0.75,
     "resonance": 0.35,
     "envmod": 0.25,
@@ -20,12 +20,12 @@
     "slideTime": 0.5,
     "subOscGain": 0.3,
     "subOscBlend": 0.0,
-    "lfoDestination": 10.0,
-    "lfoWaveform": 0.0,
+    "lfoDestination": "Waveform",
+    "lfoWaveform": "Triangle",
     "lfoRate": 0.25,
     "lfoDepth": 0.25,
-    "modSlot3Source": 4.0,
-    "modSlot3Dest": 8.0,
+    "modSlot3Source": "Key",
+    "modSlot3Dest": "Decay",
     "modSlot3Amount": -0.4
   }
 }

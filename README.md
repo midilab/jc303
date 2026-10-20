@@ -173,8 +173,8 @@ A preset file is plain JSON:
   "modKnob2": "lfoDepth",
   "values": {
     "volume": 0.75,
-    "switchModState": 1.0,
-    "oscModel": 1.0,
+    "switchModState": true,
+    "oscModel": "Alpha Juno",
     "...": "..."
   }
 }
@@ -183,8 +183,17 @@ A preset file is plain JSON:
 - `name` — the display name on the Preset row.
 - `modKnob1` / `modKnob2` — the parameters on the two mod knobs (mod-wheel driven
   knob 1). They must be Modifications-page parameters, not main-panel controls.
-- `values` — each sound parameter you want to set, in the parameter's own units.
-  Anything you leave out falls back to that parameter's default.
+- `values` — each sound parameter you want to set. Choices take the name shown in the
+  plugin (`"Alpha Juno"`, `"Env+"`; an index also works), switches take `true` / `false`,
+  and knobs take the parameter's own value. Anything you leave out falls back to that
+  parameter's default.
+
+#### Preset order
+
+`Init` is always first; the rest of a bank is listed in natural file-name order, not
+by display name. To reorder a bank, rename its files with a number prefix:
+`2_zulu.json` comes before `10_alpha.json`. Save keeps a preset's file name; New and
+Rename name the file after the preset.
 
 #### Editing presets by hand
 
