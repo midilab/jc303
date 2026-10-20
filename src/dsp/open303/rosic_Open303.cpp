@@ -513,7 +513,7 @@ void Open303::releaseNote(int noteNumber)
   else
   {
     // initiate slide back:
-    oscFreq     = pitchToFreq(currentNote);
+    oscFreq     = pitchToFreq(currentNote, tuning);
   }
 }
 

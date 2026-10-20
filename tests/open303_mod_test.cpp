@@ -421,6 +421,37 @@ static void leakyNormalizerHandlesEqualTimeConstants()
   CHECK(std::fabs(norm * peak - 1.0) < 1e-3);
 }
 
+static void slideBackHonoursTheTuning()
+{
+  // releasing a slid-to note glides back to the held note at the master tuning, not at A4 = 440 Hz
+  rosic::Open303 synth;
+  synth.setSampleRate(44100.0);
+  synth.setCutoff(500.0);
+  synth.setResonance(0.0);
+  synth.setEnvMod(0.0);
+  synth.setTuning(415.0);
+  synth.noteOn(45, 64, 0.0);
+  synth.noteOn(57, 64, 0.0);
+  for(int i = 0; i < 8820; i++)
+    synth.getSample();
+  synth.noteOn(57, 0, 0.0);
+
+  // fundamental from upward zero crossings of a lowpassed copy, after the glide settles
+  double lp = 0.0, prev = 0.0;
+  int first = -1, last = -1, count = 0;
+  for(int i = 0; i < 44100; i++)
+  {
+    lp += 0.02 * (synth.getSample() - lp);
+    if(i >= 13230 && prev <= 0.0 && lp > 0.0)
+    {
+      if(first < 0) first = i; else { last = i; count++; }
+    }
+    prev = lp;
+  }
+  const double hz = count * 44100.0 / (last - first);
+  CHECK(std::fabs(hz - 415.0 / 4.0) < 1.0);   // A2 at A4 = 415 Hz
+}
+
 int main()
 {
   lfoSlotMatchesLegacyDepth();
@@ -443,6 +474,7 @@ int main()
   randomSourceChangesPerNoteAndIsRepeatable();
   cutoffKnobSourceFollowsTheKnobPosition();
   leakyNormalizerHandlesEqualTimeConstants();
+  slideBackHonoursTheTuning();
   if(failures == 0)
     std::printf("open303_mod_test: all passed\n");
   return failures == 0 ? 0 : 1;
