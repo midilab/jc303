@@ -1,5 +1,6 @@
 #include "rosic_Open303.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -403,6 +404,23 @@ static void cutoffKnobSourceFollowsTheKnobPosition()
   CHECK(maxDiff(renderNote(45, 64, plain(1000.0)), renderNote(45, 64, at(1000.0))) > 1e-3);
 }
 
+static void leakyNormalizerHandlesEqualTimeConstants()
+{
+  // Two cascaded identical one-poles peak at n = fs*tau; brute-force the peak to compare.
+  const double fs = 44100.0, tau = 15.0;
+  const double x = std::exp(-1.0 / (fs * 0.001 * tau)), b = 1.0 - x;
+  double y1 = 0.0, y2 = 0.0, peak = 0.0;
+  for(int n = 0; n < 10000; n++)
+  {
+    y1 = b * (n == 0 ? 1.0 : 0.0) + x * y1;
+    y2 = b * y1 + x * y2;
+    peak = std::max(peak, y2);
+  }
+  const double norm = rosic::LeakyIntegrator::getNormalizer(tau, tau, fs);
+  CHECK(std::isfinite(norm));
+  CHECK(std::fabs(norm * peak - 1.0) < 1e-3);
+}
+
 int main()
 {
   lfoSlotMatchesLegacyDepth();
@@ -424,6 +442,7 @@ int main()
   keytrackIsZeroAtTheCenterNote();
   randomSourceChangesPerNoteAndIsRepeatable();
   cutoffKnobSourceFollowsTheKnobPosition();
+  leakyNormalizerHandlesEqualTimeConstants();
   if(failures == 0)
     std::printf("open303_mod_test: all passed\n");
   return failures == 0 ? 0 : 1;
