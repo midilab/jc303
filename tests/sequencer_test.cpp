@@ -817,6 +817,43 @@ static void testReversePlaybackStartsTiedRunAtFarEnd()
     CHECK (r.offAfter (40, ons[1].at) == ons[1].at + 2 * kStep + 12 * kTick);
 }
 
+static void testReversePlaybackSlidesIntoTiedNote()
+{
+    // forward: 40 slides into 43, which holds through tied step 2. Reverse: the run starts at
+    // step 2 (43) and slides into 40, the flag on its forward sender
+    Rig r;
+    r.step (0, 40, false, /*slide=*/true); r.step (1, 43);
+    r.seq.setTie (2, true);
+    r.seq.setTrackLength (3);
+    r.seq.setReversePlayback (true);
+    r.seq.start();
+    r.run (3 * kStep);
+
+    const auto ons = r.ons();
+    CHECK (ons.size() >= 2 && ons[0].note == 43 && ons[1].note == 40);
+    CHECK (ons[1].at - ons[0].at == 2 * kStep);
+    CHECK (r.offAfter (43, ons[0].at) > ons[1].at);   // legato: 40 starts before 43 ends
+}
+
+static void testReversePlaybackSlidesOutOfTiedNote()
+{
+    // forward: 40 holds through tied step 1 and slides into 47. Reverse: 47 slides into 40's run,
+    // the flag on the run's anchor
+    Rig r;
+    r.step (0, 40, false, /*slide=*/true);
+    r.seq.setTie (1, true);
+    r.step (2, 47);
+    r.seq.setTrackLength (3);
+    r.seq.setReversePlayback (true);
+    r.seq.start();
+    r.run (3 * kStep);
+
+    const auto ons = r.ons();
+    CHECK (ons.size() >= 2 && ons[0].note == 47 && ons[1].note == 40);
+    CHECK (ons[1].at - ons[0].at == kStep);
+    CHECK (r.offAfter (47, ons[0].at) > ons[1].at);   // legato: 40 starts before 47 ends
+}
+
 static void testHammerIntoFlagsTheReceivingNote()
 {
     Rig r;
@@ -878,6 +915,8 @@ int main()
     testStepSpacingAndGate();
     testReversePlaybackRunsBackwards();
     testReversePlaybackStartsTiedRunAtFarEnd();
+    testReversePlaybackSlidesIntoTiedNote();
+    testReversePlaybackSlidesOutOfTiedNote();
     testHammerIntoFlagsTheReceivingNote();
     testTiedReversedNoteCarriesGateAndMirrorsIndicator();
     testFlaggedTiedSectionMirrorsIndicatorInReverse();

@@ -1126,7 +1126,8 @@ private:
         else
         {
             const uint8_t after = static_cast<uint8_t>((stepPos + 1) % lookaheadBound);
-            const uint8_t prior = static_cast<uint8_t>((stepPos + lookaheadBound - 1) % lookaheadBound);
+            const auto    prev  = [lookaheadBound] (uint8_t p)
+            { return static_cast<uint8_t>((p + lookaheadBound - 1) % lookaheadBound); };
 
             if (isTied (stepPos) && ! isTied (after))
             {
@@ -1136,7 +1137,7 @@ private:
                 uint32_t k = 0;
                 while (isTied (p) && k < lookaheadBound)
                 {
-                    p = static_cast<uint8_t>((p + lookaheadBound - 1) % lookaheadBound);
+                    p = prev (p);
                     ++k;
                 }
                 if (_data.step[p].rest) return;
@@ -1148,12 +1149,22 @@ private:
             {
                 return;   // plain rest, mid-run tied rest, or a note already played by its run
             }
-            else if (! _data.step[prior].rest
-                     && (_data.step[prior].slide || _data.step[prior].hammer))
+
+            // Legato into the note played next (the step before this note or its run). Its flags
+            // sit on the forward sender: that note itself or, when the step is a tied run's far
+            // end, the run's anchor, whose slide carries across its tied rests.
+            uint8_t  sender = prev (srcPos);
+            uint32_t j      = 0;
+            while (isTied (sender) && j < lookaheadBound)
             {
-                // legato flags sit on the forward sender, which is the next note played
-                endStep = stepTick + 1;
-                tail    = slideTail;
+                sender = prev (sender);
+                ++j;
+            }
+            const StepData303& s = _data.step[sender];
+            if (sender != srcPos && ! s.rest && (s.slide || s.hammer))
+            {
+                endStep += 1;
+                tail     = slideTail;
             }
         }
 
