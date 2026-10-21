@@ -133,6 +133,7 @@ Open303::~Open303()
 
 void Open303::setSampleRate(double newSampleRate)
 {
+  sleepSamples = std::max(1, (int) (0.1 * newSampleRate));
   mainEnv.setSampleRate         (       newSampleRate);
   ampEnv.setSampleRate          (       newSampleRate);
   pitchSlewLimiter.setSampleRate((float)newSampleRate);
@@ -470,8 +471,19 @@ void Open303::allNotesOff()
   currentVel  = 0;
 }
 
+// out of sleep: the filters start from rest at the current cutoff (their state is from before the VCA shut)
+void Open303::wake()
+{
+  setFilterCutoff(currentFilterType, lastFilterCutoff);
+  resetFilters();
+  asleep = false;
+  quietSamples = 0;
+}
+
 void Open303::triggerNote(int noteNumber, bool hasAccent)
 {
+  if( asleep )
+    wake();
   // retrigger osc and reset filter buffers only if amplitude is near zero (to avoid clicks):
   if( idle )
   {
@@ -618,6 +630,8 @@ void Open303::extendReverseGroup()
 
 void Open303::slideToNote(int noteNumber, bool hasAccent)
 {
+  if( asleep )
+    wake();
   oscFreq = pitchToFreq(noteNumber, tuning);
 
   noteAccented = hasAccent;

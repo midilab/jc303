@@ -482,6 +482,57 @@ static void slideBackHonoursTheTuning()
   CHECK(std::fabs(hz - 415.0 / 4.0) < 1.0);   // A2 at A4 = 415 Hz
 }
 
+static double rmsOf(const std::vector<double>& y, size_t from, size_t to)
+{
+  double e = 0.0;
+  for(size_t i = from; i < to; i++)
+    e += y[i] * y[i];
+  return std::sqrt(e / (to - from));
+}
+
+static void silenceSleepsAndNotesWake()
+{
+  // after a release the voice sleeps (exact zeros, no oscillator or filter work); the next note wakes it sounding as
+  // the first did
+  rosic::Open303 synth;
+  synth.setSampleRate(44100.0);
+  synth.setFilterType(dfl::FILTER_DIODE);
+  synth.setCutoff(800.0);
+  synth.setResonance(60.0);
+  std::vector<double> first(8820), tail(88200), again(8820);
+  synth.noteOn(45, 100, 0.0);
+  for(auto& x : first) x = synth.getSample();
+  synth.noteOn(45, 0, 0.0);
+  CHECK(!synth.isAsleep());
+  for(auto& x : tail) x = synth.getSample();
+  CHECK(synth.isAsleep());
+  bool zeros = true;
+  for(size_t i = 66150; i < tail.size(); i++) zeros = zeros && tail[i] == 0.0;
+  CHECK(zeros);
+  synth.noteOn(45, 100, 0.0);
+  CHECK(!synth.isAsleep());
+  for(auto& x : again) x = synth.getSample();
+  CHECK(std::fabs(20.0 * std::log10(rmsOf(again, 2205, 8820) / rmsOf(first, 2205, 8820))) < 0.5);
+
+  // a held note never sleeps
+  rosic::Open303 held;
+  held.setSampleRate(44100.0);
+  held.noteOn(45, 100, 0.0);
+  for(int i = 0; i < 44100 * 20; i++) held.getSample();
+  CHECK(!held.isAsleep());
+
+  // a filter switch while asleep takes effect at once; the next note sounds through the new filter
+  synth.noteOn(45, 0, 0.0);
+  for(int i = 0; i < 88200; i++) synth.getSample();
+  CHECK(synth.isAsleep());
+  synth.setFilterType(dfl::FILTER_MS20);
+  for(int i = 0; i < 100; i++) synth.getSample();
+  synth.noteOn(45, 100, 0.0);
+  for(auto& x : again) x = synth.getSample();
+  CHECK(rmsOf(again, 2205, 8820) > 0.1 * rmsOf(first, 2205, 8820));
+  CHECK(synth.getActiveFilterType() == dfl::FILTER_MS20);
+}
+
 int main()
 {
   lfoSlotMatchesLegacyDepth();
@@ -506,6 +557,7 @@ int main()
   leakyNormalizerHandlesEqualTimeConstants();
   slideBackHonoursTheTuning();
   cutoffMovesGlide();
+  silenceSleepsAndNotesWake();
   if(failures == 0)
     std::printf("open303_mod_test: all passed\n");
   return failures == 0 ? 0 : 1;
