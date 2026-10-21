@@ -24,8 +24,8 @@ Open303::Open303()
   reverseLastOnPhase =   0.0;
   reverseStep      =     0.0;
   reverseShape     =     3.5;
-  reverseDen       = exp(reverseShape) - 1.0;
   reverseShapeMain =     3.5;
+  reverseDen       = exp(reverseShapeMain) - 1.0;
   reverseFreqFrom  =   440.0;
   reverseLogRatio  =     0.0;
   reverseGlideBase =     0.0;
@@ -435,10 +435,19 @@ void Open303::noteOn(int noteNumber, int velocity, double detune, bool muted, bo
         updateReverseShape();
       }
     }
-    else if( hammer )
-      hammerToNote(noteNumber, hasAccent);
     else
-      slideToNote(noteNumber, hasAccent);
+    {
+      if( hammer )
+        hammerToNote(noteNumber, hasAccent);
+      else
+        slideToNote(noteNumber, hasAccent);
+      if( gateSamples > 0.0 )   // the slid-into note's gate: the group's end is known, not projected
+      {
+        reverseLength = reversePhase + gateSamples;
+        updateReverseShape();
+        anchorReverseGlide(hammer);
+      }
+    }
     currentNoteMuted = muted;
 
     currentNote = noteNumber;
@@ -572,7 +581,6 @@ void Open303::updateReverseShape()
   if( k < 0.1 ) k = 0.1;    // keep the glide normalizer (e^k - 1) well-conditioned
   if( k > 2.5 ) k = 2.5;    // head floor >= e^-2.5: loudness/audibility guarantee
   reverseShape = k;
-  reverseDen   = exp(k) - 1.0;   // cached normalizer for the swell
 
   // the reversed filter/accent sweep mirrors the *main* (filter) envelope's decay, so the Decay
   // knob shapes the reverse sweep just like it shapes the forward one. A wider clamp keeps more
@@ -584,6 +592,7 @@ void Open303::updateReverseShape()
   if( km < 0.1 ) km = 0.1;
   if( km > 4.0 ) km = 4.0;
   reverseShapeMain = km;
+  reverseDen       = exp(km) - 1.0;   // cached normalizer for the glide's swell
 }
 
 void Open303::extendReverseGroup()
@@ -614,13 +623,6 @@ void Open303::slideToNote(int noteNumber, bool hasAccent)
   drawRandomModValue();
   currentDecay = hasAccent ? accentDecay : normalDecay;
 
-  // inverse portamento: glide from wherever the pitch currently is toward the new note, spanning the
-  // remaining swell so it arrives during the note's audible tail (see getSample). Anchoring to the
-  // current pitch and current swell keeps the glide continuous even across mid-group slides.
-  reverseFreqFrom  = reverseInstFreq;
-  reverseGlideBase = reverseSwellNow;
-  reverseLogRatio  = log(oscFreq / reverseFreqFrom);
-
   if( hasAccent )
   {
     accentGain = accent;
@@ -635,6 +637,17 @@ void Open303::slideToNote(int noteNumber, bool hasAccent)
   }
   idle = false;
   extendReverseGroup();
+  anchorReverseGlide(false);
+}
+
+void Open303::anchorReverseGlide(bool jump)
+{
+  // inverse portamento: glide from wherever the pitch is now toward oscFreq, along the rest of the
+  // swell so it arrives in the note's audible end (see getSample). Anchored after the swell's length
+  // is final, at the current pitch and swell, so it neither jumps nor stalls across mid-group slides.
+  reverseFreqFrom  = jump ? oscFreq : reverseInstFreq;
+  reverseLogRatio  = log(oscFreq / reverseFreqFrom);
+  reverseGlideBase = reverseSwellNow = reverseGlideSwell();
 }
 
 void Open303::hammerToNote(int noteNumber, bool hasAccent)
@@ -642,10 +655,7 @@ void Open303::hammerToNote(int noteNumber, bool hasAccent)
   // Hammer is a slide with an instant pitch change: snap the slew limiter to the new pitch
   slideToNote(noteNumber, hasAccent);
   pitchSlewLimiter.setState(log(oscFreq));  // the slew runs on log(freq)
-
-  // reverse mode: no inverse portamento either - the pitch is already at the target
-  reverseFreqFrom = oscFreq;
-  reverseLogRatio = 0.0;
+  anchorReverseGlide(true);   // reverse mode: no inverse portamento either
 }
 
 void Open303::releaseNote(int noteNumber)
@@ -670,6 +680,7 @@ void Open303::releaseNote(int noteNumber)
   {
     // initiate slide back:
     oscFreq     = pitchToFreq(currentNote);
+    anchorReverseGlide(false);   // in reverse too
   }
 }
 

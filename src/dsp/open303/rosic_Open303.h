@@ -665,6 +665,22 @@ namespace rosic
     one reversed note. */
     void extendReverseGroup();
 
+    /** Re-anchors the inverse portamento at the pitch and swell now, gliding to oscFreq over the rest
+    of the swell (jump: a hammer, already at the target). Call after the swell's length changes. */
+    void anchorReverseGlide(bool jump);
+
+    /** The inverse portamento's driver at the current phase: the filter swell, from 0 to 1. */
+    double reverseGlideSwell() const
+    {
+      double r = reversePhase / (reverseHoldAt * reverseLength);
+      if( r > 1.0 ) r = 1.0;
+      return (exp(reverseShapeMain * r) - 1.0) / reverseDen;
+    }
+
+    // The swell completes at this fraction of the predicted length and then holds at the peak until
+    // the cut (see getSample).
+    static constexpr double reverseHoldAt = 0.85;
+
     /** Updates envScaler / envOffset from the given env mod (percent) and the cutoff knob. */
     void calculateEnvModScalerAndOffset(double envModPercent);
 
@@ -708,12 +724,12 @@ namespace rosic
     double reverseShape;     // back-loadedness of the reverse swell, auto-set in updateReverseShape()
     double reverseShapeMain; // back-loadedness of the reversed filter/accent sweep, derived from
                              // the main (filter) envelope's decay in updateReverseShape()
-    double reverseDen;       // e^reverseShape - 1, cached normalizer for the swell
+    double reverseDen;       // e^reverseShapeMain - 1, cached normalizer for the glide's swell
     double reverseFreqFrom;  // pitch the reversed portamento glides from (Hz)
     double reverseLogRatio;  // ln(targetFreq / reverseFreqFrom); 0 for non-slide notes
     double reverseGlideBase; // swell value when the current glide started (re-anchor, jump-free slides)
     double reverseInstFreq;  // last instantaneous oscillator pitch (Hz), for glide continuity
-    double reverseSwellNow;  // most recent swell value, read by slideToNote to re-anchor the glide
+    double reverseSwellNow;  // most recent glide swell value
     double reverseHist[8];   // ring buffer of recent measured note lengths (samples), for prediction
     int    reverseHistPos;   // write index into reverseHist
     int    reverseHistCount; // number of valid entries in reverseHist (<= 8)
@@ -915,13 +931,14 @@ namespace rosic
     // (smoothed so the contour crossfade doesn't click); identical to reverseGate when no step is flagged
     const double reverseNoteTarget = currentNoteReverse ? 1.0 : 0.0;
     reverseNoteMorph = reverseNoteTarget + muteMorphCoeff * (reverseNoteMorph - reverseNoteTarget);
+    if( !currentNoteReverse && reverseNoteMorph < 1.0e-9 )
+      reverseNoteMorph = 0.0;   // settle exactly: no denormals, and reverse off is the forward path again
     const double revDepth = reverseGate > reverseNoteMorph ? reverseGate : reverseNoteMorph;
     double rPos  = reversePhase / reverseLength;                  // 0..1 over the note, then clamped
     if( rPos > 1.0 ) rPos = 1.0;
     // The swell completes slightly early (at reverseHoldAt of the predicted length) and then HOLDS
     // at the peak until the cut. This concentrates energy at full level right before the end-cut
     // (punch), and protects against over-predicted note lengths starving the note of its peak.
-    const double reverseHoldAt = 0.85;
     double rSw = rPos * (1.0/reverseHoldAt);
     if( rSw > 1.0 ) rSw = 1.0;
     // Amplitude swell: the exact time-reverse of the forward decay e^(-t/tau) over a note of
@@ -941,10 +958,12 @@ namespace rosic
     // gate. Costs a little sweep drama; set to 0 for the purest closed->open sweep.
     const double reverseFilterFloor = 0.15;
     if( swellMain < reverseFilterFloor ) swellMain = reverseFilterFloor;
-    // 0-based normalized swell, kept as the pitch-glide driver (glide anchoring expects 0..1):
-    double swell = (exp(reverseShape*rSw) - 1.0) / reverseDen;
+    // the pitch glide's driver: the filter swell from 0 to 1 (as reverseGlideSwell()), so the glide
+    // lands with the filter opening, in the note's audible end. (The amplitude swell is nearly flat
+    // with a long amp decay, which would spread the glide over the whole note.)
+    double swell = (exp(reverseShapeMain*rSw) - 1.0) / reverseDen;
     reversePhase += 1.0;
-    reverseSwellNow = swell;   // slideToNote() reads this to re-anchor the pitch glide
+    reverseSwellNow = swell;
     // gate the amplitude swell to the held note so it cuts at note-off / rests instead of holding:
     double revAmp = ampEnv.isNoteOn() ? swellAmp : 0.0;
 
