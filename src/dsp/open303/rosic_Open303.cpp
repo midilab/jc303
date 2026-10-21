@@ -117,7 +117,8 @@ void Open303::setSampleRate(double newSampleRate)
   ampEnv.setSampleRate          (       newSampleRate);
   pitchSlewLimiter.setSampleRate((float)newSampleRate);
   cutoffSmoother.setSampleRate(         newSampleRate);
-  cutoffSmoother.setState(cutoff);  // seed to current cutoff so we don't sweep up from 0
+  cutoffSmoother.setRange(log2(20.0), log2(20000.0));   // smoothed in log2(Hz)
+  cutoffSmoother.setState(log2(cutoff));  // seed to current cutoff so we don't sweep up from 0
   ampDeClicker.setSampleRate(    (float)newSampleRate);
   rc1.setSampleRate(             (float)newSampleRate);
   rc2.setSampleRate(             (float)newSampleRate);

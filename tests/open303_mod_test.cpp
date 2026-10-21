@@ -421,6 +421,36 @@ static void leakyNormalizerHandlesEqualTimeConstants()
   CHECK(std::fabs(norm * peak - 1.0) < 1e-3);
 }
 
+static void cutoffMovesGlide()
+{
+  // the anti-zipper smoother works in log frequency: a tenth of an octave is not there after 1 ms (it was there in a
+  // few samples when the smoother was fed Hz), and is there after 200 ms
+  auto after = [](double to, int samples)
+  {
+    rosic::Open303 synth;
+    synth.setSampleRate(44100.0);
+    synth.setFilterType(dfl::FILTER_DIODE);
+    synth.setCutoff(600.0);
+    synth.setResonance(0.0);
+    synth.setEnvMod(0.0);
+    synth.noteOn(45, 64, 0.0);
+    for(int i = 0; i < 4410; i++)
+      synth.getSample();
+    synth.setCutoff(to);
+    for(int i = 0; i < samples; i++)
+      synth.getSample();
+    return synth.getFilterCutoff();
+  };
+  const double to = 600.0 * std::exp2(0.1);
+  auto fraction = [&](int samples)
+  {
+    const double lo = after(600.0, samples);
+    return std::log2(after(to, samples) / lo) / 0.1;
+  };
+  CHECK(fraction(44) < 0.6);
+  CHECK(std::fabs(fraction(8820) - 1.0) < 0.01);
+}
+
 static void slideBackHonoursTheTuning()
 {
   // releasing a slid-to note glides back to the held note at the master tuning, not at A4 = 440 Hz
@@ -475,6 +505,7 @@ int main()
   cutoffKnobSourceFollowsTheKnobPosition();
   leakyNormalizerHandlesEqualTimeConstants();
   slideBackHonoursTheTuning();
+  cutoffMovesGlide();
   if(failures == 0)
     std::printf("open303_mod_test: all passed\n");
   return failures == 0 ? 0 : 1;
