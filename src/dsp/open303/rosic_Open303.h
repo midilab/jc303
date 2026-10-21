@@ -641,6 +641,22 @@ namespace rosic
     /** Clears the state of both filter models' chains (filter, input / output networks, anti-alias). */
     void resetFilters();
 
+    /** Sets the cutoff of the given filter model only. */
+    void setFilterCutoff(int type, double hz)
+    {
+      switch(type)
+      {
+      case dfl::FILTER_DIODE:     diodeFilter.setCutoff(hz);  break;
+      case dfl::FILTER_MS20:      ms20Filter.setCutoff(hz);   break;
+      case dfl::FILTER_JUNO106:   junoFilter.setCutoff(hz);   break;
+      case dfl::FILTER_WASP:      waspFilter.setCutoff(hz);   break;
+      case dfl::FILTER_WASP_A124: hornetFilter.setCutoff(hz); break;
+      case dfl::FILTER_SEM:       semFilter.setCutoff(hz);    break;
+      case dfl::FILTER_ARP4075:   arpFilter.setCutoff(hz);    break;
+      default:                    filter.setCutoff(hz);
+      }
+    }
+
     /** Slides to a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
     void slideToNote(int noteNumber, bool hasAccent);
@@ -765,6 +781,7 @@ namespace rosic
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     bool   currentNoteReverse; // reversed flag of the note (or legato group) currently sounding
     double reverseNoteMorph; // smoothed 0..1 per-note reverse amount (click-free switching)
+    double lastFilterCutoff = 1000.0;   // the sounding filter's cutoff on the last sample
     bool   currentNoteMuted; // flag indicating the current note is muted (shorter gate, darker, quieter)
 
     // TT-303 mute parameters
@@ -1158,14 +1175,9 @@ namespace rosic
     double smoothedCutoff = exp2(cutoffSmoother.getSample(log2(cutoff)));
     double instCutoff = smoothedCutoff * (1.0 + muteMorph * (muteCutoffFactor - 1.0));  // mute: darker tone
     instCutoff *= pow(2.0, tmp1+tmp2+mod.cutoffOctaves);
-    filter.setCutoff(instCutoff);
-    diodeFilter.setCutoff(instCutoff);
-    ms20Filter.setCutoff(instCutoff);
-    junoFilter.setCutoff(instCutoff);
-    waspFilter.setCutoff(instCutoff);
-    semFilter.setCutoff(instCutoff);
-    hornetFilter.setCutoff(instCutoff);
-    arpFilter.setCutoff(instCutoff);
+    // only the sounding filter; the others take the cutoff when switched in (their reset finds its operating point)
+    setFilterCutoff(currentFilterType, instCutoff);
+    lastFilterCutoff = instCutoff;
 
     // amplitude contour: crossfade the forward amp envelope with the reversed swell.
     double ampFwd    = ampEnv.getSample();
@@ -1241,6 +1253,7 @@ namespace rosic
       {
         switchGain = 0.0;
         currentFilterType = pendingFilterType;
+        setFilterCutoff(currentFilterType, lastFilterCutoff);
         resetFilters();
       }
     }
