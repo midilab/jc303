@@ -630,7 +630,11 @@ namespace rosic
     }
 
     /** Pushes a resonance percentage (0..100) to both filters. */
-    void applyResonance(double percent);
+    void applyResonance(double percent, bool perSample = false);   // perSample: renderPreVca sets the cutoff next
+    /** The resonance to one filter model (applyResonance's value); deferDiode leaves the diode's coefficients to the
+        next setCutoff. */
+    void applyFilterResonance(int type, bool deferDiode = false);
+    double appliedResonance = 0.0;   // percent, the last applyResonance
     void applyFilterFmDepth(double depth)
     {
       diodeFilter.setFilterFmDepth(depth);
@@ -1095,7 +1099,7 @@ namespace rosic
     lfoOverdriveMod = mod.overdrive;
     if( mod.resonanceOn || resonanceModActive )
     {
-      applyResonance(std::max(0.0, std::min(100.0, baseResonance + mod.resonance)));
+      applyResonance(std::max(0.0, std::min(100.0, baseResonance + mod.resonance)), true);
       resonanceModActive = mod.resonanceOn;
     }
     if( mod.filterFmOn || fmModActive )
@@ -1212,6 +1216,7 @@ namespace rosic
       if( pendingFilterType != currentFilterType )   // no crossfade needed in silence
       {
         currentFilterType = pendingFilterType;
+        applyFilterResonance(currentFilterType);
         switchGain = 1.0;
       }
       ampGain    = 0.0;
@@ -1286,6 +1291,7 @@ namespace rosic
         switchGain = 0.0;
         currentFilterType = pendingFilterType;
         setFilterCutoff(currentFilterType, lastFilterCutoff);
+        applyFilterResonance(currentFilterType);
         resetFilters();
       }
     }

@@ -222,7 +222,9 @@ namespace dfl
     bool   staticHiFi = false;
     double staticGl = 0.0, staticAf = 0.0, staticFf = 0.0;
     int    staticAi = 0, staticFi = 0;
-    INLINE void calculateStaticCoefficients();
+    INLINE void calculateStaticCoefficients();      // sample rate and Filter Feedback, then the next
+    INLINE void calculateResonanceCoefficients();   // resonance, drive and Hi-Fi
+    bool   pending = false;                         // a deferred setResonance
 
 
     /** Implements the waveshaping nonlinearity. */
@@ -498,7 +500,7 @@ namespace dfl
 
   INLINE void DiodeLadderFilter::setCutoff(double newCutoff, bool updateCoefficients)
   {
-    if( newCutoff != cutoff )
+    if( newCutoff != cutoff || pending )
     {
       if( newCutoff < 200.0 )
         cutoff = 200.0;
@@ -519,15 +521,19 @@ namespace dfl
 
     if( updateCoefficients == true )
       calculateCoefficients();
+    else
+      pending = true;   // the next setCutoff computes them
   }
 
   INLINE void DiodeLadderFilter::calculateCoefficients()
   {
+    pending = false;
     // the coefficients that do not depend on the cutoff, recomputed only when their inputs change (setCutoff runs this
     // every sample)
-    if (sampleRate != staticSampleRate || feedbackHpFreq != staticFeedbackHp || resonance != staticResonance
-        || drive != staticDrive || hiFi != staticHiFi)
+    if (sampleRate != staticSampleRate || feedbackHpFreq != staticFeedbackHp)
       calculateStaticCoefficients();
+    else if (resonance != staticResonance || drive != staticDrive || hiFi != staticHiFi)
+      calculateResonanceCoefficients();   // only these move with resonance modulation
 
     // Bilinear transform, prewarped at the cutoff (the resonant peak) rather than the stage rate, so the peak
     // frequency does not depend on the sample rate (stage rate tuned to the circuit's ladder core, see CUTOFF_TUNING)
@@ -613,9 +619,6 @@ namespace dfl
   {
     staticSampleRate = sampleRate;
     staticFeedbackHp = feedbackHpFreq;
-    staticResonance = resonance;
-    staticDrive = drive;
-    staticHiFi = hiFi;
 
     envA = 1.0 - std::exp(-1000.0 / (TENSION_ENV_MS * sampleRate));
     unMeanA = 1.0 - std::exp(-2.0 * M_PI * UN_MEAN_HZ / sampleRate);
@@ -629,16 +632,26 @@ namespace dfl
     }
     shelfRatio = NET_SHELF_ZERO / NET_POLE[NET_N - 1];
 
-    // the loop gain table's resonance and Filter Feedback interpolation (see calculateCoefficients)
+    // the loop gain table's Filter Feedback interpolation (see calculateCoefficients)
+    static const double FN[3] = { 57.5, FEEDBACK_DEFAULT, 268.0 };
+    const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[2]));
+    staticFi = (lf < std::log(FN[1])) ? 0 : 1;
+    staticFf = (lf - std::log(FN[staticFi])) / (std::log(FN[staticFi + 1]) - std::log(FN[staticFi]));
+    calculateResonanceCoefficients();
+  }
+
+  INLINE void DiodeLadderFilter::calculateResonanceCoefficients()
+  {
+    staticResonance = resonance;
+    staticDrive = drive;
+    staticHiFi = hiFi;
+
+    // the loop gain table's resonance interpolation (see calculateCoefficients)
     static const double AN[7]  = { 0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0 };
     const double pot = getResonancePot();
     int ai = 0; while (ai < 5 && AN[ai + 1] < pot) ++ai;
     staticAi = ai;
     staticAf = std::clamp((pot - AN[ai]) / (AN[ai + 1] - AN[ai]), 0.0, 1.0);
-    static const double FN[3] = { 57.5, FEEDBACK_DEFAULT, 268.0 };
-    const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[2]));
-    staticFi = (lf < std::log(FN[1])) ? 0 : 1;
-    staticFf = (lf - std::log(FN[staticFi])) / (std::log(FN[staticFi + 1]) - std::log(FN[staticFi]));
 
     // Drive level compensation (see DT_* above)
     {
