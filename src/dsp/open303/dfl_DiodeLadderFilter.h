@@ -196,6 +196,36 @@ namespace dfl
 
     /** Causes the filter to re-calculate the coefficients. */
     INLINE void calculateCoefficients();
+    // the loop gain tables (see calculateCoefficients)
+    static constexpr double KN_CUTOFF[11] = { 300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000 };
+    static inline const double KN_LOG_CUTOFF[11] = { std::log(300.0), std::log(500.0), std::log(800.0), std::log(1000.0),
+      std::log(2000.0), std::log(3000.0), std::log(5000.0), std::log(8000.0), std::log(12000.0), std::log(16000.0),
+      std::log(20000.0) };
+    static constexpr double KNT[11][7] = {
+      { 0, 3.438, 7.573, 8.984, 12.574, 14.438, 16.671 },
+      { 0, 3.198, 6.025, 8.883, 12.397, 14.466, 16.893 },
+      { 0, 3.169, 5.886, 9.122, 12.504, 14.543, 16.908 },
+      { 0, 3.344, 6.126, 9.005, 12.583, 14.583, 16.931 },
+      { 0, 3.145, 6.048, 9.074, 12.583, 14.614, 16.994 },
+      { 0, 3.185, 6.072, 9.054, 12.560, 14.597, 16.988 },
+      { 0, 3.091, 5.985, 9.040, 12.541, 14.600, 16.932 },
+      { 0, 3.021, 5.925, 9.017, 12.466, 14.527, 16.885 },
+      { 0, 2.909, 5.961, 8.955, 12.375, 14.419, 16.843 },
+      { 0, 2.762, 5.866, 8.855, 12.287, 14.358, 16.702 },
+      { 0, 2.588, 5.774, 8.761, 12.198, 14.250, 16.561 } };
+    static constexpr double KNC[3][11] = {
+      { 27.171, 22.849, 20.567, 19.830, 18.391, 17.921, 17.549, 17.341, 17.225, 17.166, 17.130 },
+      { 30.769, 24.833, 21.745, 20.754, 18.835, 18.214, 17.722, 17.448, 17.295, 17.219, 17.172 },
+      { 59.998, 45.040, 33.247, 29.640, 22.947, 20.876, 19.280, 18.405, 17.922, 17.681, 17.535 } };
+    // calculateStaticCoefficients' inputs when last run, and its results that the cutoff part reads
+    double staticSampleRate = -1.0, staticFeedbackHp = -1.0, staticResonance = -1.0, staticDrive = -1e9;
+    bool   staticHiFi = false;
+    double staticGl = 0.0, staticAf = 0.0, staticFf = 0.0;
+    int    staticAi = 0, staticFi = 0;
+    INLINE void calculateStaticCoefficients();      // sample rate and Filter Feedback, then the next
+    INLINE void calculateResonanceCoefficients();   // resonance, drive and Hi-Fi
+    bool   pending = false;                         // a deferred setResonance
+
 
     /** Implements the waveshaping nonlinearity. */
     INLINE double shape(double x);
@@ -470,7 +500,7 @@ namespace dfl
 
   INLINE void DiodeLadderFilter::setCutoff(double newCutoff, bool updateCoefficients)
   {
-    if( newCutoff != cutoff )
+    if( newCutoff != cutoff || pending )
     {
       if( newCutoff < 200.0 )
         cutoff = 200.0;
@@ -491,21 +521,29 @@ namespace dfl
 
     if( updateCoefficients == true )
       calculateCoefficients();
+    else
+      pending = true;   // the next setCutoff computes them
   }
 
   INLINE void DiodeLadderFilter::calculateCoefficients()
   {
+    pending = false;
+    // the coefficients that do not depend on the cutoff, recomputed only when their inputs change (setCutoff runs this
+    // every sample)
+    if (sampleRate != staticSampleRate || feedbackHpFreq != staticFeedbackHp)
+      calculateStaticCoefficients();
+    else if (resonance != staticResonance || drive != staticDrive || hiFi != staticHiFi)
+      calculateResonanceCoefficients();   // only these move with resonance modulation
+
     // Bilinear transform, prewarped at the cutoff (the resonant peak) rather than the stage rate, so the peak
     // frequency does not depend on the sample rate (stage rate tuned to the circuit's ladder core, see CUTOFF_TUNING)
     double gCoeff = CUTOFF_TUNING * tan(PI * cutoff / sampleRate);
-    envA = 1.0 - std::exp(-1000.0 / (TENSION_ENV_MS * sampleRate));
-    unMeanA = 1.0 - std::exp(-2.0 * M_PI * UN_MEAN_HZ / sampleRate);
     double gp1 = 1.0 + gCoeff;
 
     // Q21 loading on stage 4 (see LOAD_KAPPA): rate g (1 + kappa rho), input (a4 lp3 + kappa rho w) / (1 + kappa rho),
     // w = (gl lp4 + loadState) / (1 + gl) solved with it. rho = gl / g is the coupling pole over the stage rate in the
     // discrete domain, so the tap relations (updateTapMix) hold exactly.
-    const double gl = std::tan(PI * std::min(getCouplingPoleHz(), 0.45 * sampleRate) / sampleRate);
+    const double gl = staticGl;
     const double rho = gl / gCoeff;
     loadKR = LOAD_KAPPA * rho;
     const double g4 = gCoeff * (1.0 + loadKR);
@@ -561,6 +599,31 @@ namespace dfl
     // KNC is the measured self-oscillation threshold (growth test, native_solver) at the Filter Feedback nodes
     // 57.5 / 79 / 268 Hz (knob 1.0 / default / 0; Open303 maps the knob). The knob stops at Q21 beta about 500:
     // beyond it the coupling network's ~7 Hz mode motorboats at high resonance (SPICE: beta 800 at full pot).
+    double lc = std::log(std::clamp(cutoff, KN_CUTOFF[0], KN_CUTOFF[10]));
+    int ci = 0; while (ci < 9 && KN_LOG_CUTOFF[ci + 1] < lc) ++ci;
+    const double cf = (lc - KN_LOG_CUTOFF[ci]) / (KN_LOG_CUTOFF[ci + 1] - KN_LOG_CUTOFF[ci]);
+    const int ai = staticAi;
+    const double af = staticAf;
+    auto at = [&](int c) { return KNT[c][ai] + af * (KNT[c][ai + 1] - KNT[c][ai]); };
+    double effK = loopGainTrim * (at(ci) + cf * (at(ci + 1) - at(ci)));
+    const int fi = staticFi;
+    const double ff = staticFf;
+    auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
+    // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
+    effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
+    K = effK;
+    logLoopGain = std::log1p(effK);
+  }
+
+  INLINE void DiodeLadderFilter::calculateStaticCoefficients()
+  {
+    staticSampleRate = sampleRate;
+    staticFeedbackHp = feedbackHpFreq;
+
+    envA = 1.0 - std::exp(-1000.0 / (TENSION_ENV_MS * sampleRate));
+    unMeanA = 1.0 - std::exp(-2.0 * M_PI * UN_MEAN_HZ / sampleRate);
+    staticGl = std::tan(PI * std::min(getCouplingPoleHz(), 0.45 * sampleRate) / sampleRate);
+
     for (int i = 0; i < NET_N; ++i)
     {
       const double p = NET_POLE[i] * (i == 0 ? feedbackHpFreq / 115.0 : 1.0);
@@ -568,41 +631,27 @@ namespace dfl
       netA[i] = gn / (1.0 + gn);
     }
     shelfRatio = NET_SHELF_ZERO / NET_POLE[NET_N - 1];
-    static const double CN[11] = { 300, 500, 800, 1000, 2000, 3000, 5000, 8000, 12000, 16000, 20000 };
-    static const double AN[7]  = { 0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0 };
-    static const double KNT[11][7] = {
-      { 0, 3.438, 7.573, 8.984, 12.574, 14.438, 16.671 },
-      { 0, 3.198, 6.025, 8.883, 12.397, 14.466, 16.893 },
-      { 0, 3.169, 5.886, 9.122, 12.504, 14.543, 16.908 },
-      { 0, 3.344, 6.126, 9.005, 12.583, 14.583, 16.931 },
-      { 0, 3.145, 6.048, 9.074, 12.583, 14.614, 16.994 },
-      { 0, 3.185, 6.072, 9.054, 12.560, 14.597, 16.988 },
-      { 0, 3.091, 5.985, 9.040, 12.541, 14.600, 16.932 },
-      { 0, 3.021, 5.925, 9.017, 12.466, 14.527, 16.885 },
-      { 0, 2.909, 5.961, 8.955, 12.375, 14.419, 16.843 },
-      { 0, 2.762, 5.866, 8.855, 12.287, 14.358, 16.702 },
-      { 0, 2.588, 5.774, 8.761, 12.198, 14.250, 16.561 } };
-    static const double KNC[3][11] = {
-      { 27.171, 22.849, 20.567, 19.830, 18.391, 17.921, 17.549, 17.341, 17.225, 17.166, 17.130 },
-      { 30.769, 24.833, 21.745, 20.754, 18.835, 18.214, 17.722, 17.448, 17.295, 17.219, 17.172 },
-      { 59.998, 45.040, 33.247, 29.640, 22.947, 20.876, 19.280, 18.405, 17.922, 17.681, 17.535 } };
-    const double pot = getResonancePot();
-    double lc = std::log(std::clamp(cutoff, CN[0], CN[10]));
-    int ci = 0; while (ci < 9 && std::log(CN[ci + 1]) < lc) ++ci;
-    const double cf = (lc - std::log(CN[ci])) / (std::log(CN[ci + 1]) - std::log(CN[ci]));
-    int ai = 0; while (ai < 5 && AN[ai + 1] < pot) ++ai;
-    const double af = std::clamp((pot - AN[ai]) / (AN[ai + 1] - AN[ai]), 0.0, 1.0);
-    auto at = [&](int c) { return KNT[c][ai] + af * (KNT[c][ai + 1] - KNT[c][ai]); };
-    double effK = loopGainTrim * (at(ci) + cf * (at(ci + 1) - at(ci)));
+
+    // the loop gain table's Filter Feedback interpolation (see calculateCoefficients)
     static const double FN[3] = { 57.5, FEEDBACK_DEFAULT, 268.0 };
     const double lf = std::log(std::clamp(feedbackHpFreq, FN[0], FN[2]));
-    const int fi = (lf < std::log(FN[1])) ? 0 : 1;
-    const double ff = (lf - std::log(FN[fi])) / (std::log(FN[fi + 1]) - std::log(FN[fi]));
-    auto kcAt = [&](int h) { return KNC[h][ci] + cf * (KNC[h][ci + 1] - KNC[h][ci]); };
-    // the cap rises with a trim above 1 (a hot unit may self-oscillate); below 1 the trim only lowers K
-    effK = std::min(effK, K_MARGIN * std::max(loopGainTrim, 1.0) * (kcAt(fi) + ff * (kcAt(fi + 1) - kcAt(fi))));
-    K = effK;
-    logLoopGain = std::log1p(effK);
+    staticFi = (lf < std::log(FN[1])) ? 0 : 1;
+    staticFf = (lf - std::log(FN[staticFi])) / (std::log(FN[staticFi + 1]) - std::log(FN[staticFi]));
+    calculateResonanceCoefficients();
+  }
+
+  INLINE void DiodeLadderFilter::calculateResonanceCoefficients()
+  {
+    staticResonance = resonance;
+    staticDrive = drive;
+    staticHiFi = hiFi;
+
+    // the loop gain table's resonance interpolation (see calculateCoefficients)
+    static const double AN[7]  = { 0.0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0 };
+    const double pot = getResonancePot();
+    int ai = 0; while (ai < 5 && AN[ai + 1] < pot) ++ai;
+    staticAi = ai;
+    staticAf = std::clamp((pot - AN[ai]) / (AN[ai + 1] - AN[ai]), 0.0, 1.0);
 
     // Drive level compensation (see DT_* above)
     {

@@ -500,6 +500,14 @@ namespace rosic
     /** Renders numSamples output samples through the pre-VCA insert, in chunks of maxBlockSize. */
     void renderBlock(double* out, int numSamples);
 
+    /** Asleep: the amp envelope has been released and silent (below 1e-7) for 0.1 s, so the oscillators, filters and
+        oversampling stop and the output is exact zeros; the sequencer, envelopes and modulation keep running. The next
+        note wakes it with the filters at rest. */
+    bool isAsleep() const { return asleep; }
+
+    /** The filter model being rendered (a switch completes after its crossfade). */
+    dfl::FilterType getActiveFilterType() const { return currentFilterType; }
+
     static const int maxBlockSize = 64;
 
     //-----------------------------------------------------------------------------------------------
@@ -622,7 +630,11 @@ namespace rosic
     }
 
     /** Pushes a resonance percentage (0..100) to both filters. */
-    void applyResonance(double percent);
+    void applyResonance(double percent, bool perSample = false);   // perSample: renderPreVca sets the cutoff next
+    /** The resonance to one filter model (applyResonance's value); deferDiode leaves the diode's coefficients to the
+        next setCutoff. */
+    void applyFilterResonance(int type, bool deferDiode = false);
+    double appliedResonance = 0.0;   // percent, the last applyResonance
     void applyFilterFmDepth(double depth)
     {
       diodeFilter.setFilterFmDepth(depth);
@@ -640,6 +652,22 @@ namespace rosic
 
     /** Clears the state of both filter models' chains (filter, input / output networks, anti-alias). */
     void resetFilters();
+
+    /** Sets the cutoff of the given filter model only. */
+    void setFilterCutoff(int type, double hz)
+    {
+      switch(type)
+      {
+      case dfl::FILTER_DIODE:     diodeFilter.setCutoff(hz);  break;
+      case dfl::FILTER_MS20:      ms20Filter.setCutoff(hz);   break;
+      case dfl::FILTER_JUNO106:   junoFilter.setCutoff(hz);   break;
+      case dfl::FILTER_WASP:      waspFilter.setCutoff(hz);   break;
+      case dfl::FILTER_WASP_A124: hornetFilter.setCutoff(hz); break;
+      case dfl::FILTER_SEM:       semFilter.setCutoff(hz);    break;
+      case dfl::FILTER_ARP4075:   arpFilter.setCutoff(hz);    break;
+      default:                    filter.setCutoff(hz);
+      }
+    }
 
     /** Slides to a note (called either directly in noteOn or in getSample when the sequencer is
     used). */
@@ -765,6 +793,10 @@ namespace rosic
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
     bool   currentNoteReverse; // reversed flag of the note (or legato group) currently sounding
     double reverseNoteMorph; // smoothed 0..1 per-note reverse amount (click-free switching)
+    double lastFilterCutoff = 1000.0;   // the sounding filter's cutoff on the last sample
+    bool   asleep = false;   // see isAsleep
+    int    quietSamples = 0, sleepSamples = 4410;
+    void   wake();
     bool   currentNoteMuted; // flag indicating the current note is muted (shorter gate, darker, quieter)
 
     // TT-303 mute parameters
@@ -861,7 +893,7 @@ namespace rosic
 
     double ampGain, volumeGain;
     double tmp = renderPreVca(ampGain, volumeGain);
-    return applyVca(tmp, ampGain, volumeGain);
+    return asleep ? 0.0 : applyVca(tmp, ampGain, volumeGain);
   }
 
   INLINE double Open303::renderPreVca(double& ampGain, double& volumeGain)
@@ -1067,7 +1099,7 @@ namespace rosic
     lfoOverdriveMod = mod.overdrive;
     if( mod.resonanceOn || resonanceModActive )
     {
-      applyResonance(std::max(0.0, std::min(100.0, baseResonance + mod.resonance)));
+      applyResonance(std::max(0.0, std::min(100.0, baseResonance + mod.resonance)), true);
       resonanceModActive = mod.resonanceOn;
     }
     if( mod.filterFmOn || fmModActive )
@@ -1158,14 +1190,10 @@ namespace rosic
     double smoothedCutoff = exp2(cutoffSmoother.getSample(log2(cutoff)));
     double instCutoff = smoothedCutoff * (1.0 + muteMorph * (muteCutoffFactor - 1.0));  // mute: darker tone
     instCutoff *= pow(2.0, tmp1+tmp2+mod.cutoffOctaves);
-    filter.setCutoff(instCutoff);
-    diodeFilter.setCutoff(instCutoff);
-    ms20Filter.setCutoff(instCutoff);
-    junoFilter.setCutoff(instCutoff);
-    waspFilter.setCutoff(instCutoff);
-    semFilter.setCutoff(instCutoff);
-    hornetFilter.setCutoff(instCutoff);
-    arpFilter.setCutoff(instCutoff);
+    // only the sounding filter; the others take the cutoff when switched in (their reset finds its operating point)
+    if( !asleep )
+      setFilterCutoff(currentFilterType, instCutoff);
+    lastFilterCutoff = instCutoff;
 
     // amplitude contour: crossfade the forward amp envelope with the reversed swell.
     double ampFwd    = ampEnv.getSample();
@@ -1174,6 +1202,27 @@ namespace rosic
     if( ampEnv.isNoteOn() )
       ampEnvOut += 0.45*mainEnvOut + instAccentGain*4.0*mainEnvOut;
     ampEnvOut = ampDeClicker.getSample(ampEnvOut);
+
+    // sleep (isAsleep): the amp envelope released and silent for 0.1 s; the output is proportional to it
+    if( !ampEnv.isNoteOn() && ampEnvOut < 1e-7 )
+    {
+      if( !asleep && ++quietSamples >= sleepSamples )
+        asleep = true;
+    }
+    else
+      quietSamples = 0;
+    if( asleep )
+    {
+      if( pendingFilterType != currentFilterType )   // no crossfade needed in silence
+      {
+        currentFilterType = pendingFilterType;
+        applyFilterResonance(currentFilterType);
+        switchGain = 1.0;
+      }
+      ampGain    = 0.0;
+      volumeGain = 0.0;
+      return 0.0;
+    }
 
     // oversampled calculations:
     double tmp;
@@ -1241,6 +1290,8 @@ namespace rosic
       {
         switchGain = 0.0;
         currentFilterType = pendingFilterType;
+        setFilterCutoff(currentFilterType, lastFilterCutoff);
+        applyFilterResonance(currentFilterType);
         resetFilters();
       }
     }

@@ -133,6 +133,7 @@ Open303::~Open303()
 
 void Open303::setSampleRate(double newSampleRate)
 {
+  sleepSamples = std::max(1, (int) (0.1 * newSampleRate));
   mainEnv.setSampleRate         (       newSampleRate);
   ampEnv.setSampleRate          (       newSampleRate);
   pitchSlewLimiter.setSampleRate((float)newSampleRate);
@@ -189,7 +190,7 @@ void Open303::setResonance(double newResonance)
   applyResonance(newResonance);
 }
 
-void Open303::applyResonance(double newResonance)
+void Open303::applyResonance(double newResonance, bool perSample)
 {
   // newResonance is a percentage (0..100). The TeeBee filter takes percent
   // directly and skews/normalizes it internally; the diode filter takes the same
@@ -197,35 +198,51 @@ void Open303::applyResonance(double newResonance)
   // and undoes it to recover the resonance pot's rotation.
   double normalizedResonance = 0.01 * newResonance;               // 0..100 -> 0..1
   double skewedResonance = (1.0 - exp(-3.0*normalizedResonance)) / (1.0 - exp(-3.0));
-
-  filter.setResonance(newResonance);
-  diodeFilter.setResonance(skewedResonance);
+  appliedResonance = newResonance;
 
   // TB-303 accent capacitor: the resonance pot controls the accent-sweep
   // circuit's discharge rate. Higher resonance = slower discharge = the accent
   // sweeps up more smoothly and stacks higher on rapid successive accents.
   resonanceSkewed = skewedResonance;
   setAccentAttack(accentAttack);
+  // only the sounding model (the matrix may move resonance every sample); a model switched in takes it then
+  applyFilterResonance(currentFilterType, perSample);
+}
+
+void Open303::applyFilterResonance(int type, bool deferDiode)
+{
+  const double normalizedResonance = 0.01 * appliedResonance;
   // the MS-20, IR3109 and Wasp models undo the skew (their pots are linear); the knob reaches their pots through a per-model
   // map, so they resonate alike (dfl_ResonanceMap.h)
-  auto skewedPot = [normalizedResonance](dfl::FilterType type)
+  auto skewedPot = [normalizedResonance](dfl::FilterType t)
   {
-    return (1.0 - exp(-3.0*dfl::resonancePot(type, normalizedResonance))) / (1.0 - exp(-3.0));
+    return (1.0 - exp(-3.0*dfl::resonancePot(t, normalizedResonance))) / (1.0 - exp(-3.0));
   };
-  ms20Filter.setResonance(skewedPot(dfl::FILTER_MS20));
-  junoFilter.setResonance(skewedPot(dfl::FILTER_JUNO106));
-  waspFilter.setResonance(skewedPot(dfl::FILTER_WASP));   // the Wasp's RES pot is linear too
-  semFilter.setResonance(skewedPot(dfl::FILTER_SEM));   // the SEM's too
-  hornetFilter.setResonance(skewedPot(dfl::FILTER_WASP_A124));
-  arpFilter.setResonance(skewedPot(dfl::FILTER_ARP4075));        // the Odyssey's R144 is linear
-  outputNetwork.setPot(diodeFilter.getResonancePot());
+  switch( type )
+  {
+  case dfl::FILTER_DIODE:
+    // deferred: renderPreVca sets the cutoff next, which computes the coefficients once
+    diodeFilter.setResonance((1.0 - exp(-3.0*normalizedResonance)) / (1.0 - exp(-3.0)), !deferDiode);
+    outputNetwork.setPot(diodeFilter.getResonancePot());
+    break;
+  case dfl::FILTER_MS20:      ms20Filter.setResonance(skewedPot(dfl::FILTER_MS20));         break;
+  case dfl::FILTER_JUNO106:   junoFilter.setResonance(skewedPot(dfl::FILTER_JUNO106));      break;
+  case dfl::FILTER_WASP:      waspFilter.setResonance(skewedPot(dfl::FILTER_WASP));         break;   // the Wasp's RES pot is linear too
+  case dfl::FILTER_WASP_A124: hornetFilter.setResonance(skewedPot(dfl::FILTER_WASP_A124));  break;
+  case dfl::FILTER_SEM:       semFilter.setResonance(skewedPot(dfl::FILTER_SEM));           break;   // the SEM's too
+  case dfl::FILTER_ARP4075:   arpFilter.setResonance(skewedPot(dfl::FILTER_ARP4075));       break;   // the Odyssey's R144 is linear
+  default:                    filter.setResonance(appliedResonance);
+  }
 }
 
 void Open303::setFilterType(dfl::FilterType newType)
 {
   pendingFilterType = newType;
   if( idle )
+  {
     currentFilterType = newType;   // nothing is sounding yet: switch right away
+    applyFilterResonance(currentFilterType);
+  }
 }
 
 void Open303::resetFilters()
@@ -470,8 +487,20 @@ void Open303::allNotesOff()
   currentVel  = 0;
 }
 
+// out of sleep: the filters start from rest at the current cutoff (their state is from before the VCA shut)
+void Open303::wake()
+{
+  setFilterCutoff(currentFilterType, lastFilterCutoff);
+  applyFilterResonance(currentFilterType);
+  resetFilters();
+  asleep = false;
+  quietSamples = 0;
+}
+
 void Open303::triggerNote(int noteNumber, bool hasAccent)
 {
+  if( asleep )
+    wake();
   // retrigger osc and reset filter buffers only if amplitude is near zero (to avoid clicks):
   if( idle )
   {
@@ -618,6 +647,8 @@ void Open303::extendReverseGroup()
 
 void Open303::slideToNote(int noteNumber, bool hasAccent)
 {
+  if( asleep )
+    wake();
   oscFreq = pitchToFreq(noteNumber, tuning);
 
   noteAccented = hasAccent;

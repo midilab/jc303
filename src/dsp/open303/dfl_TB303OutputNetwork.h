@@ -42,7 +42,7 @@ namespace dfl
     void setPot(double newPot)
     {
       pot = std::clamp(newPot, 0.0, 1.0);
-      updateCoefficients();
+      updatePotCoefficients();   // only the pot's corners: cheap enough per sample (resonance modulation)
     }
 
     /** Leaves out the C27/C25 coupling stage when the filter applies it itself (with Q21's tanh after it). */
@@ -98,18 +98,23 @@ namespace dfl
 
     void updateCoefficients()
     {
+      setCorner(Q21, couplingHz);
+      setCorner(TAP_A, 1.0 / (2.0 * M_PI * (TAP_A_R + OTA_R) * TAP_C));
+      for(int i = 0; i < 3; ++i)
+        setCorner(POST1 + i, POST_HZ[i]);
+      updatePotCoefficients();
+    }
+
+    void updatePotCoefficients()
+    {
       // the pot's lower section is shunted by the wiper load; the wiper tap sees the divider's Thevenin equivalent
       const double lower = pot * POT_R * WIPER_LOAD / (pot * POT_R + WIPER_LOAD);
       const double upper = (1.0 - pot) * POT_R;
       const double wiper = lower / (lower + upper);
       const double rth   = lower * upper / (lower + upper);
       tapBGain = wiper * (TAP_A_R + OTA_R) / (TAP_B_R + OTA_R + rth);   // relative to tap A
-      setCorner(Q21, couplingHz);
       setCorner(C14, 3.2 + 0.8 * pot * pot);
-      setCorner(TAP_A, 1.0 / (2.0 * M_PI * (TAP_A_R + OTA_R) * TAP_C));
       setCorner(TAP_B, 1.0 / (2.0 * M_PI * (TAP_B_R + OTA_R + rth) * TAP_C));
-      for(int i = 0; i < 3; ++i)
-        setCorner(POST1 + i, POST_HZ[i]);
     }
 
     double sampleRate = 44100.0;
