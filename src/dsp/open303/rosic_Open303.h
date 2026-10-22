@@ -393,6 +393,9 @@ namespace rosic
     /** Returns the filter's nominal cutoff frequency (in Hz). */
     double getCutoff() const { return cutoff; }
 
+    /** Returns the cutoff the diode filter got on the last sample, after smoothing and modulation (for inspection). */
+    double getFilterCutoff() const { return diodeFilter.getCutoff(); }
+
     /** Returns the filter's resonance amount (in percent) */
     double getResonance() const { return filter.getResonance(); }
 
@@ -1020,8 +1023,8 @@ namespace rosic
     // Apply mute envelope reduction (morphed)
     tmp1 *= 1.0 + muteMorph * (muteEnvFactor - 1.0);
 
-    // Anti-zipper: dynamically smooth the (block-rate) cutoff parameter before it drives the filter
-    double smoothedCutoff = cutoffSmoother.getSample(cutoff);
+    // Anti-zipper: dynamically smooth the (block-rate) cutoff parameter before it drives the filter, in log2(Hz)
+    double smoothedCutoff = exp2(cutoffSmoother.getSample(log2(cutoff)));
     double instCutoff = smoothedCutoff * (1.0 + muteMorph * (muteCutoffFactor - 1.0));  // mute: darker tone
     instCutoff *= pow(2.0, tmp1+tmp2+mod.cutoffOctaves);
     filter.setCutoff(instCutoff);
