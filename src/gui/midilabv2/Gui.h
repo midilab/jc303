@@ -124,6 +124,22 @@ private:
     juce::TooltipWindow tooltipWindow { this, 700 };
 
     // declare the attchaments
+    // Tuning knob right-click: load a .tun file or reset to 12-TET
+    struct KnobMenuMouse : juce::MouseListener
+    {
+        std::function<void()> onMenu;
+        void mouseDown(const juce::MouseEvent& e) override
+        {
+            if (e.mods.isPopupMenu())
+                onMenu();
+        }
+    };
+    KnobMenuMouse tuningKnobMouse;
+    juce::Label* tuningScaleLabel;
+    std::unique_ptr<juce::FileChooser> tuningFileChooser;
+    void showTuningMenu();
+    void chooseTuningFile();
+
     std::unique_ptr<SliderAttachment> waveformAttachment;
     std::unique_ptr<SliderAttachment> tuningAttachment;
     std::unique_ptr<SliderAttachment> cutoffFreqAttachment;

@@ -249,6 +249,18 @@ the current bank's folder.
   `dice_acid.json`, `"My Cool Patch (1)"` → `my_cool_patch_1.json`.
 - Colliding names get OS-style suffixes: `"Name"`, `"Name (1)"`, `"Name (2)"`.
 
+## Microtuning
+
+JC303 loads AnaMark `.tun` (v2) scale files. Right-click the **Tuning** knob and choose **Load .tun...** or **Reset to 12-TET**. The active scale name shows under the knob.
+
+- `[Exact Tuning]` takes precedence and needs `BaseFreq` plus all 128 notes. Without it, `[Functional Tuning]` needs `InitEqual`, and its `Note` lines apply in file order.
+- [Scale Workshop](https://scaleworkshop.plainsound.org) designs scales in the browser and exports them as `.tun`.
+- If a file is invalid, an error dialog shows the line and the cause, and the current scale stays loaded.
+- The **Tuning** knob transposes the loaded scale, the same way it transposes 12-TET.
+- The scale is saved with the project as absolute frequencies, so the `.tun` file is not needed to reopen it.
+
+AnaMark `.tun` support by Andrej Schmitt ([@Megagoth1702](https://github.com/Megagoth1702)).
+
 ## Build
 
 Generate the cmake project build files first for the OS of your choice.  

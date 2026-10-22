@@ -24,6 +24,10 @@
 #include "rosic_EllipticQuarterBandFilter.h"
 #include "rosic_AcidSequencer.h"
 #include "dfl_LFO.h"
+#include "../tuning/TuningTable.h"
+
+#include <array>
+#include <atomic>
 #include "dfl_DynamicSmoothingFilter.h"
 
 #include <list>
@@ -153,6 +157,13 @@ namespace rosic
 
     /** Sets the master tuning frequency for note A4 (usually 440 Hz). */
     void setTuning(double newTuning) { tuning = newTuning; }
+
+    /** Installs a 128-note frequency map referenced to A4 = 440 Hz (message thread). The master
+    tuning scales the whole map. Invalid maps are rejected and leave the current map in place. */
+    bool installPitchMap(const std::array<double, TuningTable::kNumNotes>& frequencies);
+
+    /** MIDI note number -> oscillator frequency in Hz via the installed map and master tuning. */
+    double noteToHz(int noteNumber) const;
 
     /** Sets the filter's nominal cutoff frequency (in Hz). */
     void setCutoff(double newCutoff);
@@ -712,6 +723,10 @@ namespace rosic
     double blockVolume[maxBlockSize];
 
     double tuning;           // master tunung for A4 in Hz
+
+    // double-buffered pitch map: the message thread writes the inactive bank, then publishes it
+    std::array<double, TuningTable::kNumNotes> pitchBanks[2];
+    std::atomic<int> pitchBank { 0 };
     double ampScaler;        // final volume as raw factor
     double oscFreq;          // frequecy of the oscillator (without pitchbend)
     double sampleRate;       // the (non-oversampled) sample rate

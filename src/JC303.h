@@ -273,6 +273,13 @@ public:
     enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm, Undo, Redo };
     void seqCommand (SeqCommand command) { _seqCommand.store (static_cast<int>(command), std::memory_order_release); }
 
+    // ── Custom tuning (AnaMark .tun), message thread only ─────────────────────
+    /** Returns false and leaves the current map in place if the file is invalid. */
+    bool loadTuningFile (const juce::File& file, juce::String& errorMessage);
+    void resetTuning();
+    juce::String getTuningName() const { return juce::String (tuningState.getName()); }
+    bool isCustomTuningActive() const  { return tuningState.isCustom(); }
+
 private:
     void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
@@ -441,6 +448,10 @@ private:
     // Pending sequencer command set by parameterChanged, applied by the audio
     // thread in renderMidi (see applySeqCommands).
     std::atomic<int> _seqCommand { static_cast<int>(SeqCommand::None) };
+
+    // custom tuning name / path / frequencies for the UI and project state;
+    // the audio thread reads the copy installed into open303Core
+    TuningTable tuningState;
 
     // Transpose / Shift / Pitch Rotate values already written into the pattern
     std::atomic<int> _appliedTranspose { 0 };
