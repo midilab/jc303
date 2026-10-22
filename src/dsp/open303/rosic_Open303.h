@@ -228,6 +228,13 @@ namespace rosic
     /** Sets the accent (in percent).  */
     void setAccent(double newAccent);
 
+    /** Sets the reverse-gate depth (0...1). At 0 the note plays normally. As it approaches 1, the
+    amplitude, filter and accent contours are progressively flipped in time, so the note swells up
+    from silence and the filter opens toward the note's end (then cuts on the next trigger) - it
+    sounds like the note is played backwards. The swell duration follows the Decay setting (the main
+    envelope's time constant), so it needs no separate time control. */
+    void setReverseGate(double newReverseGate) { reverseGate = clip(newReverseGate, 0.0, 1.0); }
+
     /** Sets the master volume level (in dB). */
     void setVolume(double newVolume);
 
@@ -415,6 +422,13 @@ namespace rosic
     /** Returns the accent (in percent). */
     double getAccent() const { return 100.0 * accent; }
 
+    /** Returns the reverse-gate depth (0...1). */
+    double getReverseGate() const { return reverseGate; }
+
+    /** Sets the host tempo (BPM) so the predicted reverse-swell length can be snapped to the musical
+    16th-note grid. Pass 0 (or a non-positive value) when no tempo is available. */
+    void setReverseTempo(double bpm) { reverseTempoBpm = (bpm > 0.0) ? bpm : 0.0; }
+
     /** Returns the master volume level (in dB). */
     double getVolume() const { return level; }
 
@@ -493,8 +507,11 @@ namespace rosic
 
     /** Accepts note-on events (note offs are also handled here as note ons with velocity zero).
     A muted note is choked (darker, quieter, never accented); a hammer onto a held note snaps to
-    the new pitch instead of sliding. */
-    void noteOn(int noteNumber, int velocity, double detune, bool muted = false, bool hammer = false);
+    the new pitch instead of sliding; a reversed note (or the legato group it starts) plays
+    time-reversed. gateSamples is the note's gate length when known (0 = unknown), used as the
+    reverse swell length. */
+    void noteOn(int noteNumber, int velocity, double detune, bool muted = false, bool hammer = false,
+                bool reversed = false, double gateSamples = 0.0);
 
     /** Turns all possibly running notes off. */
     void allNotesOff();
@@ -639,6 +656,34 @@ namespace rosic
     /** Sets the decay-time of the main envelope and updates the normalizers n1, n2 accordingly. */
     void setMainEnvDecay(double newDecay);
 
+    /** Recomputes the reverse-swell shape (reverseShape) from the current reverseLength and the
+    amp-envelope decay, so the swell stays a faithful reversal as the predicted length changes. */
+    void updateReverseShape();
+
+    /** Predicts the current note's length (in samples) for the reverse swell: a short-biased low
+    percentile of recent measured note lengths, optionally snapped to the host's 16th-note grid. */
+    double predictReverseLength();
+
+    /** Extends the reverse swell across a legato (slide/hammer) note-on so a tied group swells as
+    one reversed note. */
+    void extendReverseGroup();
+
+    /** Re-anchors the inverse portamento at the pitch and swell now, gliding to oscFreq over the rest
+    of the swell (jump: a hammer, already at the target). Call after the swell's length changes. */
+    void anchorReverseGlide(bool jump);
+
+    /** The inverse portamento's driver at the current phase: the filter swell, from 0 to 1. */
+    double reverseGlideSwell() const
+    {
+      double r = reversePhase / (reverseHoldAt * reverseLength);
+      if( r > 1.0 ) r = 1.0;
+      return (exp(reverseShapeMain * r) - 1.0) / reverseDen;
+    }
+
+    // The swell completes at this fraction of the predicted length and then holds at the peak until
+    // the cut (see getSample).
+    static constexpr double reverseHoldAt = 0.85;
+
     /** Updates envScaler / envOffset from the given env mod (percent) and the cutoff knob. */
     void calculateEnvModScalerAndOffset(double envModPercent);
 
@@ -673,6 +718,25 @@ namespace rosic
     double level;            // master volume level (in dB)
     double levelByVel;       // velocity dependence of the level (in dB)
     double accent;           // scales all "byVel" parameters
+    double reverseGate;      // 0...1 depth for the reverse-gate effect (see setReverseGate)
+    double reversePhase;     // samples elapsed since the note trigger (drives the reverse swell)
+    double reverseLength;    // predicted note length in samples; the reverse swell peaks here
+    double reverseMeasured;  // duration of the previous note/group, used to predict reverseLength
+    double reverseLastOnPhase; // reversePhase at the most recent note-on within the current group
+    double reverseStep;      // samples between consecutive note-ons in the current tied group
+    double reverseShape;     // back-loadedness of the reverse swell, auto-set in updateReverseShape()
+    double reverseShapeMain; // back-loadedness of the reversed filter/accent sweep, derived from
+                             // the main (filter) envelope's decay in updateReverseShape()
+    double reverseDen;       // e^reverseShapeMain - 1, cached normalizer for the glide's swell
+    double reverseFreqFrom;  // pitch the reversed portamento glides from (Hz)
+    double reverseLogRatio;  // ln(targetFreq / reverseFreqFrom); 0 for non-slide notes
+    double reverseGlideBase; // swell value when the current glide started (re-anchor, jump-free slides)
+    double reverseInstFreq;  // last instantaneous oscillator pitch (Hz), for glide continuity
+    double reverseSwellNow;  // most recent glide swell value
+    double reverseHist[8];   // ring buffer of recent measured note lengths (samples), for prediction
+    int    reverseHistPos;   // write index into reverseHist
+    int    reverseHistCount; // number of valid entries in reverseHist (<= 8)
+    double reverseTempoBpm;  // host tempo in BPM (0 = unknown); snaps prediction to the 16th grid
     double slideTime;        // the time to slide from one note to another (in ms)
     double cutoff;           // nominal cutoff frequency of the filter
     double envMod;           // strength of the envelope modulation in percent
@@ -699,6 +763,8 @@ namespace rosic
     bool   slideToNextNote;  // indicate that we need to slide to the next note in sequencer mode
     bool   hammerToNextNote; // indicate that we need to hammer (legato w/ instant pitch) to the next note
     bool   idle;             // flag to indicate that we have currently nothing to do in getSample
+    bool   currentNoteReverse; // reversed flag of the note (or legato group) currently sounding
+    double reverseNoteMorph; // smoothed 0..1 per-note reverse amount (click-free switching)
     bool   currentNoteMuted; // flag indicating the current note is muted (shorter gate, darker, quieter)
 
     // TT-303 mute parameters
@@ -855,8 +921,59 @@ namespace rosic
       }
     }
 
-    // filter envelope, shared by the cutoff path and the modulation matrix
-    double mainEnvOut = mainEnv.getSample();
+    // --- reverse-gate: synthesize a genuinely time-reversed contour -------------------------------
+    // Playing a note backwards means the amplitude/filter grow as a *back-loaded* exponential: they
+    // stay quiet for most of the note, then swell rapidly to a peak right at the end, where the
+    // original attack transient becomes an abrupt cut. We drive that swell from a phase counter that
+    // reaches 1 at 'reverseLength' samples after the trigger - which triggerNote() sets to the note's
+    // (predicted) length - so the peak lands exactly at the note's end. reverseShape sets how
+    // back-loaded the curve is; reverseDen == e^reverseShape - 1 normalizes it to 0..1.
+    // Computed first because in reverse mode the swell drives the filter envelope and the pitch glide.
+    double mainEnvFwd = mainEnv.getSample();  // forward main envelope: decays 1 -> 0
+    // effective reverse depth: the global toggle, or a note flagged reversed in the sequencer
+    // (smoothed so the contour crossfade doesn't click); identical to reverseGate when no step is flagged
+    const double reverseNoteTarget = currentNoteReverse ? 1.0 : 0.0;
+    reverseNoteMorph = reverseNoteTarget + muteMorphCoeff * (reverseNoteMorph - reverseNoteTarget);
+    if( !currentNoteReverse && reverseNoteMorph < 1.0e-9 )
+      reverseNoteMorph = 0.0;   // settle exactly: no denormals, and reverse off is the forward path again
+    const double revDepth = reverseGate > reverseNoteMorph ? reverseGate : reverseNoteMorph;
+    double rPos  = reversePhase / reverseLength;                  // 0..1 over the note, then clamped
+    if( rPos > 1.0 ) rPos = 1.0;
+    // The swell completes slightly early (at reverseHoldAt of the predicted length) and then HOLDS
+    // at the peak until the cut. This concentrates energy at full level right before the end-cut
+    // (punch), and protects against over-predicted note lengths starving the note of its peak.
+    double rSw = rPos * (1.0/reverseHoldAt);
+    if( rSw > 1.0 ) rSw = 1.0;
+    // Amplitude swell: the exact time-reverse of the forward decay e^(-t/tau) over a note of
+    // length L is e^(K*(r-1)) with K = L/tau - a back-loaded exponential with a *floor* of e^-K at
+    // the head, NOT silence. Using this floored form (instead of the 0-normalized
+    // (e^(K*r)-1)/(e^K-1)) preserves the forward note's RMS by mirror symmetry, so reverse mode is
+    // as loud as forward, and guarantees every gated note is audible even when the predicted
+    // reverseLength overshoots the actual note (no more "skipped" short notes).
+    double swellAmp  = exp(reverseShape*(rSw - 1.0));
+    // Filter/accent swell: same floored form, but shaped by the *main* (filter) envelope's decay
+    // (reverseShapeMain), so the reversed cutoff sweep mirrors what the Decay knob does forwards
+    // and opens fully into the peak.
+    double swellMain = exp(reverseShapeMain*(rSw - 1.0));
+    // filter-sweep floor: keep the reversed cutoff from starting fully closed. For a full-length note
+    // this only lifts the quiet head (masked by the low amplitude there); for a note cut short by an
+    // over-prediction it keeps the audible portion from sounding dull - self-proportional via the amp
+    // gate. Costs a little sweep drama; set to 0 for the purest closed->open sweep.
+    const double reverseFilterFloor = 0.15;
+    if( swellMain < reverseFilterFloor ) swellMain = reverseFilterFloor;
+    // the pitch glide's driver: the filter swell from 0 to 1 (as reverseGlideSwell()), so the glide
+    // lands with the filter opening, in the note's audible end. (The amplitude swell is nearly flat
+    // with a long amp decay, which would spread the glide over the whole note.)
+    double swell = (exp(reverseShapeMain*rSw) - 1.0) / reverseDen;
+    reversePhase += 1.0;
+    reverseSwellNow = swell;
+    // gate the amplitude swell to the held note so it cuts at note-off / rests instead of holding:
+    double revAmp = ampEnv.isNoteOn() ? swellAmp : 0.0;
+
+    // filter envelope, shared by the cutoff path and the modulation matrix. In reverse mode the
+    // driver crossfades forward (1->0) to the reversed main-env swell (e^-Km -> 1), so the cutoff
+    // opens on the mirrored curve of the forward Decay sweep and the accent lands on the peak.
+    double mainEnvOut = mainEnvFwd + revDepth * (swellMain - mainEnvFwd);
     double rc1Out     = n1 * rc1.getSample(mainEnvOut);
     double rc2Out     = n2 * rc2.getSample(accentGain > 0.0 || accentModActive ? mainEnvOut : 0.0) * accentSweepGain;
     double envSource  = rc1Out + accentGain * rc2Out;
@@ -867,6 +984,20 @@ namespace rosic
     // so the slide is an exponential in pitch/cents rather than in Hz - this matches how a real 303 slews
     // its pitch CV (volts/octave) and keeps octave slides from lingering in the low end.
     double slewedFreq = exp( pitchSlewLimiter.getSample( log(oscFreq) ) );
+    if( revDepth > 0.0 )
+    {
+      // inverse portamento: the forward slew glides old->new at the note's silent head, so in reverse
+      // mode it is inaudible. Instead glide from the current pitch to the target along the remaining
+      // swell so it arrives during the audible tail - the reversed timing. The glide is re-anchored to
+      // where the swell was when it started (reverseGlideBase), so mid-group slides never jump.
+      double span     = 1.0 - reverseGlideBase;
+      double gp       = (span > 1.0e-3) ? (swell - reverseGlideBase) / span : 1.0;
+      if( gp < 0.0 ) gp = 0.0;
+      if( gp > 1.0 ) gp = 1.0;
+      double glideFreq = reverseFreqFrom * exp(gp * reverseLogRatio);
+      slewedFreq = slewedFreq + revDepth * (glideFreq - slewedFreq);
+    }
+    reverseInstFreq = slewedFreq;   // remember current pitch so a following slide can glide from here
 
     // modulation matrix: slot 0 is the LFO slot (lfoDepth / lfoDestination), slot 1 the envelope
     // slot, 2..3 are free. Slot 0 runs last so the other slots can modulate its depth.
@@ -1036,7 +1167,9 @@ namespace rosic
     hornetFilter.setCutoff(instCutoff);
     arpFilter.setCutoff(instCutoff);
 
-    double ampEnvOut = ampEnv.getSample();
+    // amplitude contour: crossfade the forward amp envelope with the reversed swell.
+    double ampFwd    = ampEnv.getSample();
+    double ampEnvOut = ampFwd + revDepth * (revAmp - ampFwd);
     //ampEnvOut += 0.45*filterEnvOut + accentGain*6.8*filterEnvOut;
     if( ampEnv.isNoteOn() )
       ampEnvOut += 0.45*mainEnvOut + instAccentGain*4.0*mainEnvOut;

@@ -120,6 +120,7 @@ enum Open303Parameters
   DECAY,
   ACCENT,
   VOLUME,
+  REVERSE_GATE,
   // MODs
   SWITCH_MOD,
   NORMAL_DECAY,
@@ -317,8 +318,10 @@ private:
         uint8_t          note;
         uint8_t          velocity;
         int              sampleOffset;
-        bool             mute   { false };
-        bool             hammer { false };
+        bool             mute    { false };
+        bool             hammer  { false };
+        bool             reverse { false };
+        double           gateSamples { 0.0 };
     };
     static constexpr int kPendingMax = 64;
     PendingNote  _pendingNotes[kPendingMax];
@@ -356,6 +359,7 @@ private:
     std::atomic<float>* decay = nullptr;
     std::atomic<float>* accent = nullptr;
     std::atomic<float>* volume = nullptr;
+    std::atomic<float>* reverseGate = nullptr;
     // MODs
     std::atomic<float>* switchModState = nullptr;
     std::atomic<float>* normalDecay = nullptr;

@@ -49,6 +49,13 @@ if(EXISTS "${MATH_APPROX_INCLUDE}/math_approx/math_approx.hpp")
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/dsp/open303
         ${MATH_APPROX_INCLUDE})
     add_test(NAME open303_mod_test COMMAND open303_mod_test)
+
+    add_executable(open303_reverse_test open303_reverse_test.cpp ${OPEN303_SOURCES})
+    target_compile_features(open303_reverse_test PRIVATE cxx_std_17)
+    target_include_directories(open303_reverse_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/dsp/open303
+        ${MATH_APPROX_INCLUDE})
+    add_test(NAME open303_reverse_test COMMAND open303_reverse_test)
 endif()
 
 # Oscillator models: header-only DSP, no JUCE.
