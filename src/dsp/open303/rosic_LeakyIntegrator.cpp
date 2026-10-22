@@ -73,7 +73,7 @@ double LeakyIntegrator::getNormalizer(double tau1, double tau2, double fs)
   {
     double tp  = ta;
     double np  = fs*tp;
-    xp         = (np+1.0)*ba*ba*pow(aa, np);
+    xp         = (np+1.0)*ba*ba*pow(-aa, np); // aa < 0: pow(aa, np) is NaN
   }
   else
   {

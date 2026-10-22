@@ -50,6 +50,12 @@ namespace rosic
       sensitivity = newSensitivity;
     }
 
+    /** Sets the span of the smoothed signal in its own units. The sensitivity is meant for a 0..1 signal, so a
+     *  control in other units (Hz, dB) must give its span, or every move looks huge and lands in a few samples. */
+    void setRange(double lo, double hi)
+    {
+      span = std::max(std::abs(hi - lo), 1e-12);
+    }
     /** Resets the filter state. */
     void clear()
     {
@@ -78,7 +84,7 @@ namespace rosic
       double bandz = low1z - low2z;
 
       // Dynamic cutoff based on rate of change
-      double wd = wc + sensitivity * std::abs(bandz);
+      double wd = wc + sensitivity * std::abs(bandz) / span;
 
       // Calculate filter coefficient (polynomial approximation for accurate linear frequency mapping)
       double g = wd * (5.9948827 + wd * (-11.969296 + wd * 15.959062));
@@ -98,6 +104,7 @@ namespace rosic
   protected:
     double baseFreq;     // Base frequency in Hz
     double sensitivity;  // Sensitivity to rate of change
+    double span = 1.0;   // the signal's span (setRange)
     double sampleRate;   // Sample rate in Hz
     double wc;           // Normalized cutoff frequency
     double low1;         // First lowpass filter state
