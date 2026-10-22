@@ -854,7 +854,9 @@ private:
             auto* p = intParam(item.id);
             if (p == nullptr || item.options.isEmpty())
                 return item.label;
-            return item.options[juce::jlimit(0, item.options.size() - 1, p->get())];
+            const auto& option = item.options[juce::jlimit(0, item.options.size() - 1, p->get())];
+            // On a page with several rows the label says what the option belongs to
+            return pageList.getReference(currentPage).items.size() > 1 ? item.label + ": " + option : option;
         }
 
         return labelOf(item);
@@ -1027,7 +1029,9 @@ private:
 
     // ---- pages for this plugin (the per-page code lives here, isolated from the engine) ----
 public:
-    static juce::Array<Page> buildPages(const juce::StringArray& overdriveModelNames)
+    static juce::Array<Page> buildPages(const juce::StringArray& overdriveModelNames,
+                                           const juce::StringArray& scaleNames,
+                                           const juce::StringArray& rootNames)
     {
         juce::Array<Page> pages;
 
@@ -1148,6 +1152,8 @@ public:
         seq.items.add(Item { "seqSyncMode",  "Sync Mode",  Type::value, {}, 1.0f });
         seq.items.add(Item { "seqStartMode", "Start Mode", Type::value, {}, 1.0f });
         seq.items.add(Item { "seqTranspose", "Transpose",  Type::value, {}, 1.0f });
+        seq.items.add(Item { "seqScale",     "Scale",      Type::select, scaleNames, 0.0f });
+        seq.items.add(Item { "seqRoot",      "Root Note",  Type::select, rootNames, 0.0f });
         {
             // wrap at the pattern length: the engine reads each change the shorter way round it
             Item shift { "seqShift", "Shift", Type::value, {}, 1.0f };

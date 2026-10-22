@@ -537,14 +537,14 @@ static void testRerollPitchesKeepsRhythm()
     AcidSequencer303 seq;
     for (int run = 0; run < 20; ++run)
     {
-        seq.acidRandomize (60, 50, 50, 50, 0, 36, 12);
+        seq.acidRandomize (60, 50, 50, 50, 0, 0, 0, 36, 12);
         bool rest[SEQ303_STEP_MAX], tie[SEQ303_STEP_MAX], acc[SEQ303_STEP_MAX], sld[SEQ303_STEP_MAX];
         for (int i = 0; i < SEQ303_STEP_MAX; ++i)
         {
             rest[i] = ! seq.stepOn (i); tie[i] = seq.tieOn (i);
             acc[i] = seq.accentOn (i);  sld[i] = seq.slideOn (i);
         }
-        seq.randomizePitches (0, 60, 12);            // a range the old notes cannot be in
+        seq.randomizePitches (0, 0, 0, 60, 12);            // a range the old notes cannot be in
         for (int i = 0; i < SEQ303_STEP_MAX; ++i)
         {
             CHECK (rest[i] == ! seq.stepOn (i) && tie[i] == seq.tieOn (i));
@@ -647,16 +647,16 @@ static void testUndoRedoPattern()
 {
     AcidSequencer303 seq;
     CHECK (! seq.canUndo() && ! seq.canRedo());
-    seq.acidRandomize (60, 50, 50, 50, 0, 36, 24);
+    seq.acidRandomize (60, 50, 50, 50, 0, 0, 0, 36, 24);
     const auto a = stepSignature (seq);
 
     seq.pushUndo();
-    seq.acidRandomize (60, 50, 50, 50, 0, 36, 24);
+    seq.acidRandomize (60, 50, 50, 50, 0, 0, 0, 36, 24);
     const auto b = stepSignature (seq);
     CHECK (a != b);
 
     seq.pushUndo();
-    seq.randomizePitches (0, 60, 12);
+    seq.randomizePitches (0, 0, 0, 60, 12);
     const auto c = stepSignature (seq);
 
     CHECK (seq.undoCount() == 2 && seq.canUndo());
@@ -679,7 +679,7 @@ static void testUndoHistoryIsBounded()
     for (int i = 0; i < 40; ++i)
     {
         seq.pushUndo();
-        seq.acidRandomize (60, 50, 50, 50, 0, 36, 24);
+        seq.acidRandomize (60, 50, 50, 50, 0, 0, 0, 36, 24);
     }
     CHECK (seq.undoCount() == AcidSequencer303::kUndoDepth);
     int n = 0;
@@ -736,7 +736,7 @@ static void testTempoClamp()
 static void testRandomizeFillAndFlags()
 {
     AcidSequencer303 seq;
-    seq.acidRandomize (100, 0, 0, 0, 0, 36, 24);
+    seq.acidRandomize (100, 0, 0, 0, 0, 0, 0, 36, 24);
     for (int i = 0; i < SEQ303_STEP_MAX; ++i)
     {
         CHECK (seq.stepOn (i));
@@ -744,11 +744,11 @@ static void testRandomizeFillAndFlags()
         CHECK (seq.getRawNote (i) >= 36 && seq.getRawNote (i) < 60);
     }
 
-    seq.acidRandomize (0, 100, 100, 100, 0, 36, 24);
+    seq.acidRandomize (0, 100, 100, 100, 0, 0, 0, 36, 24);
     for (int i = 0; i < SEQ303_STEP_MAX; ++i)
         CHECK (! seq.stepOn (i));                    // fill 0: every step is a rest
 
-    seq.acidRandomize (100, 100, 100, 100, 0, 36, 24);
+    seq.acidRandomize (100, 100, 100, 100, 0, 0, 0, 36, 24);
     for (int i = 0; i < SEQ303_STEP_MAX; ++i)
         CHECK (seq.accentOn (i) && seq.slideOn (i) && ! seq.tieOn (i)); // tie only lands on rests
 }
@@ -758,7 +758,7 @@ static void testRandomizeTieRule()
     AcidSequencer303 seq;
     for (int run = 0; run < 100; ++run)
     {
-        seq.acidRandomize (50, 0, 0, 100, 0, 36, 24);
+        seq.acidRandomize (50, 0, 0, 100, 0, 0, 0, 36, 24);
         for (int i = 0; i < SEQ303_STEP_MAX; ++i)
         {
             if (! seq.tieOn (i))
@@ -778,7 +778,7 @@ static void testRandomizeSilencesHeldNote()
     r.seq.start();
     r.run (kTick * 6);
     const int before = r.allNotesOffCalls;
-    r.seq.acidRandomize (100, 0, 0, 0, 0, 36, 24);
+    r.seq.acidRandomize (100, 0, 0, 0, 0, 0, 0, 36, 24);
     CHECK (r.allNotesOffCalls > before);             // host gets told to reset held-note state
     CHECK (r.offAfter (40, 0) != -1);
 }
