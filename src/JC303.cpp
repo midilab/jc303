@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "JC303.h"
 #include "dsp/tuning/TuningFileLoader.h"
 #include GUI_THEME_HEADER
@@ -983,6 +985,11 @@ void JC303::updateOpen303Parameters()
 void JC303::setParameter (Open303Parameters index, float value)
 {
   if( index < 0 || index >= OPEN303_NUM_PARAMETERS )
+    return;
+  // Reject non-finite values at the boundary: a NaN/inf parameter (host automation, a bad
+  // preset, a torn read) poisons the oscillator phase, floors to INT_MIN and reads the
+  // wavetable out of bounds -> hard crash in the audio callback.
+  if( ! std::isfinite (value) )
     return;
 
 	switch(index)

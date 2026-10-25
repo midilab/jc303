@@ -197,10 +197,15 @@ namespace rosic
   INLINE double MipMappedWaveTable::getValueLinear(int integerPart, double fractionalPart, int tableIndex)
   {
     // ensure, that the table index is in the valid range:
-    if( tableIndex<=0 )
+    if( tableIndex<0 )
       tableIndex = 0;
-    else if ( tableIndex>numTables )
-      tableIndex = 11;
+    else if ( tableIndex>numTables-1 )
+      tableIndex = numTables-1;
+
+    // a non-finite phase (NaN/inf from a bad parameter) floors to INT_MIN here and would read
+    // the table out of bounds -> crash on the audio thread. Clamp so one bad sample can at
+    // worst glitch, never index out of the table.
+    integerPart = (integerPart<0) ? 0 : (integerPart>=tableLength ? tableLength-1 : integerPart);
 
     return   (1.0-fractionalPart) * tableSet[tableIndex][integerPart] 
            +      fractionalPart  * tableSet[tableIndex][integerPart+1];
