@@ -190,7 +190,7 @@ A preset file is plain JSON:
 
 #### Preset order
 
-`Init` is always first; the rest of a bank is listed in natural file-name order, not
+`Open303 Clean` is always first; the rest of a bank is listed in natural file-name order, not
 by display name. To reorder a bank, rename its files with a number prefix:
 `2_zulu.json` comes before `10_alpha.json`. Save keeps a preset's file name; New and
 Rename name the file after the preset.
@@ -201,7 +201,7 @@ To tweak a preset without touching the plugin, open its `.json` in any text edit
 change the `values` entries, and save. The plugin reads presets from disk each time a
 bank loads, so switch the Bank back and forth (or restart the plugin) to pick up your
 edits. Keep the file valid JSON — a preset that fails to parse is skipped, and a bank
-with no loadable presets falls back to `Init`.
+with no loadable presets falls back to `Open303 Clean`.
 
 For new sounds, it's easiest to dial the patch in the plugin and use **Save / New**
 (see the Presets page above) rather than writing `values` by hand — the plugin records

@@ -1,7 +1,7 @@
 {
-  "name": "Init",
-  "modKnob1": "lfoRate",
-  "modKnob2": "lfoDepth",
+  "name": "Open303 Clean",
+  "modKnob1": "filterMorph",
+  "modKnob2": "filterFm",
   "values": {
     "volume": 0.75
   }

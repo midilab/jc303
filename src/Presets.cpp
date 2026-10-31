@@ -59,8 +59,8 @@ namespace
 
         preset.name = obj->hasProperty ("name") ? obj->getProperty ("name").toString()
                                                 : file.getFileNameWithoutExtension();
-        preset.modKnob1 = obj->hasProperty ("modKnob1") ? obj->getProperty ("modKnob1").toString() : "lfoRate";
-        preset.modKnob2 = obj->hasProperty ("modKnob2") ? obj->getProperty ("modKnob2").toString() : "lfoDepth";
+        preset.modKnob1 = obj->hasProperty ("modKnob1") ? obj->getProperty ("modKnob1").toString() : "filterMorph";
+        preset.modKnob2 = obj->hasProperty ("modKnob2") ? obj->getProperty ("modKnob2").toString() : "filterFm";
 
         preset.values.clear();
         if (const auto* values = obj->getProperty ("values").getDynamicObject())
@@ -81,14 +81,16 @@ namespace
                 presets.push_back (std::move (preset));
         }
 
-        // Init stays first (it is the default program); the rest in natural file-name order, so a bank
-        // is reordered by renaming its files ("2_zulu.json" before "10_alpha.json").
+        // init.json stays first (it is the default program) — keyed on the file name, not the display
+        // name, so a renamed preset ("Open303 Clean") and older seeded copies still sort first; the
+        // rest in natural file-name order, so a bank is reordered by renaming its files
+        // ("2_zulu.json" before "10_alpha.json").
         std::stable_sort (presets.begin(), presets.end(), [] (const FactoryPreset& a, const FactoryPreset& b)
         {
-            if (a.name == "Init")
-                return b.name != "Init";
-            if (b.name == "Init")
-                return false;
+            const bool initA = a.file.getFileNameWithoutExtension() == "init";
+            const bool initB = b.file.getFileNameWithoutExtension() == "init";
+            if (initA)  return ! initB;
+            if (initB)  return false;
             return a.file.getFileNameWithoutExtension().compareNatural (b.file.getFileNameWithoutExtension()) < 0;
         });
     }
@@ -105,10 +107,11 @@ namespace
 
         loadFromDisk (dir);
 
-        // An empty bank (or one whose presets all failed to parse) falls back to Init: the default
-        // sound with mods off, so a user who creates a blank folder can start building a bank from there.
+        // An empty bank (or one whose presets all failed to parse) falls back to the default
+        // program: the "Open303 Clean" sound, so a user who creates a blank folder can start
+        // building a bank from there.
         if (presets.empty())
-            presets.push_back ({ "Init", {}, "lfoRate", "lfoDepth" });
+            presets.push_back ({ "Open303 Clean", {}, "filterMorph", "filterFm" });
     }
 
     // The .json file a preset should be written to: its own file, or the name-derived file in the

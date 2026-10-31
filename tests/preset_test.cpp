@@ -81,7 +81,7 @@ static void testPresetValueResolution (JC303& p)
 static void testProgramList (JC303& p)
 {
     CHECK (p.getNumPrograms() >= 2, "only %d programs", p.getNumPrograms());
-    CHECK (p.getProgramName (0) == "Init", "first program is '%s'", p.getProgramName (0).toRawUTF8());
+    CHECK (p.getProgramName (0) == "Open303 Clean", "first program is '%s'", p.getProgramName (0).toRawUTF8());
     CHECK (programIndex (p, "Hoover") > 0, "no Hoover program");
 }
 
@@ -131,13 +131,13 @@ static void testInitResetsSoundOnly (JC303& p)
 
     p.setCurrentProgram (0);
 
-    CHECK (valueOf (p, "cutoff") == defaultOf (p, "cutoff"), "Init left cutoff at %g", valueOf (p, "cutoff"));
-    CHECK (valueOf (p, "oscModel") == 0.0f, "Init left oscModel at %g", valueOf (p, "oscModel"));
-    // Init recalls its own volume (0.75) like any preset
-    CHECK (std::abs (valueOf (p, "volume") - defaultOf (p, "volume")) < 1e-4f, "Init left volume at %g", valueOf (p, "volume"));
-    CHECK (std::abs (valueOf (p, "tuning") - 0.3f) < 1e-4f, "Init changed the tuning to %g", valueOf (p, "tuning"));
-    CHECK (valueOf (p, "seqTempo") == 140.0f, "Init changed the sequencer tempo to %g", valueOf (p, "seqTempo"));
-    CHECK (std::abs (valueOf (p, "seqSwing") - 60.0f) < 1e-3f, "Init changed the swing to %g", valueOf (p, "seqSwing"));
+    CHECK (valueOf (p, "cutoff") == defaultOf (p, "cutoff"), "default preset left cutoff at %g", valueOf (p, "cutoff"));
+    CHECK (valueOf (p, "oscModel") == 0.0f, "default preset left oscModel at %g", valueOf (p, "oscModel"));
+    // the default preset recalls its own volume (0.75) like any preset
+    CHECK (std::abs (valueOf (p, "volume") - defaultOf (p, "volume")) < 1e-4f, "default preset left volume at %g", valueOf (p, "volume"));
+    CHECK (std::abs (valueOf (p, "tuning") - 0.3f) < 1e-4f, "default preset changed the tuning to %g", valueOf (p, "tuning"));
+    CHECK (valueOf (p, "seqTempo") == 140.0f, "default preset changed the sequencer tempo to %g", valueOf (p, "seqTempo"));
+    CHECK (std::abs (valueOf (p, "seqSwing") - 60.0f) < 1e-3f, "default preset changed the swing to %g", valueOf (p, "seqSwing"));
     CHECK (p.getCurrentProgram() == 0, "current program %d", p.getCurrentProgram());
 }
 
@@ -205,16 +205,16 @@ static double rmsDb (const juce::AudioBuffer<float>& out, int from, int to)
     return 10.0 * std::log10 (sum / (to - from) + 1e-30);
 }
 
-// Hoover holds its level while the note is held (Init, like a stock 303, dies away)
+// Hoover holds its level while the note is held (the default preset, like a stock 303, dies away)
 static void testHooverRenders (JC303& p, const char* wavPath)
 {
     const double sr = 44100.0;
-    const auto init = render (p, "Init");
+    const auto init = render (p, "Open303 Clean");
     const auto out = render (p, "Hoover");
     const int attack = (int) (0.15 * sr), held = (int) (1.9 * sr);
     const double hooverDb = rmsDb (out, 0, attack), initDb = rmsDb (init, 0, attack);
     const double hooverLateDb = rmsDb (out, held - attack, held), initLateDb = rmsDb (init, held - attack, held);
-    std::printf ("attack: Hoover %.1f dBFS, Init %.1f dBFS; end of held note: Hoover %.1f, Init %.1f\n",
+    std::printf ("attack: Hoover %.1f dBFS, default preset %.1f dBFS; end of held note: Hoover %.1f, default preset %.1f\n",
                  hooverDb, initDb, hooverLateDb, initLateDb);
 
     bool finite = true;
@@ -231,23 +231,23 @@ static void testModKnobs()
 {
     {
         JC303 p;
-        CHECK (p.getModKnob (0) == "lfoRate" && p.getModKnob (1) == "lfoDepth",
+        CHECK (p.getModKnob (0) == "filterMorph" && p.getModKnob (1) == "filterFm",
                "default knobs %s / %s", p.getModKnob (0).toRawUTF8(), p.getModKnob (1).toRawUTF8());
 
         p.setCurrentProgram (programIndex (p, "Super JP"));
         CHECK (p.getModKnob (0) == "superDetune" && p.getModKnob (1) == "superMix",
                "Super JP knobs %s / %s", p.getModKnob (0).toRawUTF8(), p.getModKnob (1).toRawUTF8());
         p.setCurrentProgram (0);
-        CHECK (p.getModKnob (0) == "lfoRate", "Init knob 1 %s", p.getModKnob (0).toRawUTF8());
+        CHECK (p.getModKnob (0) == "filterMorph", "default preset knob 1 %s", p.getModKnob (0).toRawUTF8());
 
         // an assignment made on the knobs is part of the saved state
-        p.setModKnob (0, "filterMorph");
+        p.setModKnob (0, "lfoRate");
         juce::MemoryBlock state;
         p.getStateInformation (state);
         JC303 restored;
         restored.setStateInformation (state.getData(), (int) state.getSize());
-        CHECK (restored.getModKnob (0) == "filterMorph", "restored knob 1 %s", restored.getModKnob (0).toRawUTF8());
-        CHECK (restored.getModKnob (1) == "lfoDepth", "restored knob 2 %s", restored.getModKnob (1).toRawUTF8());
+        CHECK (restored.getModKnob (0) == "lfoRate", "restored knob 1 %s", restored.getModKnob (0).toRawUTF8());
+        CHECK (restored.getModKnob (1) == "filterFm", "restored knob 2 %s", restored.getModKnob (1).toRawUTF8());
     }
 }
 
@@ -331,20 +331,20 @@ static void testBankSwitch()
     CHECK ((int) factoryPresets().size() == factoryCount, "factory restored %d, want %d",
            (int) factoryPresets().size(), factoryCount);
 
-    // a missing bank falls back to Init so the device is never left without a program
+    // a missing bank falls back to the default preset so the device is never left without a program
     loadPresetBank ("does_not_exist");
     CHECK ((int) factoryPresets().size() == 1, "missing bank has %d presets, want 1", (int) factoryPresets().size());
-    CHECK (factoryPresets()[0].name == "Init", "missing bank preset is '%s'", factoryPresets()[0].name.toRawUTF8());
+    CHECK (factoryPresets()[0].name == "Open303 Clean", "missing bank preset is '%s'", factoryPresets()[0].name.toRawUTF8());
 
-    // an empty folder the user created is a valid starting point: it loads Init (defaults, mods off)
+    // an empty folder the user created is a valid starting point: it loads the default preset (defaults, mods off)
     const juce::File blank = factoryPresetsDirectory().getParentDirectory().getChildFile ("blankbank");
     blank.deleteRecursively();
     blank.createDirectory();
     loadPresetBank ("blankbank");
     CHECK (currentPresetBank() == "blankbank", "blank bank not selected");
     CHECK ((int) factoryPresets().size() == 1, "blank bank has %d presets, want 1", (int) factoryPresets().size());
-    CHECK (factoryPresets()[0].name == "Init", "blank bank preset is '%s'", factoryPresets()[0].name.toRawUTF8());
-    CHECK (factoryPresets()[0].modKnob1 == "lfoRate" && factoryPresets()[0].modKnob2 == "lfoDepth",
+    CHECK (factoryPresets()[0].name == "Open303 Clean", "blank bank preset is '%s'", factoryPresets()[0].name.toRawUTF8());
+    CHECK (factoryPresets()[0].modKnob1 == "filterMorph" && factoryPresets()[0].modKnob2 == "filterFm",
            "blank bank knobs '%s'/'%s'", factoryPresets()[0].modKnob1.toRawUTF8(), factoryPresets()[0].modKnob2.toRawUTF8());
 
     loadPresetBank (factoryBank);
@@ -352,7 +352,8 @@ static void testBankSwitch()
     blank.deleteRecursively();
 }
 
-// A bank is ordered by file name (natural order), so renaming files reorders it; Init stays first.
+// A bank is ordered by file name (natural order), so renaming files reorders it; init.json stays first
+// (keyed on the file name, so the default preset keeps its position however it is displayed).
 static void testBankOrderFollowsFileNames()
 {
     const juce::String factoryBank = currentPresetBank();
@@ -366,7 +367,7 @@ static void testBankOrderFollowsFileNames()
     write ("10_alpha.json", "Alpha");
     write ("2_zulu.json", "Zulu");
     write ("b_mid.json", "AAA Mid");
-    write ("x_init.json", "Init");
+    write ("init.json", "Init");
 
     loadPresetBank ("ordertest");
     const juce::StringArray want { "Init", "Zulu", "Alpha", "AAA Mid" };
@@ -552,7 +553,7 @@ static void testPitchBend (JC303& p)
     CHECK (std::abs (down - 55.0) < 1.5, "full bend down %.1f Hz, want an octave down", down);
 }
 
-// the mod wheel (CC 1) drives mod knob 1's parameter: LFO rate on Init, the preset's own knob otherwise
+// the mod wheel (CC 1) drives mod knob 1's parameter: Filter Morph on the default preset, the preset's own knob otherwise
 static void testModWheelDrivesKnobOne (JC303& p)
 {
     auto wheel = [&] (int value)
@@ -569,11 +570,11 @@ static void testModWheelDrivesKnobOne (JC303& p)
     auto normalised = [&] (const char* id) { return find (p, id)->getValue(); };
 
     p.setCurrentProgram (0);
-    CHECK (p.getModKnob (0) == "lfoRate", "Init knob 1 is %s", p.getModKnob (0).toRawUTF8());
+    CHECK (p.getModKnob (0) == "filterMorph", "default preset knob 1 is %s", p.getModKnob (0).toRawUTF8());
     wheel (127);
-    CHECK (std::abs (normalised ("lfoRate") - 1.0f) < 1e-4f, "wheel 127 left lfoRate at %g", normalised ("lfoRate"));
+    CHECK (std::abs (normalised ("filterMorph") - 1.0f) < 1e-4f, "wheel 127 left filterMorph at %g", normalised ("filterMorph"));
     wheel (0);
-    CHECK (normalised ("lfoRate") < 1e-4f, "wheel 0 left lfoRate at %g", normalised ("lfoRate"));
+    CHECK (normalised ("filterMorph") < 1e-4f, "wheel 0 left filterMorph at %g", normalised ("filterMorph"));
 
     p.setCurrentProgram (programIndex (p, "Super JP"));
     wheel (64);

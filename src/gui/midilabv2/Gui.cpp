@@ -88,8 +88,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuKnob->setRange(0.0, 100.0);
 
     // assignable macro knobs (shift-click -> assign current MOD item)
-    addAndMakeVisible(modAssign1 = createAssignableSlider("LFO rate", modAssign1Label));
-    addAndMakeVisible(modAssign2 = createAssignableSlider("LFO depth", modAssign2Label));
+    addAndMakeVisible(modAssign1 = createAssignableSlider("Filter morph", modAssign1Label));
+    addAndMakeVisible(modAssign2 = createAssignableSlider("Filter fm", modAssign2Label));
     menuPage->bindAssignableSlider(0, modAssign1, modAssign1Label);
     menuPage->bindAssignableSlider(1, modAssign2, modAssign2Label);
     menuPage->syncAssignablesFromState();   // saved with the state; presets assign them too
@@ -183,7 +183,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuPage->onRenamePreset = [this] (const juce::String& name) { return processorRef.renameCurrentPreset (name); };
     menuPage->onDeletePreset = [this] { return processorRef.deleteCurrentPreset(); };
 
-    selectMenu(2);   // default menu page; after the callback is set so the knob syncs
+    selectMenu(0);   // default menu page: the Presets page; after the callback is set so the knob syncs
 
     // sequencer step toggles (note/rest editing) and click-to-select display LEDs
     for (int i = 0; i < 16; ++i)
