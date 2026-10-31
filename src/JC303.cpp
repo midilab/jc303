@@ -381,10 +381,13 @@ JC303::JC303()
             //                                            0.0f,
             //                                            13.0f,
             //                                            0.0f),
+            // Startup default: a standalone app runs its own Internal clock, a
+            // plugin follows the host.  Only the default — state restored from a
+            // saved project still wins.
             std::make_unique<juce::AudioParameterChoice> ("seqSyncMode",
                                                         "Seq Sync Mode",
                                                         juce::StringArray{ "Internal", "Host", "Midi Clock" },
-                                                        0),
+                                                        wrapperType == juce::AudioProcessor::wrapperType_Standalone ? 0 : 1),
             std::make_unique<juce::AudioParameterChoice> ("seqStartMode",
                                                         "Seq Start Mode",
                                                         juce::StringArray{ "Transport", "Note Trigger" },
@@ -642,8 +645,17 @@ JC303::JC303()
             _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.hammer, ev.reverse, ev.gateSamples };
     };
 
-    // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
-    // and the AcidSeq303 child (stepLength) on state restore.
+    // Sequence defaults: push the APVTS startup values into the engine.  A
+    // fresh plugin instance often loads without setStateInformation, so this
+    // is what makes the default sync mode (Host for a plugin, Internal for a
+    // standalone) actually reach the sequencer.  State restored from a saved
+    // project runs later and overrides these.
+    if (auto* sm = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqSyncMode")))
+        _sequencer.setSyncMode((AcidSequencer303::SyncMode) sm->getIndex());
+    if (auto* sm = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqStartMode")))
+        _sequencer.setStartMode((AcidSequencer303::StartMode) sm->getIndex());
+    if (auto* tp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
+        _sequencer.setTempo((float) tp->get());
     _sequencer.setTrackLength (16);
 
     // Seed the user's presets directory from the embedded copies on first run, then load the factory presets.
@@ -1491,6 +1503,21 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
 
     // MPC-style swing: off-beat 16ths land at seqSwing % of the 8th-note pair
     _sequencer.setSwingPercent (seqSwing->load());
+
+    // ── External transport start takes over the clock ────────────────────────
+    // An incoming MIDI Start while the sequencer is parked switches sync to
+    // Midi Clock so we follow the signal.  The user's Start Mode still decides
+    // whether the Start itself starts the sequencer (Transport = yes, Note
+    // Trigger = wait for the first note) and MIDI Stop/Clock follow below.
+    if (! _sequencer.isRunning())
+        for (const auto meta : midiMessages)
+            if (meta.getMessage().isMidiStart())
+            {
+                _sequencer.setSyncMode (AcidSequencer303::SyncMode::MidiClock);
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (parameters.getParameter ("seqSyncMode")))
+                    *p = static_cast<int> (AcidSequencer303::SyncMode::MidiClock);   // keep the LCD menu truthful
+                break;
+            }
 
     _sequencer.processBlock (midiMessages,
                              numSamples,
