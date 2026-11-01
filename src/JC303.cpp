@@ -1456,6 +1456,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     double ppqAtStart    = 0.0;
     double hostBpm       = static_cast<double> (_sequencer.getTempo());
     bool   hostIsPlaying = false;
+    bool   hostIsLooping = false;
+    double hostLoopStart = 0.0;   // left locator, in quarter notes
 
     if (auto* ph = getPlayHead())
     {
@@ -1464,21 +1466,33 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             if (auto bpm = pos->getBpm())         hostBpm      = *bpm;
             if (auto ppq = pos->getPpqPosition()) ppqAtStart   = *ppq;
             hostIsPlaying = pos->getIsPlaying();
+            hostIsLooping = pos->getIsLooping();
+            if (const auto loop = pos->getLoopPoints()) hostLoopStart = loop->ppqStart;
         }
     }
 
     // ── Detect host play start / stop edge (Host sync mode only) ─────────────
     // Auto-start on the host play edge only in TransportStart mode; in
     // NoteTriggered the first incoming MIDI note owns the start.
+    bool hostLoopWrap = false;
     if (_sequencer.getSyncMode() == AcidSequencer303::SyncMode::Host)
     {
         const bool autoStart = _sequencer.getStartMode()
                                == AcidSequencer303::StartMode::TransportStart;
+        // A transport stop at the loop start while the host is looping is a
+        // loop-wrap rewind, not a stop: hosts that implement looping as stop +
+        // restart (Cubase and Ardour do) drop isPlaying for a buffer at the
+        // right locator.  Release held notes but keep the sequencer engaged, so
+        // the backward-jump re-anchor in processHostClock continues the pattern
+        // at the left locator when play resumes.
+        hostLoopWrap = hostIsLooping
+                       && ppqAtStart <= hostLoopStart + 0.001;
         if (hostIsPlaying && ! _wasHostPlaying && autoStart)
             _sequencer.start();
         else if (! hostIsPlaying && _wasHostPlaying)
         {
-            _sequencer.stop();
+            if (hostLoopWrap) _sequencer.releaseHeldNotes();
+            else              _sequencer.stop();
         }
     }
     _wasHostPlaying = hostIsPlaying;
@@ -1523,7 +1537,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
                              numSamples,
                              hostIsPlaying,
                              ppqAtStart,
-                             hostBpm);
+                             hostBpm,
+                             hostLoopWrap);
 
     // ── Sort pending sequencer events by sample position ──────────────────────
     // Typically 0–2 events per buffer; insertion sort is ideal here.
