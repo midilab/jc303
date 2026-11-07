@@ -63,6 +63,14 @@ RUN echo ">>> TARGETPLATFORM = $TARGETPLATFORM | RELEASE_ARCH = $RELEASE_ARCH" &
     esac
 
 # ------------------------------------------------------------
+# Debian 11 (bullseye) reached EOL: deb.debian.org still serves
+# the release metadata but the pool returns 404, so point APT at
+# archive.debian.org and skip the (now expired) Release check.
+# ------------------------------------------------------------
+RUN sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-valid-until
+
+# ------------------------------------------------------------
 # 0. Install Kitware CMake
 # ------------------------------------------------------------
 RUN apt-get update && \
