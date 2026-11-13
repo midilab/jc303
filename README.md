@@ -59,15 +59,14 @@ This de-quarantine example is for AU, please do the same for other formats you'l
 | `CUTOFF FREQ` | Filter cutoff |
 | `RESONANCE` | Filter resonance |
 | `ENVMOD` | Filter-envelope depth |
-| `DECAY` | Amp/filter decay; its range changes with the `MOD` switch |
+| `DECAY` | Filter-envelope (MEG) decay; its range changes with the `MOD` switch |
 | `ACCENT` | Accent amount |
 | `VOLUME` | Output level |
 | `MOD` switch | Turns the modifications on or off |
-| Six small knobs | `Normal Decay`, `Accent Decay`, `Filter Feedback`, `Soft Attack`, `Slide Time`, `Square Drive` (short labels on the panel; full names on the `MOD` page) |
 | `DRIVE`, `DRY/WET` + switch | Overdrive |
 | Two assignable knobs | Quick control of two `MOD`-page parameters (see [Mod knobs](#mod-knobs)) |
 
-With the `MOD` switch off the engine is a stock TB-303: TeeBee filter, TB-303 oscillator, Open303 square, no LFO, no sub oscillator and the fixed 303 envelopes. The `MOD` page, the six small knobs and the assignable knobs are inactive in that state. Switch `MOD` on to use the oscillator models, the other filters, the LFO/mod matrix and the mod knobs.
+Everything the `MOD` switch controls is on the LCD `MOD` page (see [Modifications page](#modifications-page)); the panel itself carries only the controls listed above. With the `MOD` switch off the engine is a stock TB-303: TeeBee filter, TB-303 oscillator, Open303 square, no LFO, no sub oscillator and the fixed 303 envelopes. The `MOD` page and the assignable knobs are inactive in that state. Switch `MOD` on to use the oscillator models, the other filters, the LFO/mod matrix and the mod knobs.
 
 ### LCD menu
 
@@ -81,6 +80,52 @@ The display and the eight buttons under it are the menu:
 - Each page remembers its own cursor position when you switch pages.
 
 `MOD`-page rows are greyed out and do nothing until the `MOD` switch is on. Rows that only apply to a particular filter or oscillator model are hidden while another model is selected, so the page stays short.
+
+### Modifications page
+
+The `MOD` page is the full list of modifications, in this order. Rows marked with a model only appear while that filter or oscillator model is selected.
+
+| Row | What it does |
+|--|--|
+| `Filter Model` | Selects the filter (see [Filter models](#filter-models)) |
+| `Filter Morph` | Low-pass (0) to band-pass (0.5) to high-pass (1); every model but `TeeBee` |
+| `Res Trim` | Component-tolerance loop gain, 0.5 = nominal; `Spicy` only |
+| `Filter Quality` | `Standard` or the slower, more accurate `Hi-Fi` solver; `Spicy` only |
+| `Filter Tension` | Floppy to stiff resonance; `Spicy` in `Hi-Fi` only |
+| `Filter Saturation` | 0 to +16 dB into the filter's saturating input; every model but `TeeBee` |
+| `Saturation Bias` | Asymmetry of the driven circuit, ramps in with `Filter Saturation` (hidden on `JuneBug` and `SemiSweet`) |
+| `Saturation Rail` | Ceiling of the driven circuit, ramps in with `Filter Saturation`; `Spicy` in `Hi-Fi` only |
+| `Bass Comp` | Restores the low end the resonance pot loses; `Spicy` only |
+| `Filter FM` | Audio-rate cutoff FM; every model but `TeeBee` |
+| `Osc Model` | `TB-303`, `Alpha Juno` or `Phaseshaper` (see [Oscillator models](#oscillator-models)) |
+| `Square Model` | `Open303` wavetable or `Circuit` pulse; `TB-303` only |
+| `Square Drive` | Square edge drive / waveshaper sag; `TB-303` only |
+| `Juno Wave` | `1 Saw`, `2 Oct`, `3 PW`, `4 Hi Oct`, `5 Dual`; `Alpha Juno` only |
+| `Super Detune` | Supersaw spread, 0 = one voice; `Alpha Juno` only |
+| `Super Mix` | Centre/side voice balance; `Alpha Juno` only |
+| `Shaper Mode` | `Tri Mod`, `Ripple Saw` or `Formant`; `Phaseshaper` only |
+| `Shape Drift` | Slow pitch-tracked movement; `Phaseshaper` `Ripple Saw` / `Formant` |
+| `Formant Split` | Turns one formant peak into two; `Phaseshaper` `Formant` |
+| `Sub Osc` | Sub-oscillator level (see [Sub oscillator](#sub-oscillator)) |
+| `Sub Octave -2/-1` | 0 = two octaves down (a 25% pulse), 1 = one octave down (a square) |
+| `Normal decay` | Amp-envelope decay of unaccented notes (30 ms–3 s) |
+| `Accent decay` | Amp-envelope decay of accented notes (30 ms–3 s) |
+| `Accent sweep` | Accent capacitor time constant; 15 ms is the stock 303, slower builds up over consecutive accents |
+| `Filter Feedback` | Feedback high-pass corner of the diode filters |
+| `Soft attack` | Amp-envelope attack time |
+| `Slide time` | Slide/glide time |
+| `LFO rate` | 0.1–20 Hz |
+| `LFO depth` | LFO amount |
+| `LFO wave` | `Triangle`, `Saw Up`, `Saw Down`, `Square`, `Random`, `Pink Noise` |
+| `LFO dest` | LFO destination |
+| `LFO phase` | LFO start phase, 0–360° |
+| `LFO key sync` | Restart the LFO on every note |
+| `LFO contour` | Lag/slew the LFO shape (negative) or sharpen its edges (positive) |
+| `Env dest`, `Env amount` | Filter-envelope modulation route (slot 2) |
+| `Mod 3 source`, `Mod 3 dest`, `Mod 3 amount` | Free modulation route (slot 3) |
+| `Mod 4 source`, `Mod 4 dest`, `Mod 4 amount` | Free modulation route (slot 4) |
+
+The `Normal decay`, `Accent decay` and `Soft attack` rows shape the amp envelope; the main `DECAY` knob still sets the filter (MEG) decay. The `LFO`, envelope and free routes are described under [LFO and modulation matrix](#lfo-and-modulation-matrix).
 
 ### Oscillator models
 
@@ -113,7 +158,7 @@ The filter is selected with `Filter Model` on the `MOD` page:
 
 All models except `TeeBee` support `Filter Morph`: 0 is low-pass, 0.5 band-pass and 1 high-pass, and a modulation slot can move it. `Filter Saturation` drives the filter input; `Saturation Bias` and `Saturation Rail` shape the driven circuit (both ramp in with Saturation and are hidden where the real circuit does not use them). `Filter FM` adds audio-rate cutoff modulation.
 
-The `Spicy` model also exposes the Devilfish-style controls: `Res Trim` (component-tolerance loop gain, 0.5 = nominal), `Filter Quality` (`Standard` or the slower, more accurate `Hi-Fi` solver), `Filter Tension` (Hi-Fi only: floppy to stiff resonance), and `Bass Comp` (restores the low end the real resonance pot loses). `Filter Feedback` (one of the six small knobs) sets the feedback high-pass corner for the diode filters.
+The `Spicy` model also exposes the Devilfish-style controls: `Res Trim` (component-tolerance loop gain, 0.5 = nominal), `Filter Quality` (`Standard` or the slower, more accurate `Hi-Fi` solver), `Filter Tension` (Hi-Fi only: floppy to stiff resonance), and `Bass Comp` (restores the low end the real resonance pot loses). `Filter Feedback` (on the `MOD` page) sets the feedback high-pass corner for the diode filters.
 
 `TeeBee` ignores the model-specific controls, so switching back to it is a quick way to hear the stock sound.
 
@@ -296,12 +341,12 @@ The sequencer sends note on/off messages to the host on MIDI channel 1, so its o
 
 Beneath the panel sit two assignable rotary knobs that give you quick, always-in-reach
 control over any parameter from the Modifications (`MOD`) page — handy for the ones you
-tweak the most (filter model, decay, LFO rate, a mod amount, ...).
+tweak the most (filter model, normal decay, LFO rate, a mod amount, ...).
 
 How to assign:
 
 1. Switch the editor to the `MOD` menu page and select the item you want on the knob
-   (e.g. "Decay").
+   (e.g. "Filter Saturation").
 2. **Shift-click** the knob (hold the Shift key and click it).
 3. The knob now controls that parameter; a short label appears under the knob.
 
