@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "JC303.h"
 #include "dsp/tuning/TuningFileLoader.h"
 #include GUI_THEME_HEADER
@@ -254,7 +256,7 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterChoice> ("filterType",
                                                         "Filter Model",
                                                         juce::StringArray{ "TeeBee", "Spicy", "MissBehave", "JuneBug", "Wasabi", "Hornet", "SemiSweet", "Oddity" },
-                                                        FILTER_TEEBEE),
+                                                        FILTER_DIODE),   // default "Spicy"; MOD off still forces TeeBee in setDevilMod(false)
             // oscillator model; the Waveform knob is the saw/pulse morph (Juno) or the shape (Phaseshaper)
             std::make_unique<juce::AudioParameterChoice> ("oscModel",
                                                         "Osc Model",
@@ -379,10 +381,13 @@ JC303::JC303()
             //                                            0.0f,
             //                                            13.0f,
             //                                            0.0f),
+            // Startup default: a standalone app runs its own Internal clock, a
+            // plugin follows the host.  Only the default — state restored from a
+            // saved project still wins.
             std::make_unique<juce::AudioParameterChoice> ("seqSyncMode",
                                                         "Seq Sync Mode",
                                                         juce::StringArray{ "Internal", "Host", "Midi Clock" },
-                                                        0),
+                                                        wrapperType == juce::AudioProcessor::wrapperType_Standalone ? 0 : 1),
             std::make_unique<juce::AudioParameterChoice> ("seqStartMode",
                                                         "Seq Start Mode",
                                                         juce::StringArray{ "Transport", "Note Trigger" },
@@ -640,8 +645,17 @@ JC303::JC303()
             _pendingNotes[_pendingCount++] = { ev.type, ev.note, ev.velocity, ev.sampleOffset, ev.mute, ev.hammer, ev.reverse, ev.gateSamples };
     };
 
-    // Sequence defaults are driven by the APVTS params (seqSyncMode/seqStartMode/seqTempo)
-    // and the AcidSeq303 child (stepLength) on state restore.
+    // Sequence defaults: push the APVTS startup values into the engine.  A
+    // fresh plugin instance often loads without setStateInformation, so this
+    // is what makes the default sync mode (Host for a plugin, Internal for a
+    // standalone) actually reach the sequencer.  State restored from a saved
+    // project runs later and overrides these.
+    if (auto* sm = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqSyncMode")))
+        _sequencer.setSyncMode((AcidSequencer303::SyncMode) sm->getIndex());
+    if (auto* sm = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter("seqStartMode")))
+        _sequencer.setStartMode((AcidSequencer303::StartMode) sm->getIndex());
+    if (auto* tp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
+        _sequencer.setTempo((float) tp->get());
     _sequencer.setTrackLength (16);
 
     // Seed the user's presets directory from the embedded copies on first run, then load the factory presets.
@@ -983,6 +997,11 @@ void JC303::updateOpen303Parameters()
 void JC303::setParameter (Open303Parameters index, float value)
 {
   if( index < 0 || index >= OPEN303_NUM_PARAMETERS )
+    return;
+  // Reject non-finite values at the boundary: a NaN/inf parameter (host automation, a bad
+  // preset, a torn read) poisons the oscillator phase, floors to INT_MIN and reads the
+  // wavetable out of bounds -> hard crash in the audio callback.
+  if( ! std::isfinite (value) )
     return;
 
 	switch(index)
@@ -1437,6 +1456,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     double ppqAtStart    = 0.0;
     double hostBpm       = static_cast<double> (_sequencer.getTempo());
     bool   hostIsPlaying = false;
+    bool   hostIsLooping = false;
+    double hostLoopStart = 0.0;   // left locator, in quarter notes
 
     if (auto* ph = getPlayHead())
     {
@@ -1445,21 +1466,33 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             if (auto bpm = pos->getBpm())         hostBpm      = *bpm;
             if (auto ppq = pos->getPpqPosition()) ppqAtStart   = *ppq;
             hostIsPlaying = pos->getIsPlaying();
+            hostIsLooping = pos->getIsLooping();
+            if (const auto loop = pos->getLoopPoints()) hostLoopStart = loop->ppqStart;
         }
     }
 
     // ── Detect host play start / stop edge (Host sync mode only) ─────────────
     // Auto-start on the host play edge only in TransportStart mode; in
     // NoteTriggered the first incoming MIDI note owns the start.
+    bool hostLoopWrap = false;
     if (_sequencer.getSyncMode() == AcidSequencer303::SyncMode::Host)
     {
         const bool autoStart = _sequencer.getStartMode()
                                == AcidSequencer303::StartMode::TransportStart;
+        // A transport stop at the loop start while the host is looping is a
+        // loop-wrap rewind, not a stop: hosts that implement looping as stop +
+        // restart (Cubase and Ardour do) drop isPlaying for a buffer at the
+        // right locator.  Release held notes but keep the sequencer engaged, so
+        // the backward-jump re-anchor in processHostClock continues the pattern
+        // at the left locator when play resumes.
+        hostLoopWrap = hostIsLooping
+                       && ppqAtStart <= hostLoopStart + 0.001;
         if (hostIsPlaying && ! _wasHostPlaying && autoStart)
             _sequencer.start();
         else if (! hostIsPlaying && _wasHostPlaying)
         {
-            _sequencer.stop();
+            if (hostLoopWrap) _sequencer.releaseHeldNotes();
+            else              _sequencer.stop();
         }
     }
     _wasHostPlaying = hostIsPlaying;
@@ -1485,11 +1518,27 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // MPC-style swing: off-beat 16ths land at seqSwing % of the 8th-note pair
     _sequencer.setSwingPercent (seqSwing->load());
 
+    // ── External transport start takes over the clock ────────────────────────
+    // An incoming MIDI Start while the sequencer is parked switches sync to
+    // Midi Clock so we follow the signal.  The user's Start Mode still decides
+    // whether the Start itself starts the sequencer (Transport = yes, Note
+    // Trigger = wait for the first note) and MIDI Stop/Clock follow below.
+    if (! _sequencer.isRunning())
+        for (const auto meta : midiMessages)
+            if (meta.getMessage().isMidiStart())
+            {
+                _sequencer.setSyncMode (AcidSequencer303::SyncMode::MidiClock);
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (parameters.getParameter ("seqSyncMode")))
+                    *p = static_cast<int> (AcidSequencer303::SyncMode::MidiClock);   // keep the LCD menu truthful
+                break;
+            }
+
     _sequencer.processBlock (midiMessages,
                              numSamples,
                              hostIsPlaying,
                              ppqAtStart,
-                             hostBpm);
+                             hostBpm,
+                             hostLoopWrap);
 
     // ── Sort pending sequencer events by sample position ──────────────────────
     // Typically 0–2 events per buffer; insertion sort is ideal here.

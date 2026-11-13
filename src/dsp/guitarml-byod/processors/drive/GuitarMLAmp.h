@@ -157,10 +157,12 @@ public:
         }
     }
     void setDriver (float value) {
-        if (modelArch == ModelArch::LSTM40NoCond)
-            getVTS().getParameter(RONNTags::gainTag)->setValue(value);
-        else if (modelArch == ModelArch::LSTM40Cond)
-            getVTS().getParameter(RONNTags::conditionTag)->setValue(value);
+        // audio thread: JUCE 8's base setValue() is the host's own audio-callback write API, so
+        // it is safe here; only the per-call ValueTree lookup used to be. Use the pointers cached
+        // at construction instead (same write, no lookup).
+        chowdsp::FloatParameter* target = (modelArch == ModelArch::LSTM40Cond) ? conditionParamPtr : gainParam;
+        if (target != nullptr)
+            static_cast<juce::AudioProcessorParameter*> (target)->setValue (value);
     }
 
 private:
@@ -170,6 +172,7 @@ private:
     ModelChangeBroadcaster modelChangeBroadcaster;
 
     chowdsp::FloatParameter* gainParam = nullptr;
+    chowdsp::FloatParameter* conditionParamPtr = nullptr;
     chowdsp::SmoothedBufferValue<float> conditionParam;
     chowdsp::BoolParameter* sampleRateCorrectionFilterParam = nullptr;
     chowdsp::Gain<float> inGain;

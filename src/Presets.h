@@ -15,14 +15,14 @@ struct FactoryPreset
 {
     juce::String name;
     std::vector<std::pair<juce::String, juce::var>> values;
-    juce::String modKnob1 = "lfoRate";
-    juce::String modKnob2 = "lfoDepth";
+    juce::String modKnob1 = "filterMorph";
+    juce::String modKnob2 = "filterFm";
     juce::File file;   // the .json this preset was loaded from; empty for the fallback Init of an empty bank
 };
 
 // the mod knob assignments, kept as properties of the plugin state
 inline const juce::Identifier modKnobIds[2] { "modKnob1", "modKnob2" };
-inline const char* const defaultModKnobs[2] { "lfoRate", "lfoDepth" };
+inline const char* const defaultModKnobs[2] { "filterMorph", "filterFm" };
 
 // Factory presets live as one JSON file per preset in the user's presets directory
 // (see factoryPresetsDirectory()). On first use they are seeded from the copies embedded

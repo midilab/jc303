@@ -8,6 +8,7 @@ GuitarMLAmp::GuitarMLAmp (UndoManager* um) : BaseProcessor ("GuitarML", createPa
 {
     using namespace ParameterHelpers;
     loadParameterPointer (gainParam, vts, RONNTags::gainTag);
+    conditionParamPtr = getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag);
     conditionParam.setParameterHandle (getParameterPointer<chowdsp::FloatParameter*> (vts, RONNTags::conditionTag));
     loadParameterPointer (sampleRateCorrectionFilterParam, vts, RONNTags::sampleRateCorrFilterTag);
     addPopupMenuParameter (RONNTags::sampleRateCorrFilterTag);
@@ -329,6 +330,10 @@ void GuitarMLAmp::processAudio (AudioBuffer<float>& buffer)
     // swap the model between blocks, at a point where the output is silent
     if (doSwap)
         loadModelFromJson (swapJson, swapName);
+    // shortcut: the weight copy runs on the audio thread (1-3 ms one-off at the silent gap), so a
+    // model change can still overrun the block in a strict host. The full fix is to double-buffer
+    // the model set and let the message thread run loadModelFromJson while the audio thread only
+    // flips an active-model pointer; revisit if dropouts show up on overdrive model changes.
 }
 /* 
 std::unique_ptr<XmlElement> GuitarMLAmp::toXML()

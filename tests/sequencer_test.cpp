@@ -530,6 +530,60 @@ static void testSwingMidiClockNotQuantised()
         CHECK (ons[1].at - ons[0].at == kStep + 480);
 }
 
+// Hosts that implement transport looping as stop + restart (Cubase, Ardour)
+// drop isPlaying for a buffer at the right locator.  The wrap must not tear
+// the sequencer down: it stays running through the gap and the pattern
+// continues from the loop point.
+static void testHostLoopWrapKeepsSequencerRunning()
+{
+    Rig r;
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::Host);
+    r.seq.setTrackLength (2);
+    r.step (0, 40); r.step (1, 43);
+    r.seq.start();
+    juce::MidiBuffer empty;
+    auto onsCount = [&r]
+    {
+        size_t n = 0;
+        for (const auto& e : r.evs) if (e.on) ++n;
+        return n;
+    };
+
+    r.seq.processBlock (empty, 512, true, 0.0, 120.0);          // playing, top of the loop
+    r.pos += 512;
+    CHECK (r.seq.isRunning());
+    CHECK (onsCount() >= 1, "step 0 should have played");
+    const size_t onsBefore = onsCount();
+
+    r.seq.processBlock (empty, 512, false, 0.0, 120.0, true);   // pause at the loop start = wrap
+    r.pos += 512;
+    CHECK (r.seq.isRunning(), "sequencer must survive a loop-wrap transport stop");
+
+    r.seq.processBlock (empty, 512, true, 0.0, 120.0, true);    // play resumes at the loop point
+    r.pos += 512;
+    CHECK (r.seq.isRunning());
+    CHECK (onsCount() > onsBefore, "pattern must continue after the wrap");
+}
+
+// A genuine transport stop still stops the sequencer: hostLoopWrap is true only
+// when the caller (JC303::renderMidi) judged the stop a loop-wrap rewind.
+static void testHostRealStopStopsSequencer()
+{
+    Rig r;
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::Host);
+    r.step (0, 40);
+    r.seq.start();
+    juce::MidiBuffer empty;
+
+    r.seq.processBlock (empty, 512, true, 12.0, 120.0);         // playing mid-project
+    r.pos += 512;
+    CHECK (r.seq.isRunning());
+
+    r.seq.processBlock (empty, 512, false, 12.0, 120.0);        // a real stop
+    r.pos += 512;
+    CHECK (! r.seq.isRunning(), "a real stop must stop the sequencer");
+}
+
 // ---- re-roll ----------------------------------------------------------------
 
 static void testRerollPitchesKeepsRhythm()
@@ -945,6 +999,8 @@ int main()
     testSwingReleasesBeforeNextNoteWithCpuTiming();
     testSwingHostStartMidPair();
     testSwingMidiClockNotQuantised();
+    testHostLoopWrapKeepsSequencerRunning();
+    testHostRealStopStopsSequencer();
     testRerollPitchesKeepsRhythm();
     testRerollRhythmKeepsPitchOrder();
     testPitchLengthCyclesAcrossBars();

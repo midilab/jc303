@@ -447,6 +447,62 @@ public:
         return param == nullptr ? -1.0f : param->getValue() * 100.0f;
     }
 
+    // Short names for the two mod knobs, keyed by parameter id. The full labels
+    // stay in the LCD menu; these fit the 121 px gap between the knobs.
+    static juce::String modShortLabel (const juce::String& id)
+    {
+        static const std::pair<const char*, const char*> shortLabels[]
+        {
+            { "filterType",      "Fltr Model" },
+            { "filterMorph",     "Fltr Morph" },
+            { "filterQuality",   "Fltr Qlty" },
+            { "filterTension",   "Fltr Tens" },
+            { "filterDrive",     "Fltr Sat" },
+            { "filterBias",      "Fltr Bias" },
+            { "filterRail",      "Fltr Rail" },
+            { "filterFm",        "Fltr FM" },
+            { "resTrim",         "Fltr Res" },
+            { "bassComp",        "Fltr Bass" },
+            { "feedbackFilter",  "Fltr Fdbk" },
+            { "oscModel",        "Osc Model" },
+            { "squareModel",     "Sqr Model" },
+            { "sqrDriver",       "Sqr Drive" },
+            { "junoWave",        "Juno Wave" },
+            { "superDetune",     "Sup Detune" },
+            { "superMix",        "Super Mix" },
+            { "shaperMode",      "Shpr Mode" },
+            { "shapeDrift",      "Shpr Drift" },
+            { "shaperSplit",     "Fmt Split" },
+            { "subOscGain",      "Sub Osc" },
+            { "subOscBlend",     "Sub Octave" },
+            { "normalDecay",     "Norm Decay" },
+            { "accentDecay",     "Acc Decay" },
+            { "accentSweep",     "Acc Sweep" },
+            { "softAttack",      "Soft Atk" },
+            { "slideTime",       "Slide Time" },
+            { "lfoRate",         "LFO Rate" },
+            { "lfoDepth",        "LFO Depth" },
+            { "lfoWaveform",     "LFO Wave" },
+            { "lfoDestination",  "LFO Dest" },
+            { "lfoPhase",        "LFO Phase" },
+            { "lfoSync",         "LFO Sync" },
+            { "lfoContour",      "LFO Cntr" },
+            { "modSlot2Dest",    "Env Dest" },
+            { "modSlot2Amount",  "Env Amount" },
+            { "modSlot3Source",  "Mod3 Src" },
+            { "modSlot3Dest",    "Mod3 Dst" },
+            { "modSlot3Amount",  "Mod3 Amt" },
+            { "modSlot4Source",  "Mod4 Src" },
+            { "modSlot4Dest",    "Mod4 Dst" },
+            { "modSlot4Amount",  "Mod4 Amt" },
+        };
+
+        for (const auto& entry : shortLabels)
+            if (id == entry.first)
+                return entry.second;
+        return {};
+    }
+
     juce::String assignableLabel(int slot) const
     {
         if (slot < 0 || slot >= numAssignableSlots)
@@ -457,7 +513,10 @@ public:
         for (auto& pg : pageList)
             for (auto& it : pg.items)
                 if (it.id == id)
-                    return labelOf(it).toUpperCase();
+                {
+                    const auto shortName = modShortLabel (it.id);
+                    return (shortName.isNotEmpty() ? shortName : labelOf(it)).toUpperCase();
+                }
         if (auto* p = valueTreeState.getParameter(id))   // a main-panel knob such as Cutoff
             return p->getName(32).toUpperCase();
         return {};

@@ -268,6 +268,12 @@ public:
         clearStackInternal (true);
     }
 
+    /** Send note-offs for every held note without stopping.  Used when the host
+     *  transport pauses behind a loop-wrap: the gate position must not reset,
+     *  but a note ringing across the wrap is released so it cannot hang if the
+     *  host never resumes. */
+    void releaseHeldNotes() { clearStackInternal (true); }
+
     bool isRunning() const { return _running.load(); }
 
     /** Reverse playback: steps run last to first and every note's envelope is
@@ -284,12 +290,17 @@ public:
      * @param hostIsPlaying     AudioPlayHead::isPlaying.
      * @param ppqAtBufferStart  ppqPosition at sample 0 (Host sync).
      * @param bpm               Current host BPM (Host sync; ignored in Internal).
+     * @param hostLoopWrap      True when a transport stop was a loop-wrap rewind
+     *                          (host is looping and the position is at the loop
+     *                          start) rather than a real stop, so the Host clock
+     *                          must not tear the sequencer down.
      */
     void processBlock (const juce::MidiBuffer& midiIn,
                        int    numSamples,
                        bool   hostIsPlaying,
                        double ppqAtBufferStart,
-                       double bpm)
+                       double bpm,
+                       bool   hostLoopWrap = false)
     {
         _blockLength = numSamples;
 
@@ -363,7 +374,7 @@ public:
                 break;
 
             case SyncMode::Host:
-                processHostClock (numSamples, hostIsPlaying, ppqAtBufferStart, bpm);
+                processHostClock (numSamples, hostIsPlaying, ppqAtBufferStart, bpm, hostLoopWrap);
                 break;
 
             case SyncMode::MidiClock:
@@ -875,11 +886,18 @@ private:
     void processHostClock (int    numSamples,
                            bool   hostIsPlaying,
                            double ppqStart,
-                           double bpm)
+                           double bpm,
+                           bool   hostLoopWrap)
     {
         if (! hostIsPlaying)
         {
-            if (_running) stop();
+            // A host that implements transport looping as stop + restart drops
+            // isPlaying for one buffer at the wrap.  The stop/start edge
+            // handling in JC303::renderMidi has already decided this buffer was
+            // a loop-wrap (hostLoopWrap), so keep the sequencer engaged: the
+            // backward-jump re-anchor below continues the pattern at the loop
+            // point on the next buffer instead of a hard stop.
+            if (_running && ! hostLoopWrap) stop();
             return;
         }
 

@@ -88,8 +88,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuKnob->setRange(0.0, 100.0);
 
     // assignable macro knobs (shift-click -> assign current MOD item)
-    addAndMakeVisible(modAssign1 = createAssignableSlider("LFO rate", modAssign1Label));
-    addAndMakeVisible(modAssign2 = createAssignableSlider("LFO depth", modAssign2Label));
+    addAndMakeVisible(modAssign1 = createAssignableSlider("Filter morph", modAssign1Label));
+    addAndMakeVisible(modAssign2 = createAssignableSlider("Filter fm", modAssign2Label));
     menuPage->bindAssignableSlider(0, modAssign1, modAssign1Label);
     menuPage->bindAssignableSlider(1, modAssign2, modAssign2Label);
     menuPage->syncAssignablesFromState();   // saved with the state; presets assign them too
@@ -183,7 +183,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuPage->onRenamePreset = [this] (const juce::String& name) { return processorRef.renameCurrentPreset (name); };
     menuPage->onDeletePreset = [this] { return processorRef.deleteCurrentPreset(); };
 
-    selectMenu(2);   // default menu page; after the callback is set so the knob syncs
+    selectMenu(0);   // default menu page: the Presets page; after the callback is set so the knob syncs
 
     // sequencer step toggles (note/rest editing) and click-to-select display LEDs
     for (int i = 0; i < 16; ++i)
@@ -786,23 +786,23 @@ void JC303Editor::setControlsLayout()
     pair<int, int> displayMenuLocation = {60, 210};
 
     // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {470, 340};
-    pair<int, int> seqClearButtonLocation = {535, 340};
-    pair<int, int> seqRecButtonLocation = {578, 340};
-    pair<int, int> seqRestButtonLocation = {621, 340};
+    pair<int, int> seqPlayButtonLocation = {470, 350};
+    pair<int, int> seqClearButtonLocation = {535, 350};
+    pair<int, int> seqRecButtonLocation = {578, 350};
+    pair<int, int> seqRestButtonLocation = {621, 350};
 
-    pair<int, int> seqGenerateButtonLocation = {45, 348};
-    pair<int, int> seqGenerativeFillLocation = {89, 350};
-    pair<int, int> seqGenerativeAccentProbabilityLocation = {129, 350};
-    pair<int, int> seqGenerativeSlideProbabilityLocation = {169, 350};
-    pair<int, int> seqGenerativeTieProbabilityLocation = {209, 350};
-    pair<int, int> numberOfTonesLocation = {249, 350};
-    pair<int, int> lowerNoteLocation = {289, 350};
-    pair<int, int> rangeNoteLocation = {329, 350};
+    pair<int, int> seqGenerateButtonLocation = {45, 358};
+    pair<int, int> seqGenerativeFillLocation = {89, 360};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {129, 360};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {169, 360};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {209, 360};
+    pair<int, int> numberOfTonesLocation = {249, 360};
+    pair<int, int> lowerNoteLocation = {289, 360};
+    pair<int, int> rangeNoteLocation = {329, 360};
 
     //pair<int, int> seqLengthLocation = {200, 390};
 
-    pair<int, int> keyboardLocation = {672, 325};
+    pair<int, int> keyboardLocation = {672, 335};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -816,13 +816,13 @@ void JC303Editor::setControlsLayout()
     const int switchStepHeight =  45;
     const int switchStepGap =  8;
     const int switchStepX0 =  44;   // x of the first step toggle
-    const int stepToggleY =  421;
+    const int stepToggleY =  434;
     const int ledWidth = switchStepWidth;
     const int ledHeight = ledWidth * 34 / 62;
     const int ledY = stepToggleY - ledHeight - 1;   // just above the step toggles
     const int microButtonHeight =  14;
     const int microButtonGap    =  2;
-    const int accentButtonY     = 468;   // just below the step toggles
+    const int accentButtonY     = stepToggleY + switchStepHeight + microButtonGap;   // just below the step toggles
     const int slideButtonY      = accentButtonY + (microButtonHeight + microButtonGap);
     // menu navigation controls (top row), same width/aspect as the step selector
     // buttons: width = switchStepWidth, height keeps the step-selector art frame
