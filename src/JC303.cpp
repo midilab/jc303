@@ -256,7 +256,7 @@ JC303::JC303()
             std::make_unique<juce::AudioParameterChoice> ("filterType",
                                                         "Filter Model",
                                                         juce::StringArray{ "TeeBee", "Spicy", "MissBehave", "JuneBug", "Wasabi", "Hornet", "SemiSweet", "Oddity" },
-                                                        FILTER_TEEBEE),
+                                                        FILTER_DIODE),   // default "Spicy"; MOD off still forces TeeBee in setDevilMod(false)
             // oscillator model; the Waveform knob is the saw/pulse morph (Juno) or the shape (Phaseshaper)
             std::make_unique<juce::AudioParameterChoice> ("oscModel",
                                                         "Osc Model",
