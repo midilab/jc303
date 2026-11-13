@@ -10,7 +10,7 @@ target_sources("${PROJECT_NAME}"
         dsp/open303/rosic_AcidSequencer.cpp
         dsp/open303/rosic_AnalogEnvelope.cpp
         dsp/open303/rosic_BiquadFilter.cpp
-        dsp/open303/rosic_BlendOscillator.cpp
+        dsp/open303/dfl_BlendOscillator.cpp
         dsp/open303/rosic_Complex.cpp
         dsp/open303/rosic_DecayEnvelope.cpp
         dsp/open303/rosic_EllipticQuarterBandFilter.cpp
@@ -25,9 +25,17 @@ target_sources("${PROJECT_NAME}"
         dsp/open303/rosic_RealFunctions.cpp
         dsp/open303/rosic_TeeBeeFilter.cpp
         dsp/open303/dfl_DiodeLadderFilter.cpp
+        dsp/open303/dfl_MS20Filter.cpp
+        dsp/open303/dfl_RolandFilter.cpp
+        dsp/open303/dfl_WaspFilter.cpp
+        dsp/open303/dfl_SEMFilter.cpp
+        dsp/open303/dfl_ARP4075Filter.cpp
         dsp/open303/dfl_LFO.cpp
+
+        dsp/tuning/TuningFileLoader.cpp
 
         gui/${GUI_THEME}/Gui.cpp
 
         JC303.cpp
+        Presets.cpp
 )

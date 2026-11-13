@@ -10,9 +10,12 @@ project(JC303 VERSION 0.12.3)
 
 ### Dependency versions ###
 
-set(LIB_JUCE_TAG "8.0.5")
-set(LIB_CLAP_TAG "a3227c52fa082d2df33f4377ed1e050dd8a52595")
+set(LIB_JUCE_TAG "8.0.15")
+set(LIB_CLAP_TAG "55525c9858d4b25687be7759a5e0f70eccef218e")
 set(LIB_CHOWDSP_UTILS_TAG "ffc70ba399f9afaeefb996eb14e55a1d487270b8")
+
+### Tests (see tests/CMakeLists.txt) ###
+option(JC303_BUILD_TESTS "Build unit tests" OFF)
 
 ### Gui setup
 # check if the GUI variable is set
@@ -22,6 +25,8 @@ if(NOT DEFINED GUI)
 endif()
 set(GUI_THEME_HEADER "gui/${GUI}/Gui.h")
 set(GUI_THEME ${GUI})
+
+set(BUILD_CLAP ON)
 
 # Add the GUI_THEME_HEADER macro definition
 add_definitions(-DGUI_THEME_HEADER="${GUI_THEME_HEADER}")
@@ -68,6 +73,11 @@ FetchContent_Declare(chowdsp_utils
     GIT_CONFIG     advice.detachedHead=false)
 
 FetchContent_MakeAvailable(juce juce-clap-extensions chowdsp_utils)
+
+if(JC303_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # gui resources BinaryData via CMakeLists.txt
 add_subdirectory(src/gui/${GUI})
@@ -132,10 +142,12 @@ juce_add_plugin("${PROJECT_NAME}"
     COPY_PLUGIN_AFTER_BUILD FALSE)              # Should the plugin be installed to a default location after building?
 # NOTE: Writing to the default install locations might require administrator privileges on Windows.
 
-clap_juce_extensions_plugin(
-    TARGET "${PROJECT_NAME}"
-    CLAP_ID "co.midilab.${PROJECT_NAME}"
-    CLAP_FEATURES "instrument" "synthesizer")
+if(BUILD_CLAP)
+    clap_juce_extensions_plugin(
+        TARGET "${PROJECT_NAME}"
+        CLAP_ID "co.midilab.${PROJECT_NAME}"
+        CLAP_FEATURES "instrument" "synthesizer")
+endif()
 
 # Set the C++ language standard requirenment for the "shared code" library target.
 # Setting this to PUBLIC ensures that all dependent targets will inherit the specified C++ standard.
@@ -173,6 +185,14 @@ target_compile_definitions("${PROJECT_NAME}"
 # NAMESPACE ...                 # Namespace of the generated binary data class. "BinaryData" is used by default
 #   SOURCES ...)                    # List of asset files of any kind that should be built into the static library
 
+# Factory presets: embedded copies seed the user's presets directory on first run.
+# A separate target (not the GUI's BinaryData) so the shared code and preset_test can use it.
+file(GLOB FACTORY_PRESET_JSONS CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/presets/factory/*.json")
+juce_add_binary_data(FactoryPresetData
+    HEADER_NAME FactoryPresetData.h
+    NAMESPACE FactoryPresetData
+    SOURCES ${FACTORY_PRESET_JSONS})
+
 # `target_link_libraries` links libraries and JUCE modules to other libraries or executables. Here,
 # we're linking our executable target to the `juce::juce_audio_utils` module. Inter-module
 # dependencies are resolved automatically.
@@ -182,6 +202,7 @@ target_link_libraries("${PROJECT_NAME}"
         BinaryData
         juce::juce_audio_utils
     PUBLIC
+        FactoryPresetData
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)

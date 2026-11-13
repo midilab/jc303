@@ -1,0 +1,29 @@
+{
+  "name": "Formant Talk",
+  "modKnob1": "modSlot3Amount",
+  "modKnob2": "shaperSplit",
+  "values": {
+    "volume": 0.75,
+    "switchModState": true,
+    "oscModel": "Phaseshaper",
+    "shaperMode": "Formant",
+    "waveform": 0.07,
+    "shaperSplit": 0.25,
+    "shapeDrift": 0.4,
+    "filterType": "Spicy",
+    "cutoff": 0.8,
+    "resonance": 0.25,
+    "envmod": 0.15,
+    "decay": 0.6,
+    "accentDecay": 0.15,
+    "accent": 0.5,
+    "normalDecay": 0.6,
+    "slideTime": 0.4,
+    "modSlot3Source": "Env+",
+    "modSlot3Dest": "Waveform",
+    "modSlot3Amount": 0.5,
+    "modSlot4Source": "Key",
+    "modSlot4Dest": "Cutoff",
+    "modSlot4Amount": 0.5
+  }
+}

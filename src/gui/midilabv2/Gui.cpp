@@ -8,6 +8,14 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(waveformSlider = createKnob("medium", false, "WAVEFORM"));
     addAndMakeVisible(volumeSlider = createKnob("medium", false, "VOLUME"));
     addAndMakeVisible(tuningSlider = createKnob("medium", false, "TUNING"));
+    tuningKnobMouse.onMenu = [this] { showTuningMenu(); };
+    tuningSlider->addMouseListener(&tuningKnobMouse, false);
+    addAndMakeVisible(tuningScaleLabel = new juce::Label());
+    tuningScaleLabel->setFont(juce::Font(11.0f));
+    tuningScaleLabel->setColour(juce::Label::textColourId, juce::Colour(28, 28, 28).withAlpha(0.75f));
+    tuningScaleLabel->setJustificationType(juce::Justification::centred);
+    tuningScaleLabel->setMinimumHorizontalScale(0.7f);
+    tuningScaleLabel->setInterceptsMouseClicks(false, false);
     addAndMakeVisible(cutoffFreqSlider = createKnob("medium", false, "CUTOFF FREQ"));
     addAndMakeVisible(resonanceSlider = createKnob("medium", false, "RESONANCE"));
     addAndMakeVisible(envelopModSlider = createKnob("medium", false, "ENVMOD"));
@@ -79,15 +87,13 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(menuKnob = createKnob("medium"));
     menuKnob->setRange(0.0, 100.0);
 
-    // assignable macro knobs (double-click -> assign current MOD item)
-    addAndMakeVisible(modAssign1 = createAssignableSlider("LFO rate", modAssign1Label));
-    addAndMakeVisible(modAssign2 = createAssignableSlider("LFO depth", modAssign2Label));
+    // assignable macro knobs (shift-click -> assign current MOD item)
+    addAndMakeVisible(modAssign1 = createAssignableSlider("Filter morph", modAssign1Label));
+    addAndMakeVisible(modAssign2 = createAssignableSlider("Filter fm", modAssign2Label));
     menuPage->bindAssignableSlider(0, modAssign1, modAssign1Label);
     menuPage->bindAssignableSlider(1, modAssign2, modAssign2Label);
-    menuPage->setAssignableParam(0, "lfoRate");
-    menuPage->setAssignableParam(1, "lfoDepth");
+    menuPage->syncAssignablesFromState();   // saved with the state; presets assign them too
 
-    selectMenu(2);   // default menu page = OVD (Overdrive)
     menuPresetButton->onClick = [this] { selectMenu(0); };
     menuOverdriveButton->onClick = [this] { selectMenu(1); };
     menuModButton->onClick = [this] { selectMenu(2); };
@@ -97,15 +103,87 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     menuDecButton->onPress = [this] { menuPage->valueStep(-1); };
     menuIncButton->onPress = [this] { menuPage->valueStep(1); };
     menuKnob->onValueChange = [this] { menuPage->setValue((float) menuKnob->getValue()); };
-    menuPage->onCurrentItemChanged = [this] (float v)
     {
-        const bool editable = (v >= 0.0f);
-        menuKnob->setEnabled(editable);
-        menuDecButton->setEnabled(editable);
-        menuIncButton->setEnabled(editable);
-        if (editable)
-            menuKnob->setValue(v, juce::dontSendNotification);
-    };
+        // Capture with a SafePointer: the MenuPage APVTS listener (registered on
+        // the audio processor) can outlive the editor, so a bare `this` capture
+        // would deref a freed editor when the host tears down and recreates the
+        // window and a stale parameter callback fires later.
+        const auto editorSaver = juce::Component::SafePointer<JC303Editor>(this);
+        menuPage->onCurrentItemChanged = [editorSaver] (float v)
+        {
+            auto* editor = editorSaver.getComponent();
+            if (editor == nullptr)
+                return;
+            const bool editable = (v >= 0.0f);
+            const bool stepable = editable || editor->menuPage->currentItemIsAction();
+            if (editor->menuKnob != nullptr)      editor->menuKnob->setEnabled(editable);
+            if (editor->menuDecButton != nullptr) editor->menuDecButton->setEnabled(stepable);
+            if (editor->menuIncButton != nullptr) editor->menuIncButton->setEnabled(stepable);
+            if (editable && editor->menuKnob != nullptr)
+                editor->menuKnob->setValue(v, juce::dontSendNotification);
+        };
+    }
+
+    // Presets > Preset: - / + load the previous / next factory preset (wrapping), the list picks any
+    menuPage->setAction("preset", {
+        [this] (float direction)
+        {
+            const int n = processorRef.getNumPrograms();
+            if (n == 0)
+                return;   // the current bank has no presets yet
+            processorRef.setCurrentProgram((processorRef.getCurrentProgram() + (direction < 0 ? n - 1 : 1)) % n);
+        },
+        [this] { return processorRef.getProgramName(processorRef.getCurrentProgram()); },
+        [this] (int index)
+        {
+            if (index >= 0 && index < processorRef.getNumPrograms() && index != processorRef.getCurrentProgram())
+                processorRef.setCurrentProgram(index);
+        } });
+
+    // Presets > Bank: - / + switch the preset bank (factory, or any folder the user created in the presets
+    // folder), the list picks any. Switching clears the loaded presets and loads the new bank's first preset.
+    menuPage->setAction("bank", {
+        [this] (float direction)
+        {
+            const auto banks = presetBanks();
+            if (banks.size() < 2)
+                return;   // only the default factory bank exists
+            const int cur = juce::jmax(0, banks.indexOf(currentPresetBank()));
+            loadPresetBank(banks[(cur + (direction < 0 ? (int) banks.size() - 1 : 1)) % (int) banks.size()]);
+            processorRef.setCurrentProgram(0);   // the new bank's first preset becomes the default
+            menuPage->refreshPresetOptions();
+        },
+        [this] { return currentPresetBank(); },
+        [this] (int index)
+        {
+            const auto banks = presetBanks();
+            if (index < 0 || index >= banks.size())
+                return;
+            loadPresetBank(banks[(size_t) index]);
+            processorRef.setCurrentProgram(0);
+            menuPage->refreshPresetOptions();
+        } });
+
+    // Sequencer > Undo: - undoes, + redoes the last gen / re-roll / clear
+    menuPage->setAction("seqUndo", {
+        [this] (float direction)
+        {
+            processorRef.seqCommand(direction < 0 ? JC303::SeqCommand::Undo : JC303::SeqCommand::Redo);
+        },
+        [this]
+        {
+            auto& seq = processorRef.getSequencer();
+            return "-" + juce::String(seq.undoCount()) + " +" + juce::String(seq.redoCount());
+        } });
+
+    // Presets > Save / New / Rename / Delete: the MenuPage drives the interaction, these hooks do
+    // the file work so the memory always mirrors the bank's folder (each op reloads from disk).
+    menuPage->onSave = [this] { return processorRef.saveCurrentPreset(); };
+    menuPage->onCreatePreset = [this] (const juce::String& name) { return processorRef.createNewPreset (name); };
+    menuPage->onRenamePreset = [this] (const juce::String& name) { return processorRef.renameCurrentPreset (name); };
+    menuPage->onDeletePreset = [this] { return processorRef.deleteCurrentPreset(); };
+
+    selectMenu(0);   // default menu page: the Presets page; after the callback is set so the knob syncs
 
     // sequencer step toggles (note/rest editing) and click-to-select display LEDs
     for (int i = 0; i < 16; ++i)
@@ -114,22 +192,39 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         addAndMakeVisible(stepSelectors[i] = new SequencerStepSelector());
     }
 
-    // per-step accent/slide/tie micro toggles (small sequencer-button art),
+    // pitch name (C2, F#6, ...) overlaid on each step button, in the display's pixel font
+    {
+        juce::Font noteFont(juce::Typeface::createSystemTypefaceFor(BinaryData::PressStart2PRegular_ttf,
+                                                                    BinaryData::PressStart2PRegular_ttfSize));
+        noteFont.setHeight(9.0f);
+        for (int i = 0; i < 16; ++i)
+        {
+            auto* lbl = new StepNoteLabel();
+            seqStepNoteLabels[i] = lbl;
+            addAndMakeVisible(lbl);
+            lbl->setFont(noteFont);
+            lbl->setJustificationType(juce::Justification::centred);
+            lbl->setMinimumHorizontalScale(0.7f);
+            lbl->setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+            lbl->setInterceptsMouseClicks(false, false);
+        }
+    }
+
+    // per-step accent and slide/tie micro toggles (small sequencer-button art),
     // one stacked column below each note button, in that order (top to bottom)
     for (int i = 0; i < 16; ++i)
     {
         addAndMakeVisible(seqAccentButtons[i] = new SequencerStepSelector());
         addAndMakeVisible(seqSlideButtons[i] = new SequencerStepSelector());
-        addAndMakeVisible(seqTieButtons[i] = new SequencerStepSelector());
     }
 
-    // row labels for the accent/slide/tie micro toggles (right-aligned, 4px left of each row)
+    // row labels for the accent and slide/tie micro toggles (right-aligned, 4px left of each row)
     {
-        const char* texts[5] = { "step", "rest", "accent", "slide", "tie" };
-        juce::Label** labels[5] = { &seqStepLabel, &seqRestLabel, &seqAccentLabel, &seqSlideLabel, &seqTieLabel };
-        for (int r = 0; r < 5; ++r)
+        const char* texts[4] = { "step", "rest", "accent", "slide" };
+        juce::Label** labels[4] = { &seqStepLabel, &seqRestLabel, &seqAccentLabel, &seqSlideLabel };
+        for (int r = 0; r < 4; ++r)
         {
-            auto* lbl = new juce::Label();
+            auto* lbl = new StepNoteLabel();
             *labels[r] = lbl;
             addAndMakeVisible(lbl);
             lbl->setText(texts[r], juce::dontSendNotification);
@@ -149,23 +244,51 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         const int step = i;
         seqStepButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setRest(step, !seqStepButtons[step]->getToggleState());
+            auto& seq = processorRef.getSequencer();
+            const bool on = seqStepButtons[step]->getToggleState();
+            seq.setRest(step, !on);
+            if (! on)
+                seq.setReverse(step, false);   // a rest has no reverse state
+        };
+        // shift-click toggles the step's reverse flag (turning the note on if it was a rest)
+        seqStepButtons[i]->onShiftClick = [this, step]
+        {
+            auto& seq = processorRef.getSequencer();
+            if (seq.stepOn(step))
+            {
+                seq.setReverse(step, ! seq.reverseOn(step));
+            }
+            else
+            {
+                seq.setRest(step, false);
+                seq.setReverse(step, true);
+            }
         };
         // micro toggles write their flag directly (button ON == feature active)
         seqAccentButtons[i]->setClickTogglesState(true);
         seqSlideButtons[i]->setClickTogglesState(true);
-        seqTieButtons[i]->setClickTogglesState(true);
+        // shift-click sets the secondary state: mute on the accent toggle, hammer on the slide toggle
+        seqAccentButtons[i]->setSecondaryEnabled(true);
+        seqSlideButtons[i]->setSecondaryEnabled(true);
         seqAccentButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setAccent(step, seqAccentButtons[step]->getState() != 0);
+            const int state = seqAccentButtons[step]->getState();
+            processorRef.getSequencer().setAccent(step, state == 1);
+            processorRef.getSequencer().setStepMute(step, state == SequencerStepSelector::kSecondary);
         };
+        // shared slide/tie toggle, as in aciduino: slide (or hammer) on a note, tie on a rest
+        // (labelled "slide": on the TB-303 both are the same hold-into-next-step flag)
         seqSlideButtons[i]->onClick = [this, step]
         {
-            processorRef.getSequencer().setSlide(step, seqSlideButtons[step]->getState() != 0);
-        };
-        seqTieButtons[i]->onClick = [this, step]
-        {
-            processorRef.getSequencer().setTie(step, seqTieButtons[step]->getState() != 0);
+            auto& seq = processorRef.getSequencer();
+            const int state = seqSlideButtons[step]->getState();
+            if (seq.stepOn(step))
+            {
+                seq.setSlide(step, state == 1);
+                seq.setHammer(step, state == SequencerStepSelector::kSecondary);
+            }
+            else
+                seq.setTie(step, state != 0);
         };
         // clicking an LED selects the step to edit
         stepSelectors[i]->onClick = [this, step] { selectStepFromSelector(step); };
@@ -189,8 +312,43 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         if (seq.isRecOn())
             seq.setRecStep(static_cast<uint8_t>(selectedStep));
     };
-    seqGenerateButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Generate); };
+    // gen: new pattern; Shift: new pitches, same rhythm; Alt: new rhythm, same pitches
+    seqGenerateButton->setTooltip("gen: new pattern\nShift: new pitches, same rhythm\nAlt: new rhythm, same pitches");
+    seqGenerateButton->onPress = [this]
+    {
+        const auto mods = juce::ModifierKeys::currentModifiers;
+        processorRef.seqCommand(mods.isShiftDown() ? JC303::SeqCommand::GeneratePitches
+                                : mods.isAltDown() ? JC303::SeqCommand::GenerateRhythm
+                                                   : JC303::SeqCommand::Generate);
+    };
     seqClearButton->onPress = [this] { processorRef.seqCommand(JC303::SeqCommand::Clear); };
+    // Play/Stop goes straight to the sequencer command channel instead of the
+    // seqPlayState param latch: the sequencer may be started/stopped by the host
+    // transport, MIDI clock or note-trigger, which leaves the param value stale
+    // and makes a later click a no-op.  The timer keeps the LED synced to
+    // seq.isRunning(), so every click here always emits a fresh command.
+    seqPlayButton->onClick = [this]
+    {
+        if (seqPlayButton->getToggleState())
+            processorRef.getSequencer().setReversePlayback(false);
+        processorRef.seqCommand(seqPlayButton->getToggleState()
+                                    ? JC303::SeqCommand::Play
+                                    : JC303::SeqCommand::Stop);
+    };
+    // shift-click: start playing in reverse, or flip the direction while running
+    seqPlayButton->onShiftClick = [this]
+    {
+        auto& seq = processorRef.getSequencer();
+        if (seq.isRunning())
+        {
+            seq.setReversePlayback(! seq.getReversePlayback());
+        }
+        else
+        {
+            seq.setReversePlayback(true);
+            processorRef.seqCommand(JC303::SeqCommand::Play);
+        }
+    };
     seqRestButton->onPress = [this]
     {
         auto& seq = processorRef.getSequencer();
@@ -228,8 +386,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     seqKeyboard->onOctaveScroll = [this] (int deltaSemitones)
     {
         auto& seq = processorRef.getSequencer();
-        seq.setStepData (selectedStep,
-                         static_cast<uint8_t> (juce::jlimit (0, 127, seq.getRawNote (selectedStep) + deltaSemitones)));
+        // Transpose can leave a note below the C0 floor; don't jump it back up
+        const int note = seq.getRawNote (selectedStep);
+        const int floor = std::min (static_cast<int> (SEQ303_NOTE_MIN), note);
+        seq.setStepData (selectedStep, static_cast<uint8_t> (juce::jlimit (floor, 127, note + deltaSemitones)));
         updateKeyboardForSelectedStep();
     };
 
@@ -263,7 +423,6 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     numberOfTonesAttachment.reset(new SliderAttachment(valueTreeState, "numberOfTones", *numberOfTonesSlider));
     lowerNoteAttachment.reset(new SliderAttachment(valueTreeState, "lowerNote", *lowerNoteSlider));
     rangeNoteAttachment.reset(new SliderAttachment(valueTreeState, "rangeNote", *rangeNoteSlider));
-    seqPlayButtonAttachment.reset(new ButtonAttachment(valueTreeState, "seqPlayState", *seqPlayButton));
     seqLengthAttachment.reset(new SliderAttachment(valueTreeState, "seqLength", *seqLengthSlider));
     lfoWaveformAttachment.reset(new SliderAttachment(valueTreeState, "lfoWaveform", *lfoWaveformSlider));
     lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));
@@ -274,6 +433,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
+    setWantsKeyboardFocus(true);
     setSize (930, 540);
     startTimer(30);
 }
@@ -281,6 +441,36 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 JC303Editor::~JC303Editor()
 {
     stopTimer();
+    tuningSlider->removeMouseListener(&tuningKnobMouse);
+}
+
+bool JC303Editor::keyPressed (const juce::KeyPress& key)
+{
+    // Preset row interactions (Save/New/Rename/Delete): Enter runs them, and while naming the
+    // keyboard types the preset name.
+    if (menuPage != nullptr && menuPage->handleKeyPress (key))
+        return true;
+
+    // Cmd/Ctrl+Z: undo the last gen / re-roll / clear; with Shift: redo
+    if (key.getModifiers().isCommandDown()
+        && juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) key.getKeyCode()) == 'Z')
+    {
+        processorRef.seqCommand (key.getModifiers().isShiftDown() ? JC303::SeqCommand::Redo
+                                                                  : JC303::SeqCommand::Undo);
+        return true;
+    }
+
+    if (key != juce::KeyPress::spaceKey)
+        return false;
+
+    // In a plugin host, space belongs to the host transport unless we run our own clock.
+    const bool standalone = processorRef.wrapperType == juce::AudioProcessor::wrapperType_Standalone;
+    if (! standalone && static_cast<int>(*valueTreeState.getRawParameterValue("seqSyncMode")) != 0)
+        return false;
+
+    if (auto* playParam = valueTreeState.getParameter("seqPlayState"))
+        playParam->setValueNotifyingHost(valueTreeState.getRawParameterValue("seqPlayState")->load() > 0.5f ? 0.0f : 1.0f);
+    return true;
 }
 
 //==============================================================================
@@ -295,6 +485,34 @@ void JC303Editor::paint (juce::Graphics& g)
     g.drawImage (overlay, getLocalBounds().toFloat());
 }
 
+void JC303Editor::showTuningMenu()
+{
+    juce::PopupMenu menu;
+    menu.addSectionHeader(processorRef.getTuningName());
+    menu.addItem("Load .tun...", [this] { chooseTuningFile(); });
+    menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [this] { processorRef.resetTuning(); });
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(tuningSlider));
+}
+
+void JC303Editor::chooseTuningFile()
+{
+    tuningFileChooser = std::make_unique<juce::FileChooser>("Load AnaMark tuning", juce::File(), "*.tun");
+    const auto editorSaver = juce::Component::SafePointer<JC303Editor>(this);
+    tuningFileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [editorSaver] (const juce::FileChooser& chooser)
+        {
+            auto* editor = editorSaver.getComponent();
+            const auto file = chooser.getResult();
+            if (editor == nullptr || file == juce::File())
+                return;
+            juce::String error;
+            if (! editor->processorRef.loadTuningFile(file, error))
+                juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                                                       "Tuning load failed",
+                                                       file.getFileName() + "\n\n" + error);
+        });
+}
+
 void JC303Editor::resized()
 {
     setControlsLayout();
@@ -303,11 +521,17 @@ void JC303Editor::resized()
 void JC303Editor::timerCallback()
 {
     auto& seq = processorRef.getSequencer();
+    menuPage->refreshAction();
+    menuPage->syncAssignablesFromState();
+    const auto scaleName = processorRef.isCustomTuningActive() ? processorRef.getTuningName() : juce::String();
+    if (tuningScaleLabel->getText() != scaleName)
+        tuningScaleLabel->setText(scaleName, juce::dontSendNotification);
 
     const int length = seq.getTrackLength();
     const bool playing = seq.isRunning();
     if (seqPlayButton->getToggleState() != playing)
         seqPlayButton->setToggleState(playing, juce::dontSendNotification);
+    seqPlayButton->setSecondary(playing && seq.getReversePlayback());
     const int currentStep = static_cast<int>(seq.getCurrentStep());
 
     // keep the selected step inside the active pattern length
@@ -328,25 +552,40 @@ void JC303Editor::timerCallback()
         // LED indicates the active pattern length + the selected step (blinking);
         // note/rest and the per-step flags are shown by the buttons below/above. The
         // playing current step is state 2 (overrides the blink).
-        const int ledState = isCurrent ? 2 : ((isSelected && blinkOn) || (!isSelected && i < length) ? 1 : 0);
+        // Two playheads: red = the step playing, amber = the step whose pitch is sounding
+        // (Pitch Rotate / Pitch Length move it). Red wins when they coincide.
+        const bool isPitchPlayhead = playing && i == seq.getPitchPlayhead();
+        const int ledState = isCurrent ? 2
+                           : isPitchPlayhead ? SequencerStepSelector::kPitchPlayhead
+                           : ((isSelected && blinkOn) || (!isSelected && i < length) ? 1 : 0);
         stepSelectors[i]->setState(ledState);
 
         // note step button: ON == note active, rest == OFF
         const bool noteOn = (i < length) && seq.stepOn(i);
         if (seqStepButtons[i]->getToggleState() != noteOn)
             seqStepButtons[i]->setToggleState(noteOn, juce::dontSendNotification);
+        seqStepButtons[i]->setSecondary(noteOn && seq.reverseOn(i));
 
-        // per-step accent/slide/tie toggles: ON == flag active (steps beyond the
-        // active pattern length show OFF, but stay editable)
-        const bool accentOn = (i < length) && seq.accentOn(i);
-        const bool slideOn  = (i < length) && seq.slideOn(i);
-        const bool tieOn    = (i < length) && seq.tieOn(i);
-        if (seqAccentButtons[i]->getState() != accentOn)
-            seqAccentButtons[i]->setState(accentOn ? 1 : 0);
-        if (seqSlideButtons[i]->getState() != slideOn)
-            seqSlideButtons[i]->setState(slideOn ? 1 : 0);
-        if (seqTieButtons[i]->getState() != tieOn)
-            seqTieButtons[i]->setState(tieOn ? 1 : 0);
+        // stored pitch name: black on a lit note step, dim on a rest (what it plays if switched on);
+        // DAW octave numbering (middle C = C3), matching the keyboard; steps start at C0
+        const auto noteName = juce::MidiMessage::getMidiNoteName(seq.getRawNote(i), true, true, 3);
+        const auto noteColour = noteOn ? juce::Colours::black : juce::Colour(0xff7a7a7a);
+        if (seqStepNoteLabels[i]->getText() != noteName)
+            seqStepNoteLabels[i]->setText(noteName, juce::dontSendNotification);
+        if (seqStepNoteLabels[i]->findColour(juce::Label::textColourId) != noteColour)
+            seqStepNoteLabels[i]->setColour(juce::Label::textColourId, noteColour);
+
+        // per-step accent and slide/tie toggles: ON == flag active, blue == mute / hammer
+        // (steps beyond the active pattern length show OFF, but stay editable). The shared
+        // toggle shows slide or hammer on a note step and tie on a rest.
+        constexpr int kBlue = SequencerStepSelector::kSecondary;
+        const bool noteStep  = seq.stepOn(i);
+        const int accentState = (i >= length) ? 0 : seq.accentOn(i) ? 1 : seq.stepMuteOn(i) ? kBlue : 0;
+        const int slideState  = (i >= length) ? 0
+                              : ! noteStep    ? (seq.tieOn(i) ? 1 : 0)
+                              : seq.slideOn(i) ? 1 : seq.hammerOn(i) ? kBlue : 0;
+        seqAccentButtons[i]->setState(accentState);
+        seqSlideButtons[i]->setState(slideState);
     }
 
     updateKeyboardForSelectedStep();
@@ -519,14 +758,15 @@ void JC303Editor::setControlsLayout()
 
     // knob positioning location
     // first row
-    pair<int, int> waveFormLocation = {45, 80};
-    pair<int, int> cutoffFreqLocation = {156, 80};
-    pair<int, int> resonanceLocation = {267, 80};
-    pair<int, int> envelopeLocation = {378, 80};
-    pair<int, int> decayLocation = {489, 80};
-    pair<int, int> accentLocation = {600, 80};
-    pair<int, int> tuningLocation = {840, 80};
-    pair<int, int> volumeLocation = {722, 80};
+    // tuning far left, as on the TB-303 panel
+    pair<int, int> tuningLocation = {45, 80};
+    pair<int, int> waveFormLocation = {156, 80};
+    pair<int, int> cutoffFreqLocation = {267, 80};
+    pair<int, int> resonanceLocation = {378, 80};
+    pair<int, int> envelopeLocation = {489, 80};
+    pair<int, int> decayLocation = {600, 80};
+    pair<int, int> accentLocation = {722, 80};
+    pair<int, int> volumeLocation = {840, 80};
     // MODs knobs row
     //pair<int, int> normalDecayLocation = {147, 380};
     //pair<int, int> accentDecayLocation = {208, 380};
@@ -546,23 +786,23 @@ void JC303Editor::setControlsLayout()
     pair<int, int> displayMenuLocation = {60, 210};
 
     // generative sequencer controls (top row, left to right)
-    pair<int, int> seqPlayButtonLocation = {470, 340};
-    pair<int, int> seqClearButtonLocation = {535, 340};
-    pair<int, int> seqRecButtonLocation = {578, 340};
-    pair<int, int> seqRestButtonLocation = {621, 340};
+    pair<int, int> seqPlayButtonLocation = {470, 350};
+    pair<int, int> seqClearButtonLocation = {535, 350};
+    pair<int, int> seqRecButtonLocation = {578, 350};
+    pair<int, int> seqRestButtonLocation = {621, 350};
 
-    pair<int, int> seqGenerateButtonLocation = {45, 348};
-    pair<int, int> seqGenerativeFillLocation = {89, 350};
-    pair<int, int> seqGenerativeAccentProbabilityLocation = {129, 350};
-    pair<int, int> seqGenerativeSlideProbabilityLocation = {169, 350};
-    pair<int, int> seqGenerativeTieProbabilityLocation = {209, 350};
-    pair<int, int> numberOfTonesLocation = {249, 350};
-    pair<int, int> lowerNoteLocation = {289, 350};
-    pair<int, int> rangeNoteLocation = {329, 350};
+    pair<int, int> seqGenerateButtonLocation = {45, 358};
+    pair<int, int> seqGenerativeFillLocation = {89, 360};
+    pair<int, int> seqGenerativeAccentProbabilityLocation = {129, 360};
+    pair<int, int> seqGenerativeSlideProbabilityLocation = {169, 360};
+    pair<int, int> seqGenerativeTieProbabilityLocation = {209, 360};
+    pair<int, int> numberOfTonesLocation = {249, 360};
+    pair<int, int> lowerNoteLocation = {289, 360};
+    pair<int, int> rangeNoteLocation = {329, 360};
 
     //pair<int, int> seqLengthLocation = {200, 390};
 
-    pair<int, int> keyboardLocation = {672, 325};
+    pair<int, int> keyboardLocation = {672, 335};
 
     // LFO controls
     //pair<int, int> lfoDepthLocation = {680, 20};
@@ -571,20 +811,19 @@ void JC303Editor::setControlsLayout()
     //pair<int, int> lfoDestinationLocation = {720, 60};
 
 // step toggles (note/rest editing), display LEDs above,and per-step
-    // accent/slide/tie micro toggles below (click-to-select LEDs)
+    // accent and slide/tie micro toggles below (click-to-select LEDs)
     const int switchStepWidth =  45;
     const int switchStepHeight =  45;
     const int switchStepGap =  8;
     const int switchStepX0 =  44;   // x of the first step toggle
-    const int stepToggleY =  421;
+    const int stepToggleY =  434;
     const int ledWidth = switchStepWidth;
     const int ledHeight = ledWidth * 34 / 62;
     const int ledY = stepToggleY - ledHeight - 1;   // just above the step toggles
     const int microButtonHeight =  14;
     const int microButtonGap    =  2;
-    const int accentButtonY     = 468;   // just below the step toggles
+    const int accentButtonY     = stepToggleY + switchStepHeight + microButtonGap;   // just below the step toggles
     const int slideButtonY      = accentButtonY + (microButtonHeight + microButtonGap);
-    const int tieButtonY        = slideButtonY  + (microButtonHeight + microButtonGap);
     // menu navigation controls (top row), same width/aspect as the step selector
     // buttons: width = switchStepWidth, height keeps the step-selector art frame
     // aspect (62x34), 2px gaps between buttons
@@ -624,6 +863,7 @@ void JC303Editor::setControlsLayout()
     volumeSlider->setBounds(volumeLocation.first, volumeLocation.second, sliderMediumSize, sliderMediumSize);
     // medium knobs
     tuningSlider->setBounds(tuningLocation.first, tuningLocation.second, sliderMediumSize, sliderMediumSize);
+    tuningScaleLabel->setBounds(tuningLocation.first - 30, tuningLocation.second + sliderMediumSize + 24, sliderMediumSize + 60, 14);   // below the TUNING label
     cutoffFreqSlider->setBounds(cutoffFreqLocation.first, cutoffFreqLocation.second, sliderMediumSize, sliderMediumSize);
     resonanceSlider->setBounds(resonanceLocation.first, resonanceLocation.second, sliderMediumSize, sliderMediumSize);
     envelopModSlider->setBounds(envelopeLocation.first, envelopeLocation.second, sliderMediumSize, sliderMediumSize);
@@ -664,7 +904,7 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
     {
         const int labelGap = 2;
         const int genLabelH = 16;
-        const int genLabelW = 12 + (int) juce::Font(12.0f).getStringWidth("gen");
+        const int genLabelW = 12 + (int) juce::TextLayout::getStringWidth(juce::Font(12.0f), "gen");
         seqGenerateButtonLabel->setBounds(seqGenerateButtonLocation.first - labelGap - genLabelW,
                                           seqGenerateButtonLocation.second + (int) (seqSquareButtonSize - genLabelH) / 2,
                                           genLabelW, genLabelH);
@@ -679,7 +919,7 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
     const float seqButtonLabelY = seqPlayButtonLocation.second + seqSquareButtonSize + 6;
     auto placeLabel = [&] (juce::Label* label, int x, int width)
     {
-        const int textWidth = (int) juce::Font(12.0f).getStringWidth(label->getText()) + 20;
+        const int textWidth = (int) juce::TextLayout::getStringWidth(juce::Font(12.0f), label->getText()) + 20;
         label->setBounds(x + (width - textWidth) / 2, (int) seqButtonLabelY, textWidth, 16);
     };
     placeLabel(seqPlayButtonLabel, seqPlayButtonLocation.first, (int) seqPlayButtonWidth);
@@ -694,29 +934,29 @@ seqGenerateButton->setBounds(seqGenerateButtonLocation.first, seqGenerateButtonL
     //lfoDepthSlider->setBounds(lfoDepthLocation.first, lfoDepthLocation.second, sliderSmallSize, sliderSmallSize);
     //lfoDestinationSlider->setBounds(lfoDestinationLocation.first, lfoDestinationLocation.second, sliderSmallSize, sliderSmallSize);
 
-    // step toggles, display LEDs(just above each toggle)and per-step accent/slide/tie
+    // step toggles, display LEDs(just above each toggle)and per-step accent and slide/tie
     // micro toggles (stacked below each toggle)
     for (int i =  0; i < 16; ++i)
     {
         const int stepX = switchStepX0 + i * (switchStepWidth + switchStepGap);
         seqStepButtons[i]->setBounds(stepX, stepToggleY, switchStepWidth, switchStepHeight);
+        seqStepNoteLabels[i]->setBounds(stepX, stepToggleY, switchStepWidth, switchStepHeight);
         stepSelectors[i]->setBounds(stepX + (switchStepWidth - ledWidth) / 2, ledY, ledWidth, ledHeight);
         seqAccentButtons[i]->setBounds(stepX, accentButtonY, switchStepWidth, microButtonHeight);
         seqSlideButtons[i]->setBounds(stepX, slideButtonY, switchStepWidth, microButtonHeight);
-        seqTieButtons[i]->setBounds(stepX, tieButtonY, switchStepWidth, microButtonHeight);
     }
 
-    // row labels for step LED / note-rest / accent/slide/tie rows (right-aligned,
+    // row labels for step LED / note-rest / accent / slide-tie rows (right-aligned,
     // 4px left of each row)
     {
         const int labelGap = 2;
-        juce::Label* rowLabels[5] = { seqStepLabel, seqRestLabel, seqAccentLabel, seqSlideLabel, seqTieLabel };
-        const int rowYs[5] = { ledY, stepToggleY, accentButtonY, slideButtonY, tieButtonY };
-        const int rowHs[5] = { ledHeight, switchStepHeight, microButtonHeight, microButtonHeight, microButtonHeight };
+        juce::Label* rowLabels[4] = { seqStepLabel, seqRestLabel, seqAccentLabel, seqSlideLabel };
+        const int rowYs[4] = { ledY, stepToggleY, accentButtonY, slideButtonY };
+        const int rowHs[4] = { ledHeight, switchStepHeight, microButtonHeight, microButtonHeight };
         int labelW = 12;
-        for (int r = 0; r < 5; ++r)
-            labelW = juce::jmax(labelW, 12 + (int) rowLabels[r]->getFont().getStringWidth(rowLabels[r]->getText()));
-        for (int r = 0; r < 5; ++r)
+        for (int r = 0; r < 4; ++r)
+            labelW = juce::jmax(labelW, 12 + (int) juce::TextLayout::getStringWidth(rowLabels[r]->getFont(), rowLabels[r]->getText()));
+        for (int r = 0; r < 4; ++r)
         {
             auto* lbl = rowLabels[r];
             lbl->setBounds(switchStepX0 - labelGap - labelW, rowYs[r], labelW, rowHs[r]);

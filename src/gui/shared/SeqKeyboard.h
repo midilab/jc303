@@ -16,7 +16,7 @@ public:
         : keyboard (keyboardState,
                     juce::MidiKeyboardComponent::horizontalKeyboard)
     {
-        this->startNote = juce::jlimit (0, 108, startNote);
+        this->startNote = juce::jlimit (24, 108, startNote);
         keyboardState.addListener (this);
 
         keyboard.setAvailableRange (startNote, startNote + 11);
@@ -24,7 +24,7 @@ public:
                                   ? (float) getLocalBounds().getWidth() / 7.0f
                                   : 30.0f);
         keyboard.setScrollButtonsVisible (false);
-        keyboard.setOctaveForMiddleC (5);
+        keyboard.setOctaveForMiddleC (3); // DAW convention: MIDI 60 = C3, lowest step note 24 = C0
         keyboard.onWheel = [this] (const juce::MouseWheelDetails& wheel)
         {
             const float delta = std::abs (wheel.deltaX) > std::abs (wheel.deltaY)
@@ -104,7 +104,7 @@ public:
     void setStartNote (int note)
     {
         const int oldStart = startNote;
-        startNote = juce::jlimit (0, 108, note);   // 108 + 11 = 119 < 128
+        startNote = juce::jlimit (24, 108, note);  // 24 = lowest step note; 108 + 11 = 119 < 128
         if (startNote == oldStart)
             return;
         keyboard.setAvailableRange (startNote, startNote + 11);

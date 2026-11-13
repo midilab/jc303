@@ -5,6 +5,9 @@
 #include "rosic_FunctionTemplates.h"
 #include "rosic_FourierTransformerRadix2.h"
 
+// forward declaration so MipMappedWaveTable can befriend the dfl blend oscillator:
+namespace dfl { class BlendOscillator; }
+
 namespace rosic
 {
 
@@ -21,7 +24,7 @@ namespace rosic
     // Oscillator and SuperOscillator classes need access to certain protected member-variables 
     // (namely the tableLength and related quantities), so we declare them as friend-classes:
     friend class Oscillator;
-    friend class BlendOscillator;
+    friend class dfl::BlendOscillator;
     friend class SuperOscillator;
     // \ todo: get rid of this by providing get-functions
 
@@ -194,10 +197,15 @@ namespace rosic
   INLINE double MipMappedWaveTable::getValueLinear(int integerPart, double fractionalPart, int tableIndex)
   {
     // ensure, that the table index is in the valid range:
-    if( tableIndex<=0 )
+    if( tableIndex<0 )
       tableIndex = 0;
-    else if ( tableIndex>numTables )
-      tableIndex = 11;
+    else if ( tableIndex>numTables-1 )
+      tableIndex = numTables-1;
+
+    // a non-finite phase (NaN/inf from a bad parameter) floors to INT_MIN here and would read
+    // the table out of bounds -> crash on the audio thread. Clamp so one bad sample can at
+    // worst glitch, never index out of the table.
+    integerPart = (integerPart<0) ? 0 : (integerPart>=tableLength ? tableLength-1 : integerPart);
 
     return   (1.0-fractionalPart) * tableSet[tableIndex][integerPart] 
            +      fractionalPart  * tableSet[tableIndex][integerPart+1];

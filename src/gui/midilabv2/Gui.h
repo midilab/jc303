@@ -7,6 +7,7 @@
 #include "SwitchButton.h"
 #include "SwitchStepSeqButton.h"
 #include "SequencerStepSelector.h"
+#include "StepNoteLabel.h"
 #include "../shared/MenuPage.h"
 #include "../shared/SeqKeyboard.h"
 
@@ -25,6 +26,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void timerCallback() override;
+    bool keyPressed (const juce::KeyPress&) override;
     void updateKeyboardForSelectedStep();
     void selectStepFromSelector(int step);
 
@@ -107,21 +109,37 @@ private:
     juce::Label* modAssign1Label;
     juce::Label* modAssign2Label;
     int menuMode = 0;
-    // sequencer step toggles (note/rest editing), per-step accent/slide/tie toggles,
+    // sequencer step toggles (note/rest editing), per-step accent and slide/tie toggles,
     // and click-to-select display LEDs
     SwitchButton* seqStepButtons[16];
+    StepNoteLabel* seqStepNoteLabels[16];   // stored pitch name overlaid on each step button
     SequencerStepSelector* seqAccentButtons[16];
     SequencerStepSelector* seqSlideButtons[16];
-    SequencerStepSelector* seqTieButtons[16];
     SequencerStepSelector* stepSelectors[16];
     juce::Label* seqAccentLabel;
     juce::Label* seqSlideLabel;
-    juce::Label* seqTieLabel;
     juce::Label* seqStepLabel;
     juce::Label* seqRestLabel;
     int selectedStep = 0;
+    juce::TooltipWindow tooltipWindow { this, 700 };
 
     // declare the attchaments
+    // Tuning knob right-click: load a .tun file or reset to 12-TET
+    struct KnobMenuMouse : juce::MouseListener
+    {
+        std::function<void()> onMenu;
+        void mouseDown(const juce::MouseEvent& e) override
+        {
+            if (e.mods.isPopupMenu())
+                onMenu();
+        }
+    };
+    KnobMenuMouse tuningKnobMouse;
+    juce::Label* tuningScaleLabel;
+    std::unique_ptr<juce::FileChooser> tuningFileChooser;
+    void showTuningMenu();
+    void chooseTuningFile();
+
     std::unique_ptr<SliderAttachment> waveformAttachment;
     std::unique_ptr<SliderAttachment> tuningAttachment;
     std::unique_ptr<SliderAttachment> cutoffFreqAttachment;
@@ -150,7 +168,6 @@ private:
     std::unique_ptr<SliderAttachment> numberOfTonesAttachment;
     std::unique_ptr<SliderAttachment> lowerNoteAttachment;
     std::unique_ptr<SliderAttachment> rangeNoteAttachment;
-    std::unique_ptr<ButtonAttachment> seqPlayButtonAttachment;
     std::unique_ptr<SliderAttachment> seqLengthAttachment;
     std::unique_ptr<SliderAttachment> lfoWaveformAttachment;
     std::unique_ptr<SliderAttachment> lfoRateAttachment;

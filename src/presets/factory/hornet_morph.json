@@ -1,0 +1,25 @@
+{
+  "name": "Hornet Morph",
+  "modKnob1": "lfoRate",
+  "modKnob2": "filterMorph",
+  "values": {
+    "volume": 0.75,
+    "switchModState": true,
+    "oscModel": "Alpha Juno",
+    "junoWave": "4 Hi Oct",
+    "waveform": 0.0,
+    "filterType": "Hornet",
+    "filterMorph": 0.5,
+    "cutoff": 0.5,
+    "resonance": 0.6,
+    "envmod": 0.3,
+    "decay": 0.5,
+    "accent": 0.6,
+    "lfoDestination": "Filter Morph",
+    "lfoWaveform": "Triangle",
+    "lfoRate": 0.35,
+    "lfoDepth": 1.0,
+    "normalDecay": 0.5,
+    "slideTime": 0.33
+  }
+}

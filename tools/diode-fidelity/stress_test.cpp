@@ -1,0 +1,51 @@
+// Full-synth stress test: every diode filter type x drive x cutoff x env-mod x Devilfish FM,
+// at maximum resonance with accent 100, full bass comp, LP / BP / HP and in-between modes, and the Res Trim extremes. Fails on any non-finite sample,
+// on a sustained tail after gate-off (> -100 dB), or an absurd peak (> 28). Hi-Fi runs at tension -1, 0 and 1.
+// (The loudest case without tension is HP at Res Trim 1.15, a self-oscillating unit, at +16 dB: about 21.6, as the drive
+// level tables restore BP / HP's mean level at resonance 100. Stiff tension there, at -3 dB drive where the drive makeup is
+// highest, reaches about 26.6 with FM at cutoff 314: the tension envelope's sensitivity, DiodeLadderFilter::tensionSens,
+// plus the resonance-scaled accent capacitor, which stacks the accent higher at resonance 100.)
+#include "rosic_Open303.h"
+#include <cstdio>
+#include <cstdlib>
+#include <cmath>
+int main()
+{
+  struct Case { double trim, mode; const char* name; };
+  const Case cases[] = {
+    { 1.0,  0.0,  "LP" },
+    { 0.85, 0.0,  "LP trim 0.85" },
+    { 1.15, 0.0,  "LP trim 1.15" },
+    { 1.15, 0.25, "mode 0.25 trim 1.15" },
+    { 1.15, 0.5,  "BP trim 1.15" },
+    { 1.15, 0.75, "mode 0.75 trim 1.15" },
+    { 1.15, 1.0,  "HP trim 1.15" } };
+  int bad = 0, n = 0; double worstTail = -400, worstPeak = 0;
+  for (int q = 0; q < 2; q++)
+  for (double tension : { -1.0, 0.0, 1.0 })
+  for (const Case& c : cases)
+    for (double drive : { -3.0, 0.0, 4.5, 9.0, 16.0 })
+      for (double cut : { 314.0, 1200.0, 2394.0 })
+        for (double env : { 0.0, 60.0, 100.0 })
+          for (double fm : { 0.0, 1.0 })
+          {
+            if (q == 0 && tension != 0.0) continue;   // tension is Hi-Fi only
+            rosic::Open303 s; s.setSampleRate(44100); s.setFilterType(dfl::FILTER_DIODE); s.setResonanceTrim(c.trim); s.setFilterMode(c.mode); s.setFilterHiFi(q != 0); s.setFilterTension(tension);
+            s.setCutoff(cut); s.setResonance(100); s.setEnvMod(env); s.setDecay(400); s.setAccent(100);
+            s.setVolume(-12); s.setFilterDrive(drive); s.setPassbandCompensation(1.0); s.setFilterFmDepth(fm); s.setWaveform(0.0);
+            s.noteOn(36, 127, 0.0);
+            double tail = 0, peak = 0; int N = 44100 * 2; bool finite = true;
+            for (int i = 0; i < N; i++)
+            {
+              if (i == 44100 / 4) s.noteOn(36, 0, 0.0);
+              double y = s.getSample();
+              if (!std::isfinite(y)) { finite = false; break; }
+              peak = fmax(peak, fabs(y)); if (i > N - 4410) tail = fmax(tail, fabs(y));
+            }
+            n++; double t = 20 * log10(tail + 1e-300);
+            if (!finite || t > -100 || peak > 28) { bad++; printf("  FAIL %s tension %g %s drive %.1f cutoff %.0f env %.0f fm %.0f: finite=%d tail %.0f dB peak %.2f\n", q ? "Hi-Fi" : "Standard", tension, c.name, drive, cut, env, fm, (int)finite, t, peak); }
+            worstTail = fmax(worstTail, t); worstPeak = fmax(worstPeak, peak);
+          }
+  printf("stress test: %d runs, %d failures; worst tail %.0f dB, worst peak %.2f\n", n, bad, worstTail, worstPeak);
+  return bad ? 1 : 0;
+}

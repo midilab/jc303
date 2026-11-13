@@ -4,13 +4,111 @@
 
 // Open303
 #include "dsp/open303/rosic_Open303.h"
+#include "dsp/open303/dfl_DispersionFilter.h"
 using namespace rosic;
+using namespace dfl;
 
 // GuitarML BYOD implementation
 #include "dsp/guitarml-byod/processors/drive/GuitarMLAmp.h"
 
 // Aciduino Sequencer
 #include "sequencer/AcidSequencer303.h"
+
+// Allpass dispersion in front of the overdrive: it leaves the spectrum alone but smears the harmonics' phases,
+// reshaping the waveform's peaks, which changes how the distortion bites. Eight 2nd-order allpasses spread over
+// two octaves around the Disperse corner (150 Hz..3 kHz, where a 303 line's harmonics sit; 0 is bypass). Once the
+// harmonics are scrambled the Q matters little, so it is fixed at 1, which gave the peakiest waveform.
+class Disperser
+{
+public:
+    void prepare (double newSampleRate)
+    {
+        filter.setSampleRate (newSampleRate);
+        filter.setStages (dfl::DispersionFilter::MAX_STAGES);
+        filter.setSpread (2.0);
+        filter.setQ (1.0);
+        filter.reset();
+        active = false;
+    }
+
+    void setAmount (float newAmount) { amount = newAmount; }
+
+    static double cornerFor (float p) { return minCorner * std::pow (maxCorner / minCorner, (double) p); }
+
+    void process (float* x, int numSamples)
+    {
+        if (amount <= 0.0f)
+        {
+            active = false;
+            return;
+        }
+        const double target = std::log (cornerFor (amount));
+        if (! active)
+        {
+            // coming out of bypass: start clean instead of from stale stage state
+            active = true;
+            filter.reset();
+            logCorner = target;
+            filter.setCenterFreq (std::exp (logCorner));
+        }
+        // glide the corner in the log domain, updating the coefficients every few samples
+        for (int start = 0; start < numSamples; start += updateInterval)
+        {
+            if (std::abs (target - logCorner) > 1.0e-4)
+            {
+                logCorner += 0.1 * (target - logCorner);
+                filter.setCenterFreq (std::exp (logCorner));
+            }
+            const int end = juce::jmin (numSamples, start + updateInterval);
+            for (int n = start; n < end; ++n)
+                x[n] = filter.process (x[n]);
+        }
+    }
+
+private:
+    static constexpr double minCorner = 150.0, maxCorner = 3000.0;
+    static constexpr int updateInterval = 16;
+
+    dfl::DispersionFilter filter;
+    float amount = 0.0f;
+    double logCorner = 0.0;
+    bool active = false;
+};
+
+// The overdrive in pre-VCA mode: GuitarML after the filter, before the VCA (Open303's pre-VCA insert).
+class PreVcaOverdrive : public Open303::PreVcaInsert
+{
+public:
+    void prepare (double sampleRate)
+    {
+        amp.prepareProcessing (sampleRate, Open303::maxBlockSize);
+        mix.prepare ({ sampleRate, (uint32_t) Open303::maxBlockSize, 1 });
+        mix.setMixingRule (juce::dsp::DryWetMixingRule::sin3dB);
+        disperser.prepare (sampleRate);
+        buffer.setSize (1, Open303::maxBlockSize);
+    }
+
+    void process (double* x, int numSamples) override
+    {
+        buffer.setSize (1, numSamples, false, false, true);
+        auto* b = buffer.getWritePointer (0);
+        for (int i = 0; i < numSamples; ++i)
+            b[i] = (float) x[i];
+        disperser.process (b, numSamples);
+        mix.pushDrySamples (juce::dsp::AudioBlock<float> (buffer));
+        amp.processAudioBlock (buffer);
+        mix.mixWetSamples (juce::dsp::AudioBlock<float> (buffer));
+        for (int i = 0; i < numSamples; ++i)
+            x[i] = b[i];
+    }
+
+    GuitarMLAmp amp;
+    juce::dsp::DryWetMixer<float> mix;
+    Disperser disperser;
+
+private:
+    juce::AudioBuffer<float> buffer;
+};
 
 enum Open303Parameters
 {
@@ -22,33 +120,58 @@ enum Open303Parameters
   DECAY,
   ACCENT,
   VOLUME,
+  REVERSE_GATE,
   // MODs
   SWITCH_MOD,
   NORMAL_DECAY,
   ACCENT_DECAY,
+  ACCENT_SWEEP,
   FEEDBACK_HPF,
   SOFT_ATTACK,
   SLIDE_TIME,
   TANH_SHAPER_DRIVE,
   FILTER_DRIVE,
+  FILTER_MORPH,
   BASS_COMP,
+  FILTER_FM,
+  RES_TRIM,
+  FILTER_QUALITY,
+  FILTER_TENSION,
+  FILTER_BIAS,
+  FILTER_RAIL,
   // LFO
   LFO_WAVEFORM,
   LFO_RATE,
   LFO_DEPTH,
   LFO_DESTINATION,
+  LFO_PHASE,
+  LFO_SYNC,
+  LFO_CONTOUR,
   // Overdrive
   OVERDRIVE_SWITCH,
   OVERDRIVE_LEVEL,
   OVERDRIVE_DRY_WET,
   OVERDRIVE_MODEL_INDEX,
+  OVERDRIVE_DISPERSE,
+  // Sub oscillator
+  SUB_OSC_GAIN,
+  SUB_OSC_BLEND,
+  // Oscillator models
+  SUPER_DETUNE,
+  SUPER_MIX,
+  SHAPE_DRIFT,
+  SHAPER_SPLIT,
 
   OPEN303_NUM_PARAMETERS
 };
 
 //==============================================================================
+// Accent Sweep knob 0..1 -> accent capacitor time constant in ms; 15 ms is the stock 303
+inline double accentSweepMs (float value) { return linToExp (value, 0.0, 1.0, 15.0, 2000.0); }
+
 class JC303  :  public juce::AudioProcessor,
-                public juce::AudioProcessorValueTreeState::Listener
+                public juce::AudioProcessorValueTreeState::Listener,
+                private juce::AsyncUpdater
 {
 public:
     //==============================================================================
@@ -66,6 +189,26 @@ public:
 
     void setDevilMod(bool mode);
 
+    // Bipolar (-1..1) parameters: a centre detent snaps |v| < bipolarDetentZone to exactly 0 and the rest of the travel
+    // is stretched so the ends still reach +-1 (as the web UI's sticky zero, with a narrower zone so the Mods menu's
+    // 2 % steps leave it in two clicks).
+    static constexpr float bipolarDetentZone = 0.05f;
+    static float bipolarDetent (float v)
+    {
+        const float a = std::abs (v);
+        return a < bipolarDetentZone ? 0.0f : std::copysign ((a - bipolarDetentZone) / (1.0f - bipolarDetentZone), v);
+    }
+
+    // TB-303 service notes: TUNING approx. +/-700 cents (perfect fifth)
+    static constexpr float tuningRangeCents = 700.0f;
+    static float tuningCents (float v) { return tuningRangeCents * bipolarDetent (v); }
+
+    static juce::String signedPercent (float v)
+    {
+        const int pct = juce::roundToInt (v * 100.0f);
+        return (pct > 0 ? "+" : "") + juce::String (pct) + "%";
+    }
+
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
@@ -80,10 +223,24 @@ public:
 
     //==============================================================================
     int getNumPrograms() override;
+
+    /** The parameter ID on mod knob 0 or 1 (saved with the state; the mod wheel drives knob 0). */
+    juce::String getModKnob (int knob) const;
+    void setModKnob (int knob, const juce::String& paramID);
+
+    /** Applies controller moves queued by the audio thread (the mod wheel); runs on the message thread. */
+    void applyPendingControllers();
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
+
+    /** Preset file operations from the Presets menu (Save / New / Rename / Delete): snapshot the
+        current sound, write it to the current bank's folder, and re-sync the bank in memory. */
+    bool saveCurrentPreset();            // overwrite the current preset's own .json; false on failure
+    int createNewPreset (const juce::String& name);      // -> new preset's index, or -1
+    int renameCurrentPreset (const juce::String& name);  // -> new index, or -1
+    int deleteCurrentPreset();           // -> the index to select next, or -1
 
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
@@ -113,19 +270,33 @@ public:
     void sequencerStop()  { _sequencer.stop();  }
 
     // ── Sequencer UI→audio command channel ────────────────────────────────────
-    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear };
+    enum class SeqCommand : int { None = 0, Play, Stop, Generate, Clear, GeneratePitches, GenerateRhythm, Undo, Redo };
     void seqCommand (SeqCommand command) { _seqCommand.store (static_cast<int>(command), std::memory_order_release); }
+
+    // ── Custom tuning (AnaMark .tun), message thread only ─────────────────────
+    /** Returns false and leaves the current map in place if the file is invalid. */
+    bool loadTuningFile (const juce::File& file, juce::String& errorMessage);
+    void resetTuning();
+    juce::String getTuningName() const { return juce::String (tuningState.getName()); }
+    bool isCustomTuningActive() const  { return tuningState.isCustom(); }
 
 private:
     void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
     void setParameter (Open303Parameters index, float value);
+    void updateModSlot (int index);   // pushes free matrix slot 0..2 (UI slots 2..4) to the core
+    // Re-applies all cheap DSP parameters from the APVTS atomics on the audio thread. Called from
+    // processBlock when parametersNeedUpdate is set, so parameter writes never race getSample().
+    void updateOpen303Parameters();
 
     // Sequencer UI→audio command channel, consumed at the top of every audio
     // buffer so play/stop/generate/clear (and the accompanying Open303 note
     // flushes) always run on the audio thread.  Setting it from the message
     // thread keeps sequencer + Open303 state single-threaded while running.
     void applySeqCommands();
+    void applySeqRewrites();
+    void resetSeqOffsets (int mask);
+    void handleAsyncUpdate() override;
 
     // presets and overdrive models user data management
     void setupDataDirectories();
@@ -138,6 +309,8 @@ private:
     // GuitarML - BYOD
     GuitarMLAmp guitarML;
     juce::dsp::DryWetMixer<float> overdriveMix;
+    Disperser overdriveDisperser;
+    PreVcaOverdrive preVcaOverdrive;
 
     // ── Acid Sequencer ────────────────────────────────────────────────────────
     AcidSequencer303 _sequencer;
@@ -152,6 +325,10 @@ private:
         uint8_t          note;
         uint8_t          velocity;
         int              sampleOffset;
+        bool             mute    { false };
+        bool             hammer  { false };
+        bool             reverse { false };
+        double           gateSamples { 0.0 };
     };
     static constexpr int kPendingMax = 64;
     PendingNote  _pendingNotes[kPendingMax];
@@ -159,15 +336,6 @@ private:
 
     // Tracks host play state across buffers to detect start/stop edges
     bool _wasHostPlaying { false };
-
-    // Currently held note from the sequencer (-1 = none).
-    // Prevents stale NoteOffs from closing a new note after a slide,
-    // and detects wrap-around ties (same pitch re-firing at pattern start).
-    int  _heldNote         { -1    };
-
-    // Slide flag from the last dispatched step, carried across buffer
-    // boundaries so the *receiving* step's NoteOn gets slide=1 correctly.
-    bool _lastStepHadSlide { false };
 
     // Mute flag for sequencer (used during acidRandomize to prevent note triggering)
     std::atomic<bool> _sequencerMuted { false };
@@ -181,6 +349,8 @@ private:
     int  _recHeldNote   { -1    };
     bool _sustainArmed  { true  };
     bool _recWasOn      { false };
+
+    int currentProgram = 0;   // factory preset index (see Presets.h)
 
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
@@ -196,10 +366,12 @@ private:
     std::atomic<float>* decay = nullptr;
     std::atomic<float>* accent = nullptr;
     std::atomic<float>* volume = nullptr;
+    std::atomic<float>* reverseGate = nullptr;
     // MODs
     std::atomic<float>* switchModState = nullptr;
     std::atomic<float>* normalDecay = nullptr;
     std::atomic<float>* accentDecay = nullptr;
+    std::atomic<float>* accentSweep = nullptr;
     std::atomic<float>* feedbackFilter = nullptr;
     std::atomic<float>* softAttack = nullptr;
     std::atomic<float>* slideTime = nullptr;
@@ -209,14 +381,30 @@ private:
     std::atomic<float>* lfoRate = nullptr;
     std::atomic<float>* lfoDepth = nullptr;
     std::atomic<float>* lfoDestination = nullptr;
+    std::atomic<float>* lfoPhase = nullptr;
+    std::atomic<float>* lfoSync = nullptr;
+    std::atomic<float>* lfoContour = nullptr;
+    std::atomic<float>* modSlotSource[3] = {};
+    std::atomic<float>* modSlotDest[3] = {};
+    std::atomic<float>* modSlotAmount[3] = {};
     // overdrive
     std::atomic<float>* overdriveModelIndex = nullptr;
     std::atomic<float>* switchOverdriveState = nullptr;
     std::atomic<float>* overdriveLevel = nullptr;
     std::atomic<float>* overdriveDryWet = nullptr;
+    std::atomic<float>* overdriveDisperse = nullptr;
+    std::atomic<float>* overdrivePreVca = nullptr;
     std::atomic<float>* filterType = nullptr;
+    std::atomic<float>* squareModel = nullptr;
     std::atomic<float>* filterDrive = nullptr;
+    std::atomic<float>* filterMorph = nullptr;
     std::atomic<float>* bassComp = nullptr;
+    std::atomic<float>* filterFm = nullptr;
+    std::atomic<float>* resTrim = nullptr;
+    std::atomic<float>* filterQuality = nullptr;
+    std::atomic<float>* filterTension = nullptr;
+    std::atomic<float>* filterBias = nullptr;
+    std::atomic<float>* filterRail = nullptr;
     // generative sequencer
     std::atomic<float>* seqGenerativeFill = nullptr;
     std::atomic<float>* seqGenerativeAccentProbability = nullptr;
@@ -226,6 +414,12 @@ private:
     std::atomic<float>* lowerNote = nullptr;
     std::atomic<float>* rangeNote = nullptr;
     std::atomic<float>* seqPlayState = nullptr;
+    std::atomic<float>* seqCpuTiming = nullptr;
+    std::atomic<float>* seqTranspose = nullptr;
+    std::atomic<float>* seqShift = nullptr;
+    std::atomic<float>* seqPitchRotate = nullptr;
+    std::atomic<float>* seqSwing = nullptr;
+    std::atomic<float>* seqPitchLength = nullptr;
     std::atomic<float>* seqGenerate = nullptr;
     std::atomic<float>* seqClear = nullptr;
     //std::atomic<float>* seqHarmonizer = nullptr;
@@ -233,6 +427,17 @@ private:
     std::atomic<float>* seqSyncMode = nullptr;
     std::atomic<float>* seqStartMode = nullptr;
     std::atomic<float>* seqTempo = nullptr;
+    // Sub oscillator
+    std::atomic<float>* subOscGain = nullptr;
+    std::atomic<float>* subOscBlend = nullptr;
+    // Oscillator models
+    std::atomic<float>* oscModel = nullptr;
+    std::atomic<float>* junoWave = nullptr;
+    std::atomic<float>* superDetune = nullptr;
+    std::atomic<float>* superMix = nullptr;
+    std::atomic<float>* shaperMode = nullptr;
+    std::atomic<float>* shapeDrift = nullptr;
+    std::atomic<float>* shaperSplit = nullptr;
 
     double decayMin = 200;
     double decayMax = 2000;
@@ -243,6 +448,21 @@ private:
     // Pending sequencer command set by parameterChanged, applied by the audio
     // thread in renderMidi (see applySeqCommands).
     std::atomic<int> _seqCommand { static_cast<int>(SeqCommand::None) };
+
+    // custom tuning name / path / frequencies for the UI and project state;
+    // the audio thread reads the copy installed into open303Core
+    TuningTable tuningState;
+
+    // Transpose / Shift / Pitch Rotate values already written into the pattern
+    std::atomic<int> _appliedTranspose { 0 };
+    std::atomic<int> _appliedShift { 0 };
+    std::atomic<int> _appliedPitchRotate { 0 };
+
+    // Offsets a new or cleared pattern zeroes; the message thread resets the
+    // params, and rewrites wait until it has
+    enum SeqOffset : int { OffsetTranspose = 1, OffsetShift = 2, OffsetPitchRotate = 4 };
+    std::atomic<int> _seqOffsetReset { 0 };
+    std::atomic<int> _pendingModWheel { -1 };   // CC 1 value awaiting the message thread, -1 = none
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)
