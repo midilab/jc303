@@ -1,6 +1,6 @@
 # JC-303 Plugin
 
-This is a Free Roland TB-303 clone plugin. A Cmake JUCE port of [Robin Schmidt`s Open303](https://github.com/RobinSchmidt/Open303) with added features.
+This is a Free Roland TB-303 clone plugin. A Cmake JUCE port of [Robin Schmidt`s Open303](https://github.com/RobinSchmidt/Open303) with added features: a step sequencer ported from [midilab`s Aciduino V2](https://github.com/midilab/aciduino/tree/master/v2), a neural overdrive based on [GuitarML](https://github.com/GuitarML) and tons of DSP MODs implemented by the community.
 
 ![JC-303 Screenshot](https://raw.githubusercontent.com/midilab/jc303/main/img/jc303.png)
 
@@ -8,11 +8,17 @@ This software is licensed under the GNU General Public License version 3 (GPLv3)
 
 The Open303 engine part of this software is also licensed under the MIT License.
 
+The Aciduino sequencer part of this software is also licensed under the MIT License.
+
+The overdrive is based on the GuitarML neural amp modeller and its Chowdhury-DSP BYOD port, distributed under the GPLv3 like the rest of this project.
+
 ### Licensing by file
 
 - The project as a whole is distributed under GPLv3 (see `LICENSE`).
 - `src/dsp/open303/rosic_*` and the other Open303 files are MIT, Copyright (c) 2009 Robin Schmidt (see `src/dsp/open303/LICENSE`).
-- `src/dsp/open303/dfl_DiodeLadderFilter.*`, `src/dsp/open303/dfl_TB303OutputNetwork.h` and `src/dsp/open303/dfl_LFO.*` are AGPL-3.0-or-later, Copyright (C) 2026 David Lowenfels (see `LICENSE-AGPL-3.0`). Each file carries an SPDX header.
+- `src/dsp/open303/dfl_DiodeLadderFilter.*`, `src/dsp/open303/dfl_TB303OutputNetwork.h` and `src/dsp/open303/dfl_LFO.*` are AGPL-3.0-or-later, Copyright (C) 2026 David Lowenfels (see `src/dsp/open303/LICENSE-AGPL-3.0`). Each file carries an SPDX header.
+- `src/sequencer/AcidSequencer303.h` and `src/sequencer/Harmonizer.h` are a JUCE port of Aciduino V2 (`engine_303.cpp` + `harmonizer.cpp`), MIT, Copyright (c) 2022 Romulo Silva.
+- `src/dsp/guitarml-byod/` is a port of Chowdhury-DSP BYOD's `GuitarMLAmp`, implementing the GuitarML LSTM amp modeller by Keith Bloemer (see `src/dsp/guitarml-byod/LICENSE`).
 
 ## Features
 
@@ -29,13 +35,11 @@ The manual below describes the `midilabv2` GUI theme (the default). The `amadeus
 
 Supports Windows, Linux and MacOS. You may find CLAP, VST3, LV2 and AU formats available to download. For VST2 plugin you need to compile it by your own self using vst2 sdk from Steinberg - vstsdk2.4.
 
-MacOS Universal - Intel and ARM: [jc303-macos_universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.13.0/jc303-0.13.0-macos_universal-plugins.zip)
+MacOS Universal - Intel and ARM: [jc303-macos_universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.0/jc303-0.14.0-macos_universal-plugins.zip)
 
-Windows Intel x64: [jc303-windows_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.13.0/jc303-0.13.0-windows_x64-plugins.zip)
+Windows Intel x64: [jc303-windows_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.0/jc303-0.14.0-windows_x64-plugins.zip)
 
-Linux Intel x64: [jc303-linux_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.13.0/jc303-0.13.0-linux_x64-plugins.zip)  
-
-Linux ARM64: Soon...  
+Linux Intel x64: [jc303-linux_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.0/jc303-0.14.0-linux_x64-plugins.zip)  
 
 ## Installation
 

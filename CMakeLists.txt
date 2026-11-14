@@ -5,7 +5,7 @@ if(WIN32)
     add_compile_definitions(__amd64__=1)
 endif()
 
-project(JC303 VERSION 0.12.3)
+project(JC303 VERSION 0.14.0)
 
 
 ### Dependency versions ###
