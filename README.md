@@ -1,6 +1,6 @@
 # JC-303 Plugin
 
-This is a Free Roland TB-303 clone plugin. A Cmake JUCE port of [Robin Schmidt`s Open303](https://github.com/RobinSchmidt/Open303) with added features: a step sequencer ported from [midilab`s Aciduino V2](https://github.com/midilab/aciduino/tree/master/v2), a neural overdrive based on [GuitarML](https://github.com/GuitarML) and tons of DSP MODs implemented by the community.
+This is a Free Roland TB-303 clone plugin. A Cmake JUCE port of [Robin Schmidt\`s Open303](https://github.com/RobinSchmidt/Open303) with added features: a step sequencer ported from [midilab\`s Aciduino V2](https://github.com/midilab/aciduino/tree/master/v2), a neural overdrive based on [GuitarML](https://github.com/GuitarML) and tons of DSP MODs implemented by the community.
 
 ![JC-303 Screenshot](https://raw.githubusercontent.com/midilab/jc303/main/img/jc303.png)
 
