@@ -38,7 +38,9 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(switchOverdriveButton = createSwitch());
     //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
-    addAndMakeVisible(menuPage = new MenuPage(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames())));
+    addAndMakeVisible(menuPage = new MenuPage(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames(),
+                                                                                    juce::StringArray(scalemask::kScaleNames, scalemask::kNumScaleChoices),
+                                                                                    juce::StringArray(scalemask::kRootNames, scalemask::kNumRoots))));
     addAndMakeVisible(seqKeyboard = new SeqKeyboard(48));
 
     // generative sequencer controls
@@ -526,6 +528,9 @@ void JC303Editor::timerCallback()
     const auto scaleName = processorRef.isCustomTuningActive() ? processorRef.getTuningName() : juce::String();
     if (tuningScaleLabel->getText() != scaleName)
         tuningScaleLabel->setText(scaleName, juce::dontSendNotification);
+
+    seqKeyboard->setAllowedMask (scalemask::playableMask (static_cast<int> (*valueTreeState.getRawParameterValue ("seqRoot")),
+                                                          static_cast<int> (*valueTreeState.getRawParameterValue ("seqScale"))));
 
     const int length = seq.getTrackLength();
     const bool playing = seq.isRunning();
