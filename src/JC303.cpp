@@ -657,7 +657,12 @@ JC303::JC303()
     if (auto* tp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
         _sequencer.setTempo((float) tp->get());
     _sequencer.setTrackLength (16);
-
+    // >>> MIDI-CC [4] BEGIN
+    for (auto& v : _pendingCC)
+        v.store (-1);
+    resetCCMappingToDefaults();
+    // <<< MIDI-CC [4] END
+    
     // Seed the user's presets directory from the embedded copies on first run, then load the factory presets.
     ensureFactoryPresets();
 }
@@ -859,6 +864,9 @@ void JC303::handleAsyncUpdate()
     if ((mask & OffsetPitchRotate) != 0) _appliedPitchRotate.store (0);
     _seqOffsetReset.fetch_and (~mask, std::memory_order_acq_rel);
     applyPendingControllers();
+    // >>> MIDI-CC [6] BEGIN
+    applyPendingCCs();
+    // <<< MIDI-CC [6] END
 }
 
 // The mod wheel sets mod knob 0's parameter directly, so the knob on screen follows it.
@@ -874,6 +882,102 @@ void JC303::applyPendingControllers()
         p->endChangeGesture();
     }
 }
+// >>> MIDI-CC [7] BEGIN
+void JC303::applyPendingCCs()
+{
+    for (int cc = 0; cc < 128; ++cc)
+    {
+        const int value = _pendingCC[(size_t) cc].exchange (-1, std::memory_order_acq_rel);
+        if (value < 0)
+            continue;
+
+        juce::String paramID;
+        {
+            const juce::ScopedLock sl (ccMapLock);
+            if (midiLearnParam.isNotEmpty())   // learn: il primo CC che arriva vince
+            {
+                for (auto it = ccMap.begin(); it != ccMap.end();)   // un solo CC per parametro
+                    it = (it->second == midiLearnParam) ? ccMap.erase (it) : std::next (it);
+                ccMap[cc] = midiLearnParam;
+                midiLearnParam = {};
+            }
+            if (auto it = ccMap.find (cc); it != ccMap.end())
+                paramID = it->second;
+        }
+        if (paramID.isEmpty())
+            continue;
+         // >>> MIDI-CC [23] BEGIN
+        if (paramID == "@modKnob1")      paramID = getModKnob (0);   // il parametro assegnato al macro knob 1
+        else if (paramID == "@modKnob2") paramID = getModKnob (1);
+        // <<< MIDI-CC [23] END
+        if (auto* p = parameters.getParameter (paramID))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost ((float) value / 127.0f);
+            p->endChangeGesture();
+        }
+    }
+}
+
+void JC303::midiLearnStart (const juce::String& id)
+{
+    for (auto& v : _pendingCC)
+        v.store (-1);   // scarta i CC già in coda
+    const juce::ScopedLock sl (ccMapLock);
+    midiLearnParam = id;
+}
+
+void JC303::midiLearnCancel()
+{
+    const juce::ScopedLock sl (ccMapLock);
+    midiLearnParam = {};
+}
+
+juce::String JC303::getMidiLearnTarget() const
+{
+    const juce::ScopedLock sl (ccMapLock);
+    return midiLearnParam;
+}
+
+int JC303::getMappedCC (const juce::String& id) const
+{
+    const juce::ScopedLock sl (ccMapLock);
+    for (auto& [cc, p] : ccMap)
+        if (p == id)
+            return cc;
+    return -1;
+}
+
+void JC303::clearCCMapping (const juce::String& id)
+{
+    const juce::ScopedLock sl (ccMapLock);
+    for (auto it = ccMap.begin(); it != ccMap.end();)
+        it = (it->second == id) ? ccMap.erase (it) : std::next (it);
+}
+
+void JC303::resetCCMappingToDefaults()
+{
+    const juce::ScopedLock sl (ccMapLock);
+       // >>> MIDI-CC [16] BEGIN
+    ccMap = {
+        // TR-303
+        { 11, "volume" },         // Master Level / Expression
+        { 12, "envmod" },         // Env Mod
+        { 16, "accent" },         // Accent
+        { 17, "overdriveLevel" }, // Drive Depth
+        { 71, "resonance" },      // Resonance
+        { 74, "cutoff" },         // Cutoff Frequency
+        { 75, "decay" },          // Decay
+        { 104, "tuning" },        // Tuning
+        // extra (CC non definiti dallo standard):
+        { 20, "overdriveDryWet" },
+        { 21, "waveform" },
+        { 22, "@modKnob1" },
+        { 23, "@modKnob2" }       
+    };
+    // <<< MIDI-CC [16] END
+}
+// <<< MIDI-CC [7] END
 
 juce::String JC303::getModKnob (int knob) const
 {
@@ -1639,11 +1743,29 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
         // the mod wheel is applied to mod knob 0 on the message thread (applyPendingControllers).
         if (message.isPitchWheel())
             open303Core.setPitchBend (12.0 * (message.getPitchWheelValue() - 8192) / 8192.0);
-        else if (message.isController() && message.getControllerNumber() == 1)
+        //else if (message.isController() && message.getControllerNumber() == 1)
+        //{
+        //    _pendingModWheel.store (message.getControllerValue(), std::memory_order_release);
+        //    triggerAsyncUpdate();
+        //}
+        // >>> MIDI-CC [5] BEGIN
+        else if (message.isController())
         {
-            _pendingModWheel.store (message.getControllerValue(), std::memory_order_release);
-            triggerAsyncUpdate();
+            const int cc = message.getControllerNumber();
+            // CC1 (mod wheel -> macro knob 1) disattivato: ora il macro knob 1 si muove solo con il suo CC della mappa.
+            // if (cc == 1)
+            // {
+            //     _pendingModWheel.store (message.getControllerValue(), std::memory_order_release);
+            //     triggerAsyncUpdate();
+            // }
+            // else
+            if (cc != 64 && cc < 120)   // 64 = sustain (REC), 120+ = channel mode
+            {
+                _pendingCC[(size_t) cc].store (message.getControllerValue(), std::memory_order_release);
+                triggerAsyncUpdate();
+            }
         }
+        // <<< MIDI-CC [5] END
 
         // ── Rec mode (works whether or not the sequencer is playing) ─────────
         // Reset per-press state each time rec is (re)enabled so a stale held
@@ -1852,7 +1974,10 @@ juce::AudioProcessorEditor* JC303::createEditor()
 // out of the APVTS tree so replaceState/copyState round trips don't stack stale copies.
 static void stripSerialisedChildren (juce::ValueTree& state)
 {
-    for (auto name : { "AcidSeq303", "CustomTuning" })
+    //for (auto name : { "AcidSeq303", "CustomTuning" })
+// <<< MIDI-CC [7] START
+    for (auto name : { "AcidSeq303", "CustomTuning", "MidiMap" })   // MIDI-CC [8]   
+// <<< MIDI-CC [7] END
         for (auto child = state.getChildWithName (name); child.isValid(); child = state.getChildWithName (name))
             state.removeChild (child, nullptr);
 }
@@ -1922,7 +2047,18 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
         tuningXml->setAttribute ("path", juce::String (tuningState.getSourcePath()));
         tuningXml->setAttribute ("freqs", juce::String (tuningState.frequenciesToString()));
     }
-
+    // >>> MIDI-CC [9] BEGIN
+    {
+        const juce::ScopedLock sl (ccMapLock);
+        auto* mapXml = xml->createNewChildElement ("MidiMap");   // scritto sempre, anche vuoto
+        for (auto& [cc, id] : ccMap)
+        {
+            auto* e = mapXml->createNewChildElement ("CC");
+            e->setAttribute ("cc", cc);
+            e->setAttribute ("param", id);
+        }
+    }
+    // <<< MIDI-CC [9] END
     copyXmlToBinary (*xml, destData);
 }
 
@@ -1993,7 +2129,20 @@ void JC303::setStateInformation (const void* data, int sizeInBytes)
                                               tuningXml->getStringAttribute ("path").toStdString()))
                 tuningState.setEqualTemperament (440.0);
             open303Core.installPitchMap (tuningState.getFrequencies());
-
+            // >>> MIDI-CC [10] BEGIN
+            if (auto* mapXml = xmlState->getChildByName ("MidiMap"))   // vecchi progetti: restano i default
+            {
+                const juce::ScopedLock sl (ccMapLock);
+                ccMap.clear();
+                for (auto* e : mapXml->getChildWithTagNameIterator ("CC"))
+                {
+                    const int cc = e->getIntAttribute ("cc", -1);
+                    const auto id = e->getStringAttribute ("param");
+                    if (cc >= 0 && cc < 128 && (id.startsWith ("@") || parameters.getParameter (id) != nullptr))   // MIDI-CC [24]
+                        ccMap[cc] = id;
+                }
+            }
+            // <<< MIDI-CC [10] END
             // The restored pattern already carries its offsets
             _appliedTranspose.store   (static_cast<int>(std::lround (seqTranspose->load())));
             _appliedShift.store       (static_cast<int>(std::lround (seqShift->load())));

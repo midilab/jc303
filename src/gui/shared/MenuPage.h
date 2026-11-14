@@ -465,7 +465,14 @@ public:
 
     // Fired when a slot is (re)bound so a theme can refresh anything extra.
     std::function<void(int)> onAssignableChanged;
-
+    // >>> MIDI-CC [19] BEGIN
+    std::function<void (const juce::String&)> onMidiLearn;     // ID parametro -> avvia il learn
+    std::function<void()> onMidiLearnCancel;
+    std::function<juce::String()> getLearnTarget;
+    std::function<int (const juce::String&)> getMappedCC;      // -1 = nessuno
+    std::function<void (const juce::String&)> onMidiClear;
+    std::function<void()> onMidiResetDefaults;
+    // <<< MIDI-CC [19] END
     void parameterChanged(const juce::String& parameterID, float newValue) override
     {
         ignoreUnused(parameterID, newValue);
@@ -481,11 +488,18 @@ public:
         notifyCurrentItemChanged();
     }
 
+    // >>> MIDI-CC [20] BEGIN
     void mouseDown(const juce::MouseEvent& e) override
     {
+        if (e.mods.isPopupMenu())
+        {
+            showLearnMenu();
+            return;
+        }
         if (itemLabel.getBounds().contains(e.getPosition()))
             showItemMenu();
     }
+    // <<< MIDI-CC [20] END
 
 void timerCallback() override
     {
@@ -973,7 +987,43 @@ private:
                                .withMousePosition(),
                            juce::ModalCallbackFunction::create(onChoice));
     }
+    // >>> MIDI-CC [21] BEGIN
+    void showLearnMenu()
+    {
+        auto& item = currentItem();
+        if (! onMidiLearn || item.type == Type::placeholder || item.type == Type::action
+            || item.id.isEmpty() || valueTreeState.getParameter(item.id) == nullptr)
+            return;
 
+        const juce::String id = item.id;
+        const bool learning = getLearnTarget && getLearnTarget() == id;
+        const int cc = getMappedCC ? getMappedCC(id) : -1;
+
+        juce::PopupMenu menu;
+        menu.addItem(1, learning ? "Learning... move a CC knob" : "MIDI Learn", true, learning);
+        menu.addItem(2, cc >= 0 ? "Clear MIDI mapping (CC " + juce::String(cc) + ")" : juce::String("Clear MIDI mapping"), cc >= 0);
+        menu.addSeparator();
+        menu.addItem(3, "Reset all MIDI mappings to defaults");
+        menu.setLookAndFeel(&popupLookAndFeel);
+
+        juce::Component::SafePointer<MenuPage> safeThis(this);
+        menu.showMenuAsync(juce::PopupMenu::Options()
+                               .withTargetComponent(this)
+                               .withMousePosition(),
+                           juce::ModalCallbackFunction::create([safeThis, id, learning](int result)
+                           {
+                               if (safeThis == nullptr || result <= 0)
+                                   return;
+                               if (result == 1)
+                               {
+                                   if (learning) { if (safeThis->onMidiLearnCancel) safeThis->onMidiLearnCancel(); }
+                                   else          { if (safeThis->onMidiLearn) safeThis->onMidiLearn(id); }
+                               }
+                               else if (result == 2) { if (safeThis->onMidiClear) safeThis->onMidiClear(id); }
+                               else if (result == 3) { if (safeThis->onMidiResetDefaults) safeThis->onMidiResetDefaults(); }
+                           }));
+    }
+    // <<< MIDI-CC [21] END
     void handlePopupChoice(int pick)
     {
         auto& item = currentItem();

@@ -1,6 +1,10 @@
 #pragma once
 
 #include <JuceHeader.h>
+// >>> MIDI-CC [1] BEGIN
+#include <array>
+#include <map>
+// <<< MIDI-CC [1] END
 
 // Open303
 #include "dsp/open303/rosic_Open303.h"
@@ -279,7 +283,14 @@ public:
     void resetTuning();
     juce::String getTuningName() const { return juce::String (tuningState.getName()); }
     bool isCustomTuningActive() const  { return tuningState.isCustom(); }
-
+    // >>> MIDI-CC [2] BEGIN
+    void midiLearnStart (const juce::String& paramID);
+    void midiLearnCancel();
+    juce::String getMidiLearnTarget() const;
+    int  getMappedCC (const juce::String& paramID) const;   // -1 = nessuno
+    void clearCCMapping (const juce::String& paramID);
+    void resetCCMappingToDefaults();
+    // <<< MIDI-CC [2] END
 private:
     void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
     void render303   (juce::AudioBuffer<float>& buffer, int beginSample, int endSample);
@@ -463,7 +474,13 @@ private:
     enum SeqOffset : int { OffsetTranspose = 1, OffsetShift = 2, OffsetPitchRotate = 4 };
     std::atomic<int> _seqOffsetReset { 0 };
     std::atomic<int> _pendingModWheel { -1 };   // CC 1 value awaiting the message thread, -1 = none
-
+    // >>> MIDI-CC [3] BEGIN
+    void applyPendingCCs();
+    std::array<std::atomic<int>, 128> _pendingCC;   // thread audio -> message thread, -1 = niente
+    mutable juce::CriticalSection ccMapLock;        // mai preso dal thread audio
+    std::map<int, juce::String> ccMap;              // CC -> ID parametro
+    juce::String midiLearnParam;                    // parametro in attesa di un CC
+    // <<< MIDI-CC [3] END
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)
 };
