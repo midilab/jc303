@@ -465,14 +465,14 @@ public:
 
     // Fired when a slot is (re)bound so a theme can refresh anything extra.
     std::function<void(int)> onAssignableChanged;
-    // >>> MIDI-CC [19] BEGIN
+    
     std::function<void (const juce::String&)> onMidiLearn;     // ID parametro -> avvia il learn
     std::function<void()> onMidiLearnCancel;
     std::function<juce::String()> getLearnTarget;
     std::function<int (const juce::String&)> getMappedCC;      // -1 = nessuno
     std::function<void (const juce::String&)> onMidiClear;
     std::function<void()> onMidiResetDefaults;
-    // <<< MIDI-CC [19] END
+    
     void parameterChanged(const juce::String& parameterID, float newValue) override
     {
         ignoreUnused(parameterID, newValue);
@@ -488,7 +488,7 @@ public:
         notifyCurrentItemChanged();
     }
 
-    // >>> MIDI-CC [20] BEGIN
+    
     void mouseDown(const juce::MouseEvent& e) override
     {
         if (e.mods.isPopupMenu())
@@ -499,7 +499,7 @@ public:
         if (itemLabel.getBounds().contains(e.getPosition()))
             showItemMenu();
     }
-    // <<< MIDI-CC [20] END
+    
 
 void timerCallback() override
     {
@@ -987,7 +987,7 @@ private:
                                .withMousePosition(),
                            juce::ModalCallbackFunction::create(onChoice));
     }
-    // >>> MIDI-CC [21] BEGIN
+    
     void showLearnMenu()
     {
         auto& item = currentItem();
@@ -1023,7 +1023,7 @@ private:
                                else if (result == 3) { if (safeThis->onMidiResetDefaults) safeThis->onMidiResetDefaults(); }
                            }));
     }
-    // <<< MIDI-CC [21] END
+    
     void handlePopupChoice(int pick)
     {
         auto& item = currentItem();
