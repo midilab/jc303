@@ -428,7 +428,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));
     lfoDepthAttachment.reset(new SliderAttachment(valueTreeState, "lfoDepth", *lfoDepthSlider));
     lfoDestinationAttachment.reset(new SliderAttachment(valueTreeState, "lfoDestination", *lfoDestinationSlider));
-    // >>> MIDI-CC [12] BEGIN
+    
     {
         const std::pair<juce::Slider*, const char*> learnable[] = {
             { waveformSlider, "waveform" },   { cutoffFreqSlider, "cutoff" }, { resonanceSlider, "resonance" },
@@ -443,16 +443,16 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
             slider->addMouseListener (m, false);
         }
     }
-    // <<< MIDI-CC [12] END
-    // <<< MIDI-CC [12] END
-    // >>> MIDI-CC [22] BEGIN
+    
+    
+    
     menuPage->onMidiLearn         = [this] (const juce::String& id) { processorRef.midiLearnStart (id); };
     menuPage->onMidiLearnCancel   = [this] { processorRef.midiLearnCancel(); };
     menuPage->getLearnTarget      = [this] { return processorRef.getMidiLearnTarget(); };
     menuPage->getMappedCC         = [this] (const juce::String& id) { return processorRef.getMappedCC (id); };
     menuPage->onMidiClear         = [this] (const juce::String& id) { processorRef.clearCCMapping (id); };
     menuPage->onMidiResetDefaults = [this] { processorRef.resetCCMappingToDefaults(); };
-    // <<< MIDI-CC [22] END
+    
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
@@ -466,11 +466,11 @@ JC303Editor::~JC303Editor()
 {
     stopTimer();
     tuningSlider->removeMouseListener(&tuningKnobMouse);
-    // >>> MIDI-CC [13] BEGIN
+    
         for (auto* s : std::initializer_list<juce::Slider*> { waveformSlider, cutoffFreqSlider, resonanceSlider, envelopModSlider, decaySlider, accentSlider, volumeSlider,overdriveLevelSlider, overdriveDryWetSlider, modAssign1, modAssign2 })   // MIDI-CC [27]
         for (auto* m : learnMouses)
             s->removeMouseListener (m);
-    // <<< MIDI-CC [13] END
+    
 }
 
 bool JC303Editor::keyPressed (const juce::KeyPress& key)
@@ -520,7 +520,7 @@ void JC303Editor::showTuningMenu()
     menu.addSectionHeader(processorRef.getTuningName());
     menu.addItem("Load .tun...", [this] { chooseTuningFile(); });
     menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [this] { processorRef.resetTuning(); });
-    // >>> MIDI-CC [15] BEGIN
+    
     menu.addSeparator();
     {
         const bool learning = processorRef.getMidiLearnTarget() == "tuning";
@@ -534,7 +534,7 @@ void JC303Editor::showTuningMenu()
         menu.addItem (cc >= 0 ? "Clear MIDI mapping (CC " + juce::String (cc) + ")" : juce::String ("Clear MIDI mapping"),
                       cc >= 0, false, [this] { processorRef.clearCCMapping ("tuning"); });
     }
-    // <<< MIDI-CC [15] END
+    
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(tuningSlider));
 }
 
@@ -556,7 +556,7 @@ void JC303Editor::chooseTuningFile()
                                                        file.getFileName() + "\n\n" + error);
         });
 }
-// >>> MIDI-CC [14] BEGIN
+
 void JC303Editor::showKnobMenu (juce::Slider* knob, const juce::String& paramID)
 {
     juce::PopupMenu menu;
@@ -570,13 +570,13 @@ void JC303Editor::showKnobMenu (juce::Slider* knob, const juce::String& paramID)
                   });
     menu.addItem (cc >= 0 ? "Clear MIDI mapping (CC " + juce::String (cc) + ")" : juce::String ("Clear MIDI mapping"),
                   cc >= 0, false, [this, paramID] { processorRef.clearCCMapping (paramID); });
-    // >>> MIDI-CC [17] BEGIN
+    
     menu.addSeparator();
     menu.addItem ("Reset all MIDI mappings to defaults", [this] { processorRef.resetCCMappingToDefaults(); });
-    // <<< MIDI-CC [17] END
+    
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (knob));
 }
-// <<< MIDI-CC [14] END
+
 void JC303Editor::resized()
 {
     setControlsLayout();

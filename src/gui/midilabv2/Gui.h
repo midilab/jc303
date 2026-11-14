@@ -140,10 +140,10 @@ private:
     std::unique_ptr<juce::FileChooser> tuningFileChooser;
     void showTuningMenu();
     void chooseTuningFile();
-    // >>> MIDI-CC [11] BEGIN
+    
     juce::OwnedArray<KnobMenuMouse> learnMouses;
     void showKnobMenu (juce::Slider* knob, const juce::String& paramID);
-    // <<< MIDI-CC [11] END
+    
     std::unique_ptr<SliderAttachment> waveformAttachment;
     std::unique_ptr<SliderAttachment> tuningAttachment;
     std::unique_ptr<SliderAttachment> cutoffFreqAttachment;
