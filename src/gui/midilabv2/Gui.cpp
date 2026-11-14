@@ -428,7 +428,31 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     lfoRateAttachment.reset(new SliderAttachment(valueTreeState, "lfoRate", *lfoRateSlider));
     lfoDepthAttachment.reset(new SliderAttachment(valueTreeState, "lfoDepth", *lfoDepthSlider));
     lfoDestinationAttachment.reset(new SliderAttachment(valueTreeState, "lfoDestination", *lfoDestinationSlider));
-
+    
+    {
+        const std::pair<juce::Slider*, const char*> learnable[] = {
+            { waveformSlider, "waveform" },   { cutoffFreqSlider, "cutoff" }, { resonanceSlider, "resonance" },
+            { envelopModSlider, "envmod" },   { decaySlider, "decay" },       { accentSlider, "accent" },
+            { volumeSlider, "volume" },
+            { overdriveLevelSlider, "overdriveLevel" }, { overdriveDryWetSlider, "overdriveDryWet" },
+            { modAssign1, "@modKnob1" },      { modAssign2, "@modKnob2" } };   // MIDI-CC [26]
+        for (auto& [slider, id] : learnable)
+        {
+            auto* m = learnMouses.add (new KnobMenuMouse());
+            m->onMenu = [this, s = slider, pid = juce::String (id)] { showKnobMenu (s, pid); };
+            slider->addMouseListener (m, false);
+        }
+    }
+    
+    
+    
+    menuPage->onMidiLearn         = [this] (const juce::String& id) { processorRef.midiLearnStart (id); };
+    menuPage->onMidiLearnCancel   = [this] { processorRef.midiLearnCancel(); };
+    menuPage->getLearnTarget      = [this] { return processorRef.getMidiLearnTarget(); };
+    menuPage->getMappedCC         = [this] (const juce::String& id) { return processorRef.getMappedCC (id); };
+    menuPage->onMidiClear         = [this] (const juce::String& id) { processorRef.clearCCMapping (id); };
+    menuPage->onMidiResetDefaults = [this] { processorRef.resetCCMappingToDefaults(); };
+    
     setControlsLayout();
 
     // Make sure that before the constructor has finished, you've set the
@@ -442,6 +466,11 @@ JC303Editor::~JC303Editor()
 {
     stopTimer();
     tuningSlider->removeMouseListener(&tuningKnobMouse);
+    
+        for (auto* s : std::initializer_list<juce::Slider*> { waveformSlider, cutoffFreqSlider, resonanceSlider, envelopModSlider, decaySlider, accentSlider, volumeSlider,overdriveLevelSlider, overdriveDryWetSlider, modAssign1, modAssign2 })   // MIDI-CC [27]
+        for (auto* m : learnMouses)
+            s->removeMouseListener (m);
+    
 }
 
 bool JC303Editor::keyPressed (const juce::KeyPress& key)
@@ -491,6 +520,21 @@ void JC303Editor::showTuningMenu()
     menu.addSectionHeader(processorRef.getTuningName());
     menu.addItem("Load .tun...", [this] { chooseTuningFile(); });
     menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [this] { processorRef.resetTuning(); });
+    
+    menu.addSeparator();
+    {
+        const bool learning = processorRef.getMidiLearnTarget() == "tuning";
+        menu.addItem (learning ? "Learning... move a CC knob" : "MIDI Learn", true, learning,
+                      [this, learning]
+                      {
+                          if (learning) processorRef.midiLearnCancel();
+                          else          processorRef.midiLearnStart ("tuning");
+                      });
+        const int cc = processorRef.getMappedCC ("tuning");
+        menu.addItem (cc >= 0 ? "Clear MIDI mapping (CC " + juce::String (cc) + ")" : juce::String ("Clear MIDI mapping"),
+                      cc >= 0, false, [this] { processorRef.clearCCMapping ("tuning"); });
+    }
+    
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(tuningSlider));
 }
 
@@ -511,6 +555,26 @@ void JC303Editor::chooseTuningFile()
                                                        "Tuning load failed",
                                                        file.getFileName() + "\n\n" + error);
         });
+}
+
+void JC303Editor::showKnobMenu (juce::Slider* knob, const juce::String& paramID)
+{
+    juce::PopupMenu menu;
+    const bool learning = processorRef.getMidiLearnTarget() == paramID;
+    const int cc = processorRef.getMappedCC (paramID);
+    menu.addItem (learning ? "Learning... move a CC knob" : "MIDI Learn", true, learning,
+                  [this, paramID, learning]
+                  {
+                      if (learning) processorRef.midiLearnCancel();
+                      else          processorRef.midiLearnStart (paramID);
+                  });
+    menu.addItem (cc >= 0 ? "Clear MIDI mapping (CC " + juce::String (cc) + ")" : juce::String ("Clear MIDI mapping"),
+                  cc >= 0, false, [this, paramID] { processorRef.clearCCMapping (paramID); });
+    
+    menu.addSeparator();
+    menu.addItem ("Reset all MIDI mappings to defaults", [this] { processorRef.resetCCMappingToDefaults(); });
+    
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (knob));
 }
 
 void JC303Editor::resized()
@@ -588,8 +652,32 @@ void JC303Editor::timerCallback()
         seqSlideButtons[i]->setState(slideState);
     }
 
-    updateKeyboardForSelectedStep();
+    // Modifica per aggiornare tastiera Start
+    //updateKeyboardForSelectedStep();
+    if (playing)
+        updateKeyboardForStep(currentStep);
+    else
+        updateKeyboardForSelectedStep();
 }
+    // Modifica per aggiornare tastiera Start
+void JC303Editor::updateKeyboardForStep(int step)
+{
+    const auto& seq = processorRef.getSequencer();
+    const uint8_t rawNote = seq.getRawNote(step);
+
+    if (seq.stepOn(step))
+    {
+        seqKeyboard->setStartNote((rawNote / 12) * 12);
+        seqKeyboard->showNote(rawNote);
+    }
+    else
+    {
+        seqKeyboard->showNote(seqKeyboard->getStartNote() + (rawNote % 12));
+    }
+}
+
+
+
 
 void JC303Editor::updateKeyboardForSelectedStep()
 {

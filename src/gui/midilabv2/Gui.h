@@ -28,6 +28,7 @@ public:
     void timerCallback() override;
     bool keyPressed (const juce::KeyPress&) override;
     void updateKeyboardForSelectedStep();
+    void updateKeyboardForStep(int step); //aggiunta per tastiera in play
     void selectStepFromSelector(int step);
 
     void setScaleFactor(float scale) override { juce::AudioProcessorEditor::setScaleFactor(1.0f); }
@@ -139,7 +140,10 @@ private:
     std::unique_ptr<juce::FileChooser> tuningFileChooser;
     void showTuningMenu();
     void chooseTuningFile();
-
+    
+    juce::OwnedArray<KnobMenuMouse> learnMouses;
+    void showKnobMenu (juce::Slider* knob, const juce::String& paramID);
+    
     std::unique_ptr<SliderAttachment> waveformAttachment;
     std::unique_ptr<SliderAttachment> tuningAttachment;
     std::unique_ptr<SliderAttachment> cutoffFreqAttachment;
