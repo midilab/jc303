@@ -526,6 +526,7 @@ void JC303Editor::resized()
 void JC303Editor::timerCallback()
 {
     auto& seq = processorRef.getSequencer();
+    menuPage->handleParameterChanges();
     menuPage->refreshAction();
     menuPage->syncAssignablesFromState();
     const auto scaleName = processorRef.isCustomTuningActive() ? processorRef.getTuningName() : juce::String();

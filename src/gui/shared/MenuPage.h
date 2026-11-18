@@ -525,9 +525,29 @@ public:
     // Fired when a slot is (re)bound so a theme can refresh anything extra.
     std::function<void(int)> onAssignableChanged;
 
+    // Called on whichever thread changed the parameter. Under CLAP that is often the audio
+    // thread, inside process(): clap-juce-extensions notifies parameter listeners
+    // synchronously there. Nothing below may run on it, since it edits components and calls
+    // the editor's actions, so off the message thread this only raises a flag that
+    // handleParameterChanges() picks up from the editor's timer.
     void parameterChanged(const juce::String& parameterID, float newValue) override
     {
         ignoreUnused(parameterID, newValue);
+        if (juce::MessageManager::existsAndIsCurrentThread())
+            applyParameterChange();
+        else
+            parameterChangePending.store(true, std::memory_order_release);
+    }
+
+    // Message thread: apply a change parameterChanged() flagged from another thread.
+    void handleParameterChanges()
+    {
+        if (parameterChangePending.exchange(false, std::memory_order_acq_rel))
+            applyParameterChange();
+    }
+
+    void applyParameterChange()
+    {
         refreshAssignableEnabled();
         if (isHidden(currentItem()))
         {
@@ -557,6 +577,9 @@ void timerCallback() override
     }
 
 private:
+    // Raised by parameterChanged() off the message thread, cleared by handleParameterChanges().
+    std::atomic<bool> parameterChangePending { false };
+
     enum class State { idle, naming, confirmDelete, feedback };
 
     bool isIdle() const { return state == State::idle; }
