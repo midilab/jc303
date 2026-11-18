@@ -38,7 +38,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(switchOverdriveButton = createSwitch());
     //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
-    addAndMakeVisible(menuPage = new MenuPage(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames())));
+    menuPage = std::make_unique<MenuPage>(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames()));
+    addAndMakeVisible(*menuPage);
     addAndMakeVisible(seqKeyboard = new SeqKeyboard(48));
 
     // generative sequencer controls
@@ -441,6 +442,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 JC303Editor::~JC303Editor()
 {
     stopTimer();
+    // Deleting the menu page is what unregisters its parameter listeners. Leaked, it kept
+    // receiving parameter changes after the window closed, and its actions called into this
+    // editor once it was freed: a segfault in process() at the next host parameter event.
+    menuPage.reset();
     tuningSlider->removeMouseListener(&tuningKnobMouse);
 }
 
