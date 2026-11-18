@@ -311,7 +311,7 @@ The sequencer is briefly muted while a pattern is generated so no stray notes pl
 ### Transport and clock
 
 - **`PLAY/STOP`** starts and stops the sequencer.
-- In a plugin the default `Sync Mode` is `Host`; the standalone app defaults to `Internal`. These are only startup defaults — a saved project restores its own setting.
+- The default `Sync Mode` is `Internal`, in a plugin as in the standalone app, so the sequencer waits for `PLAY` rather than starting with the host's transport; choose `Host` to have it follow the DAW. This is only the startup default — a saved project restores its own setting.
 - An incoming **MIDI Start** while the sequencer is parked switches `Sync Mode` to `Midi Clock`, so it follows the external clock from then on. The `Start Mode` still decides whether that Start begins playback.
 
 The `SEQ` page in the LCD exposes:
