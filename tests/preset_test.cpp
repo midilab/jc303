@@ -268,7 +268,9 @@ static void testPresetPage()
     CHECK (pages[0].title == "Presets", "first page is '%s'", pages[0].title.toRawUTF8());
     CHECK (pages[0].items.size() == 6, "preset page has %d rows", pages[0].items.size());
 
-    const auto& presetRow = pages[0].items.getReference (0);
+    // pages[0] is a copy (juce::Array::operator[] returns by value): a reference into it would
+    // dangle at the end of the statement, so take the element itself.
+    const auto& presetRow = pages.getReference (0).items.getReference (0);
     CHECK (presetRow.options.size() == (int) factoryPresets().size(),
            "preset options %d, want %d", presetRow.options.size(), (int) factoryPresets().size());
     for (int i = 0; i < presetRow.options.size(); ++i)
