@@ -5,6 +5,8 @@
 #include GUI_THEME_HEADER
 #include "Presets.h"
 
+#include <clap/factory/preset-discovery.h>
+
 namespace
 {
     // Time mappings shared by the parameter text and setParameter, so the menu shows what you hear
@@ -1326,6 +1328,56 @@ void JC303::setCurrentProgram (int index)
     applyFactoryPreset (getParameters(), preset);
     setModKnob (0, preset.modKnob1);
     setModKnob (1, preset.modKnob2);
+
+    // A preset picked in the window tells a CLAP host, so its browser follows. A load the host
+    // asked for is confirmed by the wrapper itself, once, so not here as well. The fallback Init of
+    // an empty bank has no file, and so nothing a host could have listed.
+    if (! loadingFromHost && preset.file.existsAsFile())
+    {
+        const auto path = preset.file.getFullPathName();
+        reportPresetLoaded (CLAP_PRESET_DISCOVERY_LOCATION_FILE, path.toRawUTF8(), nullptr);
+    }
+}
+
+bool JC303::presetLoadFromLocation (uint32_t locationKind, const char* location, const char* loadKey) noexcept
+{
+    if (locationKind != CLAP_PRESET_DISCOVERY_LOCATION_FILE || location == nullptr)
+    {
+        reportPresetLoadError (locationKind, location, loadKey, 0, "JC303's presets are files");
+        return false;
+    }
+
+    const juce::File file (juce::String::fromUTF8 (location));
+    FactoryPreset preset;
+    if (! readPresetFile (file, preset))
+    {
+        reportPresetLoadError (locationKind, location, loadKey, 0, "not a JC303 preset: " + file.getFullPathName());
+        return false;
+    }
+
+    const juce::ScopedValueSetter<bool> fromHost (loadingFromHost, true);
+
+    // A preset in one of the banks becomes that bank's current program, as a pick in the window
+    // would, so the window shows its name and steps on from it. The bank is shared by every
+    // instance, as the window's bank switch already makes it.
+    for (const auto& bank : presetBanks())
+        if (file.getParentDirectory() == presetBankDirectory (bank))
+        {
+            loadPresetBank (bank);
+            const auto& presets = factoryPresets();
+            for (size_t i = 0; i < presets.size(); ++i)
+                if (presets[i].file == file)
+                {
+                    setCurrentProgram ((int) i);
+                    return true;
+                }
+        }
+
+    // Anywhere else, or a file the loaded bank has not read yet: the sound alone.
+    applyFactoryPreset (getParameters(), preset);
+    setModKnob (0, preset.modKnob1);
+    setModKnob (1, preset.modKnob2);
+    return true;
 }
 
 const juce::String JC303::getProgramName (int index)

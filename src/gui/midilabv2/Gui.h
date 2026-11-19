@@ -121,6 +121,7 @@ private:
     juce::Label* seqStepLabel;
     juce::Label* seqRestLabel;
     int selectedStep = 0;
+    juce::String shownPresetBank = currentPresetBank();   // the bank the menu's preset list was built from
     juce::TooltipWindow tooltipWindow { this, 700 };
 
     // declare the attchaments

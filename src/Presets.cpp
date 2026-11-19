@@ -26,7 +26,7 @@ namespace
     // The directory the currently selected bank's presets live in.
     juce::File currentBankDir()
     {
-        return currentBank == "factory" ? presetsDir() : banksRoot().getChildFile (currentBank);
+        return presetBankDirectory (currentBank);
     }
 
     // First run: copy the JSON files embedded in the binary into the user's presets directory.
@@ -202,6 +202,23 @@ void loadPresetBank (const juce::String& name)
 juce::String currentPresetBank()
 {
     return currentBank;
+}
+
+juce::File presetBankDirectory (const juce::String& bank)
+{
+    return bank == "factory" ? presetsDir() : banksRoot().getChildFile (bank);
+}
+
+void seedFactoryPresetsIfMissing()
+{
+    const juce::File dir = presetsDir();
+    if (! dir.isDirectory())
+        seedFromBinaryData (dir);
+}
+
+bool readPresetFile (const juce::File& file, FactoryPreset& preset)
+{
+    return file.existsAsFile() && parsePreset (file, preset);
 }
 
 const std::vector<FactoryPreset>& factoryPresets()
