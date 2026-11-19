@@ -4,6 +4,8 @@
 #include "Presets.h"
 #include "gui/shared/MenuPage.h"
 
+#include <clap/factory/preset-discovery.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <optional>
@@ -261,6 +263,41 @@ static void testPresetKnobsExist (JC303& p)
 
 // The Presets page is a list of factory presets (like the Overdrive drivers) followed by the
 // Save/New/Rename/Delete rows, and every preset's mod knobs must be MOD-page parameters.
+// CLAP's preset-load, as a host calls it with what our preset discovery listed: a bank's .json by
+// its path becomes that bank's current program, every value it holds applied; anything else is
+// refused. (The discovery side is the host's to read: one file location per bank.)
+static void testPresetLoadFromLocation (JC303& p)
+{
+    loadPresetBank ("factory");
+    const int hoover = programIndex (p, "Hoover");
+    CHECK (hoover > 0, "no Hoover after Init in the factory bank (index %d)", hoover);
+    if (hoover <= 0)
+        return;
+
+    p.setCurrentProgram (0);
+    const auto preset = factoryPresets()[(size_t) hoover];
+    const auto path = preset.file.getFullPathName();
+    CHECK (p.presetLoadFromLocation (CLAP_PRESET_DISCOVERY_LOCATION_FILE, path.toRawUTF8(), nullptr),
+           "loading %s was refused", path.toRawUTF8());
+    CHECK (p.getCurrentProgram() == hoover, "current program %d after the load, want %d",
+           p.getCurrentProgram(), hoover);
+    for (auto& [id, v] : preset.values)
+        if (auto* param = find (p, id.toRawUTF8()))
+            if (const auto want = resolvePresetValue (*param, v))
+                CHECK (std::abs (valueOf (p, id.toRawUTF8()) - *want) <= 1e-3f * std::max (1.0f, std::abs (*want)),
+                       "%s is %g after the load, the preset says %g", id.toRawUTF8(),
+                       (double) valueOf (p, id.toRawUTF8()), (double) *want);
+
+    CHECK (! p.presetLoadFromLocation (CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr, "Hoover"),
+           "a plugin location was accepted: JC303's presets are files");
+    CHECK (! p.presetLoadFromLocation (CLAP_PRESET_DISCOVERY_LOCATION_FILE,
+                                       preset.file.getSiblingFile ("no_such_preset.json").getFullPathName().toRawUTF8(),
+                                       nullptr),
+           "a file that is not there was accepted");
+    CHECK (p.getCurrentProgram() == hoover, "a refused load moved the current program to %d",
+           p.getCurrentProgram());
+}
+
 static void testPresetPage()
 {
     const auto pages = MenuPage::buildPages (juce::StringArray {});
@@ -633,6 +670,7 @@ int main (int argc, char** argv)
         testPresetPage();
         testPresetValueResolution (p);
         testBankSwitch();
+        testPresetLoadFromLocation (p);
         testBankOrderFollowsFileNames();
         testSaveWritesChoiceNames (p);
         testSaveRenameDelete (p);
