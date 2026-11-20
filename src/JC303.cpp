@@ -381,13 +381,15 @@ JC303::JC303()
             //                                            0.0f,
             //                                            13.0f,
             //                                            0.0f),
-            // Startup default: a standalone app runs its own Internal clock, a
-            // plugin follows the host.  Only the default — state restored from a
-            // saved project still wins.
+            // Startup default: Internal everywhere, so the sequencer stays parked
+            // until its own Play is pressed. Following the host would start the
+            // pattern under whatever the host itself plays the moment its
+            // transport runs, which a new instance on a track should not do.
+            // Only the default — state restored from a saved project still wins.
             std::make_unique<juce::AudioParameterChoice> ("seqSyncMode",
                                                         "Seq Sync Mode",
                                                         juce::StringArray{ "Internal", "Host", "Midi Clock" },
-                                                        wrapperType == juce::AudioProcessor::wrapperType_Standalone ? 0 : 1),
+                                                        0),
             std::make_unique<juce::AudioParameterChoice> ("seqStartMode",
                                                         "Seq Start Mode",
                                                         juce::StringArray{ "Transport", "Note Trigger" },
