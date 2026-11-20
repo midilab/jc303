@@ -589,6 +589,14 @@ void JC303Editor::timerCallback()
     }
 
     updateKeyboardForSelectedStep();
+
+    // A host can load a preset from another bank (CLAP's preset-load), which switches the bank
+    // under the window: list the new bank's presets, as the window's own bank switch does.
+    if (currentPresetBank() != shownPresetBank)
+    {
+        shownPresetBank = currentPresetBank();
+        menuPage->refreshPresetOptions();
+    }
 }
 
 void JC303Editor::updateKeyboardForSelectedStep()

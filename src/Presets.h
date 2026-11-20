@@ -37,6 +37,12 @@ juce::StringArray presetBanks();                  // "factory" first, then the o
 void loadPresetBank (const juce::String& name);   // clear presets from memory, then load the bank's *.json
 juce::String currentPresetBank();                 // "factory" unless loadPresetBank was called
 
+// For CLAP preset discovery, which reads presets without a processor and on a host's own thread:
+// these touch the files alone, never the loaded bank above.
+juce::File presetBankDirectory (const juce::String& bank);   // a name from presetBanks() -> its folder
+void seedFactoryPresetsIfMissing();                           // the first-run copy, without loading it
+bool readPresetFile (const juce::File& file, FactoryPreset& preset);   // one .json; false if not a preset
+
 // User preset file operations. Every write happens atomically (a .json.tmp is moved over the target),
 // and every operation reloads the current bank so in-memory presets mirror the folder's .json files.
 juce::String presetFileName (const juce::String& name);   // "Dice Acid" -> "dice_acid.json" (lowercase, spaces -> _)

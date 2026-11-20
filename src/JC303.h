@@ -2,6 +2,8 @@
 
 #include <JuceHeader.h>
 
+#include <clap-juce-extensions/clap-juce-extensions.h>
+
 // Open303
 #include "dsp/open303/rosic_Open303.h"
 #include "dsp/open303/dfl_DispersionFilter.h"
@@ -171,6 +173,7 @@ inline double accentSweepMs (float value) { return linToExp (value, 0.0, 1.0, 15
 
 class JC303  :  public juce::AudioProcessor,
                 public juce::AudioProcessorValueTreeState::Listener,
+                public clap_juce_extensions::clap_juce_audio_processor_capabilities,
                 private juce::AsyncUpdater
 {
 public:
@@ -234,6 +237,11 @@ public:
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
+
+    /** CLAP's preset-load: a preset file the host found through our preset discovery
+        (ClapPresetDiscovery.cpp), loaded as the window loads one. Main thread. */
+    bool supportsPresetLoad() const noexcept override { return true; }
+    bool presetLoadFromLocation (uint32_t locationKind, const char* location, const char* loadKey) noexcept override;
 
     /** Preset file operations from the Presets menu (Save / New / Rename / Delete): snapshot the
         current sound, write it to the current bank's folder, and re-sync the bank in memory. */
@@ -351,6 +359,7 @@ private:
     bool _recWasOn      { false };
 
     int currentProgram = 0;   // factory preset index (see Presets.h)
+    bool loadingFromHost = false;   // inside presetLoadFromLocation: the wrapper tells the host itself
 
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
