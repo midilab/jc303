@@ -1690,22 +1690,22 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             }
         }
 
-        // External MIDI note handling (sequencer not running only)
-        if (! _sequencer.isRunning())
+        // External MIDI note handling.  Always forwarded, in every sync mode and
+        // whether or not the sequencer is running, so keys play through the
+        // engine while the sequence steps.  The engine is monophonic: a key
+        // takes the voice and the next step takes it back.
+        if (message.isNoteOn())
         {
-            if (message.isNoteOn())
-            {
-                open303Core.noteOn (message.getNoteNumber(), message.getVelocity(), 0);
-            }
-            else if (message.isNoteOff())
-            {
-                open303Core.noteOn (message.getNoteNumber(), 0, 0);
-            }
-            else if (message.isAllNotesOff())
-            {
-                for (int i = 0; i <= 127; i++)
-                    open303Core.noteOn (i, 0, 0);
-            }
+            open303Core.noteOn (message.getNoteNumber(), message.getVelocity(), 0);
+        }
+        else if (message.isNoteOff())
+        {
+            open303Core.noteOn (message.getNoteNumber(), 0, 0);
+        }
+        else if (message.isAllNotesOff())
+        {
+            for (int i = 0; i <= 127; i++)
+                open303Core.noteOn (i, 0, 0);
         }
     }
 

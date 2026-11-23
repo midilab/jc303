@@ -582,6 +582,41 @@ static void testModWheelDrivesKnobOne (JC303& p)
            "wheel 64 set superDetune %g", normalised ("superDetune"));
 }
 
+// A fresh instance starts with an empty pattern: every step is a rest.
+static void testInitialPatternIsEmpty()
+{
+    JC303 p;
+    auto& seq = p.getSequencer();
+    CHECK (seq.getTrackLength() == 16, "fresh track length %d", (int) seq.getTrackLength());
+    for (int i = 0; i < 16; ++i)
+        CHECK (! seq.stepOn (i), "fresh step %d is not a rest", i);
+}
+
+// Incoming notes play through the engine even while the sequencer is running.
+static void testInputPlaysWhileSequencerRuns (JC303& p)
+{
+    p.setCurrentProgram (0);
+    setParam (p, "cutoff", 1.0f);
+    setParam (p, "tuning", 0.0f);
+    p.setSequencerSyncMode (AcidSequencer303::SyncMode::Internal);
+    p.setPlayConfigDetails (0, 2, 44100.0, 512);
+    p.prepareToPlay (44100.0, 512);
+    p.sequencerStart();   // free-running; the fresh pattern is silent, so any audio is the key
+
+    juce::AudioBuffer<float> out (2, 512 * 20), buffer (2, 512);
+    for (int b = 0; b < 20; ++b)
+    {
+        juce::MidiBuffer midi;
+        if (b == 0) midi.addEvent (juce::MidiMessage::noteOn (1, 45, (juce::uint8) 100), 0);
+        buffer.clear();
+        p.processBlock (buffer, midi);
+        out.copyFrom (0, b * 512, buffer, 0, 0, 512);
+    }
+    p.releaseResources();
+    CHECK (rmsDb (out, 0, (int) (0.15 * 44100.0)) > -60.0,
+           "input note was silent while the sequencer ran");
+}
+
 // every preset makes clean sound: finite, audible, under full scale, and level-matched to the bank
 static void testEveryPresetRenders (JC303& p, const char* wavDir)
 {
@@ -641,8 +676,10 @@ int main (int argc, char** argv)
         testEveryPresetRenders (p, argc > 2 ? argv[2] : nullptr);
         testPitchBend (p);
         testModWheelDrivesKnobOne (p);
+        testInputPlaysWhileSequencerRuns (p);
     }
     testModKnobs();
+    testInitialPatternIsEmpty();
 
     if (failures == 0)
         std::printf ("preset_test: all passed\n");

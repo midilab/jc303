@@ -156,7 +156,8 @@ public:
             _data.stepLength = SEQ303_STEP_MAX;
             _data.tune       = 0;
             _data.pitchLength = 0;
-            clearStepDataInternal (/*fillWithRests=*/false);
+            // A fresh instance starts empty: every step is a rest.
+            clearStepDataInternal (/*fillWithRests=*/true);
         }
         _stepLocation = 0;
         clearStackInternal (/*sendNoteOffs=*/false);
