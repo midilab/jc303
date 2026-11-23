@@ -38,4 +38,5 @@ target_sources("${PROJECT_NAME}"
 
         JC303.cpp
         Presets.cpp
+        ClapPresetDiscovery.cpp
 )
