@@ -38,7 +38,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(switchOverdriveButton = createSwitch());
     //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
-    addAndMakeVisible(menuPage = new MenuPage(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames())));
+    menuPage = std::make_unique<MenuPage>(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames()));
+    addAndMakeVisible(*menuPage);
     addAndMakeVisible(seqKeyboard = new SeqKeyboard(48));
 
     // generative sequencer controls
@@ -441,6 +442,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 JC303Editor::~JC303Editor()
 {
     stopTimer();
+    // Deleting the menu page is what unregisters its parameter listeners. Leaked, it kept
+    // receiving parameter changes after the window closed, and its actions called into this
+    // editor once it was freed: a segfault in process() at the next host parameter event.
+    menuPage.reset();
     tuningSlider->removeMouseListener(&tuningKnobMouse);
 }
 
@@ -489,8 +494,10 @@ void JC303Editor::showTuningMenu()
 {
     juce::PopupMenu menu;
     menu.addSectionHeader(processorRef.getTuningName());
-    menu.addItem("Load .tun...", [this] { chooseTuningFile(); });
-    menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [this] { processorRef.resetTuning(); });
+    // The async menu outlives this editor if the host closes the window while it is open.
+    const auto editorSaver = juce::Component::SafePointer<JC303Editor>(this);
+    menu.addItem("Load .tun...", [editorSaver] { if (auto* editor = editorSaver.getComponent()) editor->chooseTuningFile(); });
+    menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [editorSaver] { if (auto* editor = editorSaver.getComponent()) editor->processorRef.resetTuning(); });
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(tuningSlider));
 }
 
@@ -521,6 +528,7 @@ void JC303Editor::resized()
 void JC303Editor::timerCallback()
 {
     auto& seq = processorRef.getSequencer();
+    menuPage->handleParameterChanges();
     menuPage->refreshAction();
     menuPage->syncAssignablesFromState();
     const auto scaleName = processorRef.isCustomTuningActive() ? processorRef.getTuningName() : juce::String();
@@ -883,7 +891,8 @@ void JC303Editor::setControlsLayout()
     overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderMediumSize, sliderMediumSize);
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
     //ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
-    menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
+    if (menuPage != nullptr)   // resized() must not outlive the page during teardown
+        menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
 
     // shared single-octave keyboard
     seqKeyboard->setBounds(keyboardLocation.first, keyboardLocation.second, 210, 66);
