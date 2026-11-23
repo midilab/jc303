@@ -494,8 +494,10 @@ void JC303Editor::showTuningMenu()
 {
     juce::PopupMenu menu;
     menu.addSectionHeader(processorRef.getTuningName());
-    menu.addItem("Load .tun...", [this] { chooseTuningFile(); });
-    menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [this] { processorRef.resetTuning(); });
+    // The async menu outlives this editor if the host closes the window while it is open.
+    const auto editorSaver = juce::Component::SafePointer<JC303Editor>(this);
+    menu.addItem("Load .tun...", [editorSaver] { if (auto* editor = editorSaver.getComponent()) editor->chooseTuningFile(); });
+    menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [editorSaver] { if (auto* editor = editorSaver.getComponent()) editor->processorRef.resetTuning(); });
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(tuningSlider));
 }
 
@@ -889,7 +891,8 @@ void JC303Editor::setControlsLayout()
     overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderMediumSize, sliderMediumSize);
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
     //ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
-    menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
+    if (menuPage != nullptr)   // resized() must not outlive the page during teardown
+        menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
 
     // shared single-octave keyboard
     seqKeyboard->setBounds(keyboardLocation.first, keyboardLocation.second, 210, 66);
