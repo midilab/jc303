@@ -70,8 +70,9 @@ public:
         juce::Array<Item> items;
     };
 
-    MenuPage(juce::AudioProcessorValueTreeState& vts, const juce::Array<Page>& pages)
-        : valueTreeState(vts), pageList(pages)
+    MenuPage(juce::AudioProcessorValueTreeState& vts, const juce::Array<Page>& pages,
+             juce::CriticalSection* stateLockToUse = nullptr)
+        : valueTreeState(vts), stateLock(stateLockToUse), pageList(pages)
     {
         customFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::PressStart2PRegular_ttf, BinaryData::PressStart2PRegular_ttfSize));
         customFont.setHeight(12.0f);
@@ -398,7 +399,10 @@ public:
     {
         if (slot < 0 || slot >= numAssignableSlots)
             return;
-        valueTreeState.state.setProperty(modKnobIds[slot], paramID, nullptr);
+        {
+            const juce::ScopedLock sl (stateLock != nullptr ? *stateLock : defaultStateLock());
+            valueTreeState.state.setProperty(modKnobIds[slot], paramID, nullptr);
+        }
         if (assignableSlots[slot].id == paramID)
             return;
         assignableSlots[slot].id = paramID;
@@ -408,13 +412,18 @@ public:
     // Picks up assignments changed outside the menu (a preset load, a restored session); polled by the theme.
     void syncAssignablesFromState()
     {
+        juce::String ids[numAssignableSlots];
+        {
+            const juce::ScopedLock sl (stateLock != nullptr ? *stateLock : defaultStateLock());
+            for (int i = 0; i < numAssignableSlots; ++i)
+                ids[i] = valueTreeState.state.getProperty(modKnobIds[i],
+                                                          defaultModKnobs[i]).toString();
+        }
         for (int i = 0; i < numAssignableSlots; ++i)
         {
-            const juce::String id = valueTreeState.state.getProperty(modKnobIds[i],
-                                                                     defaultModKnobs[i]).toString();
-            if (assignableSlots[i].id != id)
+            if (assignableSlots[i].id != ids[i])
             {
-                assignableSlots[i].id = id;
+                assignableSlots[i].id = ids[i];
                 rebindAssignable(i);
             }
         }
@@ -1264,6 +1273,14 @@ public:
 
 private:
     juce::AudioProcessorValueTreeState& valueTreeState;
+    juce::CriticalSection* stateLock = nullptr;
+
+    // Only used when the owner passes no lock (no such caller today).
+    static juce::CriticalSection& defaultStateLock()
+    {
+        static juce::CriticalSection lock;
+        return lock;
+    }
     juce::Array<Page> pageList;
     juce::StringArray paramIDs;
     AssignableSlot assignableSlots[numAssignableSlots];

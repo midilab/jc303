@@ -584,6 +584,77 @@ static void testHostRealStopStopsSequencer()
     CHECK (! r.seq.isRunning(), "a real stop must stop the sequencer");
 }
 
+// JUCE's LV2 wrapper never supplies ppqPosition. Host sync must still play the
+// whole pattern: the sequencer falls back to its own clock at the host tempo.
+static void testHostClockWithoutPpqKeepsPlaying()
+{
+    Rig r;
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::Host);
+    r.step (0, 40); r.step (1, 43); r.step (2, 45); r.step (3, 47);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    juce::MidiBuffer empty;
+
+    for (int b = 0; b < 200; ++b)
+    {
+        r.seq.processBlock (empty, 512, true, 0.0, 120.0, false, /*hostPpqValid=*/false);
+        r.pos += 512;
+    }
+
+    const auto ons = r.ons();
+    CHECK (ons.size() >= 8);
+    bool movedOn = false;
+    for (size_t i = 4; i < ons.size(); ++i)
+        if (ons[i].note != ons[0].note) movedOn = true;
+    CHECK (movedOn);                                 // step 0 is not replayed forever
+    CHECK (r.seq.getClockAlive());
+}
+
+// A host that reports a ppq which does not move is not usable either: replaying
+// tick 0 every buffer would repeat step 0. Treat it like a missing position.
+static void testHostStalledPpqFallsBackToInternalClock()
+{
+    Rig r;
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::Host);
+    r.step (0, 40); r.step (1, 43); r.step (2, 45); r.step (3, 47);
+    r.seq.setTrackLength (4);
+    r.seq.start();
+    juce::MidiBuffer empty;
+
+    for (int b = 0; b < 200; ++b)
+    {
+        r.seq.processBlock (empty, 512, true, 0.0, 120.0, false, /*hostPpqValid=*/true);
+        r.pos += 512;
+    }
+
+    const auto ons = r.ons();
+    CHECK (ons.size() >= 8);
+    bool movedOn = false;
+    for (size_t i = 4; i < ons.size(); ++i)
+        if (ons[i].note != ons[0].note) movedOn = true;
+    CHECK (movedOn);
+}
+
+// The host tempo must not overwrite the internal tempo: switching back to
+// Internal has to keep the Seq Tempo knob's value.
+static void testHostTempoDoesNotOverwriteInternalTempo()
+{
+    Rig r;
+    r.seq.setTempo (100.0f);
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::Host);
+    r.step (0, 40);
+    r.seq.start();
+    juce::MidiBuffer empty;
+    for (int b = 0; b < 8; ++b)
+        r.seq.processBlock (empty, 512, true, 1.0, 140.0);
+
+    CHECK (r.seq.getTempo() == 100.0f);
+
+    r.seq.setSyncMode (AcidSequencer303::SyncMode::Internal);
+    r.seq.processBlock (empty, 512, false, 0.0, 120.0);
+    CHECK (r.seq.getTempo() == 100.0f);
+}
+
 // ---- re-roll ----------------------------------------------------------------
 
 static void testRerollPitchesKeepsRhythm()
@@ -1001,6 +1072,9 @@ int main()
     testSwingMidiClockNotQuantised();
     testHostLoopWrapKeepsSequencerRunning();
     testHostRealStopStopsSequencer();
+    testHostClockWithoutPpqKeepsPlaying();
+    testHostStalledPpqFallsBackToInternalClock();
+    testHostTempoDoesNotOverwriteInternalTempo();
     testRerollPitchesKeepsRhythm();
     testRerollRhythmKeepsPitchOrder();
     testPitchLengthCyclesAcrossBars();

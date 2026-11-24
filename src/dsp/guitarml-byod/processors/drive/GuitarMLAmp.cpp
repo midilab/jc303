@@ -329,7 +329,18 @@ void GuitarMLAmp::processAudio (AudioBuffer<float>& buffer)
 
     // swap the model between blocks, at a point where the output is silent
     if (doSwap)
-        loadModelFromJson (swapJson, swapName);
+    {
+        // loadModelFromJson throws on an unsupported/invalid model. It runs on the
+        // audio thread, so an escaping exception would std::terminate the host.
+        try
+        {
+            loadModelFromJson (swapJson, swapName);
+        }
+        catch (...)
+        {
+            loadModel (0);   // built-in fallback, as fromXML() does
+        }
+    }
     // shortcut: the weight copy runs on the audio thread (1-3 ms one-off at the silent gap), so a
     // model change can still overrun the block in a strict host. The full fix is to double-buffer
     // the model set and let the message thread run loadModelFromJson while the audio thread only

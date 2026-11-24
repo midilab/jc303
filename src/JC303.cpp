@@ -658,7 +658,9 @@ JC303::JC303()
         _sequencer.setStartMode((AcidSequencer303::StartMode) sm->getIndex());
     if (auto* tp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqTempo")))
         _sequencer.setTempo((float) tp->get());
-    _sequencer.setTrackLength (16);
+    // Follow the seqLength parameter's startup default rather than hard-coding 16.
+    if (auto* lp = dynamic_cast<juce::AudioParameterInt*>(parameters.getParameter("seqLength")))
+        _sequencer.setTrackLength((uint8_t) lp->get());
 
     // Seed the user's presets directory from the embedded copies on first run, then load the factory presets.
     ensureFactoryPresets();
@@ -737,16 +739,17 @@ JC303::~JC303()
     parameters.removeParameterListener("shaperSplit", this);
 }
 
-// Parameter change callback. Runs on the message/automation thread, NOT the audio thread, so it may
-// only touch cheap flags here - the actual open303 setters (which rewrite filter/envelope
-// coefficients the audio thread reads inside getSample) are deferred to updateOpen303Parameters(),
-// applied at the top of processBlock. This closes the torn-read race Fable flagged.
+// Parameter change callback. The vendored CLAP and VST3 wrappers call this synchronously from
+// process(), i.e. on the audio thread, so it may only touch cheap flags here - the actual
+// open303 setters (which rewrite filter/envelope coefficients the audio thread reads inside
+// getSample) are deferred to updateOpen303Parameters(), applied at the top of processBlock.
 void JC303::parameterChanged(const juce::String& parameterID, float newValue)
 {
-    // Exception: loading an overdrive model allocates and touches the filesystem, which must happen
-    // off the audio thread. Keep it here on the message thread rather than deferring it.
+    // Loading an overdrive model allocates, parses JSON and touches the filesystem, which must
+    // happen off the audio thread. Queue it for handleAsyncUpdate() (message thread).
     if (parameterID == "overdriveModelIndex") {
-        setParameter(OVERDRIVE_MODEL_INDEX, newValue);
+        _pendingOverdriveModel.store ((int) std::lround (newValue), std::memory_order_release);
+        triggerAsyncUpdate();
         return;
     }
 
@@ -845,6 +848,29 @@ void JC303::resetSeqOffsets (int mask)
 
 void JC303::handleAsyncUpdate()
 {
+    // A program change came in on a non-message thread (VST3 turns it into
+    // setCurrentProgram from the audio callback): apply it here.
+    const int program = _pendingProgram.exchange (-1, std::memory_order_acq_rel);
+    if (program >= 0)
+        setCurrentProgram (program);
+
+    // Host automation can change the overdrive model on the audio thread; the
+    // parse, allocations and file I/O happen here.
+    const int model = _pendingOverdriveModel.exchange (-1, std::memory_order_acq_rel);
+    if (model >= 0)
+        setParameter (OVERDRIVE_MODEL_INDEX, (float) model);
+
+    // An incoming MIDI Start switched us to Midi Clock on the audio thread; tell
+    // the host from here so it never gets a parameter notification from process().
+    const int syncMode = _pendingSeqSyncMode.exchange (-1, std::memory_order_acq_rel);
+    if (syncMode >= 0)
+        if (auto* p = parameters.getParameter ("seqSyncMode"))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 ((float) syncMode));
+            p->endChangeGesture();
+        }
+
     const int mask = _seqOffsetReset.load (std::memory_order_acquire);
     const std::pair<SeqOffset, const char*> offsets[] {
         { OffsetTranspose, "seqTranspose" }, { OffsetShift, "seqShift" }, { OffsetPitchRotate, "seqPitchRotate" } };
@@ -881,13 +907,17 @@ juce::String JC303::getModKnob (int knob) const
 {
     if (knob < 0 || knob > 1)
         return {};
+    const juce::ScopedLock sl (stateLock);
     return parameters.state.getProperty (modKnobIds[knob], defaultModKnobs[knob]).toString();
 }
 
 void JC303::setModKnob (int knob, const juce::String& paramID)
 {
     if (knob >= 0 && knob <= 1)
+    {
+        const juce::ScopedLock sl (stateLock);
         parameters.state.setProperty (modKnobIds[knob], paramID, nullptr);
+    }
 }
 
 void JC303::applySeqCommands()
@@ -1323,7 +1353,18 @@ void JC303::setCurrentProgram (int index)
 {
     if (index < 0 || index >= getNumPrograms())
         return;
+
+    // Hosts can turn a program change into this call from the audio callback.
+    // Keep the index visible immediately, but do the ValueTree/host work later.
     currentProgram = index;
+    if (! juce::MessageManager::existsAndIsCurrentThread())
+    {
+        _pendingProgram.store (index, std::memory_order_release);
+        triggerAsyncUpdate();
+        return;
+    }
+    _pendingProgram.store (-1, std::memory_order_release);   // a direct load supersedes a queued one
+
     const auto& preset = factoryPresets()[(size_t) index];
     applyFactoryPreset (getParameters(), preset);
     setModKnob (0, preset.modKnob1);
@@ -1453,15 +1494,18 @@ void JC303::prepareToPlay (double sampleRate, int samplesPerBlock)
     _sequencer.prepare (sampleRate, 960.0);
     _pendingCount     = 0;
     _wasHostPlaying   = false;
+    _hostStoppedSeconds = 0.0;
     _recHeldNote      = -1;
     _sustainArmed     = true;
     _recWasOn         = false;
+    _midiOut.ensureSize (static_cast<size_t> (juce::jmax (64, samplesPerBlock * 4)));
 }
 
 void JC303::releaseResources()
 {
     // Stop sequencer and flush any held notes when playback stops
     _sequencer.stop();
+    _pendingCount = 0;
 }
 
 bool JC303::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -1508,18 +1552,33 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     double ppqAtStart    = 0.0;
     double hostBpm       = static_cast<double> (_sequencer.getTempo());
     bool   hostIsPlaying = false;
-    bool   hostIsLooping = false;
-    double hostLoopStart = 0.0;   // left locator, in quarter notes
+    bool   hostPpqValid  = false;
 
     if (auto* ph = getPlayHead())
     {
         if (auto pos = ph->getPosition())
         {
             if (auto bpm = pos->getBpm())         hostBpm      = *bpm;
-            if (auto ppq = pos->getPpqPosition()) ppqAtStart   = *ppq;
+            if (auto ppq = pos->getPpqPosition())
+            {
+                ppqAtStart  = *ppq;
+                hostPpqValid = std::isfinite (ppqAtStart);
+            }
             hostIsPlaying = pos->getIsPlaying();
-            hostIsLooping = pos->getIsLooping();
-            if (const auto loop = pos->getLoopPoints()) hostLoopStart = loop->ppqStart;
+
+            // JUCE's LV2 wrapper never sets ppqPosition (it only has the sample
+            // timeline). Derive a position from timeInSamples when it is there;
+            // if not, the sequencer free-runs at the host tempo instead.
+            if (! hostPpqValid)
+                if (auto timeSamples = pos->getTimeInSamples())
+                {
+                    const double sr = getSampleRate();
+                    if (sr > 0.0 && hostBpm > 0.0 && std::isfinite (hostBpm))
+                    {
+                        ppqAtStart   = (double) *timeSamples / sr * hostBpm / 60.0;
+                        hostPpqValid = std::isfinite (ppqAtStart);
+                    }
+                }
         }
     }
 
@@ -1531,21 +1590,29 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     {
         const bool autoStart = _sequencer.getStartMode()
                                == AcidSequencer303::StartMode::TransportStart;
-        // A transport stop at the loop start while the host is looping is a
-        // loop-wrap rewind, not a stop: hosts that implement looping as stop +
-        // restart (Cubase and Ardour do) drop isPlaying for a buffer at the
-        // right locator.  Release held notes but keep the sequencer engaged, so
-        // the backward-jump re-anchor in processHostClock continues the pattern
-        // at the left locator when play resumes.
-        hostLoopWrap = hostIsLooping
-                       && ppqAtStart <= hostLoopStart + 0.001;
-        if (hostIsPlaying && ! _wasHostPlaying && autoStart)
-            _sequencer.start();
-        else if (! hostIsPlaying && _wasHostPlaying)
+
+        // A host that implements looping as stop + restart (Cubase and Ardour
+        // do) drops isPlaying for a buffer at the right locator.  Hold the
+        // sequencer engaged through a short stop so that wrap is not mistaken
+        // for a real stop; a genuine stop ends it after the grace period.
+        // Matching the loop start instead gives false stops (and no way to tell
+        // a user's Stop at the left locator from a wrap).
+        if (hostIsPlaying)
+            _hostStoppedSeconds = 0.0;
+        else if (_wasHostPlaying)
         {
-            if (hostLoopWrap) _sequencer.releaseHeldNotes();
-            else              _sequencer.stop();
+            _hostStoppedSeconds = numSamples / juce::jmax (1.0, getSampleRate());
+            _sequencer.releaseHeldNotes();
+            hostLoopWrap = true;
         }
+        else
+        {
+            _hostStoppedSeconds += numSamples / juce::jmax (1.0, getSampleRate());
+            hostLoopWrap = _hostStoppedSeconds < 0.25;
+        }
+
+        if (hostIsPlaying && ! _wasHostPlaying && autoStart)
+            _sequencer.start();   // no-op if the wrap grace kept it running
     }
     _wasHostPlaying = hostIsPlaying;
 
@@ -1580,8 +1647,9 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             if (meta.getMessage().isMidiStart())
             {
                 _sequencer.setSyncMode (AcidSequencer303::SyncMode::MidiClock);
-                if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (parameters.getParameter ("seqSyncMode")))
-                    *p = static_cast<int> (AcidSequencer303::SyncMode::MidiClock);   // keep the LCD menu truthful
+                _pendingSeqSyncMode.store (static_cast<int> (AcidSequencer303::SyncMode::MidiClock),
+                                           std::memory_order_release);
+                triggerAsyncUpdate();   // the host notification happens on the message thread
                 break;
             }
 
@@ -1590,7 +1658,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
                              hostIsPlaying,
                              ppqAtStart,
                              hostBpm,
-                             hostLoopWrap);
+                             hostLoopWrap,
+                             hostPpqValid);
 
     // ── Sort pending sequencer events by sample position ──────────────────────
     // Typically 0–2 events per buffer; insertion sort is ideal here.
@@ -1619,8 +1688,8 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     //
     // MIDI output buffer — built up during rendering, replaces midiMessages
     // at the end so the DAW receives sample-accurate note events on the
-    // plugin's MIDI output port.
-    juce::MidiBuffer midiOut;
+    // plugin's MIDI output port. A member, so the audio thread never allocates.
+    _midiOut.clear();
 
     auto dispatchSeqNote = [&] (const PendingNote& ev)
     {
@@ -1634,16 +1703,16 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
             open303Core.noteOn (ev.note, ev.velocity, 0, ev.mute, ev.hammer, ev.reverse, ev.gateSamples);
 
             // MIDI out: NoteOn
-            midiOut.addEvent (juce::MidiMessage::noteOn  (1, ev.note, static_cast<uint8_t>(ev.velocity)),
-                              samplePos);
+            _midiOut.addEvent (juce::MidiMessage::noteOn  (1, ev.note, static_cast<uint8_t>(ev.velocity)),
+                               samplePos);
         }
         else // NoteOff
         {
             open303Core.noteOn (ev.note, 0, 0);
 
             // MIDI out: NoteOff
-            midiOut.addEvent (juce::MidiMessage::noteOff (1, ev.note),
-                              samplePos);
+            _midiOut.addEvent (juce::MidiMessage::noteOff (1, ev.note),
+                               samplePos);
         }
     };
 
@@ -1783,7 +1852,7 @@ void JC303::renderMidi (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi
     // Replace the incoming MIDI buffer with the sequencer's output so the
     // DAW receives sample-accurate NoteOn/NoteOff on the plugin's MIDI output.
     // Incoming transport/clock messages are intentionally not forwarded.
-    midiMessages.swapWith (midiOut);
+    midiMessages.swapWith (_midiOut);
 }
 
 void JC303::updateModSlot(int index)
@@ -1800,6 +1869,10 @@ void JC303::processBlock (juce::AudioBuffer<float>& buffer,
 {
     juce::ScopedNoDenormals noDenormals;
     const auto numSamples = buffer.getNumSamples();
+
+    // Render writes channel 0 and copies it to the rest; nothing to do without it.
+    if (numSamples <= 0 || buffer.getNumChannels() <= 0)
+        return;
 
     // Apply any pending parameter changes here on the audio thread, before rendering, so open303's
     // coefficients are never rewritten concurrently with getSample() reading them.
@@ -1917,21 +1990,34 @@ bool JC303::loadTuningFile (const juce::File& file, juce::String& errorMessage)
         errorMessage = juce::String (result.error);
         return false;
     }
-    tuningState = std::move (result.table);
-    open303Core.installPitchMap (tuningState.getFrequencies());
+
+    std::array<double, TuningTable::kNumNotes> frequencies;
+    {
+        const juce::ScopedLock sl (stateLock);
+        tuningState = std::move (result.table);
+        frequencies = tuningState.getFrequencies();
+    }
+    open303Core.installPitchMap (frequencies);
     updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
     return true;
 }
 
 void JC303::resetTuning()
 {
-    tuningState.setEqualTemperament (440.0);
-    open303Core.installPitchMap (tuningState.getFrequencies());
+    std::array<double, TuningTable::kNumNotes> frequencies;
+    {
+        const juce::ScopedLock sl (stateLock);
+        tuningState.setEqualTemperament (440.0);
+        frequencies = tuningState.getFrequencies();
+    }
+    open303Core.installPitchMap (frequencies);
     updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
 }
 
 void JC303::getStateInformation (juce::MemoryBlock& destData)
 {
+    const juce::ScopedLock sl (stateLock);
+
     auto state = parameters.copyState();
     stripSerialisedChildren (state);
     auto xml = state.createXml();
@@ -1980,6 +2066,8 @@ void JC303::getStateInformation (juce::MemoryBlock& destData)
 
 void JC303::setStateInformation (const void* data, int sizeInBytes)
 {
+    const juce::ScopedLock sl (stateLock);
+
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
     if (xmlState.get() != nullptr)
     {

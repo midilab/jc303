@@ -17,13 +17,14 @@ void drawRotarySlider(Graphics& g,
 
     if (imageKnob.isValid())
     {
-        const double rotation = (slider.getValue()
-                                 - slider.getMinimum())
-        / (slider.getMaximum()
-           - slider.getMinimum());
+        const double range = slider.getMaximum() - slider.getMinimum();
+        const double rotation = range > 0.0
+        ? (slider.getValue() - slider.getMinimum()) / range
+        : 0.0;
 
         const int frames = imageKnob.getHeight() / imageKnob.getWidth();
-        const int frameId = (int)ceil(rotation * ((double)frames - 1.0));
+        const int frameId = juce::jlimit (0, jmax (0, frames - 1),
+                                          (int)ceil(rotation * ((double)frames - 1.0)));
         const float radius = jmin(width / 2.0f, height / 2.0f);
         const float centerX = x + width * 0.5f;
         const float centerY = y + height * 0.5f;

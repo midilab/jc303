@@ -170,6 +170,9 @@ namespace
 
 bool ensureFactoryPresets()
 {
+    // The preset vector is shared file-scope state and is not thread-safe: only the
+    // message thread may (re)load it. CLAP preset discovery deliberately uses the
+    // path-only helpers instead; keep it that way.
     loadPresetBank ("factory");
     return ! presets.empty();
 }
@@ -193,6 +196,7 @@ juce::StringArray presetBanks()
 
 void loadPresetBank (const juce::String& name)
 {
+    // Mutates the shared preset vector; message thread only (see ensureFactoryPresets).
     if (name == currentBank && loaded)
         return;
     currentBank = name;

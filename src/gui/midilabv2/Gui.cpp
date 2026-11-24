@@ -38,7 +38,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(switchOverdriveButton = createSwitch());
     //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
-    menuPage = std::make_unique<MenuPage>(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames()));
+    menuPage = std::make_unique<MenuPage>(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames()), &processorRef.getStateLock());
     addAndMakeVisible(*menuPage);
     addAndMakeVisible(seqKeyboard = new SeqKeyboard(48));
 
@@ -113,7 +113,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         menuPage->onCurrentItemChanged = [editorSaver] (float v)
         {
             auto* editor = editorSaver.getComponent();
-            if (editor == nullptr)
+            if (editor == nullptr || editor->menuPage == nullptr)
                 return;
             const bool editable = (v >= 0.0f);
             const bool stepable = editable || editor->menuPage->currentItemIsAction();
@@ -328,10 +328,21 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // transport, MIDI clock or note-trigger, which leaves the param value stale
     // and makes a later click a no-op.  The timer keeps the LED synced to
     // seq.isRunning(), so every click here always emits a fresh command.
+    seqPlayButton->setTooltip("Play / Stop\nHost or MIDI Clock sync follows the external transport.");
     seqPlayButton->onClick = [this]
     {
+        auto& seq = processorRef.getSequencer();
         if (seqPlayButton->getToggleState())
-            processorRef.getSequencer().setReversePlayback(false);
+        {
+            // Host / MIDI Clock sync: there is nothing to play until the external
+            // clock runs. Stay off instead of going red and silent.
+            if (seq.getSyncMode() != AcidSequencer303::SyncMode::Internal && ! seq.getClockAlive())
+            {
+                seqPlayButton->setToggleState(false, juce::dontSendNotification);
+                return;
+            }
+            seq.setReversePlayback(false);
+        }
         processorRef.seqCommand(seqPlayButton->getToggleState()
                                     ? JC303::SeqCommand::Play
                                     : JC303::SeqCommand::Stop);
@@ -344,7 +355,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         {
             seq.setReversePlayback(! seq.getReversePlayback());
         }
-        else
+        else if (seq.getSyncMode() == AcidSequencer303::SyncMode::Internal || seq.getClockAlive())
         {
             seq.setReversePlayback(true);
             processorRef.seqCommand(JC303::SeqCommand::Play);
@@ -473,8 +484,13 @@ bool JC303Editor::keyPressed (const juce::KeyPress& key)
     if (! standalone && static_cast<int>(*valueTreeState.getRawParameterValue("seqSyncMode")) != 0)
         return false;
 
-    if (auto* playParam = valueTreeState.getParameter("seqPlayState"))
-        playParam->setValueNotifyingHost(valueTreeState.getRawParameterValue("seqPlayState")->load() > 0.5f ? 0.0f : 1.0f);
+    // Space drives the sequencer command channel, like the Play button: the
+    // seqPlayState parameter can be stale when the host/note/MIDI started it.
+    auto& seq = processorRef.getSequencer();
+    if (seq.isRunning())
+        processorRef.seqCommand (JC303::SeqCommand::Stop);
+    else if (seq.getSyncMode() == AcidSequencer303::SyncMode::Internal || seq.getClockAlive())
+        processorRef.seqCommand (JC303::SeqCommand::Play);
     return true;
 }
 
@@ -528,6 +544,8 @@ void JC303Editor::resized()
 void JC303Editor::timerCallback()
 {
     auto& seq = processorRef.getSequencer();
+    if (menuPage == nullptr)
+        return;
     menuPage->handleParameterChanges();
     menuPage->refreshAction();
     menuPage->syncAssignablesFromState();
