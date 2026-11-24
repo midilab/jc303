@@ -70,8 +70,9 @@ public:
         juce::Array<Item> items;
     };
 
-    MenuPage(juce::AudioProcessorValueTreeState& vts, const juce::Array<Page>& pages)
-        : valueTreeState(vts), pageList(pages)
+    MenuPage(juce::AudioProcessorValueTreeState& vts, const juce::Array<Page>& pages,
+             juce::CriticalSection* stateLockToUse = nullptr)
+        : valueTreeState(vts), stateLock(stateLockToUse), pageList(pages)
     {
         customFont = juce::Font(juce::Typeface::createSystemTypefaceFor(BinaryData::PressStart2PRegular_ttf, BinaryData::PressStart2PRegular_ttfSize));
         customFont.setHeight(12.0f);
@@ -398,7 +399,10 @@ public:
     {
         if (slot < 0 || slot >= numAssignableSlots)
             return;
-        valueTreeState.state.setProperty(modKnobIds[slot], paramID, nullptr);
+        {
+            const juce::ScopedLock sl (stateLock != nullptr ? *stateLock : defaultStateLock());
+            valueTreeState.state.setProperty(modKnobIds[slot], paramID, nullptr);
+        }
         if (assignableSlots[slot].id == paramID)
             return;
         assignableSlots[slot].id = paramID;
@@ -408,13 +412,18 @@ public:
     // Picks up assignments changed outside the menu (a preset load, a restored session); polled by the theme.
     void syncAssignablesFromState()
     {
+        juce::String ids[numAssignableSlots];
+        {
+            const juce::ScopedLock sl (stateLock != nullptr ? *stateLock : defaultStateLock());
+            for (int i = 0; i < numAssignableSlots; ++i)
+                ids[i] = valueTreeState.state.getProperty(modKnobIds[i],
+                                                          defaultModKnobs[i]).toString();
+        }
         for (int i = 0; i < numAssignableSlots; ++i)
         {
-            const juce::String id = valueTreeState.state.getProperty(modKnobIds[i],
-                                                                     defaultModKnobs[i]).toString();
-            if (assignableSlots[i].id != id)
+            if (assignableSlots[i].id != ids[i])
             {
-                assignableSlots[i].id = id;
+                assignableSlots[i].id = ids[i];
                 rebindAssignable(i);
             }
         }
@@ -525,9 +534,29 @@ public:
     // Fired when a slot is (re)bound so a theme can refresh anything extra.
     std::function<void(int)> onAssignableChanged;
 
+    // Called on whichever thread changed the parameter. Under CLAP that is often the audio
+    // thread, inside process(): clap-juce-extensions notifies parameter listeners
+    // synchronously there. Nothing below may run on it, since it edits components and calls
+    // the editor's actions, so off the message thread this only raises a flag that
+    // handleParameterChanges() picks up from the editor's timer.
     void parameterChanged(const juce::String& parameterID, float newValue) override
     {
         ignoreUnused(parameterID, newValue);
+        if (juce::MessageManager::existsAndIsCurrentThread())
+            applyParameterChange();
+        else
+            parameterChangePending.store(true, std::memory_order_release);
+    }
+
+    // Message thread: apply a change parameterChanged() flagged from another thread.
+    void handleParameterChanges()
+    {
+        if (parameterChangePending.exchange(false, std::memory_order_acq_rel))
+            applyParameterChange();
+    }
+
+    void applyParameterChange()
+    {
         refreshAssignableEnabled();
         if (isHidden(currentItem()))
         {
@@ -557,6 +586,9 @@ void timerCallback() override
     }
 
 private:
+    // Raised by parameterChanged() off the message thread, cleared by handleParameterChanges().
+    std::atomic<bool> parameterChangePending { false };
+
     enum class State { idle, naming, confirmDelete, feedback };
 
     bool isIdle() const { return state == State::idle; }
@@ -1241,6 +1273,14 @@ public:
 
 private:
     juce::AudioProcessorValueTreeState& valueTreeState;
+    juce::CriticalSection* stateLock = nullptr;
+
+    // Only used when the owner passes no lock (no such caller today).
+    static juce::CriticalSection& defaultStateLock()
+    {
+        static juce::CriticalSection lock;
+        return lock;
+    }
     juce::Array<Page> pageList;
     juce::StringArray paramIDs;
     AssignableSlot assignableSlots[numAssignableSlots];

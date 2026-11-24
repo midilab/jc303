@@ -26,7 +26,7 @@ namespace
     // The directory the currently selected bank's presets live in.
     juce::File currentBankDir()
     {
-        return currentBank == "factory" ? presetsDir() : banksRoot().getChildFile (currentBank);
+        return presetBankDirectory (currentBank);
     }
 
     // First run: copy the JSON files embedded in the binary into the user's presets directory.
@@ -170,6 +170,9 @@ namespace
 
 bool ensureFactoryPresets()
 {
+    // The preset vector is shared file-scope state and is not thread-safe: only the
+    // message thread may (re)load it. CLAP preset discovery deliberately uses the
+    // path-only helpers instead; keep it that way.
     loadPresetBank ("factory");
     return ! presets.empty();
 }
@@ -193,6 +196,7 @@ juce::StringArray presetBanks()
 
 void loadPresetBank (const juce::String& name)
 {
+    // Mutates the shared preset vector; message thread only (see ensureFactoryPresets).
     if (name == currentBank && loaded)
         return;
     currentBank = name;
@@ -202,6 +206,23 @@ void loadPresetBank (const juce::String& name)
 juce::String currentPresetBank()
 {
     return currentBank;
+}
+
+juce::File presetBankDirectory (const juce::String& bank)
+{
+    return bank == "factory" ? presetsDir() : banksRoot().getChildFile (bank);
+}
+
+void seedFactoryPresetsIfMissing()
+{
+    const juce::File dir = presetsDir();
+    if (! dir.isDirectory())
+        seedFromBinaryData (dir);
+}
+
+bool readPresetFile (const juce::File& file, FactoryPreset& preset)
+{
+    return file.existsAsFile() && parsePreset (file, preset);
 }
 
 const std::vector<FactoryPreset>& factoryPresets()

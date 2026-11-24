@@ -156,7 +156,8 @@ public:
             _data.stepLength = SEQ303_STEP_MAX;
             _data.tune       = 0;
             _data.pitchLength = 0;
-            clearStepDataInternal (/*fillWithRests=*/false);
+            // A fresh instance starts empty: every step is a rest.
+            clearStepDataInternal (/*fillWithRests=*/true);
         }
         _stepLocation = 0;
         clearStackInternal (/*sendNoteOffs=*/false);
@@ -193,11 +194,14 @@ public:
         _sampleAccum     = 0.0;
         _tickCounter     = 0;
         _lastHostTick    = -1;
+        _lastHostPpq     = -1.0;
+        _hostPpqStallCount = 0;
         _lastMode        = _syncMode.load (std::memory_order_relaxed);
         _blockStart      = 0;
         _queueCount      = 0;
         _lastMidiClock   = -1;
         _tickSamples     = _samplesPerTick;
+        _clockAlive.store (false, std::memory_order_relaxed);
     }
 
     // =========================================================================
@@ -252,6 +256,8 @@ public:
         _tickCounter  = 0;
         _sampleAccum  = 0.0;
         _lastHostTick = -1;
+        _lastHostPpq  = -1.0;
+        _hostPpqStallCount = 0;
         _lastMidiClock = -1;
         _swingRelatch = true;
         _pitchPlayhead = -1;
@@ -276,6 +282,11 @@ public:
 
     bool isRunning() const { return _running.load(); }
 
+    /** True when the clock currently driving the sequencer is live (the host is
+     *  playing, or MIDI clock messages are arriving). Internal is live while it
+     *  runs. The UI uses this to avoid showing a red Play button with no clock. */
+    bool getClockAlive() const { return _clockAlive.load (std::memory_order_relaxed); }
+
     /** Reverse playback: steps run last to first and every note's envelope is
      *  reversed, except steps flagged reverse (reverse of reverse = forward). */
     void setReversePlayback (bool v) { _reversePlay.store (v); }
@@ -291,16 +302,20 @@ public:
      * @param ppqAtBufferStart  ppqPosition at sample 0 (Host sync).
      * @param bpm               Current host BPM (Host sync; ignored in Internal).
      * @param hostLoopWrap      True when a transport stop was a loop-wrap rewind
-     *                          (host is looping and the position is at the loop
-     *                          start) rather than a real stop, so the Host clock
-     *                          must not tear the sequencer down.
+     *                          rather than a real stop, so the Host clock must not
+     *                          tear the sequencer down.
+     * @param hostPpqValid      False when the host supplied no usable ppq position
+     *                          (JUCE's LV2 wrapper never does): the Host clock then
+     *                          free-runs at the host tempo instead of re-anchoring
+     *                          to a fake position 0 every buffer.
      */
     void processBlock (const juce::MidiBuffer& midiIn,
                        int    numSamples,
                        bool   hostIsPlaying,
                        double ppqAtBufferStart,
                        double bpm,
-                       bool   hostLoopWrap = false)
+                       bool   hostLoopWrap = false,
+                       bool   hostPpqValid = true)
     {
         _blockLength = numSamples;
 
@@ -323,8 +338,13 @@ public:
             _lastMode = mode;
             stop();
             _lastHostTick  = -1;
+            _lastHostPpq   = -1.0;
+            _hostPpqStallCount = 0;
             _tickCounter   = 0;
             _sampleAccum   = 0.0;
+            _lastMidiClock = -1;
+            _tickSamples   = _samplesPerTick;
+            _swingRelatch  = true;
 
             // Entering Host while the host is already playing produces no play
             // edge, so re-arm immediately; the host ppq re-anchors the position.
@@ -356,9 +376,10 @@ public:
                 {
                     stop();
                 }
-                else if (msg.isMidiClock() && _running)
+                else if (msg.isMidiClock())
                 {
-                    tickMidiClock (samplePos);
+                    if (_running) tickMidiClock (samplePos);
+                    else          _lastMidiClock = _blockStart + samplePos;   // let the UI see a live clock before Start
                 }
             }
 
@@ -374,7 +395,7 @@ public:
                 break;
 
             case SyncMode::Host:
-                processHostClock (numSamples, hostIsPlaying, ppqAtBufferStart, bpm, hostLoopWrap);
+                processHostClock (numSamples, hostIsPlaying, ppqAtBufferStart, bpm, hostLoopWrap, hostPpqValid);
                 break;
 
             case SyncMode::MidiClock:
@@ -382,6 +403,15 @@ public:
         }
 
         flushQueue (numSamples);
+
+        // Whether the clock currently driving us is live: Internal is live while it
+        // runs, Host follows the transport, MidiClock needs recent clock messages.
+        _clockAlive.store (mode == SyncMode::Internal ? _running.load()
+                             : mode == SyncMode::Host ? hostIsPlaying
+                             : (_lastMidiClock >= 0
+                                && static_cast<double>(_blockStart - _lastMidiClock) < _sampleRate),
+                           std::memory_order_relaxed);
+
         _blockStart += numSamples;
     }
 
@@ -422,32 +452,30 @@ public:
      *  harmonized note if tune > 0, raw MIDI note otherwise. */
     uint8_t getStepData (int step) const
     {
+        juce::SpinLock::ScopedLockType lk (_dataLock);
         const uint8_t raw = _data.step[step].note;
         if (_data.tune > 0)
-        {
-            juce::SpinLock::ScopedLockType lk (_dataLock);
             return _harmonizer.harmonize (raw) + static_cast<uint8_t>(_data.tune - 1);
-        }
         return raw;
     }
 
     /** Raw MIDI note, bypassing harmonizer. */
-    uint8_t getRawNote (int step) const { return _data.step[step].note; }
+    uint8_t getRawNote (int step) const { juce::SpinLock::ScopedLockType lk (_dataLock); return _data.step[step].note; }
 
     /** stepOn(step) — mirrors Engine303::stepOn() */
-    bool stepOn  (int step) const { return ! _data.step[step].rest;   }
+    bool stepOn  (int step) const { juce::SpinLock::ScopedLockType lk (_dataLock); return ! _data.step[step].rest;   }
     /** accentOn(step) */
-    bool accentOn (int step) const { return  _data.step[step].accent; }
+    bool accentOn (int step) const { juce::SpinLock::ScopedLockType lk (_dataLock); return  _data.step[step].accent; }
     /** slideOn(step) */
-    bool slideOn  (int step) const { return  _data.step[step].slide;  }
+    bool slideOn  (int step) const { juce::SpinLock::ScopedLockType lk (_dataLock); return  _data.step[step].slide;  }
     /** tieOn(step) */
-    bool tieOn    (int step) const { return  _data.step[step].tie;    }
+    bool tieOn    (int step) const { juce::SpinLock::ScopedLockType lk (_dataLock); return  _data.step[step].tie;    }
     /** stepMuteOn(step) */
-    bool stepMuteOn (int step) const { return  _data.step[step].mute;   }
+    bool stepMuteOn (int step) const { juce::SpinLock::ScopedLockType lk (_dataLock); return  _data.step[step].mute;   }
     /** hammerOn(step) */
-    bool hammerOn (int step) const { return  _data.step[step].hammer; }
+    bool hammerOn (int step) const { juce::SpinLock::ScopedLockType lk (_dataLock); return  _data.step[step].hammer; }
     /** reverseOn(step) */
-    bool reverseOn(int step) const { return  _data.step[step].reverse; }
+    bool reverseOn(int step) const { juce::SpinLock::ScopedLockType lk (_dataLock); return  _data.step[step].reverse; }
 
     // =========================================================================
     // ── Track-level getters / setters — mirrors engine_303 API ───────────────
@@ -501,7 +529,7 @@ public:
         juce::SpinLock::ScopedLockType lk (_dataLock);
         _data.pitchLength = static_cast<uint8_t>(juce::jmin<int> (length, SEQ303_STEP_MAX));
     }
-    uint8_t getPitchLength() const { return _data.pitchLength; }
+    uint8_t getPitchLength() const { juce::SpinLock::ScopedLockType lk (_dataLock); return _data.pitchLength; }
 
     /** Pitch playhead: the step whose stored pitch the last started note
      *  used (differs from the step position with Pitch Rotate / Pitch
@@ -516,7 +544,7 @@ public:
         juce::SpinLock::ScopedLockType lk (_dataLock);
         _data.tune = tune;
     }
-    uint8_t getTune() const { return _data.tune; }
+    uint8_t getTune() const { juce::SpinLock::ScopedLockType lk (_dataLock); return _data.tune; }
 
     /** True if every stored step note (rests included) stays in 0..127
      *  after shifting by `semitones`. */
@@ -549,7 +577,7 @@ public:
         juce::SpinLock::ScopedLockType lk (_dataLock);
         _data.stepLength = juce::jlimit<uint8_t> (1, SEQ303_STEP_MAX, length);
     }
-    uint8_t getTrackLength() const { return _data.stepLength; }
+    uint8_t getTrackLength() const { juce::SpinLock::ScopedLockType lk (_dataLock); return _data.stepLength; }
 
     /** setMute / getMute — silences note-on output; clears stack when muting */
     void setMute (bool m)
@@ -840,9 +868,11 @@ private:
     void updateSamplesPerTick()
     {
         const float bpm = _internalBpm.load (std::memory_order_relaxed);
-        if (bpm > 0.f && _sampleRate > 0.0)
-            _samplesPerTick = (_sampleRate * 60.0)
-                              / (static_cast<double>(bpm) * 96.0);
+        if (bpm > 0.f)
+            // Floor at 1: a degenerate tempo / sample rate must not make the
+            // accumulator loop below spin on a zero-size tick forever.
+            _samplesPerTick = std::max (1.0, (_sampleRate * 60.0)
+                                              / (static_cast<double>(bpm) * 96.0));
     }
 
     // ── Internal clock ────────────────────────────────────────────────────────
@@ -887,12 +917,13 @@ private:
                            bool   hostIsPlaying,
                            double ppqStart,
                            double bpm,
-                           bool   hostLoopWrap)
+                           bool   hostLoopWrap,
+                           bool   ppqValid)
     {
         if (! hostIsPlaying)
         {
             // A host that implements transport looping as stop + restart drops
-            // isPlaying for one buffer at the wrap.  The stop/start edge
+            // isPlaying for a buffer at the wrap.  The stop/start edge
             // handling in JC303::renderMidi has already decided this buffer was
             // a loop-wrap (hostLoopWrap), so keep the sequencer engaged: the
             // backward-jump re-anchor below continues the pattern at the loop
@@ -903,17 +934,45 @@ private:
 
         if (! _running) return;
 
-        if (bpm > 0.0 && std::isfinite (bpm))
-        {
-            _internalBpm.store (static_cast<float>(bpm), std::memory_order_relaxed);
-            updateSamplesPerTick();
-        }
+        const bool bpmValid = bpm > 0.0 && std::isfinite (bpm);
+        if (bpmValid)
+            _hostBpm = bpm;                       // Host tempo stays out of _internalBpm
+        const double clockBpm = bpmValid ? bpm : _hostBpm;
+
+        // A host can report the same ppq every buffer (or no ppq at all, as
+        // JUCE's LV2 wrapper does).  Trusting it re-anchors to tick 0 each
+        // buffer and the pattern repeats step 0 forever ("one note").  A ppq
+        // that has not moved for two buffers is not a usable position; one
+        // repeated buffer is tolerated so a single stop-wrap resume still
+        // re-fires the step at the loop point.
+        const bool ppqSame = ppqValid
+                             && _lastHostPpq >= 0.0
+                             && std::abs (ppqStart - _lastHostPpq) < 1.0e-9;
+        if (ppqValid && std::isfinite (ppqStart) && std::abs (ppqStart) < 1.0e9)
+            _lastHostPpq = ppqStart;
         else
+            ppqValid = false;
+        _hostPpqStallCount = ppqSame ? _hostPpqStallCount + 1 : 0;
+
+        if (! ppqValid || _hostPpqStallCount >= 2)
         {
-            // Host handed us NaN / 0 / negative tempo — fall back to our cached
-            // tempo so the division below can never produce NaN/inf.
-            bpm = _internalBpm.load (std::memory_order_relaxed);
-            updateSamplesPerTick();
+            // No usable host position: free-run our own clock at the host tempo.
+            // The pattern keeps time and plays in full, just not phase-locked to
+            // the transport (there is no position to lock to).
+            //
+            // Resume at the tick after the last host tick: the internal clock
+            // fires _tickCounter itself, so leaving it at the last fired host
+            // tick would repeat a step boundary once.
+            if (_lastHostTick >= 0)
+            {
+                _tickCounter  = static_cast<uint32_t>(_lastHostTick + 1);
+                _lastHostTick = -1;
+                _sampleAccum  = 0.0;
+            }
+            _samplesPerTick = std::max (1.0, (_sampleRate * 60.0) / (clockBpm * 96.0));
+            _tickSamples    = _samplesPerTick;
+            processInternalClock (numSamples);
+            return;
         }
 
         // Convert buffer start position to 96-PPQN ticks
@@ -923,7 +982,7 @@ private:
         const double  tickPosAtStart = ppqStart * 96.0;
 
         // Samples per quarter note at current BPM
-        const double samplesPerQuarter = (_sampleRate * 60.0) / bpm;
+        const double samplesPerQuarter = (_sampleRate * 60.0) / clockBpm;
         // Samples per 96-PPQN tick (floored at 1.0 so a degenerate host tempo can
         // never yield sampPerTick = NaN/inf/0 and wedge the loop below)
         const double sampPerTick = std::max (1.0, samplesPerQuarter / 96.0);
@@ -1585,6 +1644,7 @@ private:
 
     // Transport
     std::atomic<bool>      _running { false };
+    std::atomic<bool>      _clockAlive { false };   // the clock currently driving us is live
 
     // Clock parameters (set in prepare(), updated in setTempo())
     double                 _sampleRate      { 44100.0 };
@@ -1601,6 +1661,9 @@ private:
 
     // Host sync — last 96-PPQN tick seen from AudioPlayHead
     int64_t                _lastHostTick    { -1 };
+    double                 _lastHostPpq     { -1.0 };  // previous host ppq, to spot a stalled position
+    int                    _hostPpqStallCount { 0 };   // consecutive buffers with an unchanged ppq
+    double                 _hostBpm         { 120.0 }; // host tempo; never overwrites _internalBpm
 
     // Note lengths in 96-PPQN ticks (identical numbers to original engine_303)
     int32_t                _noteLengthTicks { 0 };   // = 12 ticks = 50% gate

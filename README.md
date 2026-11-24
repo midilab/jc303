@@ -315,6 +315,8 @@ The sequencer is briefly muted while a pattern is generated so no stray notes pl
 ### Transport and clock
 
 - **`PLAY/STOP`** starts and stops the sequencer.
+- A fresh instance starts with an **empty pattern** (every step a rest), so a new track is silent until you enter notes.
+- Incoming MIDI notes always play through the engine, in every `Sync Mode` and whether or not the sequencer is running, so you can play keys while the sequence steps. The engine is monophonic: a key takes the voice and the next sequence step takes it back.
 - In a plugin the default `Sync Mode` is `Host`; the standalone app defaults to `Internal`. These are only startup defaults — a saved project restores its own setting.
 - An incoming **MIDI Start** while the sequencer is parked switches `Sync Mode` to `Midi Clock`, so it follows the external clock from then on. The `Start Mode` still decides whether that Start begins playback.
 

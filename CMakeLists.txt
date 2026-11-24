@@ -5,7 +5,7 @@ if(WIN32)
     add_compile_definitions(__amd64__=1)
 endif()
 
-project(JC303 VERSION 0.14.0)
+project(JC303 VERSION 0.14.1)
 
 
 ### Dependency versions ###
@@ -142,11 +142,15 @@ juce_add_plugin("${PROJECT_NAME}"
     COPY_PLUGIN_AFTER_BUILD FALSE)              # Should the plugin be installed to a default location after building?
 # NOTE: Writing to the default install locations might require administrator privileges on Windows.
 
+# The CLAP id, also the one the preset discovery names (src/ClapPresetDiscovery.cpp).
+set(JC303_CLAP_ID "co.midilab.${PROJECT_NAME}")
+
 if(BUILD_CLAP)
     clap_juce_extensions_plugin(
         TARGET "${PROJECT_NAME}"
-        CLAP_ID "co.midilab.${PROJECT_NAME}"
-        CLAP_FEATURES "instrument" "synthesizer")
+        CLAP_ID "${JC303_CLAP_ID}"
+        CLAP_FEATURES "instrument" "synthesizer"
+        CLAP_SUPPORTS_CUSTOM_FACTORY 1)   # the preset-discovery factory, src/ClapPresetDiscovery.cpp
 endif()
 
 # Set the C++ language standard requirenment for the "shared code" library target.
@@ -175,7 +179,8 @@ target_compile_definitions("${PROJECT_NAME}"
         # JUCE_WEB_BROWSER and JUCE_USE_CURL would be on by default, but you might not need them.
         JUCE_WEB_BROWSER=0  # If you remove this, add `NEEDS_WEB_BROWSER TRUE` to the `juce_add_plugin` call
         JUCE_USE_CURL=0     # If you remove this, add `NEEDS_CURL TRUE` to the `juce_add_plugin` call
-        JUCE_VST3_CAN_REPLACE_VST2=0)
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        JC303_CLAP_ID="${JC303_CLAP_ID}")
 
 # If your target needs extra binary assets, you can add them here.
 # NOTE: Conversion to binary-data happens when the target is built.
@@ -203,6 +208,7 @@ target_link_libraries("${PROJECT_NAME}"
         juce::juce_audio_utils
     PUBLIC
         FactoryPresetData
+        clap_juce_extensions   # the processor's CLAP capabilities: preset-load
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)

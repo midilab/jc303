@@ -128,8 +128,11 @@ public:
         _suppressCallbacks = true;
         if (midiNote == shownNote)
         {
-            // Re-assertsthe selected key after a physical release.
+            // Re-asserts the selected key after a physical release; the state
+            // change repaints the keyboard, so no manual repaint here.
             keyboardState.noteOn (1, midiNote, 0.75f);
+            _suppressCallbacks = false;
+            return;
         }
         else
         {

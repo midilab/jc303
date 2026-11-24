@@ -38,7 +38,8 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     addAndMakeVisible(switchOverdriveButton = createSwitch());
     //addAndMakeVisible(ledOverdriveButton = createLed("switchOverdriveState"));
     // overdrive model select component
-    addAndMakeVisible(menuPage = new MenuPage(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames())));
+    menuPage = std::make_unique<MenuPage>(valueTreeState, MenuPage::buildPages(processorRef.getModelListNames()), &processorRef.getStateLock());
+    addAndMakeVisible(*menuPage);
     addAndMakeVisible(seqKeyboard = new SeqKeyboard(48));
 
     // generative sequencer controls
@@ -112,7 +113,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         menuPage->onCurrentItemChanged = [editorSaver] (float v)
         {
             auto* editor = editorSaver.getComponent();
-            if (editor == nullptr)
+            if (editor == nullptr || editor->menuPage == nullptr)
                 return;
             const bool editable = (v >= 0.0f);
             const bool stepable = editable || editor->menuPage->currentItemIsAction();
@@ -327,10 +328,21 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
     // transport, MIDI clock or note-trigger, which leaves the param value stale
     // and makes a later click a no-op.  The timer keeps the LED synced to
     // seq.isRunning(), so every click here always emits a fresh command.
+    seqPlayButton->setTooltip("Play / Stop\nHost or MIDI Clock sync follows the external transport.");
     seqPlayButton->onClick = [this]
     {
+        auto& seq = processorRef.getSequencer();
         if (seqPlayButton->getToggleState())
-            processorRef.getSequencer().setReversePlayback(false);
+        {
+            // Host / MIDI Clock sync: there is nothing to play until the external
+            // clock runs. Stay off instead of going red and silent.
+            if (seq.getSyncMode() != AcidSequencer303::SyncMode::Internal && ! seq.getClockAlive())
+            {
+                seqPlayButton->setToggleState(false, juce::dontSendNotification);
+                return;
+            }
+            seq.setReversePlayback(false);
+        }
         processorRef.seqCommand(seqPlayButton->getToggleState()
                                     ? JC303::SeqCommand::Play
                                     : JC303::SeqCommand::Stop);
@@ -343,7 +355,7 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
         {
             seq.setReversePlayback(! seq.getReversePlayback());
         }
-        else
+        else if (seq.getSyncMode() == AcidSequencer303::SyncMode::Internal || seq.getClockAlive())
         {
             seq.setReversePlayback(true);
             processorRef.seqCommand(JC303::SeqCommand::Play);
@@ -441,6 +453,10 @@ JC303Editor::JC303Editor (JC303& p, juce::AudioProcessorValueTreeState& vts)
 JC303Editor::~JC303Editor()
 {
     stopTimer();
+    // Deleting the menu page is what unregisters its parameter listeners. Leaked, it kept
+    // receiving parameter changes after the window closed, and its actions called into this
+    // editor once it was freed: a segfault in process() at the next host parameter event.
+    menuPage.reset();
     tuningSlider->removeMouseListener(&tuningKnobMouse);
 }
 
@@ -468,8 +484,13 @@ bool JC303Editor::keyPressed (const juce::KeyPress& key)
     if (! standalone && static_cast<int>(*valueTreeState.getRawParameterValue("seqSyncMode")) != 0)
         return false;
 
-    if (auto* playParam = valueTreeState.getParameter("seqPlayState"))
-        playParam->setValueNotifyingHost(valueTreeState.getRawParameterValue("seqPlayState")->load() > 0.5f ? 0.0f : 1.0f);
+    // Space drives the sequencer command channel, like the Play button: the
+    // seqPlayState parameter can be stale when the host/note/MIDI started it.
+    auto& seq = processorRef.getSequencer();
+    if (seq.isRunning())
+        processorRef.seqCommand (JC303::SeqCommand::Stop);
+    else if (seq.getSyncMode() == AcidSequencer303::SyncMode::Internal || seq.getClockAlive())
+        processorRef.seqCommand (JC303::SeqCommand::Play);
     return true;
 }
 
@@ -489,8 +510,10 @@ void JC303Editor::showTuningMenu()
 {
     juce::PopupMenu menu;
     menu.addSectionHeader(processorRef.getTuningName());
-    menu.addItem("Load .tun...", [this] { chooseTuningFile(); });
-    menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [this] { processorRef.resetTuning(); });
+    // The async menu outlives this editor if the host closes the window while it is open.
+    const auto editorSaver = juce::Component::SafePointer<JC303Editor>(this);
+    menu.addItem("Load .tun...", [editorSaver] { if (auto* editor = editorSaver.getComponent()) editor->chooseTuningFile(); });
+    menu.addItem("Reset to 12-TET", processorRef.isCustomTuningActive(), false, [editorSaver] { if (auto* editor = editorSaver.getComponent()) editor->processorRef.resetTuning(); });
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(tuningSlider));
 }
 
@@ -521,6 +544,9 @@ void JC303Editor::resized()
 void JC303Editor::timerCallback()
 {
     auto& seq = processorRef.getSequencer();
+    if (menuPage == nullptr)
+        return;
+    menuPage->handleParameterChanges();
     menuPage->refreshAction();
     menuPage->syncAssignablesFromState();
     const auto scaleName = processorRef.isCustomTuningActive() ? processorRef.getTuningName() : juce::String();
@@ -589,6 +615,14 @@ void JC303Editor::timerCallback()
     }
 
     updateKeyboardForSelectedStep();
+
+    // A host can load a preset from another bank (CLAP's preset-load), which switches the bank
+    // under the window: list the new bank's presets, as the window's own bank switch does.
+    if (currentPresetBank() != shownPresetBank)
+    {
+        shownPresetBank = currentPresetBank();
+        menuPage->refreshPresetOptions();
+    }
 }
 
 void JC303Editor::updateKeyboardForSelectedStep()
@@ -883,7 +917,8 @@ void JC303Editor::setControlsLayout()
     overdriveDryWetSlider->setBounds(overdriveDryWetLocation.first, overdriveDryWetLocation.second, sliderMediumSize, sliderMediumSize);
     switchOverdriveButton->setBounds(overdriveSwitchLocation.first, overdriveSwitchLocation.second, switchWidth, switchHeight);
     //ledOverdriveButton ->setBounds(overdriveLedLocation.first, overdriveLedLocation.second, ledWidth, ledHeight);
-    menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
+    if (menuPage != nullptr)   // resized() must not outlive the page during teardown
+        menuPage->setBounds(displayMenuLocation.first, displayMenuLocation.second, displayMenuWidth, selectModelHeight);
 
     // shared single-octave keyboard
     seqKeyboard->setBounds(keyboardLocation.first, keyboardLocation.second, 210, 66);

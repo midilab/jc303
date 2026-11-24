@@ -2,6 +2,8 @@
 
 #include <JuceHeader.h>
 
+#include <clap-juce-extensions/clap-juce-extensions.h>
+
 // Open303
 #include "dsp/open303/rosic_Open303.h"
 #include "dsp/open303/dfl_DispersionFilter.h"
@@ -171,6 +173,7 @@ inline double accentSweepMs (float value) { return linToExp (value, 0.0, 1.0, 15
 
 class JC303  :  public juce::AudioProcessor,
                 public juce::AudioProcessorValueTreeState::Listener,
+                public clap_juce_extensions::clap_juce_audio_processor_capabilities,
                 private juce::AsyncUpdater
 {
 public:
@@ -228,12 +231,21 @@ public:
     juce::String getModKnob (int knob) const;
     void setModKnob (int knob, const juce::String& paramID);
 
+    /** Serialises state and tuning reads/writes: the host may read state off the
+        message thread while the editor writes the mod knobs. */
+    juce::CriticalSection& getStateLock() const { return stateLock; }
+
     /** Applies controller moves queued by the audio thread (the mod wheel); runs on the message thread. */
     void applyPendingControllers();
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
+
+    /** CLAP's preset-load: a preset file the host found through our preset discovery
+        (ClapPresetDiscovery.cpp), loaded as the window loads one. Main thread. */
+    bool supportsPresetLoad() const noexcept override { return true; }
+    bool presetLoadFromLocation (uint32_t locationKind, const char* location, const char* loadKey) noexcept override;
 
     /** Preset file operations from the Presets menu (Save / New / Rename / Delete): snapshot the
         current sound, write it to the current bank's folder, and re-sync the bank in memory. */
@@ -277,8 +289,8 @@ public:
     /** Returns false and leaves the current map in place if the file is invalid. */
     bool loadTuningFile (const juce::File& file, juce::String& errorMessage);
     void resetTuning();
-    juce::String getTuningName() const { return juce::String (tuningState.getName()); }
-    bool isCustomTuningActive() const  { return tuningState.isCustom(); }
+    juce::String getTuningName() const { const juce::ScopedLock sl (stateLock); return juce::String (tuningState.getName()); }
+    bool isCustomTuningActive() const  { const juce::ScopedLock sl (stateLock); return tuningState.isCustom(); }
 
 private:
     void renderMidi  (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages);
@@ -336,6 +348,9 @@ private:
 
     // Tracks host play state across buffers to detect start/stop edges
     bool _wasHostPlaying { false };
+    // Seconds the host has stayed stopped. A loop-wrap pause gets a short grace
+    // period instead of a hard stop; a genuine stop ends the sequencer after it.
+    double _hostStoppedSeconds { 0.0 };
 
     // Mute flag for sequencer (used during acidRandomize to prevent note triggering)
     std::atomic<bool> _sequencerMuted { false };
@@ -351,6 +366,7 @@ private:
     bool _recWasOn      { false };
 
     int currentProgram = 0;   // factory preset index (see Presets.h)
+    bool loadingFromHost = false;   // inside presetLoadFromLocation: the wrapper tells the host itself
 
     // presets storage: user documents folder
     File userAppDataDirectory = File::getSpecialLocation(File::userDocumentsDirectory).getChildFile(JucePlugin_Manufacturer).getChildFile(JucePlugin_Name);
@@ -453,6 +469,13 @@ private:
     // the audio thread reads the copy installed into open303Core
     TuningTable tuningState;
 
+    // Guards tuningState and direct parameters.state writes against a host
+    // reading/saving state on another thread. Mutable: the const getters lock it.
+    mutable juce::CriticalSection stateLock;
+
+    // Output MIDI for the current block; a member so renderMidi never allocates.
+    juce::MidiBuffer _midiOut;
+
     // Transpose / Shift / Pitch Rotate values already written into the pattern
     std::atomic<int> _appliedTranspose { 0 };
     std::atomic<int> _appliedShift { 0 };
@@ -463,6 +486,9 @@ private:
     enum SeqOffset : int { OffsetTranspose = 1, OffsetShift = 2, OffsetPitchRotate = 4 };
     std::atomic<int> _seqOffsetReset { 0 };
     std::atomic<int> _pendingModWheel { -1 };   // CC 1 value awaiting the message thread, -1 = none
+    std::atomic<int> _pendingOverdriveModel { -1 };   // overdrive model index awaiting the message thread
+    std::atomic<int> _pendingSeqSyncMode { -1 };      // sync mode the host must be told about, -1 = none
+    std::atomic<int> _pendingProgram { -1 };          // program change awaiting the message thread
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JC303)

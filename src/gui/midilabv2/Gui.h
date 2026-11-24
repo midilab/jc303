@@ -121,6 +121,7 @@ private:
     juce::Label* seqStepLabel;
     juce::Label* seqRestLabel;
     int selectedStep = 0;
+    juce::String shownPresetBank = currentPresetBank();   // the bank the menu's preset list was built from
     juce::TooltipWindow tooltipWindow { this, 700 };
 
     // declare the attchaments
@@ -174,7 +175,7 @@ private:
     std::unique_ptr<SliderAttachment> lfoDepthAttachment;
     std::unique_ptr<SliderAttachment> lfoDestinationAttachment;
     // shared LCD menu page component (pages: PST, OVD, MOD, SEQ)
-    MenuPage* menuPage;
+    std::unique_ptr<MenuPage> menuPage;
     // shared single-octave keyboard (API-ready for sequencer wiring)
     SeqKeyboard* seqKeyboard;
 

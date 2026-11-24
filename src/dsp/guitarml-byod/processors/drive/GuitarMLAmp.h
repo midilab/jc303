@@ -135,6 +135,7 @@ public:
     int getModelListSize() { return RONNTags::numBuiltInModels + modelList.size(); }
     int getCurrentModelIndex() { return currentModelIndex; }
     void loadUserModel(int modelIndex) {
+        jassert (juce::MessageManager::existsAndIsCurrentThread());
         if (modelIndex >= getModelListSize())
             modelIndex = getModelListSize() - 1;
         if (modelIndex < 0)
@@ -148,6 +149,19 @@ public:
             {
                 const auto modelFile = modelList[modelIndex];
                 const auto modelJson = chowdsp::JSONUtils::fromFile (modelFile);
+
+                // Validate the architecture here, on the message thread: loadModelFromJson
+                // throws on anything but the two LSTM40 shapes, and it runs on the audio
+                // thread once the swap reaches its silent gap.
+                const auto& modelData = modelJson.at ("model_data");
+                const auto numInputs  = modelData.value ("input_size", 1);
+                const auto hiddenSize = modelData.value ("hidden_size", 0);
+                if (! ((numInputs == 1 || numInputs == 2) && hiddenSize == 40))
+                {
+                    loadModel (0);
+                    return;
+                }
+
                 requestModelSwap (modelJson, modelFile.getFileNameWithoutExtension());
                 currentModelIndex = modelIndex;
             } catch (const std::exception& exc) {
