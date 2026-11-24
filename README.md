@@ -35,11 +35,11 @@ The manual below describes the `midilabv2` GUI theme (the default). The `amadeus
 
 Supports Windows, Linux and MacOS. You may find CLAP, VST3, LV2 and AU formats available to download. For VST2 plugin you need to compile it by your own self using vst2 sdk from Steinberg - vstsdk2.4.
 
-MacOS Universal - Intel and ARM: [jc303-macos_universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.0/jc303-0.14.0-macos_universal-plugins.zip)
+MacOS Universal - Intel and ARM: [jc303-macos_universal-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.1/jc303-0.14.1-macos_universal-plugins.zip)
 
-Windows Intel x64: [jc303-windows_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.0/jc303-0.14.0-windows_x64-plugins.zip)
+Windows Intel x64: [jc303-windows_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.1/jc303-0.14.1-windows_x64-plugins.zip)
 
-Linux Intel x64: [jc303-linux_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.0/jc303-0.14.0-linux_x64-plugins.zip)  
+Linux Intel x64: [jc303-linux_x64-plugins.zip](https://github.com/midilab/jc303/releases/download/v0.14.1/jc303-0.14.1-linux_x64-plugins.zip)  
 
 ## Installation
 
